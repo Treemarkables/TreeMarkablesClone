@@ -162,6 +162,7 @@ export type LeadSourceTypeType = z.infer<typeof LeadSourceType>;
 
 // Team Management
 export const teams = pgTable("teams", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   description: text("description"),
@@ -176,6 +177,7 @@ export const teams = pgTable("teams", {
 
 // Customer Import Batches - Track import sessions
 export const customerImportBatches = pgTable("customer_import_batches", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   importType: text("import_type").notNull(), // csv_upload, manual_entry, servicem8_sync, api_import
   fileName: text("file_name"), // Original CSV filename if applicable
@@ -193,6 +195,7 @@ export const customerImportBatches = pgTable("customer_import_batches", {
 
 // Customer Management
 export const customers = pgTable("customers", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   email: text("email"),
@@ -230,6 +233,7 @@ export const customers = pgTable("customers", {
 // email/phone/role. Each job picks one contact via jobs.customerContactId,
 // which auto-populates the per-job jobContact* override fields.
 export const customerContacts = pgTable("customer_contacts", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
   firstName: text("first_name"),
@@ -252,6 +256,7 @@ export const customerContacts = pgTable("customer_contacts", {
 
 // Customer Communication Preferences
 export const communicationPreferences = pgTable("communication_preferences", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: 'cascade' }),
   emailEnabled: boolean("email_enabled").default(true),
@@ -272,6 +277,7 @@ export const communicationPreferences = pgTable("communication_preferences", {
 
 // Lead Pipeline Management  
 export const leads = pgTable("leads", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id),
   name: text("name"),
@@ -295,6 +301,7 @@ export const leads = pgTable("leads", {
 
 // Call Recording & Management
 export const calls = pgTable("calls", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   leadId: varchar("lead_id").references(() => leads.id),
   customerId: varchar("customer_id").references(() => customers.id),
@@ -316,6 +323,7 @@ export const calls = pgTable("calls", {
 
 // API Keys for Mobile App Authentication
 export const apiKeys = pgTable("api_keys", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   keyHash: text("key_hash").notNull().unique(),
@@ -327,6 +335,7 @@ export const apiKeys = pgTable("api_keys", {
 
 // Quote Management
 export const quotes = pgTable("quotes", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   leadId: varchar("lead_id").references(() => leads.id),
   jobId: varchar("job_id").references(() => jobs.id),
@@ -360,6 +369,7 @@ export const quotes = pgTable("quotes", {
 
 // Job Management
 export const jobs = pgTable("jobs", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id),
   // Optional pointer to a saved contact under the customer (see customerContacts).
@@ -544,6 +554,7 @@ export const jobs = pgTable("jobs", {
 
 // Job Diary Entries
 export const jobDiaryEntries = pgTable("job_diary_entries", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").references(() => jobs.id).notNull(),
   entryType: text("entry_type").notNull(), // note, progress, issue, milestone, weather, equipment, safety, completion, email
@@ -573,6 +584,7 @@ export const jobDiaryEntries = pgTable("job_diary_entries", {
 // completion. Soft-delete via deletedAt — kept off the board view but
 // retained for audit and so recurring chains remain traceable.
 export const tasks = pgTable("tasks", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
   description: text("description"),
@@ -618,6 +630,7 @@ export type UpdateTask = z.infer<typeof updateTaskSchema>;
 
 // Safety Incident Management
 export const safetyIncidents = pgTable("safety_incidents", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   incidentNumber: text("incident_number").notNull().unique(),
   type: text("type").notNull(), // near_miss, minor_injury, major_injury, property_damage, environmental, equipment_failure
@@ -648,6 +661,7 @@ export const safetyIncidents = pgTable("safety_incidents", {
 
 // Risk Assessment Management  
 export const riskAssessments = pgTable("risk_assessments", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").references(() => jobs.id),
   assessmentDate: timestamp("assessment_date").defaultNow(),
@@ -671,6 +685,7 @@ export const riskAssessments = pgTable("risk_assessments", {
 
 // Proposal System
 export const proposals = pgTable("proposals", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").references(() => jobs.id),
   quoteId: varchar("quote_id").references(() => quotes.id),
@@ -715,6 +730,7 @@ export const proposals = pgTable("proposals", {
 
 // Proposal Sections
 export const proposalSections = pgTable("proposal_sections", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   proposalId: varchar("proposal_id").references(() => proposals.id, { onDelete: 'cascade' }).notNull(),
   sectionType: text("section_type").notNull(), // intro, service_description, pricing, terms, photos, custom
@@ -730,6 +746,7 @@ export const proposalSections = pgTable("proposal_sections", {
 
 // Proposal Line Items
 export const proposalLineItems = pgTable("proposal_line_items", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   proposalId: varchar("proposal_id").references(() => proposals.id, { onDelete: 'cascade' }).notNull(),
   sectionId: varchar("section_id").references(() => proposalSections.id, { onDelete: 'cascade' }),
@@ -756,6 +773,7 @@ export const proposalLineItems = pgTable("proposal_line_items", {
 
 // Proposal Line Item Choices (for multiple choice options)
 export const proposalLineItemChoices = pgTable("proposal_line_item_choices", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   lineItemId: varchar("line_item_id").references(() => proposalLineItems.id, { onDelete: 'cascade' }).notNull(),
   label: text("label").notNull(), // "Basic", "Premium", "Emergency"
@@ -769,6 +787,7 @@ export const proposalLineItemChoices = pgTable("proposal_line_item_choices", {
 
 // Enhanced Photo Management System
 export const photos = pgTable("photos", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").references(() => jobs.id),
   customerId: varchar("customer_id").references(() => customers.id),
@@ -824,6 +843,7 @@ export const photos = pgTable("photos", {
 //     missing. Original `sourceUrl` is never overwritten so annotations
 //     are always reversible.
 export const photoAnnotations = pgTable("photo_annotations", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sourceUrl: text("source_url").notNull().unique(), // e.g. /objects/photos/foo.jpg
   annotations: jsonb("annotations").notNull(), // Konva shape array
@@ -840,6 +860,7 @@ export const photoAnnotations = pgTable("photo_annotations", {
 // object path (`url` like `/objects/videos/<file>`). showToCustomer gates
 // whether the video surfaces on the customer-facing quote/proposal view.
 export const videos = pgTable("videos", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   // 'job' = customer-facing on-site walkthrough tied to a job; 'knowledge' =
   // how-to / training video for the subscriber-facing knowledge page (no job).
@@ -900,6 +921,7 @@ export const helpArticles = pgTable("help_articles", {
 
 // Activity Log & Communication Tracking
 export const activities = pgTable("activities", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id),
   leadId: varchar("lead_id").references(() => leads.id),
@@ -919,6 +941,7 @@ export const activities = pgTable("activities", {
 
 // Review Management
 export const reviews = pgTable("reviews", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id),
   jobId: varchar("job_id").references(() => jobs.id),
@@ -939,6 +962,7 @@ export const reviews = pgTable("reviews", {
 
 // Marketing Campaign Management
 export const campaigns = pgTable("campaigns", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   type: text("type").notNull(), // email, sms, social, google_ads, facebook_ads
@@ -964,6 +988,7 @@ export const campaigns = pgTable("campaigns", {
 
 // Social Media Planning
 export const socialPlans = pgTable("social_plans", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   platform: text("platform").notNull(), // facebook, instagram, tiktok
   contentType: text("content_type"), // before_after, tip, promo, testimonial, seasonal
@@ -984,6 +1009,7 @@ export const socialPlans = pgTable("social_plans", {
 
 // Competitor Intelligence
 export const competitorSignals = pgTable("competitor_signals", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   competitorName: text("competitor_name").notNull(),
   signal: text("signal").notNull(), // price_change, new_service, ad_spotted, review_trend
@@ -1001,6 +1027,7 @@ export const competitorSignals = pgTable("competitor_signals", {
 
 // Pricing Rules Engine
 export const priceRules = pgTable("price_rules", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   serviceName: text("service_name").notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
@@ -1103,6 +1130,7 @@ export const riskAssessmentInsertSchema = createInsertSchema(riskAssessments).om
 
 // Compliance Monitoring System
 export const complianceRequirements = pgTable("compliance_requirements", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
   description: text("description").notNull(),
@@ -1126,6 +1154,7 @@ export const complianceRequirements = pgTable("compliance_requirements", {
 });
 
 export const complianceRecords = pgTable("compliance_records", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   requirementId: varchar("requirement_id").references(() => complianceRequirements.id).notNull(),
   completedBy: text("completed_by").notNull(),
@@ -1203,6 +1232,7 @@ export type CsvImportResult = z.infer<typeof csvImportResultSchema>;
 
 // Business Settings Table - Comprehensive settings management
 export const businessSettings = pgTable("business_settings", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
   // Business Information
@@ -1398,6 +1428,7 @@ export type NotificationPriority = typeof notificationPriorities[number];
 
 // Notifications Table
 export const notifications = pgTable("notifications", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
   message: text("message").notNull(),
@@ -1464,6 +1495,7 @@ export type NotificationSummary = z.infer<typeof notificationSummarySchema>;
 
 // Notification Queue Table (for scheduled email/SMS notifications)
 export const notificationQueue = pgTable("notification_queue", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   recipientId: varchar("recipient_id").notNull(), // Employee ID
   recipientEmail: text("recipient_email"),
@@ -1500,6 +1532,7 @@ export type InsertNotificationQueueItem = z.infer<typeof insertNotificationQueue
 // booking-reminder worker tick processes any row where status='pending'
 // and scheduled_for <= now.
 export const bookingReminders = pgTable("booking_reminders", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull(), // FK to jobs.id, no cascade — kept for audit if job is deleted
   scheduledFor: timestamp("scheduled_for").notNull(), // When to send (NULL when manual=true and already sent)
@@ -1551,6 +1584,7 @@ export type StaffRoleType = z.infer<typeof StaffRole>;
 
 // Role Tiers (named permission presets that can be assigned to staff)
 export const roleTiers = pgTable("role_tiers", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   // Stable identifier for system-seeded tiers ('owner', 'manager', etc.); null for user-created tiers
   key: text("key"),
@@ -1584,6 +1618,7 @@ export type PermissionOverridesShape = z.infer<typeof permissionOverridesSchema>
 
 // Employee/Team Member Schema
 export const employees = pgTable("employees", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
@@ -1631,6 +1666,7 @@ export type UpdateEmployee = z.infer<typeof updateEmployeeSchema>;
 
 // Schedule/Calendar Events Schema
 export const scheduleEvents = pgTable("schedule_events", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
   description: text("description"),
@@ -1707,6 +1743,7 @@ export type UpdateScheduleEvent = z.infer<typeof updateScheduleEventSchema>;
 
 // Job Staff Assignments - tracks which staff are assigned to which jobs with timing
 export const jobStaffAssignments = pgTable("job_staff_assignments", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull(),
   employeeId: varchar("employee_id").notNull(),
@@ -1745,6 +1782,7 @@ export type UpdateJobStaffAssignment = z.infer<typeof updateJobStaffAssignmentSc
 
 // Job Template Schema  
 export const jobTemplates = pgTable("job_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   category: text("category").notNull(), // tree_removal, pruning, stump_grinding, emergency, maintenance
@@ -1803,6 +1841,7 @@ export type UpdateJobTemplate = z.infer<typeof updateJobTemplateSchema>;
 // ========================================
 
 export const emailTemplates = pgTable("email_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   category: text("category").notNull(), // job_status, quote, invoice, reminder, welcome
@@ -1836,6 +1875,7 @@ export type UpdateEmailTemplate = z.infer<typeof updateEmailTemplateSchema>;
 // ========================================
 
 export const smsTemplates = pgTable("sms_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   category: text("category").notNull(), // job_status, quote, reminder, confirmation
@@ -1933,6 +1973,7 @@ export type UpdateProposalLineItemChoice = z.infer<typeof updateProposalLineItem
 
 // Equipment/Resource Schema
 export const equipment = pgTable("equipment", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   type: text("type"), // vehicle, chainsaw, chipper, bucket_truck, stump_grinder, safety_gear
@@ -1994,6 +2035,7 @@ export type UpdateEquipment = z.infer<typeof updateEquipmentSchema>;
 
 // Equipment Maintenance Records
 export const equipmentMaintenance = pgTable("equipment_maintenance", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   equipmentId: varchar("equipment_id").references(() => equipment.id).notNull(),
   maintenanceType: text("maintenance_type").notNull(), // routine, repair, inspection, calibration
@@ -2011,6 +2053,7 @@ export const equipmentMaintenance = pgTable("equipment_maintenance", {
 
 // Parts and Supplies Inventory
 export const inventory = pgTable("inventory", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   sku: text("sku").unique(),
@@ -2050,6 +2093,7 @@ export const inventory = pgTable("inventory", {
 
 // Equipment Check-in/Check-out System
 export const equipmentCheckouts = pgTable("equipment_checkouts", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   equipmentId: varchar("equipment_id").references(() => equipment.id).notNull(),
   checkedOutBy: text("checked_out_by").notNull(), // employee name
@@ -2080,6 +2124,7 @@ export const equipmentCheckouts = pgTable("equipment_checkouts", {
 
 // Inventory Transactions  
 export const inventoryTransactions = pgTable("inventory_transactions", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   inventoryId: varchar("inventory_id").references(() => inventory.id).notNull(),
   transactionType: text("transaction_type").notNull(), // purchase, usage, adjustment, return, waste
@@ -2121,6 +2166,7 @@ export type InsertInventoryTransaction = z.infer<typeof insertInventoryTransacti
 
 // Inspection Templates - Customizable checklists per vehicle type
 export const inspectionTemplates = pgTable("inspection_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(), // "Standard Vehicle Inspection", "Truck with Trailer", etc.
   vehicleType: text("vehicle_type"), // vehicle, truck, van, chipper, bucket_truck - maps to equipment.type
@@ -2134,6 +2180,7 @@ export const inspectionTemplates = pgTable("inspection_templates", {
 
 // Checklist Items - Individual questions in each template
 export const inspectionChecklistItems = pgTable("inspection_checklist_items", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").references(() => inspectionTemplates.id, { onDelete: 'cascade' }).notNull(),
   question: text("question").notNull(), // "Are the wheel nuts tight?"
@@ -2147,6 +2194,7 @@ export const inspectionChecklistItems = pgTable("inspection_checklist_items", {
 
 // Vehicle Inspections - Completed inspection records
 export const vehicleInspections = pgTable("vehicle_inspections", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   vehicleId: varchar("vehicle_id").references(() => equipment.id).notNull(),
   vehicleName: text("vehicle_name").notNull(), // Denormalized for reporting
@@ -2176,6 +2224,7 @@ export const vehicleInspections = pgTable("vehicle_inspections", {
 
 // Inspection Responses - Individual YES/NO/N/A answers
 export const inspectionResponses = pgTable("inspection_responses", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   inspectionId: varchar("inspection_id").references(() => vehicleInspections.id, { onDelete: 'cascade' }).notNull(),
   checklistItemId: varchar("checklist_item_id").references(() => inspectionChecklistItems.id, { onDelete: 'set null' }), // SET NULL to preserve historic responses
@@ -2248,6 +2297,7 @@ export type InsertInspectionResponse = z.infer<typeof insertInspectionResponseSc
 
 // Induction Templates - Customizable induction checklists per equipment type
 export const inductionTemplates = pgTable("induction_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   equipmentType: text("equipment_type"),
@@ -2260,6 +2310,7 @@ export const inductionTemplates = pgTable("induction_templates", {
 });
 
 export const inductionChecklistItems = pgTable("induction_checklist_items", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").references(() => inductionTemplates.id, { onDelete: 'cascade' }).notNull(),
   step: text("step").notNull(),
@@ -2271,6 +2322,7 @@ export const inductionChecklistItems = pgTable("induction_checklist_items", {
 });
 
 export const equipmentInductions = pgTable("equipment_inductions", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: varchar("employee_id").notNull(),
   employeeName: text("employee_name").notNull(),
@@ -2291,6 +2343,7 @@ export const equipmentInductions = pgTable("equipment_inductions", {
 });
 
 export const inductionResponses = pgTable("induction_responses", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   inductionId: varchar("induction_id").references(() => equipmentInductions.id, { onDelete: 'cascade' }).notNull(),
   checklistItemId: varchar("checklist_item_id").references(() => inductionChecklistItems.id, { onDelete: 'set null' }),
@@ -2356,6 +2409,7 @@ export type InsertInductionResponse = z.infer<typeof insertInductionResponseSche
 
 // Communications & Message Management
 export const communications = pgTable("communications", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
   // Platform and source information
@@ -2426,6 +2480,7 @@ export const communications = pgTable("communications", {
 
 // Email tracking events (opens, clicks, bounces from Resend webhooks)
 export const emailEvents = pgTable("email_events", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   messageId: text("message_id").notNull(), // Resend message ID
   eventType: text("event_type").notNull(), // opened, clicked, delivered, bounced, complained, unsubscribed
@@ -2440,6 +2495,7 @@ export const emailEvents = pgTable("email_events", {
 
 // Communication templates for responses
 export const communicationTemplates = pgTable("communication_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   platform: text("platform").notNull(), // email, sms, facebook, etc.
@@ -2454,6 +2510,7 @@ export const communicationTemplates = pgTable("communication_templates", {
 
 // Communication rules and automation
 export const communicationRules = pgTable("communication_rules", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   platform: text("platform"), // null = all platforms
@@ -2499,6 +2556,7 @@ export const insertCommunicationRuleSchema = createInsertSchema(communicationRul
 
 // Conversations table for centralized pre-sales communication management
 export const conversations = pgTable("conversations", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
   // Lead/Customer relationship
@@ -2536,6 +2594,7 @@ export const conversations = pgTable("conversations", {
 
 // Messages within conversations
 export const conversationMessages = pgTable("conversation_messages", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   conversationId: varchar("conversation_id").references(() => conversations.id, { onDelete: 'cascade' }).notNull(),
   
@@ -2691,6 +2750,7 @@ export type PhotoSearch = z.infer<typeof photoSearchSchema>;
 
 // Invoice Management for Customer Portal
 export const invoices = pgTable("invoices", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   jobId: varchar("job_id").references(() => jobs.id),
@@ -2717,6 +2777,7 @@ export const invoices = pgTable("invoices", {
 // Invoice Sections — mirror of proposalSections, lets invoices carry photos +
 // narrative sections rendered on the customer-facing invoice page.
 export const invoiceSections = pgTable("invoice_sections", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   invoiceId: varchar("invoice_id").references(() => invoices.id, { onDelete: 'cascade' }).notNull(),
   sectionType: text("section_type").notNull(), // intro, photos, notes, terms, custom
@@ -2732,6 +2793,7 @@ export const invoiceSections = pgTable("invoice_sections", {
 
 // Invoice Line Items - proper line items with labor type support
 export const invoiceLineItems = pgTable("invoice_line_items", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   invoiceId: varchar("invoice_id").references(() => invoices.id, { onDelete: 'cascade' }).notNull(),
   description: text("description").notNull(),
@@ -2758,6 +2820,7 @@ export const invoiceLineItems = pgTable("invoice_line_items", {
 // Idempotency: provider_session_id is unique so the Stripe webhook can be
 // retried safely without double-counting a deposit.
 export const payments = pgTable("payments", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").references(() => jobs.id),
   proposalId: varchar("proposal_id").references(() => proposals.id),
@@ -2784,6 +2847,7 @@ export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 
 // Xero OAuth2 Integration
 export const xeroConnections = pgTable("xero_connections", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: text("tenant_id").notNull().unique(), // Xero organization/tenant ID
   tenantName: text("tenant_name"), // Organization name for display
@@ -2800,6 +2864,7 @@ export const xeroConnections = pgTable("xero_connections", {
 
 // Xero Settings - Configurable account codes and tax types
 export const xeroSettings = pgTable("xero_settings", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   salesAccountCode: text("sales_account_code").notNull().default("200"), // Default sales account code
   taxType: text("tax_type").notNull().default("OUTPUT2"), // Default tax type (OUTPUT2 = 15% GST for NZ)
@@ -2809,6 +2874,7 @@ export const xeroSettings = pgTable("xero_settings", {
 
 // Service Requests from Customer Portal
 export const serviceRequests = pgTable("service_requests", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   serviceType: text("service_type").notNull(),
@@ -2823,6 +2889,7 @@ export const serviceRequests = pgTable("service_requests", {
 
 // Customer Authentication for Portal
 export const customerAuth = pgTable("customer_auth", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   email: text("email").notNull(),
@@ -2929,6 +2996,7 @@ export type InsertCommunicationRule = z.infer<typeof insertCommunicationRuleSche
 
 // Business Intelligence Reports
 export const businessReports = pgTable("business_reports", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   description: text("description"),
@@ -2947,6 +3015,7 @@ export const businessReports = pgTable("business_reports", {
 
 // Key Performance Indicators (KPIs)
 export const kpiMetrics = pgTable("kpi_metrics", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   description: text("description"),
@@ -2965,6 +3034,7 @@ export const kpiMetrics = pgTable("kpi_metrics", {
 
 // Performance Analytics Data
 export const performanceAnalytics = pgTable("performance_analytics", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   metricDate: timestamp("metric_date").notNull(),
   period: text("period").notNull(), // daily, weekly, monthly, quarterly, yearly
@@ -2989,6 +3059,7 @@ export const performanceAnalytics = pgTable("performance_analytics", {
 
 // Financial Analytics
 export const financialAnalytics = pgTable("financial_analytics", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   periodStart: timestamp("period_start").notNull(),
   periodEnd: timestamp("period_end").notNull(),
@@ -3013,6 +3084,7 @@ export const financialAnalytics = pgTable("financial_analytics", {
 
 // Dashboard Configurations
 export const dashboardConfigs = pgTable("dashboard_configs", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   description: text("description"),
@@ -3029,6 +3101,7 @@ export const dashboardConfigs = pgTable("dashboard_configs", {
 
 // Report Analytics Tracking
 export const reportAnalytics = pgTable("report_analytics", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   reportId: varchar("report_id").references(() => businessReports.id),
   viewedBy: varchar("viewed_by"),
@@ -3138,6 +3211,7 @@ export type UpdateConversationMessage = z.infer<typeof updateConversationMessage
 
 // Document Templates (Quote, Proposal, Invoice)
 export const documentTemplates = pgTable("document_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(), // "Standard Quote", "Tree Removal Proposal", "Tax Invoice"
   type: text("type").notNull(), // "quote", "proposal", "invoice"
@@ -3175,6 +3249,7 @@ export const documentTemplates = pgTable("document_templates", {
 
 // Template Sections (for Proposals with multiple options)
 export const templateSections = pgTable("template_sections", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").references(() => documentTemplates.id).notNull(),
   sectionType: text("section_type").notNull(), // "option", "terms", "description"
@@ -3188,6 +3263,7 @@ export const templateSections = pgTable("template_sections", {
 
 // Template Line Items (services, materials, labor)
 export const templateLineItems = pgTable("template_line_items", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").references(() => documentTemplates.id),
   sectionId: varchar("section_id").references(() => templateSections.id), // Optional: belongs to specific section
@@ -3205,6 +3281,7 @@ export const templateLineItems = pgTable("template_line_items", {
 
 // Template Photos (for Proposals)
 export const templatePhotos = pgTable("template_photos", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").references(() => documentTemplates.id),
   sectionId: varchar("section_id").references(() => templateSections.id), // Which proposal section
@@ -3220,6 +3297,7 @@ export const templatePhotos = pgTable("template_photos", {
 
 // Generated Documents (instances created from templates)
 export const generatedDocuments = pgTable("generated_documents", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").references(() => documentTemplates.id).notNull(),
   jobId: varchar("job_id").references(() => jobs.id),
@@ -3267,6 +3345,7 @@ export const generatedDocuments = pgTable("generated_documents", {
 
 // Generated Document Line Items (specific items for this document instance)
 export const generatedDocumentLineItems = pgTable("generated_document_line_items", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   generatedDocumentId: varchar("generated_document_id").references(() => generatedDocuments.id).notNull(),
   sectionTitle: text("section_title"), // "Option 1", "Option 2" for proposals
@@ -3286,6 +3365,7 @@ export const generatedDocumentLineItems = pgTable("generated_document_line_items
 
 // Generated Document Photos (photos for specific document instance)
 export const generatedDocumentPhotos = pgTable("generated_document_photos", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   generatedDocumentId: varchar("generated_document_id").references(() => generatedDocuments.id).notNull(),
   sectionTitle: text("section_title"), // Which proposal section
@@ -3583,6 +3663,7 @@ export type ItemTypeType = z.infer<typeof ItemType>;
 
 // Materials and Services Catalog Tables
 export const materials = pgTable("materials", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   itemNumber: text("item_number").notNull(),
   name: text("name").notNull(),
@@ -3596,6 +3677,7 @@ export const materials = pgTable("materials", {
 });
 
 export const services = pgTable("services", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   category: text("category").notNull(),
@@ -3629,6 +3711,7 @@ export type Service = typeof services.$inferSelect;
 
 // Review Management Tables
 export const reviewRequests = pgTable("review_requests", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").references(() => jobs.id).notNull(),
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
@@ -3654,6 +3737,7 @@ export const reviewRequests = pgTable("review_requests", {
 });
 
 export const reviewSubmissions = pgTable("review_submissions", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   requestId: varchar("request_id").references(() => reviewRequests.id).notNull(),
   jobId: varchar("job_id").references(() => jobs.id).notNull(),
@@ -3703,6 +3787,7 @@ export type InsertReviewSubmission = z.infer<typeof insertReviewSubmissionSchema
 
 // Job Hazard Analysis (JHA) System
 export const jhaHazardTemplates = pgTable("jha_hazard_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(), // e.g., "Falling Debris", "Tree Felling"
   description: text("description"),
@@ -3714,6 +3799,7 @@ export const jhaHazardTemplates = pgTable("jha_hazard_templates", {
 });
 
 export const jhaControlMeasureTemplates = pgTable("jha_control_measure_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   hazardTemplateId: varchar("hazard_template_id").references(() => jhaHazardTemplates.id),
   description: text("description").notNull(), // e.g., "Wear the correct P.P.E. for the job"
@@ -3726,6 +3812,7 @@ export const jhaControlMeasureTemplates = pgTable("jha_control_measure_templates
 });
 
 export const jhaAssessments = pgTable("jha_assessments", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").references(() => jobs.id),
   assessmentNumber: text("assessment_number").unique(),
@@ -3759,6 +3846,7 @@ export const jhaAssessments = pgTable("jha_assessments", {
 });
 
 export const jhaSteps = pgTable("jha_steps", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   assessmentId: varchar("assessment_id").references(() => jhaAssessments.id).notNull(),
   stepNumber: integer("step_number").notNull(), // Order of steps
@@ -3785,6 +3873,7 @@ export const jhaSteps = pgTable("jha_steps", {
 });
 
 export const jhaStepControls = pgTable("jha_step_controls", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   stepId: varchar("step_id").references(() => jhaSteps.id).notNull(),
   controlMeasureTemplateId: varchar("control_measure_template_id").references(() => jhaControlMeasureTemplates.id),
@@ -3799,6 +3888,7 @@ export const jhaStepControls = pgTable("jha_step_controls", {
 });
 
 export const jhaSignatures = pgTable("jha_signatures", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   assessmentId: varchar("assessment_id").references(() => jhaAssessments.id).notNull(),
   
@@ -3814,6 +3904,7 @@ export const jhaSignatures = pgTable("jha_signatures", {
 });
 
 export const jhaRiskControlTemplates = pgTable("jha_risk_control_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(), // e.g., "Elimination", "Substitution", "Engineering Controls"
   description: text("description"), // Optional description of when to use this control type
@@ -3890,6 +3981,7 @@ export type InsertJhaRiskControlTemplate = z.infer<typeof insertJhaRiskControlTe
 
 // Marketing Campaigns
 export const marketingCampaigns = pgTable("marketing_campaigns", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
   // Campaign basics
@@ -3952,6 +4044,7 @@ export type InsertMarketingCampaign = z.infer<typeof insertMarketingCampaignSche
 
 // FCM (Firebase Cloud Messaging) notification tokens
 export const fcmTokens = pgTable("fcm_tokens", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: varchar("employee_id").notNull().references(() => employees.id, { onDelete: 'cascade' }),
   token: text("token").notNull().unique(),
@@ -3963,6 +4056,7 @@ export const fcmTokens = pgTable("fcm_tokens", {
 
 // Notification preferences for each employee
 export const notificationPreferences = pgTable("notification_preferences", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: varchar("employee_id").notNull().references(() => employees.id, { onDelete: 'cascade' }).unique(),
   
@@ -4014,6 +4108,7 @@ export type InsertNotificationPreferences = z.infer<typeof insertNotificationPre
 // ========================================
 
 export const callRecords = pgTable("call_records", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
   // Call details
@@ -4075,6 +4170,7 @@ export type UpdateCallRecord = z.infer<typeof updateCallRecordSchema>;
 
 // Tree location markers for job site mapping
 export const treeMarkers = pgTable("tree_markers", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
@@ -4105,6 +4201,7 @@ export type UpdateTreeMarker = z.infer<typeof updateTreeMarkerSchema>;
 
 // ─── Mulch Drops ────────────────────────────────────────────────────────────
 export const mulchDrops = pgTable("mulch_drops", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   phone: text("phone").notNull().default(''),
@@ -4128,6 +4225,7 @@ export type UpdateMulchDrop = z.infer<typeof updateMulchDropSchema>;
 
 // Daily Briefing tables
 export const dailyBriefings = pgTable("daily_briefings", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   date: text("date").notNull().unique(), // YYYY-MM-DD
   content: text("content").notNull().default(''),
@@ -4137,6 +4235,7 @@ export const dailyBriefings = pgTable("daily_briefings", {
 });
 
 export const dailyJobNotes = pgTable("daily_job_notes", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   date: text("date").notNull(), // YYYY-MM-DD
@@ -4146,6 +4245,7 @@ export const dailyJobNotes = pgTable("daily_job_notes", {
 });
 
 export const checklistTemplates = pgTable("checklist_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   text: text("text").notNull(),
   sortOrder: integer("sort_order").default(0),
@@ -4162,6 +4262,7 @@ export type InsertChecklistTemplate = z.infer<typeof insertChecklistTemplateSche
 // from Settings. Built-in tasks (the seven seeded defaults) can be disabled but
 // not deleted; user-added ones are fully editable.
 export const roleChecklistTasks = pgTable("role_checklist_tasks", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   roleKey: varchar("role_key").notNull(), // 'A' | 'B' | 'C'
   itemId: text("item_id").notNull().unique(), // slug used by completions table
@@ -4187,6 +4288,7 @@ export type InsertDailyJobNote = z.infer<typeof insertDailyJobNoteSchema>;
 
 // AI Assistant Messages
 export const assistantMessages = pgTable("assistant_messages", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sessionId: varchar("session_id").notNull(),
   employeeId: varchar("employee_id").notNull(), // owner — enforced on read/delete
@@ -4204,6 +4306,7 @@ export type InsertAssistantMessage = z.infer<typeof insertAssistantMessageSchema
 // Draft customer messages awaiting owner approval before sending
 // ========================================
 export const pendingOutboundMessages = pgTable("pending_outbound_messages", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").references(() => jobs.id),
   customerId: varchar("customer_id").references(() => customers.id),
@@ -4237,6 +4340,7 @@ export type InsertPendingOutboundMessage = z.infer<typeof insertPendingOutboundM
 // review and toolbox talks.
 
 export const nearMissReports = pgTable("near_miss_reports", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   reportNumber: text("report_number").notNull().unique(), // NM-YYYY-####
   reporterUserId: varchar("reporter_user_id").references(() => employees.id).notNull(),
@@ -4265,6 +4369,7 @@ export const nearMissReports = pgTable("near_miss_reports", {
 });
 
 export const nearMissAttachments = pgTable("near_miss_attachments", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
   type: text("type").notNull(), // photo, voice_note
@@ -4274,6 +4379,7 @@ export const nearMissAttachments = pgTable("near_miss_attachments", {
 });
 
 export const nearMissWitnesses = pgTable("near_miss_witnesses", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
   witnessUserId: varchar("witness_user_id").references(() => employees.id), // null for non-staff witnesses
@@ -4290,6 +4396,7 @@ export const nearMissWitnesses = pgTable("near_miss_witnesses", {
 });
 
 export const nearMissActions = pgTable("near_miss_actions", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
   title: text("title").notNull(),
@@ -4348,6 +4455,7 @@ export type UpdateNearMissAction = z.infer<typeof updateNearMissActionSchema>;
 // One row per (jobId, itemId) when an operator marks the item complete.
 // Absence of a row means "not done". Toggling off deletes the row.
 export const jobChecklistCompletions = pgTable("job_checklist_completions", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   itemId: text("item_id").notNull(),
@@ -4376,6 +4484,7 @@ export type InsertJobChecklistCompletion = z.infer<typeof insertJobChecklistComp
 // is the stable key referenced by completions, so it stays put even if the
 // label is renamed.
 export const quotingProcessSteps = pgTable("quoting_process_steps", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   itemId: text("item_id").notNull().unique(),
   label: text("label").notNull(),
@@ -4395,6 +4504,7 @@ export type InsertQuotingProcessStep = z.infer<typeof insertQuotingProcessStepSc
 // Absence of a row means "not done". Toggling off deletes the row, which also
 // clears the captured note/photos — same convention as job_checklist_completions.
 export const jobQuotingProcessCompletions = pgTable("job_quoting_process_completions", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   itemId: text("item_id").notNull(),
@@ -4426,6 +4536,7 @@ export type InsertJobQuotingProcessCompletion = z.infer<typeof insertJobQuotingP
 
 // --- Toolbox Talks ---
 export const toolboxTalkTopics = pgTable("toolbox_talk_topics", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   key: text("key").unique(), // stable slug for built-in seeds
   title: text("title").notNull(),
@@ -4439,6 +4550,7 @@ export const toolboxTalkTopics = pgTable("toolbox_talk_topics", {
 });
 
 export const toolboxTalks = pgTable("toolbox_talks", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   talkNumber: text("talk_number").notNull().unique(), // TB-YYYY-####
   topicId: varchar("topic_id").references(() => toolboxTalkTopics.id),
@@ -4456,6 +4568,7 @@ export const toolboxTalks = pgTable("toolbox_talks", {
 });
 
 export const toolboxTalkAttendees = pgTable("toolbox_talk_attendees", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   talkId: varchar("talk_id").references(() => toolboxTalks.id, { onDelete: "cascade" }).notNull(),
   name: text("name").notNull(),
@@ -4476,6 +4589,7 @@ export type InsertToolboxTalkAttendee = z.infer<typeof insertToolboxTalkAttendee
 
 // --- Pre-start Equipment Checklists ---
 export const prestartChecklistTemplates = pgTable("prestart_checklist_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   key: text("key").unique(), // stable slug for built-in seeds
   equipmentType: text("equipment_type").notNull(), // chainsaw, chipper, stump_grinder, ewp, rigging, vehicle
@@ -4489,6 +4603,7 @@ export const prestartChecklistTemplates = pgTable("prestart_checklist_templates"
 });
 
 export const prestartChecklists = pgTable("prestart_checklists", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   checkNumber: text("check_number").notNull().unique(), // PS-YYYY-####
   templateId: varchar("template_id").references(() => prestartChecklistTemplates.id),
@@ -4515,6 +4630,7 @@ export type InsertPrestartChecklist = z.infer<typeof insertPrestartChecklistSche
 
 // --- PPE / Equipment Inspection Register ---
 export const safetyAssets = pgTable("safety_assets", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   assetTag: text("asset_tag"), // user-facing label / QR value
   name: text("name").notNull(),
@@ -4532,6 +4648,7 @@ export const safetyAssets = pgTable("safety_assets", {
 });
 
 export const assetInspections = pgTable("asset_inspections", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   assetId: varchar("asset_id").references(() => safetyAssets.id, { onDelete: "cascade" }).notNull(),
   inspectorName: text("inspector_name"),
@@ -4552,6 +4669,7 @@ export type InsertAssetInspection = z.infer<typeof insertAssetInspectionSchema>;
 
 // --- Training / Competency / Ticket Register ---
 export const competencyTypes = pgTable("competency_types", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   key: text("key").unique(),
   name: text("name").notNull(),
@@ -4565,6 +4683,7 @@ export const competencyTypes = pgTable("competency_types", {
 });
 
 export const employeeCompetencies = pgTable("employee_competencies", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: varchar("employee_id").references(() => employees.id, { onDelete: "cascade" }).notNull(),
   competencyTypeId: varchar("competency_type_id").references(() => competencyTypes.id),
@@ -4587,6 +4706,7 @@ export type InsertEmployeeCompetency = z.infer<typeof insertEmployeeCompetencySc
 
 // --- SWMS (Safe Work Method Statements) ---
 export const swmsTemplates = pgTable("swms_templates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   key: text("key").unique(),
   name: text("name").notNull(),
@@ -4602,6 +4722,7 @@ export const swmsTemplates = pgTable("swms_templates", {
 });
 
 export const swmsDocuments = pgTable("swms_documents", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   swmsNumber: text("swms_number").notNull().unique(), // SW-YYYY-####
   title: text("title").notNull(),
@@ -4619,6 +4740,7 @@ export const swmsDocuments = pgTable("swms_documents", {
 });
 
 export const swmsSteps = pgTable("swms_steps", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   swmsId: varchar("swms_id").references(() => swmsDocuments.id, { onDelete: "cascade" }).notNull(),
   stepNumber: integer("step_number").notNull(),
@@ -4631,6 +4753,7 @@ export const swmsSteps = pgTable("swms_steps", {
 });
 
 export const swmsSignatures = pgTable("swms_signatures", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   swmsId: varchar("swms_id").references(() => swmsDocuments.id, { onDelete: "cascade" }).notNull(),
   workerName: text("worker_name").notNull(),
@@ -4654,6 +4777,7 @@ export type InsertSwmsSignature = z.infer<typeof insertSwmsSignatureSchema>;
 
 // --- Notifiable Events (WorkSafe NZ) ---
 export const notifiableEvents = pgTable("notifiable_events", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   eventNumber: text("event_number").notNull().unique(), // NE-YYYY-####
   eventType: text("event_type").notNull(), // death, notifiable_injury, notifiable_illness, notifiable_incident

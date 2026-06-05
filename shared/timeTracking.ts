@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 
 // Daily Time Entry Schema - ServiceM8 Style
 export const dailyTimeEntries = pgTable("daily_time_entries", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: varchar("employee_id").notNull(),
   employeeName: text("employee_name").notNull(),
@@ -35,6 +36,7 @@ export const dailyTimeEntries = pgTable("daily_time_entries", {
 
 // Individual Time Entry for Jobs - ServiceM8 Style
 export const jobTimeEntries = pgTable("job_time_entries", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   dailyEntryId: varchar("daily_entry_id").references(() => dailyTimeEntries.id).notNull(),
   jobId: varchar("job_id").notNull(),
@@ -80,6 +82,7 @@ export const jobTimeEntries = pgTable("job_time_entries", {
 
 // Staff Rate Matrix - Different rates per staff per service type
 export const staffRates = pgTable("staff_rates", {
+  businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: varchar("employee_id").notNull(),
   employeeName: text("employee_name").notNull(),
