@@ -1,28 +1,30 @@
 /**
- * Inflow tenancy — request-scoped tenant context (write-path).
+ * Inflow tenancy — request-scoped tenant context (AsyncLocalStorage).
  *
- * Uses AsyncLocalStorage so the current request's business id is available deep in
- * the data layer WITHOUT threading a parameter through hundreds of storage methods.
- * `tenantStoreMiddleware` binds it from the session; `withTenant()` stamps it onto
- * insert payloads.
+ * Carries, per request:
+ *   - businessId: the logged-in employee's business (for write-path `withTenant`)
+ *   - tenantDb:   an optional Drizzle client pinned to a pooled connection that has
+ *                 `SET ROLE app_tenant` + the tenant GUC applied, so Postgres RLS
+ *                 enforces isolation (Phase 2 fallback). Absent on login/cron/owner paths.
  *
- * Single-tenant today: every logged-in employee resolves to the Treemarkables id, so
- * this matches the DB column default. Its real job is correctness once tenant #2 exists
- * — then each request runs inside its own tenant context and inserts get the right owner
- * instead of silently defaulting to Treemarkables.
- *
- * Read isolation is handled separately by RLS (Phase 2), not here.
+ * No DB imports here (keeps this leaf module cycle-free). The pinning + RLS routing
+ * live in tenantMiddleware.ts and db.ts.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { Request, Response, NextFunction } from "express";
 
 interface TenantCtx {
   businessId?: string;
+  tenantDb?: unknown; // a Drizzle instance bound to a tenant-scoped connection
 }
 
 const als = new AsyncLocalStorage<TenantCtx>();
 
-/** Run `fn` with `businessId` bound to the async context. */
+/** Run `fn` with a full tenant context (businessId + optional pinned tenantDb). */
+export function runWithTenant<T>(ctx: TenantCtx, fn: () => T): T {
+  return als.run(ctx, fn);
+}
+
+/** Run `fn` with just the businessId bound (owner path — no RLS connection). */
 export function runWithBusiness<T>(businessId: string | undefined, fn: () => T): T {
   return als.run({ businessId }, fn);
 }
@@ -32,17 +34,17 @@ export function currentBusinessId(): string | undefined {
   return als.getStore()?.businessId;
 }
 
+/** The current request's RLS-scoped Drizzle client, if one was pinned for this request. */
+export function currentTenantDb(): unknown {
+  return als.getStore()?.tenantDb;
+}
+
 /**
- * Stamp an insert payload with the current tenant. If there's no context (background
- * work), leaves `businessId` off so the DB column default (Treemarkables, single-tenant
- * period) applies — never guesses a wrong owner.
+ * Stamp an insert payload with the current tenant. No context → leaves it off so the
+ * DB column default applies. Required so inserts satisfy the RLS WITH CHECK under the
+ * app_tenant role (business_id must equal the tenant GUC).
  */
 export function withTenant<T extends object>(values: T): T & { businessId?: string } {
   const businessId = currentBusinessId();
   return businessId ? { ...values, businessId } : values;
-}
-
-/** Express middleware: bind the logged-in employee's business to the async context. */
-export function tenantStoreMiddleware(req: Request, _res: Response, next: NextFunction): void {
-  runWithBusiness(req.session?.businessId, () => next());
 }

@@ -1,9 +1,10 @@
 import pg from "pg";
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { neon, Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
+import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
+import { drizzle as drizzleWs } from "drizzle-orm/neon-serverless";
 import * as schema from "@shared/schema";
-import { currentBusinessId } from "./tenancy/tenantStore";
-import { signTenantJwt } from "./tenancy/tenantKeys";
+import { currentTenantDb } from "./tenancy/tenantStore";
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -11,10 +12,15 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+neonConfig.webSocketConstructor = ws;
+
+// Phase 2 RLS flag. Off (default) = exact current behaviour: every query runs on the
+// owner neon-http client (BYPASSRLS). On = tenant requests run via a pooled connection
+// as the non-bypass `app_tenant` role with the tenant GUC set, so Postgres RLS enforces
+// isolation. Flipping it off is an instant rollback (no redeploy).
+const RLS_ENABLED = process.env.TENANT_RLS_ENABLED === "true";
+
 // Small pg.Pool kept solely for connect-pg-simple (session store).
-// All Drizzle ORM queries use the Neon HTTP driver below, which makes
-// stateless per-query HTTP requests — no persistent connections, no
-// "Connection terminated due to connection timeout" errors on Neon.
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   max: 3,
@@ -29,45 +35,61 @@ pool.on('error', (err) => {
   console.error('Session pool error (non-fatal):', err.message);
 });
 
-// ── Tenancy-aware Drizzle client (Phase 2 RLS) ──────────────────────────────
-// Default: the neondb_owner HTTP client (BYPASSRLS) — exact current behaviour.
-// When TENANT_RLS_ENABLED=true, queries made *inside a logged-in request* run via an
-// `authenticated` client carrying the tenant's JWT, so Postgres RLS enforces isolation.
-// Login, crons and platform-admin run OUTSIDE a request context → owner → cross-tenant
-// access (intended). Flag off = current behaviour; flipping it off is an instant rollback.
-const RLS_ENABLED = process.env.TENANT_RLS_ENABLED === "true";
-if (RLS_ENABLED && !process.env.TENANT_JWT_PRIVATE_KEY_B64) {
-  throw new Error(
-    "TENANT_RLS_ENABLED=true requires TENANT_JWT_PRIVATE_KEY_B64 / TENANT_JWT_KID to be set",
-  );
+// ── Owner client (neon-http, BYPASSRLS) ─────────────────────────────────────
+// Stateless one-request-per-query HTTP. Used for login, crons, platform-admin, and
+// ALL queries when RLS is disabled.
+const ownerDb = drizzleHttp(neon(process.env.DATABASE_URL), { schema });
+
+// ── Tenant pool (neon-serverless WebSocket) ─────────────────────────────────
+// Only created when RLS is enabled. Hands out per-request connections that run as the
+// non-bypass `app_tenant` role with the tenant GUC set, so RLS filters every query.
+export const tenantPool = RLS_ENABLED
+  ? new NeonPool({ connectionString: process.env.DATABASE_URL })
+  : null;
+
+export interface TenantConnection {
+  tenantDb: ReturnType<typeof drizzleWs>;
+  release: () => Promise<void>;
 }
 
-// Neon HTTP driver — one HTTP request per query, zero persistent connections.
-const ownerDb = drizzle(neon(process.env.DATABASE_URL), { schema });
-
-// One authed client per tenant, reused across requests (neon-http is stateless; the
-// authToken callback re-mints a fresh short-lived JWT per query).
-const authedDbByBusiness = new Map<string, typeof ownerDb>();
-function authedDbFor(businessId: string): typeof ownerDb {
-  let d = authedDbByBusiness.get(businessId);
-  if (!d) {
-    const authedSql = neon(process.env.DATABASE_URL!, {
-      authToken: () => signTenantJwt({ business_id: businessId }),
-    });
-    d = drizzle(authedSql, { schema });
-    authedDbByBusiness.set(businessId, d);
+/**
+ * Pin a pooled connection to a tenant for the duration of a request:
+ * `SET ROLE app_tenant` + set the `app.current_business` GUC. The returned `release`
+ * MUST be called when the request ends (resets the connection before returning it to
+ * the pool, so no tenant context leaks to the next request).
+ */
+export async function acquireTenantDb(businessId: string): Promise<TenantConnection> {
+  if (!tenantPool) throw new Error("TENANT_RLS_ENABLED is off — tenant pool unavailable");
+  const client = await tenantPool.connect();
+  try {
+    await client.query("SET ROLE app_tenant");
+    await client.query("SELECT set_config('app.current_business', $1, false)", [businessId]);
+  } catch (e) {
+    client.release();
+    throw e;
   }
-  return d;
+  const tenantDb = drizzleWs(client, { schema });
+  const release = async () => {
+    try {
+      await client.query("RESET ROLE");
+      await client.query("SELECT set_config('app.current_business', '', false)");
+    } catch {
+      /* dead/errored connection — the pool discards it on release, so no leak */
+    }
+    client.release();
+  };
+  return { tenantDb, release };
 }
 
+// ── Context-aware client ────────────────────────────────────────────────────
+// Inside a logged-in request (RLS on), resolves to the pinned tenant client; otherwise
+// the owner client. No call-site changes across storage.ts / routes.ts.
 function contextDb(): typeof ownerDb {
   if (!RLS_ENABLED) return ownerDb;
-  const businessId = currentBusinessId();
-  return businessId ? authedDbFor(businessId) : ownerDb;
+  const tdb = currentTenantDb() as typeof ownerDb | undefined;
+  return tdb ?? ownerDb;
 }
 
-// Transparent proxy: every `db.*` access resolves to the right client for the current
-// async context — no call-site changes across storage.ts / routes.ts.
 export const db: typeof ownerDb = new Proxy(ownerDb, {
   get(_target, prop) {
     const active = contextDb() as Record<string | symbol, unknown>;

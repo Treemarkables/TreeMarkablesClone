@@ -7,7 +7,7 @@ import * as Sentry from "@sentry/node";
 import http from "http";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.ts";
-import { tenantStoreMiddleware } from "./tenancy/tenantStore";
+import { tenantContextMiddleware } from "./tenancy/tenantMiddleware";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
 import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
@@ -143,10 +143,11 @@ app.use(
 
 console.log('✅ Session store: PostgreSQL (sessions persist across server restarts)');
 
-// Tenancy: bind each request to its business (from the session) via AsyncLocalStorage,
-// so the data layer can stamp inserts with the right owner. Must come after session
-// middleware. No-op behaviour today (single-tenant), foundation for multi-tenant writes.
-app.use(tenantStoreMiddleware);
+// Tenancy: bind each request to its business via AsyncLocalStorage (for write-path
+// stamping), and — when TENANT_RLS_ENABLED — pin a tenant-scoped pooled connection so
+// Postgres RLS enforces read isolation. Must come after session middleware. With the
+// flag off this only sets businessId (no pooled connection) — exact current behaviour.
+app.use(tenantContextMiddleware);
 
 // Runtime static file serving with path resolution
 function resolveAndServeStatic(appInstance: express.Express) {

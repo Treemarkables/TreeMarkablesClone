@@ -120,7 +120,41 @@ at all 101 sites. (Single-tenant today: default = TM = claim, so it passes regar
 
 ---
 
-## ⏸️ PAUSED 2026-06-05 — blocked on Neon Authorize JWKS validation
+## ✅ RESOLVED via FALLBACK 2026-06-05 — `app_tenant` role + GUC (no Neon Authorize)
+
+After Neon Authorize proved unworkable (below), we pivoted to the fallback and **it works,
+fully validated on real Dev data:**
+- `INFLOW_PHASE2_FALLBACK_rls.sql` — `app_tenant` role + GUC-based `tenant_isolation` policies on
+  all 127 tables. Applied to Dev (supersedes the old `auth.session()` policies; idempotent).
+- App integration BUILT (branch, flag-gated by `TENANT_RLS_ENABLED`):
+  - `server/db.ts` — owner neon-http client (flag off / login / cron) + a `neon-serverless`
+    WebSocket pool; `acquireTenantDb(businessId)` pins a connection with `SET ROLE app_tenant` +
+    the tenant GUC. Context-aware proxy routes `db.*` to the pinned client inside a request.
+  - `server/tenancy/tenantMiddleware.ts` — pins/releases the tenant connection per request
+    (resets on response finish, no leak). Mounted after session in `index.ts`.
+  - `server/tenancy/tenantStore.ts` — ALS carries `businessId` + the pinned `tenantDb`.
+- **Validated on real tables** (customers 2371, jobs 3612, photos 29): tenant=Treemarkables sees
+  all its rows; tenant=other sees **0**; no-context = **0** (fail-closed); no GUC leak after reset.
+  `drizzle/neon-serverless` confirmed working over a pooled client.
+
+**Why this is better than Neon Authorize:** standard Postgres only — no proxy, no JWKS hosting, no
+vendor-feature fragility. Flag off = exact current behaviour (no pool created); flipping off is an
+instant rollback.
+
+### Production rollout (remaining — user-gated)
+1. Apply `INFLOW_PHASE2_FALLBACK_rls.sql` to **prod** (Neon SQL Editor; no-op while flag off / owner).
+2. Deploy the code (rebase branch → push → DO). Flag **off** → zero behaviour change.
+3. Set `TENANT_RLS_ENABLED=true` in DO env → RLS active. Smoke-test (Treemarkables sees all its
+   data = everything, single-tenant). Monitor the WebSocket pool. Instant rollback = unset the flag.
+
+### Cleanup note
+Dev tables retain the fallback RLS (inert under the owner connection). The old Neon-Authorize
+`authenticated` grants/role linger harmlessly; `INFLOW_PHASE2_rls.sql` (the auth.session variant) is
+superseded by the FALLBACK file.
+
+---
+
+## (historical) ⏸️ Neon Authorize attempt — blocked on JWKS validation
 
 **Decision:** paused (not abandoned). RLS isn't urgent while single-tenant; the data-layer + write-path
 (done + safe) are what mattered. Resume as a focused effort before onboarding tenant #2.
