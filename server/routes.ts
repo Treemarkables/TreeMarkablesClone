@@ -17,6 +17,7 @@ declare module 'express-session' {
 }
 import { storage, invoiceRevenueExGst } from "./storage";
 import { withTenant } from "./tenancy/tenantStore";
+import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db } from "./db";
@@ -1625,6 +1626,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     res.json({ success: true });
   });
+
+  // Public JWKS endpoint for Neon Authorize (Phase 2 RLS). Neon's proxy fetches this to
+  // validate per-request tenant JWTs. Public key only — safe to expose. Dormant until
+  // Neon Authorize is configured and TENANT_RLS_ENABLED=true.
+  app.get('/.well-known/jwks.json', jwksHandler);
 
   // AUTHENTICATION ENDPOINTS
   // ========================================
