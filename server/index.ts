@@ -16,7 +16,8 @@ import path from "path";
 import { fileURLToPath } from 'url';
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { pool } from "./db";
+import { pool, assertTenantDbMatchesOwner } from "./db";
+import { ensureSchemaUpToDate } from "./schemaMigrations";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
 if (!process.env.ALLOW_EMPLOYEE_ID_LOGIN) {
@@ -416,6 +417,28 @@ function startNotificationQueueWorker() {
 (async () => {
   try {
     log("Starting server initialization...", "startup");
+
+    // Fail fast if the tenant connection points at a different database than the
+    // owner connection (a wrong DIRECT_DATABASE_URL once made prod data appear to
+    // "vanish" — owner-path login worked, tenant reads hit an empty branch). Refuse
+    // to boot so the misconfig surfaces as an obvious deploy failure.
+    try {
+      await assertTenantDbMatchesOwner();
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
+
+    // Self-healing schema: bring the database up to match the deployed code so a
+    // schema change can't silently outrun the prod DB (caused the deposit-column /
+    // billing-table scrambles). Non-fatal — log loudly but keep booting, so a
+    // transient migration hiccup doesn't take the whole app down.
+    try {
+      await ensureSchemaUpToDate();
+      log("✅ Schema up to date", "startup");
+    } catch (e) {
+      console.error("[schema] boot migrations failed (continuing):", e);
+    }
 
     let devServer: http.Server | undefined;
     try {
