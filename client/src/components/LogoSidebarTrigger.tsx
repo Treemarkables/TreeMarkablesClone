@@ -25,7 +25,7 @@ export function LogoSidebarTrigger({ className = "", size = 44 }: LogoSidebarTri
       style={{
         width: size,
         height: size,
-        backgroundImage: "url(/inflow-icon-192.png?v=7)",
+        backgroundImage: "url(/inflow-icon-192.png?v=8)",
         backgroundSize: "100%",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",

@@ -22,6 +22,12 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setSpeaker", returnType: CAPPluginReturnPromise),
     ]
 
+    /// Shared instance so the AppDelegate can stand up VoIP push handling at app
+    /// launch — required to catch a call that cold-launches a killed/locked app,
+    /// since iOS delivers the VoIP push before the Capacitor webview loads —
+    /// while Capacitor registers this SAME instance for JS bridge calls.
+    static let shared = TwilioVoicePlugin()
+
     // MARK: - Stored Properties (strongly retained)
 
     /// Retained reference to PKPushRegistry — must be a stored property or callbacks stop.
@@ -38,8 +44,25 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
 
     public override func load() {
         super.load()
-        DispatchQueue.main.async {
-            self.setupCallKit()
+        startVoIP()
+    }
+
+    /// Sets up CallKit + the VoIP push registry. Called from the AppDelegate at
+    /// `didFinishLaunchingWithOptions` (so the registry is live before iOS
+    /// delivers a cold-launch VoIP push to a killed/locked app — the webview
+    /// hasn't loaded yet at that point) and again from `load()` for normal
+    /// launches. Both setup steps are idempotent, so repeat calls are no-ops.
+    /// Handling an incoming push needs no access token, so this is safe to run
+    /// before JS hands one over.
+    func startVoIP() {
+        if Thread.isMainThread {
+            setupCallKit()
+            registerForVoIPPush()
+        } else {
+            DispatchQueue.main.async {
+                self.setupCallKit()
+                self.registerForVoIPPush()
+            }
         }
     }
 
@@ -52,7 +75,12 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         }
         self.accessToken = token
         DispatchQueue.main.async {
+            // Registry is normally already up from load(); this is a no-op then.
             self.registerForVoIPPush()
+            // If the device token already arrived (registry came up at launch),
+            // bind/refresh it with Twilio now. Otherwise didUpdate handles it
+            // once the token is delivered.
+            self.registerWithTwilioIfReady()
         }
         call.resolve()
     }
@@ -132,6 +160,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - CallKit Setup
 
     private func setupCallKit() {
+        guard callKitProvider == nil else { return }
         let config = CXProviderConfiguration(localizedName: "Inflow")
         config.maximumCallGroups = 1
         config.maximumCallsPerCallGroup = 1
@@ -148,6 +177,10 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - VoIP Push Registration
 
     private func registerForVoIPPush() {
+        // Idempotent: the registry is created once (at launch in load()) and
+        // reused when JS later calls register(). Creating a second registry
+        // would orphan the delegate callbacks.
+        guard self.voipRegistry == nil else { return }
         // Assign to stored property so the registry — and therefore the delegate
         // callbacks — remain alive for the lifetime of the plugin instance.
         let registry = PKPushRegistry(queue: DispatchQueue.main)
@@ -156,12 +189,46 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         self.voipRegistry = registry
     }
 
+    /// Binds the VoIP device token to the Twilio identity so inbound calls get
+    /// pushed here. No-op until BOTH the access token (from JS `register()`) and
+    /// the device token (from the PKPushRegistry) are available — the two can
+    /// arrive in either order depending on app launch path.
+    private func registerWithTwilioIfReady() {
+        guard let token = self.accessToken, let deviceToken = self.deviceToken else { return }
+        TwilioVoiceSDK.register(accessToken: token, deviceToken: deviceToken) { error in
+            if let error = error {
+                NSLog("[TwilioVoice] Registration error: \(error)")
+                self.notifyListeners("registrationError", data: ["message": error.localizedDescription])
+            } else {
+                let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+                NSLog("[TwilioVoice] Registered — device token: \(hex.prefix(8))...")
+                self.notifyListeners("registered", data: ["deviceToken": hex])
+            }
+        }
+    }
+
     // MARK: - Incoming Call Presentation
 
     private func reportIncomingCall(from callInvite: CallInvite) {
         self.callInvite = callInvite
         let uuid = UUID()
         self.callUUID = uuid
+
+        // Capture whether the app is in the foreground BEFORE presenting the
+        // CallKit UI (presenting it can flip the app to inactive). iOS only
+        // shows its own full-screen call UI for lock-screen/background answers;
+        // when the app is already open it tucks the call into the Dynamic Island
+        // and expects the app to draw its own controls. The web layer keys off
+        // this flag to show the in-app call screen ONLY for foreground calls.
+        let isForeground: Bool
+        if Thread.isMainThread {
+            isForeground = UIApplication.shared.applicationState == .active
+        } else {
+            isForeground = DispatchQueue.main.sync {
+                UIApplication.shared.applicationState == .active
+            }
+        }
+        NSLog("[TwilioVoice] incoming call — foreground=\(isForeground)")
 
         let update = CXCallUpdate()
         let callerNumber = callInvite.from ?? "Unknown"
@@ -181,12 +248,20 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
 
+        // Retain these call-lifecycle events until a JS listener consumes them.
+        // When the app is cold-launched (or foregrounded) by the VoIP push, the
+        // native side reports the call and the user can answer from CallKit
+        // BEFORE the webview's React listeners have attached. Without retention,
+        // Capacitor drops those early events, so the web `callState` never
+        // leaves "idle" and the in-call overlay (mute/speaker/end-call) never
+        // appears — the user lands on the current route with no controls.
         notifyListeners("incomingCall", data: [
             "from": callerNumber,
             "to": callInvite.to ?? "",
             "callSid": callInvite.callSid,
             "callerName": knownName ?? "",
-        ])
+            "foreground": isForeground ? "true" : "false",
+        ], retainUntilConsumed: true)
     }
 }
 
@@ -199,20 +274,13 @@ extension TwilioVoicePlugin: PKPushRegistryDelegate {
         didUpdate pushCredentials: PKPushCredentials,
         for type: PKPushType
     ) {
-        guard type == .voIP, let token = self.accessToken else { return }
-        let deviceToken = pushCredentials.token
-        self.deviceToken = deviceToken
-
-        TwilioVoiceSDK.register(accessToken: token, deviceToken: deviceToken) { error in
-            if let error = error {
-                NSLog("[TwilioVoice] Registration error: \(error)")
-                self.notifyListeners("registrationError", data: ["message": error.localizedDescription])
-            } else {
-                let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
-                NSLog("[TwilioVoice] Registered — device token: \(hex.prefix(8))...")
-                self.notifyListeners("registered", data: ["deviceToken": hex])
-            }
-        }
+        guard type == .voIP else { return }
+        // Always keep the device token — the registry can come up at launch
+        // (load) before JS has supplied an access token. The Twilio binding then
+        // happens as soon as register() provides the token (or right here if it
+        // already has).
+        self.deviceToken = pushCredentials.token
+        registerWithTwilioIfReady()
     }
 
     public func pushRegistry(
@@ -262,7 +330,7 @@ extension TwilioVoicePlugin: NotificationDelegate {
         callKitProvider?.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
         self.callInvite = nil
         self.callUUID = nil
-        notifyListeners("callCancelled", data: [:])
+        notifyListeners("callCancelled", data: [:], retainUntilConsumed: true)
     }
 }
 
@@ -283,7 +351,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         self.activeCall = callInvite.accept(options: acceptOptions, delegate: self)
         self.callInvite = nil
         action.fulfill()
-        notifyListeners("callAnswered", data: [:])
+        notifyListeners("callAnswered", data: [:], retainUntilConsumed: true)
     }
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
@@ -293,7 +361,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         activeCall = nil
         callUUID = nil
         action.fulfill()
-        notifyListeners("callEnded", data: [:])
+        notifyListeners("callEnded", data: [:], retainUntilConsumed: true)
     }
 
     public func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
@@ -314,7 +382,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
 
 extension TwilioVoicePlugin: CallDelegate {
     public func callDidConnect(call: Call) {
-        notifyListeners("callConnected", data: ["sid": call.sid ?? ""])
+        notifyListeners("callConnected", data: ["sid": call.sid ?? ""], retainUntilConsumed: true)
     }
 
     public func callDidDisconnect(call: Call, error: Error?) {
@@ -325,7 +393,7 @@ extension TwilioVoicePlugin: CallDelegate {
         callUUID = nil
         notifyListeners("callDisconnected", data: [
             "error": error?.localizedDescription ?? "",
-        ])
+        ], retainUntilConsumed: true)
     }
 
     public func callDidFailToConnect(call: Call, error: Error) {
@@ -334,6 +402,24 @@ extension TwilioVoicePlugin: CallDelegate {
         }
         activeCall = nil
         callUUID = nil
-        notifyListeners("callFailed", data: ["error": error.localizedDescription])
+        notifyListeners("callFailed", data: ["error": error.localizedDescription], retainUntilConsumed: true)
+    }
+}
+
+// MARK: - Bridge View Controller
+
+/// Capacitor 6+ only auto-registers plugins listed in capacitor.config.json's
+/// package list (i.e. npm-installed plugins). Local, app-target plugins like
+/// this one are NOT discovered automatically anymore — the legacy `.m`
+/// `CAP_PLUGIN` macro no longer registers them — so the web layer would get
+/// `{"code":"UNIMPLEMENTED"}` when calling TwilioVoice. Registering the
+/// instance here in `capacitorDidLoad()` is the supported way to wire up a
+/// local plugin. The storyboard's root view controller points at this class.
+class MainViewController: CAPBridgeViewController {
+    override func capacitorDidLoad() {
+        // Register the SAME instance the AppDelegate already used to stand up
+        // VoIP push handling at launch, so JS bridge calls and the live push
+        // registry share one plugin instance.
+        bridge?.registerPluginInstance(TwilioVoicePlugin.shared)
     }
 }

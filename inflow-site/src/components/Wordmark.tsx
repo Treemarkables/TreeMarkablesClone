@@ -14,7 +14,7 @@ export default function Wordmark({
     >
       <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-ink-900">
         <img
-          src="/inflow-icon-192.png"
+          src="/inflow-icon-192.png?v=8"
           alt=""
           className="h-8 w-8 rounded-md"
           width={32}

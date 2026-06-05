@@ -5078,51 +5078,78 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   app.get('/api/jobs', async (req: Request, res: Response) => {
     try {
       const { customerId, status, limit, offset, excludeCompleted, excludeArchived } = req.query;
-      
+
       // Parse pagination params
       const parsedLimit = limit ? parseInt(limit as string) : 10;
       const parsedOffset = offset ? parseInt(offset as string) : 0;
-      
+
+      // Fold the customer name onto each job row so list consumers (e.g. the
+      // dispatch board tiles) can render the name immediately, instead of
+      // waiting on a *separate* /api/customers fetch and a client-side join.
+      // Without this the board shows a placeholder, then the name "fetches in"
+      // a beat later — a visible flash. Customers are loaded once per request
+      // and mapped in memory; failure is non-fatal (name falls back to null).
+      let customerNameById: Map<string, string> | null = null;
+      const attachCustomerNames = async <T extends { customerId?: string | null }>(
+        jobs: T[],
+      ): Promise<Array<T & { customerName: string | null }>> => {
+        try {
+          if (!customerNameById) {
+            const allCustomers = await storage.getAllCustomers();
+            customerNameById = new Map(
+              allCustomers.map((c) => [c.id, c.name] as [string, string]),
+            );
+          }
+          return jobs.map((j) => ({
+            ...j,
+            customerName: j.customerId ? customerNameById!.get(j.customerId) ?? null : null,
+          }));
+        } catch (custErr) {
+          console.error('Error attaching customer names to jobs list:', custErr);
+          return jobs.map((j) => ({ ...j, customerName: null }));
+        }
+      };
+
       // Handle customer-specific queries (return all jobs for that customer, no pagination)
       if (customerId && typeof customerId === 'string') {
         const jobs = await storage.getJobsByCustomer(customerId);
         // Serialize timestamps to ISO UTC format
-        const serializedJobs = jobs.map(serializeJobTimestamps);
+        const serializedJobs = await attachCustomerNames(jobs.map(serializeJobTimestamps));
         return res.json({ success: true, data: serializedJobs, total: jobs.length, limit: jobs.length, offset: 0 });
       }
-      
+
       // Handle status-specific queries with pagination
       if (status && typeof status === 'string') {
-        const result = await storage.getAllJobs({ 
-          limit: parsedLimit, 
-          offset: parsedOffset, 
-          status 
+        const result = await storage.getAllJobs({
+          limit: parsedLimit,
+          offset: parsedOffset,
+          status
         });
         // Serialize timestamps to ISO UTC format
-        const serializedJobs = result.jobs.map(serializeJobTimestamps);
-        return res.json({ 
-          success: true, 
-          data: serializedJobs, 
+        const serializedJobs = await attachCustomerNames(result.jobs.map(serializeJobTimestamps));
+        return res.json({
+          success: true,
+          data: serializedJobs,
           total: result.total,
           limit: parsedLimit,
           offset: parsedOffset
         });
       }
-      
+
       // Default: get all jobs with optional exclusion filters
-      const result = await storage.getAllJobs({ 
-        limit: parsedLimit, 
+      const result = await storage.getAllJobs({
+        limit: parsedLimit,
         offset: parsedOffset,
         excludeCompleted: excludeCompleted === 'true',
         excludeArchived: excludeArchived === 'true',
       });
-      
+
       // Serialize timestamps to ISO UTC format
-      const serializedJobs = result.jobs.map(serializeJobTimestamps);
-      
-      res.json({ 
-        success: true, 
-        data: serializedJobs, 
+      const serializedJobs = await attachCustomerNames(result.jobs.map(serializeJobTimestamps));
+
+      res.json({
+        success: true,
+        data: serializedJobs,
         total: result.total,
         limit: parsedLimit,
         offset: parsedOffset
@@ -5425,7 +5452,25 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
-      res.json({ success: true, data: job });
+      // Eagerly resolve the linked customer and fold the name (+ the full
+      // record) into the job payload. The customer name is otherwise only
+      // available via a *separate* /api/customers fetch, which means the job
+      // card renders, then the name "fetches in" a beat later — a visible
+      // flash on slow/mobile connections. Carrying it on the job removes that
+      // second round-trip so the name paints with the job itself.
+      let customerName: string | null = null;
+      let customer: Awaited<ReturnType<typeof storage.getCustomer>> | undefined;
+      if (job.customerId) {
+        try {
+          customer = await storage.getCustomer(job.customerId);
+          customerName = customer?.name ?? null;
+        } catch (custErr) {
+          // Non-fatal: the job still loads, the name just falls back to the
+          // client's existing /api/customers lookup.
+          console.error('Error resolving customer for job payload:', custErr);
+        }
+      }
+      res.json({ success: true, data: { ...job, customerName, customer } });
     } catch (error) {
       console.error('Error fetching job:', error);
       res.status(500).json({ success: false, message: 'Error fetching job' });
@@ -10654,6 +10699,7 @@ ${phoneTarget}
   //   folder=voicemail  baseName=greeting   → voicemail/greeting.{mp3,wav}
   //   folder=recording-disclosure baseName=disclosure → .../disclosure.{mp3,wav}
   const serveBucketAudio = async (
+    req: Request,
     res: Response,
     folder: string,
     baseName: string,
@@ -10676,12 +10722,43 @@ ${phoneTarget}
         const [exists] = await file.exists();
         if (!exists) continue;
         const [metadata] = await file.getMetadata();
+        const total = Number(metadata.size) || 0;
         res.set('Content-Type', (metadata.contentType as string) || candidate.type);
         res.set('Cache-Control', 'public, max-age=300');
-        return file.createReadStream().on('error', (err) => {
+        // WebKit (<audio> in Safari and the iOS webview) refuses to play media
+        // unless the server advertises and honours byte-range requests — it
+        // sends `Range: bytes=0-` and expects a 206 Partial Content reply. Plain
+        // 200 full-body responses show as "Error" in the player. Honour ranges
+        // so the in-app preview works. (Twilio's <Play> uses a plain GET and is
+        // unaffected either way.)
+        res.set('Accept-Ranges', 'bytes');
+
+        const onErr = (err: Error) => {
           console.error(`Error streaming ${folder}/${baseName}:`, err);
           if (!res.headersSent) res.status(500).send('Stream error');
-        }).pipe(res);
+        };
+
+        const rangeHeader = req.headers.range;
+        const match =
+          total > 0 && typeof rangeHeader === 'string'
+            ? /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim())
+            : null;
+        if (match) {
+          const start = match[1] ? parseInt(match[1], 10) : 0;
+          let end = match[2] ? parseInt(match[2], 10) : total - 1;
+          if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= total) {
+            res.set('Content-Range', `bytes */${total}`);
+            return res.status(416).end();
+          }
+          if (end >= total) end = total - 1;
+          res.status(206);
+          res.set('Content-Range', `bytes ${start}-${end}/${total}`);
+          res.set('Content-Length', String(end - start + 1));
+          return file.createReadStream({ start, end }).on('error', onErr).pipe(res);
+        }
+
+        if (total > 0) res.set('Content-Length', String(total));
+        return file.createReadStream().on('error', onErr).pipe(res);
       }
       return res.status(404).send(notFoundMsg);
     } catch (err) {
@@ -10692,8 +10769,9 @@ ${phoneTarget}
 
   // Voicemail greeting — upload to voicemail/greeting.{mp3,wav}; point
   // TWILIO_VOICEMAIL_GREETING_URL at this.
-  app.get('/api/public/voicemail-greeting', async (_req: Request, res: Response) => {
+  app.get('/api/public/voicemail-greeting', async (req: Request, res: Response) => {
     await serveBucketAudio(
+      req,
       res,
       'voicemail',
       'greeting',
@@ -10703,8 +10781,9 @@ ${phoneTarget}
 
   // Recorded-call disclosure — upload to recording-disclosure/disclosure.{mp3,wav};
   // point TWILIO_RECORDING_DISCLOSURE_URL at this.
-  app.get('/api/public/recording-disclosure', async (_req: Request, res: Response) => {
+  app.get('/api/public/recording-disclosure', async (req: Request, res: Response) => {
     await serveBucketAudio(
+      req,
       res,
       'recording-disclosure',
       'disclosure',
@@ -10712,8 +10791,112 @@ ${phoneTarget}
     );
   });
 
+  // ── Voicemail greeting management (admin) ──────────────────────────────────
+  // Lets the owner record/upload their own voicemail greeting from the app
+  // instead of hand-uploading to GCS or editing env vars. The file lands at
+  // voicemail/greeting.{mp3,wav}; the public /api/public/voicemail-greeting
+  // route above serves it to Twilio, and the no-answer handler below
+  // auto-detects it — so no TWILIO_VOICEMAIL_GREETING_URL env var is required.
+  const parsePrivateBucket = (): { bucketName: string; prefix: string } | null => {
+    const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
+    if (!privateDir) return null;
+    const parts = privateDir.replace(/^\//, '').split('/');
+    return { bucketName: parts[0], prefix: parts.slice(1).join('/') };
+  };
+
+  // Returns the format of an uploaded greeting if one is present, else null.
+  const findUploadedGreeting = async (): Promise<'mp3' | 'wav' | null> => {
+    const bucket = parsePrivateBucket();
+    if (!bucket) return null;
+    for (const ext of ['mp3', 'wav'] as const) {
+      try {
+        const [exists] = await objectStorageClient
+          .bucket(bucket.bucketName)
+          .file(`${bucket.prefix}/voicemail/greeting.${ext}`)
+          .exists();
+        if (exists) return ext;
+      } catch {
+        /* try next candidate */
+      }
+    }
+    return null;
+  };
+
+  // Admin UI status: is a custom greeting in use right now?
+  app.get('/api/twilio/voicemail-greeting/status', requireAdmin, async (_req: Request, res: Response) => {
+    const format = await findUploadedGreeting();
+    res.json({ success: true, exists: !!format, format });
+  });
+
+  // Upload a recorded/selected greeting. Only mp3/wav — the formats Twilio
+  // <Play> accepts. Writes greeting.<ext> and removes the sibling format so
+  // serveBucketAudio (which checks mp3 before wav) resolves deterministically.
+  app.post('/api/twilio/voicemail-greeting', requireAdmin, imageUpload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ success: false, message: 'No audio file provided' });
+      }
+      const mime = (file.mimetype || '').toLowerCase();
+      const name = file.originalname.toLowerCase();
+      const isMp3 = mime === 'audio/mpeg' || mime === 'audio/mp3' || name.endsWith('.mp3');
+      const isWav = mime === 'audio/wav' || mime === 'audio/wave' || mime === 'audio/x-wav' || name.endsWith('.wav');
+      if (!isMp3 && !isWav) {
+        return res.status(400).json({ success: false, message: 'Greeting must be an MP3 or WAV file' });
+      }
+      const bucket = parsePrivateBucket();
+      if (!bucket) {
+        return res.status(503).json({ success: false, message: 'Object storage not configured' });
+      }
+      const ext = isMp3 ? 'mp3' : 'wav';
+      const siblingExt = isMp3 ? 'wav' : 'mp3';
+      const contentType = isMp3 ? 'audio/mpeg' : 'audio/wav';
+      await objectStorageClient
+        .bucket(bucket.bucketName)
+        .file(`${bucket.prefix}/voicemail/greeting.${ext}`)
+        .save(file.buffer, { contentType });
+      try {
+        await objectStorageClient
+          .bucket(bucket.bucketName)
+          .file(`${bucket.prefix}/voicemail/greeting.${siblingExt}`)
+          .delete({ ignoreNotFound: true });
+      } catch (delErr) {
+        console.error('Voicemail greeting: failed clearing sibling format:', delErr);
+      }
+      console.log(`📞 Voicemail greeting uploaded (${ext}, ${file.buffer.length} bytes)`);
+      res.json({ success: true, format: ext });
+    } catch (err) {
+      console.error('❌ Voicemail greeting upload failed:', err);
+      res.status(500).json({ success: false, message: 'Failed to save greeting' });
+    }
+  });
+
+  // Revert to the default spoken greeting by removing any uploaded file.
+  app.delete('/api/twilio/voicemail-greeting', requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const bucket = parsePrivateBucket();
+      if (!bucket) {
+        return res.status(503).json({ success: false, message: 'Object storage not configured' });
+      }
+      for (const ext of ['mp3', 'wav'] as const) {
+        try {
+          await objectStorageClient
+            .bucket(bucket.bucketName)
+            .file(`${bucket.prefix}/voicemail/greeting.${ext}`)
+            .delete({ ignoreNotFound: true });
+        } catch (delErr) {
+          console.error(`Voicemail greeting: failed deleting ${ext}:`, delErr);
+        }
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error('❌ Voicemail greeting delete failed:', err);
+      res.status(500).json({ success: false, message: 'Failed to remove greeting' });
+    }
+  });
+
   // TwiML: owner didn't answer → take a voicemail (still records and processes)
-  app.post('/api/webhooks/twilio-no-answer', (req: Request, res: Response) => {
+  app.post('/api/webhooks/twilio-no-answer', async (req: Request, res: Response) => {
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
@@ -10756,8 +10939,13 @@ ${phoneTarget}
     const greetingAudioUrl = (process.env.TWILIO_VOICEMAIL_GREETING_URL || '').trim();
     let greetingTwiml: string;
     if (greetingAudioUrl) {
-      // Audio URL must be publicly reachable by Twilio's servers.
+      // Explicit override via env var — audio URL must be publicly reachable.
       greetingTwiml = `<Play>${escapeXml(greetingAudioUrl)}</Play>`;
+    } else if (await findUploadedGreeting()) {
+      // Owner recorded/uploaded a greeting in the app — serve it via the public
+      // endpoint (no env var needed). Cache-bust so Twilio re-fetches after a
+      // re-record instead of replaying a stale cached file.
+      greetingTwiml = `<Play>${escapeXml(`${baseUrl}/api/public/voicemail-greeting?t=${Date.now()}`)}</Play>`;
     } else {
       const defaultGreeting =
         "Hi, you have reached Treemarkables. We are unable to take your call right now. " +
@@ -11078,6 +11266,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       TWILIO_API_SECRET: { set: !!process.env.TWILIO_API_SECRET, masked: mask(process.env.TWILIO_API_SECRET) },
       TWILIO_PHONE_NUMBER: { set: !!process.env.TWILIO_PHONE_NUMBER, value: process.env.TWILIO_PHONE_NUMBER || null },
       TWILIO_TWIML_APP_SID: { set: !!process.env.TWILIO_TWIML_APP_SID, masked: mask(process.env.TWILIO_TWIML_APP_SID) },
+      TWILIO_PUSH_CREDENTIAL_SID: { set: !!process.env.TWILIO_PUSH_CREDENTIAL_SID, masked: mask(process.env.TWILIO_PUSH_CREDENTIAL_SID) },
       TWILIO_CLIENT_IDENTITY: { set: !!process.env.TWILIO_CLIENT_IDENTITY, value: process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner (default)' },
       OWNER_PHONE_NUMBER: { set: !!process.env.OWNER_PHONE_NUMBER, value: process.env.OWNER_PHONE_NUMBER || null },
       OPENAI_API_KEY: { set: !!process.env.OPENAI_API_KEY, masked: mask(process.env.OPENAI_API_KEY) },
@@ -11156,6 +11345,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     if (!env.PRIVATE_OBJECT_DIR.set) recommendations.push('Set PRIVATE_OBJECT_DIR so recordings persist to GCS Object Storage');
     if (!env.TWILIO_API_KEY.set || !env.TWILIO_API_SECRET.set) recommendations.push('Set TWILIO_API_KEY + TWILIO_API_SECRET so the iOS app can register for incoming calls via the Voice SDK');
     if (!env.TWILIO_TWIML_APP_SID.set) recommendations.push('Set TWILIO_TWIML_APP_SID to enable outgoing calls from the iOS app');
+    if (!env.TWILIO_PUSH_CREDENTIAL_SID.set) recommendations.push('Set TWILIO_PUSH_CREDENTIAL_SID (a VoIP Push Credential in Twilio Console → Voice → Push Credentials, backed by an Apple VoIP Services APNs certificate) so the iOS app can RECEIVE incoming calls');
     if (twilioPhoneNumber && !twilioPhoneNumber.voiceUrlMatchesExpected) {
       recommendations.push(`Update Twilio console voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'})`);
     }
@@ -22638,7 +22828,6 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         );
         const taxRate = parseFloat(req.body.taxRate || '15') / 100;
         const discountAmt = parseFloat(req.body.discountAmount || '0') || 0;
-        const discountType = req.body.discountType || 'fixed';
         let recomputedSubtotal = 0;
         for (const item of storedItems) {
           const inOptionalSection = optionalSectionIds.has(item.sectionId || '');
@@ -22647,9 +22836,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             recomputedSubtotal += item.priceIncludesTax ? price / (1 + taxRate) : price;
           }
         }
-        const discountValue = discountType === 'percentage'
-          ? (recomputedSubtotal * discountAmt) / 100
-          : discountAmt;
+        // discountAmount arrives as the pre-computed dollar discount the
+        // builder already applied (it always sends discountValue in dollars,
+        // regardless of discountType). Subtract it directly — matching the
+        // accept path and the customer-facing renderers.
+        const discountValue = discountAmt;
         const subtotalAfterDiscount = Math.max(0, recomputedSubtotal - discountValue);
         const recomputedGst = subtotalAfterDiscount * taxRate;
         const recomputedTotal = subtotalAfterDiscount + recomputedGst;
@@ -22808,7 +22999,6 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         );
         const taxRatePut = parseFloat(req.body.taxRate || '15') / 100;
         const discountAmtPut = parseFloat(req.body.discountAmount || '0') || 0;
-        const discountTypePut = req.body.discountType || 'fixed';
         let recomputedSubtotalPut = 0;
         for (const item of storedItemsPut) {
           const inOptionalSectionPut = optionalSectionIdsPut.has(item.sectionId || '');
@@ -22817,9 +23007,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             recomputedSubtotalPut += item.priceIncludesTax ? price / (1 + taxRatePut) : price;
           }
         }
-        const discountValuePut = discountTypePut === 'percentage'
-          ? (recomputedSubtotalPut * discountAmtPut) / 100
-          : discountAmtPut;
+        // discountAmount is the pre-computed dollar discount (see CREATE above).
+        const discountValuePut = discountAmtPut;
         const subtotalAfterDiscountPut = Math.max(0, recomputedSubtotalPut - discountValuePut);
         const recomputedGstPut = subtotalAfterDiscountPut * taxRatePut;
         const recomputedTotalPut = subtotalAfterDiscountPut + recomputedGstPut;
@@ -22993,7 +23182,6 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           const acceptLineItems = await storage.getProposalLineItemsByProposal(id);
           const acceptTaxRate = parseFloat(proposal.taxRate?.toString() || '15') / 100;
           const acceptDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
-          const acceptDiscountType = proposal.discountType || 'fixed';
           let computedSubtotal = 0;
           for (const item of acceptLineItems) {
             if (item.selected !== false) {
@@ -23001,9 +23189,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
               computedSubtotal += item.priceIncludesTax ? price / (1 + acceptTaxRate) : price;
             }
           }
-          const acceptDiscountValue = acceptDiscountType === 'percentage'
-            ? (computedSubtotal * acceptDiscountAmt) / 100
-            : acceptDiscountAmt;
+          // discountAmount is the pre-computed dollar discount (see CREATE/PUT).
+          const acceptDiscountValue = acceptDiscountAmt;
           const acceptSubtotalAfterDiscount = Math.max(0, computedSubtotal - acceptDiscountValue);
           const acceptGst = acceptSubtotalAfterDiscount * acceptTaxRate;
           updatedSubtotal = Math.round(computedSubtotal * 100) / 100;

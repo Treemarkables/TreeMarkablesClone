@@ -9,6 +9,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         FirebaseSetup.configure(application)
+        // Stand up Twilio VoIP push handling at the very start of launch. An
+        // incoming call can cold-launch a killed/locked app via VoIP push, and
+        // iOS delivers that push during launch — before the Capacitor webview
+        // (and thus the plugin's load()) is ready. Setting up the PKPushRegistry
+        // here guarantees a live delegate to catch the push and ring CallKit.
+        TwilioVoicePlugin.shared.startVoIP()
         return true
     }
 

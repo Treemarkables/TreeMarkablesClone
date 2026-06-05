@@ -27,6 +27,12 @@ export interface CallEvent {
   error?: string;
   deviceToken?: string;
   message?: string;
+  // "true" when the app was in the foreground as the call arrived (captured
+  // natively before CallKit is presented). TwilioCallContext shows the in-app
+  // call screen when this is true OR the webview is currently visible — the
+  // foreground flag is the reliable signal for app-open calls, while visibility
+  // covers answering a backgrounded/locked call then opening the app.
+  foreground?: string;
 }
 
 export interface TwilioVoiceOptions {
@@ -54,11 +60,36 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
         method: "POST",
         credentials: "include",
       });
-      if (!res.ok) throw new Error(`Token fetch failed: ${res.status}`);
-      const { token } = await res.json();
-      await TwilioVoice.register({ token });
+      const bodyText = await res.text();
+      if (!res.ok) {
+        // Surface the server's actual message (e.g. 401 not-authenticated, or
+        // 503 "Twilio API Key not configured") — logging the bare Error object
+        // serialises to "{}" in the iOS webview console and hides the cause.
+        console.error(
+          `[TwilioVoice] token endpoint returned ${res.status}: ${bodyText}`,
+        );
+        return;
+      }
+      const data = JSON.parse(bodyText) as {
+        token?: string;
+        pushEnabled?: boolean;
+      };
+      if (!data.token) {
+        console.error("[TwilioVoice] token endpoint returned no token:", bodyText);
+        return;
+      }
+      if (data.pushEnabled === false) {
+        console.warn(
+          "[TwilioVoice] token issued but VoIP push is DISABLED (TWILIO_PUSH_CREDENTIAL_SID not set) — the app cannot receive inbound calls.",
+        );
+      }
+      await TwilioVoice.register({ token: data.token });
+      console.log("[TwilioVoice] register() ok — requested VoIP registration");
     } catch (err) {
-      console.error("[TwilioVoice] Registration failed:", err);
+      console.error(
+        "[TwilioVoice] Registration failed:",
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }, [isNative]);
 
@@ -104,23 +135,39 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
 
   const answer = useCallback(async () => {
     if (!isNative) return;
-    await TwilioVoice.answer();
+    try {
+      await TwilioVoice.answer();
+    } catch (err) {
+      console.warn("[TwilioVoice] answer failed:", err);
+    }
   }, [isNative]);
 
   const reject = useCallback(async () => {
     if (!isNative) return;
-    await TwilioVoice.reject();
+    try {
+      await TwilioVoice.reject();
+    } catch (err) {
+      console.warn("[TwilioVoice] reject failed:", err);
+    }
   }, [isNative]);
 
   const hangup = useCallback(async () => {
     if (!isNative) return;
-    await TwilioVoice.hangup();
+    try {
+      await TwilioVoice.hangup();
+    } catch (err) {
+      console.warn("[TwilioVoice] hangup failed:", err);
+    }
   }, [isNative]);
 
   const mute = useCallback(
     async (muted: boolean) => {
       if (!isNative) return;
-      await TwilioVoice.mute({ muted });
+      try {
+        await TwilioVoice.mute({ muted });
+      } catch (err) {
+        console.warn("[TwilioVoice] mute failed:", err);
+      }
     },
     [isNative],
   );
@@ -128,7 +175,13 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
   const setSpeaker = useCallback(
     async (on: boolean) => {
       if (!isNative) return;
-      await TwilioVoice.setSpeaker({ on });
+      try {
+        await TwilioVoice.setSpeaker({ on });
+      } catch (err) {
+        // The iOS native plugin doesn't implement setSpeaker; swallow so a
+        // failed toggle doesn't surface as an unhandled promise rejection.
+        console.warn("[TwilioVoice] setSpeaker failed:", err);
+      }
     },
     [isNative],
   );

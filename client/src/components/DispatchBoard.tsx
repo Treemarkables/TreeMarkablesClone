@@ -1166,11 +1166,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               (1000 * 60 * 60)
             : 2; // Default to 2 hours if parsing fails
 
-        // Safari-safe customer name lookup - check multiple sources
+        // Safari-safe customer name lookup - check multiple sources.
+        // Prefer the name folded onto the job payload by GET /api/jobs so the
+        // tile renders immediately without waiting on the separate
+        // /api/customers fetch + client-side map (which caused a name flash).
         const customerName =
-          apiJob.customerId && customerMap.has(apiJob.customerId)
+          apiJob.customerName ||
+          (apiJob.customerId && customerMap.has(apiJob.customerId)
             ? customerMap.get(apiJob.customerId)
-            : apiJob.clientName || apiJob.title || "";
+            : apiJob.clientName || apiJob.title || "");
 
         jobAssignments.push({
           id: apiJob.id,
@@ -1261,11 +1265,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           ).toISOString();
         }
 
-        // Safari-safe customer name lookup - check multiple sources
+        // Safari-safe customer name lookup - check multiple sources.
+        // Prefer the name folded onto the job payload by GET /api/jobs so the
+        // tile renders immediately without waiting on the separate
+        // /api/customers fetch + client-side map (which caused a name flash).
         const customerName =
-          apiJob.customerId && customerMap.has(apiJob.customerId)
+          apiJob.customerName ||
+          (apiJob.customerId && customerMap.has(apiJob.customerId)
             ? customerMap.get(apiJob.customerId)
-            : apiJob.clientName || apiJob.title || "";
+            : apiJob.clientName || apiJob.title || "");
 
         jobAssignments.push({
           id: apiJob.id,
@@ -2905,18 +2913,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                       </div>
                                     )}
 
-                                    {/* Row 2c: Customer confirmed / replied badge */}
-                                    {(job.customerConfirmed || job.customerReplyReceivedAt) && (
+                                    {/* Row 2c: Customer confirmed badge */}
+                                    {(job.customerConfirmed || job.confirmationReplySentAt) && (
                                       <div className="mb-1 flex items-center gap-1 flex-wrap">
-                                        {job.customerConfirmed ? (
+                                        {job.customerConfirmed && (
                                           <Badge className="bg-emerald-50 text-emerald-700 border-0 text-xs rounded-lg">
                                             <Check className="h-3 w-3 mr-1" />
                                             Confirmed
-                                          </Badge>
-                                        ) : (
-                                          <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
-                                            <MessageSquare className="h-3 w-3 mr-1" />
-                                            Customer replied
                                           </Badge>
                                         )}
                                         {job.confirmationReplySentAt && (
@@ -3306,12 +3309,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               <Badge className="bg-emerald-50 text-emerald-700 border-0 text-xs rounded-lg">
                                 <Check className="h-3 w-3 mr-1" />
                                 Confirmed
-                              </Badge>
-                            )}
-                            {!job.customerConfirmed && job.customerReplyReceivedAt && (
-                              <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
-                                <MessageSquare className="h-3 w-3 mr-1" />
-                                Customer replied
                               </Badge>
                             )}
                             {job.confirmationReplySentAt && (
