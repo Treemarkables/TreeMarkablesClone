@@ -45,11 +45,19 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    const onVisibility = () =>
-      setAppVisible(document.visibilityState === "visible");
-    document.addEventListener("visibilitychange", onVisibility);
-    return () =>
-      document.removeEventListener("visibilitychange", onVisibility);
+    const sync = () => setAppVisible(document.visibilityState === "visible");
+    // WKWebView's `visibilitychange → visible` is unreliable on the transition
+    // back from a native CallKit screen — it can fail to fire, leaving us stuck
+    // "hidden". Listen broadly (focus / pageshow too) and re-sync on each so the
+    // webview's visibility state recovers however iOS hands control back.
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("focus", sync);
+    window.addEventListener("pageshow", sync);
+    return () => {
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("pageshow", sync);
+    };
   }, []);
 
   const refreshCallHistory = useCallback(() => {
@@ -120,17 +128,33 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     });
   }, [setSpeaker]);
 
-  // Show our in-app call screen whenever there's a live call AND the app is on
-  // screen — NOT only when the call happened to arrive in the foreground. This
-  // covers the common case: a call arrives while the app is backgrounded/locked,
-  // the user answers from the native CallKit UI, then opens the app — without
-  // this they'd land on the dispatch board with the call hidden in the Dynamic
-  // Island and no controls. When the app is backgrounded/locked the webview is
-  // not visible, so we stay out of the way and let native CallKit own the screen.
+  // Show our in-app call screen whenever there's a live call and either:
+  //   • the call arrived while the app was open (callInfo.foreground) — a flag
+  //     captured natively & reliably before CallKit was presented, OR
+  //   • the webview is currently visible (appVisible) — covers answering a
+  //     backgrounded/locked call from native CallKit, then opening the app.
+  // We need BOTH signals: the foreground flag alone misses the lock-screen
+  // case, and appVisible alone is flaky on the return-from-CallKit transition
+  // (WKWebView can stay stuck "hidden"), which left foreground calls dumping the
+  // user onto the dispatch board with the call hidden in the Dynamic Island.
+  // When the app is genuinely backgrounded the webview isn't on screen anyway,
+  // so rendering the overlay there is harmless and native CallKit still owns it.
   const showOverlay =
     isNative &&
-    appVisible &&
+    (callInfo?.foreground || appVisible) &&
     (callState === "connecting" || callState === "active");
+
+  // Diagnostic: surfaces in Safari Web Inspector why the overlay did/didn't show
+  // during a live call. Gated on callState so it doesn't spam on idle renders.
+  if (callState !== "idle") {
+    console.log("[TwilioCall] overlay gate", {
+      showOverlay,
+      isNative,
+      foreground: callInfo?.foreground,
+      appVisible,
+      callState,
+    });
+  }
 
   return (
     <>
