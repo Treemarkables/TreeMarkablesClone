@@ -104,6 +104,7 @@ const RoleChecklistSettings = lazy(() => import("@/pages/RoleChecklistSettings")
 const QuotingProcessSettings = lazy(() => import("@/pages/QuotingProcessSettings"));
 const DocumentBuilderPage = lazy(() => import("@/pages/DocumentBuilderPage"));
 const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
+const Billing = lazy(() => import("@/pages/Billing"));
 const SettingsQuoteFollowup = lazy(() => import("@/pages/SettingsQuoteFollowup"));
 const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoReply"));
 const TimeTracking = lazy(() => import("@/pages/TimeTracking"));
@@ -1307,6 +1308,11 @@ function Router() {
       <Route path="/settings/company">
         <SidebarLayout>
           <SettingsCompany />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/billing">
+        <SidebarLayout>
+          <Billing />
         </SidebarLayout>
       </Route>
       <Route path="/settings/security">

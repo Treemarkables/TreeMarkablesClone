@@ -41,6 +41,14 @@ import { Link } from "wouter";
 // Settings sections data - simplified without complex features
 const settingsOptions = [
   {
+    id: "billing",
+    title: "Billing & Subscription",
+    description: "Manage your plan, payment method and invoices",
+    icon: Banknote,
+    color: "bg-emerald-100 text-emerald-600",
+    path: "/settings/billing"
+  },
+  {
     id: "checklist-template",
     title: "Default Job Checklist",
     description: "Tasks that auto-load into every new job card",

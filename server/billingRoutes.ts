@@ -58,6 +58,30 @@ export function registerBillingRoutes(app: any) {
     }
   });
 
+  // ── Plan catalog (for the billing settings UI) ─────────────────────────────
+  app.get("/api/billing/plans", async (req: Request, res: Response) => {
+    if (!req.session?.employeeId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    try {
+      const plans = await db
+        .select({
+          key: schema.subscriptionPlans.key,
+          name: schema.subscriptionPlans.name,
+          priceNzd: schema.subscriptionPlans.priceNzd,
+          interval: schema.subscriptionPlans.interval,
+          activeJobCap: schema.subscriptionPlans.activeJobCap,
+        })
+        .from(schema.subscriptionPlans)
+        .where(eq(schema.subscriptionPlans.isActive, true))
+        .orderBy(schema.subscriptionPlans.sortOrder);
+      return res.json(plans);
+    } catch (err: any) {
+      console.error("[billing] plans error:", err?.message);
+      return res.status(500).json({ error: "Failed to load plans" });
+    }
+  });
+
   // ── Start / upgrade a paid plan ────────────────────────────────────────────
   app.post("/api/billing/checkout", async (req: Request, res: Response) => {
     const businessId = req.session?.businessId;
