@@ -4809,5 +4809,71 @@ export const insertNotifiableEventSchema = createInsertSchema(notifiableEvents).
 export type NotifiableEvent = typeof notifiableEvents.$inferSelect;
 export type InsertNotifiableEvent = z.infer<typeof insertNotifiableEventSchema>;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SaaS subscription billing (Inflow — Phase 4). `subscriptionPlans` + `addOns` are the
+// GLOBAL catalog (no tenant). `subscriptions` + `businessAddOns` are per-business
+// (tenant-scoped — need businessId RLS + app_tenant grants when migrated). Stripe is the
+// source of truth for billing state; these rows mirror it via webhooks.
+// NOT YET MIGRATED — needs a DB migration (+ RLS on the two tenant tables) before use.
+// ─────────────────────────────────────────────────────────────────────────────
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),                 // 'freemium' | 'crew' | 'business'
+  name: text("name").notNull(),
+  stripePriceId: text("stripe_price_id"),              // recurring price id (null for freemium)
+  priceNzd: decimal("price_nzd", { precision: 10, scale: 2 }).notNull().default("0"),
+  interval: text("interval").notNull().default("month"),
+  activeJobCap: integer("active_job_cap"),             // null = unlimited
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull(),        // FK -> businesses(id), enforced at DB level
+  planId: varchar("plan_id").references(() => subscriptionPlans.id),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  status: text("status").notNull().default("active"),  // trialing|active|past_due|canceled|incomplete
+  currentPeriodEnd: timestamp("current_period_end"),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  trialEnd: timestamp("trial_end"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const addOns = pgTable("add_ons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),                 // matches capability `requires`, e.g. 'call_recording'
+  name: text("name").notNull(),
+  stripePriceId: text("stripe_price_id"),
+  priceNzd: decimal("price_nzd", { precision: 10, scale: 2 }),
+  billingType: text("billing_type").notNull().default("flat"), // 'flat' | 'metered'
+  isActive: boolean("is_active").notNull().default(true),
+});
+
+export const businessAddOns = pgTable("business_add_ons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull(),
+  addOnId: varchar("add_on_id").references(() => addOns.id),
+  status: text("status").notNull().default("active"),
+  stripeSubscriptionItemId: text("stripe_subscription_item_id"),
+  activatedAt: timestamp("activated_at").defaultNow(),
+});
+
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({ id: true, createdAt: true });
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true, updatedAt: true });
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export const insertAddOnSchema = createInsertSchema(addOns).omit({ id: true });
+export type AddOn = typeof addOns.$inferSelect;
+export type InsertAddOn = z.infer<typeof insertAddOnSchema>;
+export const insertBusinessAddOnSchema = createInsertSchema(businessAddOns).omit({ id: true, activatedAt: true });
+export type BusinessAddOn = typeof businessAddOns.$inferSelect;
+export type InsertBusinessAddOn = z.infer<typeof insertBusinessAddOnSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';
