@@ -223,6 +223,93 @@ export function InvoiceBuilder({
     }
   }, [isOpen]);
 
+  // Extract invoice line items from the best available source for this job, in
+  // priority order: accepted/sent proposal → quote → the job's own line items.
+  // Shared by the auto-init effect AND the manual "Import" button so the modal
+  // pre-fills with exactly what Import would produce. Previously these two paths
+  // diverged: auto-init only read proposal.sections[].lineItems and missed
+  // top-level proposal.lineItems, so it fell through to the job's unpriced
+  // placeholder ($0.00) and the user had to click Import to get the real price.
+  const extractLineItemsFromSources = (): InvoiceLineItem[] => {
+    const proposals = proposalsResponse?.data || [];
+    const quotes = quotesResponse?.data || [];
+
+    const proposal =
+      proposals.find((p: any) => p.status === "accepted") ||
+      proposals.find((p: any) => p.status === "sent") ||
+      proposals[0];
+    const quote =
+      quotes.find((q: any) => q.status === "accepted") ||
+      quotes.find((q: any) => q.status === "sent") ||
+      quotes[0];
+
+    const items: InvoiceLineItem[] = [];
+
+    // Proposal items may live at the top level OR nested inside sections.
+    const proposalItemArrays: any[][] = [];
+    if (Array.isArray(proposal?.lineItems)) {
+      proposalItemArrays.push(proposal.lineItems);
+    } else if (Array.isArray(proposal?.sections)) {
+      proposal.sections.forEach((section: any) => {
+        if (Array.isArray(section.lineItems)) {
+          proposalItemArrays.push(section.lineItems);
+        }
+      });
+    }
+    proposalItemArrays.forEach((arr) => {
+      arr.forEach((item: any) => {
+        items.push({
+          id: Math.random().toString(),
+          description: item.description || "",
+          quantity: item.quantity || 1,
+          unitPrice: parseFloat(item.unitPrice || item.rate || 0),
+          total: parseFloat(item.total || item.totalPrice || item.amount || 0),
+        });
+      });
+    });
+
+    // Fall back to the quote's line items.
+    if (items.length === 0 && Array.isArray(quote?.lineItems)) {
+      quote.lineItems.forEach((item: any) => {
+        items.push({
+          id: Math.random().toString(),
+          description: item.description || "",
+          quantity: item.quantity || 1,
+          unitPrice: parseFloat(item.unitPrice || item.rate || 0),
+          total: parseFloat(item.total || item.amount || 0),
+        });
+      });
+    }
+
+    // Last resort: the job's own line items (set via the Quote tab). These can
+    // be unpriced placeholders (e.g. a "Tree care" category row at $0.00).
+    if (
+      items.length === 0 &&
+      Array.isArray(job.lineItems) &&
+      job.lineItems.length > 0
+    ) {
+      (job.lineItems as any[]).forEach((item: any) => {
+        items.push({
+          id: item.id || Math.random().toString(),
+          description: item.description || "",
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice || item.rate || 0,
+          total:
+            item.total ||
+            item.amount ||
+            (item.quantity || 1) * (item.unitPrice || item.rate || 0) ||
+            0,
+          category: item.category,
+          serviceId: item.serviceId,
+          materialId: item.materialId,
+          unitCost: item.unitCost,
+        });
+      });
+    }
+
+    return items;
+  };
+
   // Initialize fields when modal opens or when job changes.
   //
   // No "wait for all three queries" gate here. GlobalJobCard pre-fetches
@@ -390,57 +477,10 @@ export function InvoiceBuilder({
     const sentQuote = quotes.find((q: any) => q.status === "sent");
     const quote = acceptedQuote || sentQuote || quotes[0];
 
-    // Extract line items from proposal sections or quote
-    let extractedItems: InvoiceLineItem[] = [];
-
-    if (proposal?.sections) {
-      // Get line items from proposal sections
-      proposal.sections.forEach((section: any) => {
-        if (section.lineItems && Array.isArray(section.lineItems)) {
-          section.lineItems.forEach((item: any) => {
-            extractedItems.push({
-              id: Math.random().toString(),
-              description: item.description || "",
-              quantity: item.quantity || 1,
-              unitPrice: parseFloat(item.rate || item.unitPrice || 0),
-              total: parseFloat(item.total || item.amount || 0),
-            });
-          });
-        }
-      });
-    }
-
-    // If proposal had no line items, fall back to quote
-    if (
-      extractedItems.length === 0 &&
-      quote?.lineItems &&
-      Array.isArray(quote.lineItems)
-    ) {
-      quote.lineItems.forEach((item: any) => {
-        extractedItems.push({
-          id: Math.random().toString(),
-          description: item.description || "",
-          quantity: item.quantity || 1,
-          unitPrice: parseFloat(item.rate || item.unitPrice || 0),
-          total: parseFloat(item.total || item.amount || 0),
-        });
-      });
-    }
-
-    // If still no items, fall back to job line items
-    if (
-      extractedItems.length === 0 &&
-      job.lineItems &&
-      job.lineItems.length > 0
-    ) {
-      extractedItems = job.lineItems.map((item: any) => ({
-        id: item.id || Math.random().toString(),
-        description: item.description || "",
-        quantity: item.quantity || 1,
-        unitPrice: item.unitPrice || 0,
-        total: item.total || item.quantity * item.unitPrice || 0,
-      }));
-    }
+    // Extract line items from the best available source (proposal → quote →
+    // job). Same logic the "Import" button uses, so the modal pre-fills with
+    // exactly what Import would produce.
+    let extractedItems: InvoiceLineItem[] = extractLineItemsFromSources();
 
     // No final fallback — if there's no proposal, quote, or job line items,
     // start with an empty line-items list so the user picks what goes on the
@@ -466,15 +506,36 @@ export function InvoiceBuilder({
         existingInvoices[0].items.some((ei: any) => ei.description === li.description)
       ));
 
+    // Total of the saved invoice's existing items. If this is $0 the invoice
+    // only holds unpriced placeholder rows (e.g. a "Tree care" category at
+    // $0.00 copied from the job before pricing existed) — safe to replace with
+    // the priced proposal/quote items. A non-zero total means real prices the
+    // user may have set by hand, so we never stomp those.
+    const existingItemsTotal = (existingInvoices[0]?.items || []).reduce(
+      (sum: number, it: any) =>
+        sum + (parseFloat(it.amount || it.total || 0) || 0),
+      0,
+    );
+    const extractedTotal = extractedItems.reduce(
+      (sum, it) => sum + (it.total || 0),
+      0,
+    );
+
     if (existingInvoices.length === 0) {
       // New invoice — always set line items from proposal/quote/fallback
       setLineItems(extractedItems);
-    } else if (hasProposalOrQuoteItems && !existingItemsLookLikeProposalItems) {
-      // Existing invoice but its items weren't sourced from the current proposal/quote —
-      // auto-import so the user doesn't have to click the button manually.
+    } else if (
+      hasProposalOrQuoteItems &&
+      (!existingItemsLookLikeProposalItems ||
+        (existingItemsTotal === 0 && extractedTotal > 0))
+    ) {
+      // Existing invoice but either its items weren't sourced from the current
+      // proposal/quote, OR they're unpriced $0.00 placeholders while a priced
+      // source is available — auto-import so the user doesn't have to click the
+      // Import button manually.
       setLineItems(extractedItems);
     }
-    // else: existing invoice already has proposal-sourced items, keep them as-is.
+    // else: existing invoice already has proposal-sourced, priced items — keep them as-is.
 
     // Set description from proposal/quote (only if no existing invoice)
     if (!existingInvoices.length) {
@@ -585,103 +646,11 @@ export function InvoiceBuilder({
     }
   };
 
-  // Import line items from quote or proposal
+  // Import line items from quote or proposal. Uses the same extractor as the
+  // auto-init effect so a manual click produces exactly what the modal already
+  // tried to pre-fill (the two used to diverge — see extractLineItemsFromSources).
   const importFromQuoteOrProposal = () => {
-    const proposals = proposalsResponse?.data || [];
-    const quotes = quotesResponse?.data || [];
-
-    console.log("🔍 Import Debug - Proposals:", proposals);
-    console.log("🔍 Import Debug - Quotes:", quotes);
-
-    // Find accepted proposal or most recent sent proposal
-    const acceptedProposal = proposals.find(
-      (p: any) => p.status === "accepted",
-    );
-    const sentProposal = proposals.find((p: any) => p.status === "sent");
-    const proposal = acceptedProposal || sentProposal || proposals[0];
-
-    console.log("🔍 Import Debug - Selected Proposal:", proposal);
-
-    // Find accepted or sent quote
-    const acceptedQuote = quotes.find((q: any) => q.status === "accepted");
-    const sentQuote = quotes.find((q: any) => q.status === "sent");
-    const quote = acceptedQuote || sentQuote || quotes[0];
-
-    console.log("🔍 Import Debug - Selected Quote:", quote);
-
-    // Extract line items from proposal or quote
-    let extractedItems: InvoiceLineItem[] = [];
-
-    // Check if proposal has direct line items array
-    if (proposal?.lineItems && Array.isArray(proposal.lineItems)) {
-      console.log(
-        "🔍 Import Debug - Found proposal.lineItems:",
-        proposal.lineItems,
-      );
-      proposal.lineItems.forEach((item: any) => {
-        extractedItems.push({
-          id: Math.random().toString(),
-          description: item.description || "",
-          quantity: item.quantity || 1,
-          unitPrice: parseFloat(item.unitPrice || 0),
-          total: parseFloat(item.totalPrice || item.total || 0),
-        });
-      });
-    }
-    // Check if proposal has sections with line items
-    else if (proposal?.sections && Array.isArray(proposal.sections)) {
-      console.log(
-        "🔍 Import Debug - Found proposal.sections:",
-        proposal.sections,
-      );
-      proposal.sections.forEach((section: any) => {
-        if (section.lineItems && Array.isArray(section.lineItems)) {
-          section.lineItems.forEach((item: any) => {
-            extractedItems.push({
-              id: Math.random().toString(),
-              description: item.description || "",
-              quantity: item.quantity || 1,
-              unitPrice: parseFloat(item.unitPrice || 0),
-              total: parseFloat(item.totalPrice || item.total || 0),
-            });
-          });
-        }
-      });
-    }
-
-    // If proposal had no line items, fall back to quote
-    if (
-      extractedItems.length === 0 &&
-      quote?.lineItems &&
-      Array.isArray(quote.lineItems)
-    ) {
-      console.log("🔍 Import Debug - Using quote.lineItems:", quote.lineItems);
-      quote.lineItems.forEach((item: any) => {
-        extractedItems.push({
-          id: Math.random().toString(),
-          description: item.description || "",
-          quantity: item.quantity || 1,
-          unitPrice: parseFloat(item.rate || item.unitPrice || 0),
-          total: parseFloat(item.total || item.amount || 0),
-        });
-      });
-    }
-
-    // If still no items, fall back to job's own line items (set via the Quote tab)
-    if (extractedItems.length === 0 && job.lineItems && Array.isArray(job.lineItems) && job.lineItems.length > 0) {
-      console.log("🔍 Import Debug - Falling back to job.lineItems:", job.lineItems);
-      extractedItems = (job.lineItems as any[]).map((item: any) => ({
-        id: item.id || Math.random().toString(),
-        description: item.description || "",
-        quantity: item.quantity || 1,
-        unitPrice: item.unitPrice || item.rate || 0,
-        total: item.total || item.amount || (item.quantity * (item.unitPrice || item.rate || 0)) || 0,
-        category: item.category,
-        serviceId: item.serviceId,
-        materialId: item.materialId,
-        unitCost: item.unitCost,
-      }));
-    }
+    const extractedItems = extractLineItemsFromSources();
 
     console.log("🔍 Import Debug - Extracted Items:", extractedItems);
 
