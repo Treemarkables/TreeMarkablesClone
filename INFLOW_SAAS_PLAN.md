@@ -31,6 +31,7 @@ This is the design + handoff doc for that work, in the same spirit as `MIGRATION
 | Billing provider | Stripe, NZD, **prices displayed ex-GST** (+15% GST at checkout) | **Locked** | Ex-GST display is the B2B norm — GST-registered customers claim it back and read ex-GST as cheaper. (Customer *invoicing* already exists and is unrelated — this is subscription billing.) |
 | Tier count | Three tiers: **Freemium (free) / Crew / Business** (free entry + two paid) | **Decided (2026-05-30)** — structure draft in §Subscriptions | Freemium (free) tier is the funnel; paid tiers gate features + raise job caps. |
 | Cost-incurring features | Sold as add-ons (call recording, SMS, anything with per-use cost to us) | **Locked** | — |
+| In-app customer payments | **Add-on** (Stripe Connect; subscriber connects own account, money flows to them). Separate from platform billing (core). | **Decided (2026-06-06)** | Not every subscriber takes card payments; making it an add-on keeps Connect off the launch-blocker path and adds a revenue line. |
 | Trial / freemium model | **Freemium** — the Freemium (free) tier is the trial (job-capped, no time limit); optional 14-day Business trial on top | **Decided (2026-05-30)** | — |
 | Pricing (NZD per tier / add-on) | Crew $89/mo, Business $189/mo (draft, ex-GST); Freemium $0 | **Draft — needs validation** | Drives Stripe product setup + sales-page copy. |
 | Treemarkables (tenant #1) billing | **Comped — does not pay.** Gets full (Business-equivalent) entitlements at $0 | **Decided (2026-06-02)** | Owner's own business, backfilled as tenant #1 in Phase 1; exercises the full feature set without charging ourselves. |
@@ -198,6 +199,13 @@ businessAddOns         -- which add-ons a business has switched on
 **Add-ons (flat, on top of any *paid* tier):**
 - **Call recording** — flat monthly (per the locked decision; real per-use cost to us).
 - **AI bundle** — metered usage, or a flat "unlimited-AI" add-on for Crew (Business bundles it under fair-use).
+- **Payments (in-app card payments)** — **add-on, decided 2026-06-06.** Lets a subscriber take deposit + invoice payments from *their own* customers in-app. When enabled, the subscriber connects their **own** Stripe account (Stripe Connect); money routes to *them* (`on_behalf_of` / `transfer_data`), not the platform. Gated behind capability `requires: "addon:payments"`. This is **separate from platform billing** (how Inflow charges the subscriber the monthly fee, which is core and always on). See "Two distinct Stripe roles" below.
+
+**Two distinct Stripe roles — don't conflate them:**
+1. **Platform billing (core, always on):** Inflow's *own* Stripe account charges subscribers the monthly tier + add-on fees. Every paid subscriber uses this. Built in Phase 4.
+2. **Subscriber payment processing (the Payments add-on):** a subscriber's *own* Stripe (via Connect) collects deposits/invoices from *their* customers. Only subscribers who buy the add-on connect an account. Money flows to them, not the platform.
+
+> **Current hardcoded debt:** today `server/stripe.ts` uses a single account (`STRIPE_SECRET_KEY`) and the existing `createDepositCheckoutSession` / `createInvoiceCheckoutSession` route all customer money into Treemarkables' Stripe. Under SaaS that existing flow **becomes the Payments add-on's payload** — gated behind `requires: "addon:payments"` and reworked for Connect (`on_behalf_of` / `transfer_data` → the subscriber's connected account). Treemarkables (tenant #1, comped) connects its own account like any other subscriber. Because it's an add-on, Connect is **not a launch blocker** — only buyers of the add-on need it.
 
 **Freemium funnel (resolves open question #2 — freemium chosen):**
 - The **Freemium** (free) tier *is* the trial — no time limit, but single-user, hard-capped at 15 active jobs/month and max 3 photos/job, core features only. Upgrade prompts appear when a business hits the job cap, needs a second user, exceeds the photo limit, or taps a gated feature (SMS, safety, marketing).
@@ -316,6 +324,8 @@ Migrate app to `inflowapp.co.nz`, public sales/marketing page, pricing page, sig
 - **Capability keys are an API contract.** Once a role stores `grantedCaps: ["jobs.edit"]`, renaming that key orphans the grant. Keys are append-only; deprecate, don't rename.
 - **Entitlements ∩ permissions, in that order.** A staff member can have `calls.record` granted by their role but still not do it if the business dropped the Call Recording add-on. The resolver must intersect with live entitlements every request.
 - **iOS shell is one webview at `app.treemarkables.co.nz` (per memory).** Session-derived tenancy works there unchanged; subdomain-per-tenant would need shell rework — another reason to defer it.
+- **`getBusinessSettings()` is tenant-blind today (`server/storage.ts:5225` → `.limit(1)`).** It returns the *first* settings row regardless of the logged-in business, and is called ~50 times (business name, GST, deposit defaults, AI context, email branding, reminders). **This must become `getBusinessSettings(businessId)` scoped to `req.session.businessId` before a second tenant is real** — it's a Phase 2 prerequisite, not a cosmetic. The single seed row `id: 'default'` is the same assumption. RLS (the fallback) would make a missed scope fail-closed, but this specific helper needs an explicit `businessId` param because it's read on nearly every request.
+- **Identity literals bypass `businessSettings` in many customer-facing renders** (PDF footers `server/routes.ts:1049`, email from/reply-to `routes.ts:9311`, sender block `server/emailTemplates.ts:27`, inbound routing `to: quotes@treemarkables.nz` `server/email.ts:178`). The email `from`/`to` ones are the riskiest — a subscriber's customer replies would land in *Treemarkables'* inbox. De-hardcoding tracked in `INFLOW_TRADE_GENERALIZATION_PLAN.md` (Track A); the from/to addresses should be prioritized within it for deliverability + privacy.
 
 ---
 
