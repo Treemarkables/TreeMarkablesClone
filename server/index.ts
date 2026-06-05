@@ -128,12 +128,17 @@ app.use(
       pruneSessionInterval: 60 * 15,
     }),
     cookie: {
-      secure: true,
+      // Local dev runs over http://localhost, where browsers silently drop a
+      // `Secure` cookie — and `SameSite=None` *requires* Secure, so the session
+      // cookie would never persist and every post-login /api/auth/me would 401,
+      // bouncing the user back to /login. Use lax + non-secure in dev. Production
+      // (https, PWA/iOS webview cross-site context) keeps secure + sameSite:none.
+      secure: !isDevelopment,
       httpOnly: true,
       maxAge: isDevelopment
         ? 1000 * 60 * 60 * 24 * 90
         : 1000 * 60 * 60 * 24 * 30,
-      sameSite: 'none',
+      sameSite: isDevelopment ? 'lax' : 'none',
       // Host-only cookie: omit domain so it scopes to app.treemarkables.co.nz
       // exactly. Domain-scoped cookies (.treemarkables.co.nz) caused PWA users
       // to lose sessions on Chrome's installed-PWA storage partition.
