@@ -4,6 +4,8 @@ Active initiative as of 2026-05-22. Turn the single-business Treemarkables app i
 
 This is the design + handoff doc for that work, in the same spirit as `MIGRATION_PLAN.md`. Read it before touching tenancy, roles, or billing code.
 
+> **Companion: `INFLOW_TRADE_GENERALIZATION_PLAN.md`.** This doc makes a second *business* possible. That one makes a second *trade* (plumber/electrician/builder) possible — de-hardcoding "Treemarkables"/arborist via trade presets + per-business config so the app isn't tree-specific. Its catalog-seeding hooks into Phase 4 onboarding here; its identity/AI de-hardcoding is independent and can start now. Read it before touching seed data, AI prompts, templates, or onboarding.
+
 > **Status: design phase.** Nothing below is built yet. The "Decisions" table separates what's locked from what's still open. Treemarkables continues running as a single-tenant app the whole time — it becomes **tenant #1** when Phase 1 lands, so the live business is never blocked by this work.
 
 ---
