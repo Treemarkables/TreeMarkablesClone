@@ -2666,6 +2666,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           <Input
                             placeholder="Search jobs..."
                             value={searchQuery}
+                            autoComplete="off"
                             onChange={(e) => {
                               setSearchQuery(e.target.value);
                               if (isDeepSearchActive) {
@@ -3043,6 +3044,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                     <Input
                       autoFocus
+                      autoComplete="off"
                       placeholder="Search jobs..."
                       value={searchQuery}
                       onChange={(e) => {
