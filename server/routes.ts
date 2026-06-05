@@ -77,7 +77,12 @@ import {
   createJobCheckoutSession,
   constructWebhookEvent,
   computeDepositAmount,
+  createSubscriptionCheckoutSession,
+  getOrCreateStripeCustomer,
+  retrieveStripeSubscription,
+  createBillingPortalSession,
 } from "./stripe";
+import * as billing from "./billing";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import {
   ensureRoleTiersSeeded,
@@ -23428,6 +23433,84 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   // express.json verify callback, then dispatches by event type. Idempotent:
   // a duplicate checkout.session.completed for the same session_id will be
   // rejected by the unique index on payments.provider_session_id.
+  // ── Subscription billing (Inflow — Phase 4) ───────────────────────────────
+  // List the active plans (for the pricing / upgrade UI).
+  app.get('/api/billing/plans', async (_req: Request, res: Response) => {
+    try {
+      res.json({ success: true, data: await billing.getActivePlans() });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Failed to load plans' });
+    }
+  });
+
+  // Current business's subscription status.
+  app.get('/api/billing/subscription', async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      res.json({ success: true, data: (await billing.getSubscriptionByBusiness(businessId)) || null });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message });
+    }
+  });
+
+  // Start (or change) a subscription — returns a Stripe Checkout URL to redirect to.
+  app.post('/api/billing/checkout', requireAdmin, async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    const employeeId = req.session.employeeId;
+    if (!businessId || !employeeId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    if (!isStripeConfigured()) return res.status(503).json({ success: false, message: 'Billing is not available right now.' });
+    try {
+      const { planKey } = req.body as { planKey?: string };
+      if (!planKey) return res.status(400).json({ success: false, message: 'planKey required' });
+      const plan = await billing.getPlanByKey(planKey);
+      if (!plan) return res.status(404).json({ success: false, message: 'Unknown plan' });
+      if (!plan.stripePriceId) return res.status(400).json({ success: false, message: `${plan.name} is free — no checkout needed.` });
+
+      const employee = await storage.getEmployee(employeeId);
+      const existing = await billing.getSubscriptionByBusiness(businessId);
+      const customerId = await getOrCreateStripeCustomer(businessId, {
+        email: employee?.email,
+        name: `${employee?.firstName ?? ''} ${employee?.lastName ?? ''}`.trim() || undefined,
+        existingId: existing?.stripeCustomerId,
+      });
+      // Persist the customer id now so we never create a duplicate on retry.
+      await billing.upsertSubscription(businessId, {
+        stripeCustomerId: customerId,
+        planId: plan.id,
+        status: existing?.status ?? 'incomplete',
+      });
+
+      const base = 'https://app.treemarkables.co.nz';
+      const session = await createSubscriptionCheckoutSession({
+        businessId,
+        priceId: plan.stripePriceId,
+        planKey,
+        customerId,
+        successUrl: `${base}/settings/billing?status=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${base}/settings/billing?status=cancelled`,
+      });
+      res.json({ success: true, url: session.url });
+    } catch (e: any) {
+      console.error('billing checkout error:', e?.message);
+      res.status(500).json({ success: false, message: e?.message || 'Failed to start checkout' });
+    }
+  });
+
+  // Billing portal — subscriber updates their card / cancels.
+  app.post('/api/billing/portal', requireAdmin, async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      const sub = await billing.getSubscriptionByBusiness(businessId);
+      if (!sub?.stripeCustomerId) return res.status(400).json({ success: false, message: 'No billing account yet — subscribe first.' });
+      const { url } = await createBillingPortalSession(sub.stripeCustomerId, 'https://app.treemarkables.co.nz/settings/billing');
+      res.json({ success: true, url });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message });
+    }
+  });
+
   app.post('/api/stripe/webhook', async (req: Request, res: Response) => {
     const rawBody: Buffer | undefined = (req as any).rawBody;
     const signature = req.headers['stripe-signature'] as string | undefined;
@@ -23444,6 +23527,34 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
 
     try {
+      // ── Subscription billing events (Inflow — Phase 4) ──
+      // Keep each business's `subscriptions` row in sync with Stripe. Runs outside any
+      // request (owner connection), so businessId comes from the event metadata.
+      if (event.type === 'customer.subscription.created'
+        || event.type === 'customer.subscription.updated'
+        || event.type === 'customer.subscription.deleted') {
+        const sub = event.data.object as any;
+        const businessId: string | undefined = sub?.metadata?.businessId;
+        if (businessId) {
+          await billing.syncFromStripeSubscription(businessId, sub);
+          console.log(`Stripe webhook: synced subscription ${sub.id} for business ${businessId} -> ${sub.status}`);
+        }
+        return res.json({ received: true });
+      }
+      // Subscription checkout finished — sync immediately rather than waiting for the
+      // subscription.* event, so the owner sees an active plan as soon as they're back.
+      if (event.type === 'checkout.session.completed'
+        && (event.data.object as any)?.metadata?.kind === 'subscription') {
+        const session = event.data.object as any;
+        const businessId: string | undefined = session?.client_reference_id || session?.metadata?.businessId;
+        if (businessId && session.subscription) {
+          const sub = await retrieveStripeSubscription(session.subscription);
+          await billing.syncFromStripeSubscription(businessId, sub);
+          console.log(`Stripe webhook: subscription checkout completed for business ${businessId}`);
+        }
+        return res.json({ received: true });
+      }
+
       if (event.type === 'checkout.session.completed') {
         const session = event.data.object as any;
         const proposalId: string | undefined = session?.metadata?.proposalId;

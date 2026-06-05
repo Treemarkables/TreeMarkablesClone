@@ -230,6 +230,67 @@ export async function createJobCheckoutSession(input: JobCheckoutInput): Promise
   return { id: session.id, url: session.url };
 }
 
+// ── SaaS subscription billing (Inflow — Phase 4) ────────────────────────────
+
+export interface SubscriptionCheckoutInput {
+  businessId: string;
+  priceId: string;             // recurring price (subscription_plans.stripe_price_id)
+  planKey: string;
+  customerId?: string | null;  // existing Stripe customer to reuse (avoids dupes)
+  customerEmail?: string | null;
+  successUrl: string;
+  cancelUrl: string;
+}
+
+// Creates a subscription-mode Checkout Session. The subscriber enters their card on
+// Stripe's hosted page and a recurring monthly subscription begins; Stripe auto-charges
+// each month and handles retries. businessId rides on client_reference_id + subscription
+// metadata so the webhook can map the resulting subscription back to the tenant.
+export async function createSubscriptionCheckoutSession(input: SubscriptionCheckoutInput): Promise<{ id: string; url: string }> {
+  const stripe = await getStripe();
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    line_items: [{ price: input.priceId, quantity: 1 }],
+    customer: input.customerId || undefined,
+    customer_email: input.customerId ? undefined : (input.customerEmail || undefined),
+    client_reference_id: input.businessId,
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+    subscription_data: { metadata: { businessId: input.businessId, planKey: input.planKey } },
+    metadata: { kind: 'subscription', businessId: input.businessId, planKey: input.planKey },
+  });
+  if (!session.url) throw new Error('Stripe subscription checkout session did not return a redirect URL');
+  return { id: session.id, url: session.url };
+}
+
+// Returns `existingId` if given, else creates a Stripe customer for the business.
+export async function getOrCreateStripeCustomer(
+  businessId: string,
+  opts: { email?: string | null; name?: string | null; existingId?: string | null },
+): Promise<string> {
+  if (opts.existingId) return opts.existingId;
+  const stripe = await getStripe();
+  const customer = await stripe.customers.create({
+    email: opts.email || undefined,
+    name: opts.name || undefined,
+    metadata: { businessId },
+  });
+  return customer.id;
+}
+
+// Retrieves a subscription from Stripe (to sync its status into the DB).
+export async function retrieveStripeSubscription(subscriptionId: string): Promise<any> {
+  const stripe = await getStripe();
+  return stripe.subscriptions.retrieve(subscriptionId);
+}
+
+// Billing-portal session so a subscriber can update their card / cancel.
+export async function createBillingPortalSession(customerId: string, returnUrl: string): Promise<{ url: string }> {
+  const stripe = await getStripe();
+  const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: returnUrl });
+  return { url: session.url };
+}
+
 // Verifies a Stripe webhook signature against the raw request body and
 // returns the parsed event. Throws on signature mismatch — caller should
 // 400 the response so Stripe will retry.
