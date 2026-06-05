@@ -485,3 +485,21 @@
     padding-top: env(safe-area-inset-top);
   }
 }
+
+/* No spinning loading circles anywhere in the app. Per product decision: never
+   show a fetching circle on any page. Skeleton placeholders (animate-pulse) are
+   intentionally kept. To restore spinners, delete this block.
+
+   1) Stop every spin so nothing rotates. This also covers action icons that
+      only spin while busy (e.g. RefreshCw / sync buttons) — they stay visible
+      as static icons rather than vanishing, so buttons aren't broken.
+   2) Fully remove the dedicated loader shapes so they don't linger as a static
+      ring: border-ring fetch spinners (.animate-spin.rounded-full) and the
+      lucide Loader2 / LoaderCircle / Spinner icons used in buttons and inline. */
+.animate-spin {
+  animation: none !important;
+}
+.animate-spin.rounded-full,
+svg.lucide-loader-circle {
+  display: none !important;
+}
