@@ -27,10 +27,11 @@ export interface CallEvent {
   error?: string;
   deviceToken?: string;
   message?: string;
-  // "true" when the app was in the foreground as the call arrived. Native only
-  // surfaces a full-screen call UI for lock-screen/background answers, so the
-  // web in-app call screen is shown only for foreground calls (see
-  // TwilioCallContext) to avoid competing with the native UI.
+  // "true" when the app was in the foreground as the call arrived (captured
+  // natively before CallKit is presented). TwilioCallContext shows the in-app
+  // call screen when this is true OR the webview is currently visible — the
+  // foreground flag is the reliable signal for app-open calls, while visibility
+  // covers answering a backgrounded/locked call then opening the app.
   foreground?: string;
 }
 
