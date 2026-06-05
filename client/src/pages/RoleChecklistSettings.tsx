@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, Redirect } from "wouter";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 import {
   ArrowLeft,
   Plus,
@@ -90,6 +91,8 @@ const ROLE_BLURB: Record<RoleKey, string> = {
 const ROLE_KEYS: RoleKey[] = ["C", "A", "B"];
 
 export default function RoleChecklistSettings() {
+  // Treemarkables-only feature — block direct navigation for other tenants.
+  const roleChecklistEnabled = useRoleChecklistFeature();
   const { toast } = useToast();
   const [newLabel, setNewLabel] = useState<Record<RoleKey, string>>({
     A: "",
@@ -188,6 +191,11 @@ export default function RoleChecklistSettings() {
       iconName: newIcon[role],
     });
   };
+
+  // Other tenants don't get this feature — bounce direct URL hits back to Settings.
+  if (!roleChecklistEnabled) {
+    return <Redirect to="/settings" />;
+  }
 
   return (
     <div className="flex flex-col h-full p-4 md:p-6 space-y-6 max-w-3xl mx-auto">

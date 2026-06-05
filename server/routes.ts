@@ -16,7 +16,8 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
-import { withTenant } from "./tenancy/tenantStore";
+import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
+import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
@@ -6845,6 +6846,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   // Scope: jobs with status='completed' whose completedDate falls in [fromDate, toDate].
   // For each canonical item, percent = jobs-with-this-completion / totalCompletedJobs * 100.
   app.get('/api/checklist-usage', async (req: Request, res: Response) => {
+    // Role checklist usage is Treemarkables-only — other tenants get an empty result.
+    if (!businessHasRoleChecklist(currentBusinessId())) {
+      return res.json({ success: true, data: { totalJobs: 0, overall: 0, items: [] } });
+    }
     try {
       const { fromDate, toDate } = req.query as { fromDate?: string; toDate?: string };
 
@@ -29218,6 +29223,8 @@ If you cannot find a value, use null. Do not guess.`
   // panel; Settings UI shows everything so users can re-enable.
   app.get('/api/role-checklist-tasks', async (req: Request, res: Response) => {
     if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    // Treemarkables-only feature — other tenants get an empty list, never the seed.
+    if (!businessHasRoleChecklist(currentBusinessId())) return res.json({ success: true, data: [] });
     try {
       const { db } = await import('./db');
       const { roleChecklistTasks } = await import('../shared/schema');
@@ -29236,6 +29243,7 @@ If you cannot find a value, use null. Do not guess.`
   // If itemId omitted, derive a slug from the label.
   app.post('/api/role-checklist-tasks', async (req: Request, res: Response) => {
     if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    if (!businessHasRoleChecklist(currentBusinessId())) return res.status(403).json({ success: false, message: 'Feature not available' });
     try {
       const { db } = await import('./db');
       const { roleChecklistTasks } = await import('../shared/schema');
@@ -29276,6 +29284,7 @@ If you cannot find a value, use null. Do not guess.`
   // roleKey and itemId are immutable once set (itemId is referenced by completions).
   app.put('/api/role-checklist-tasks/:id', async (req: Request, res: Response) => {
     if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    if (!businessHasRoleChecklist(currentBusinessId())) return res.status(403).json({ success: false, message: 'Feature not available' });
     try {
       const { db } = await import('./db');
       const { roleChecklistTasks } = await import('../shared/schema');
@@ -29298,6 +29307,7 @@ If you cannot find a value, use null. Do not guess.`
   // Built-ins can be disabled via PUT but never deleted, so completions stay intact.
   app.delete('/api/role-checklist-tasks/:id', async (req: Request, res: Response) => {
     if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    if (!businessHasRoleChecklist(currentBusinessId())) return res.status(403).json({ success: false, message: 'Feature not available' });
     try {
       const { db } = await import('./db');
       const { roleChecklistTasks } = await import('../shared/schema');

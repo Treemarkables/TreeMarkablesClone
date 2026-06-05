@@ -5233,8 +5233,16 @@ class DatabaseStorage implements IStorage {
   }
 
   async getBusinessSettings(): Promise<BusinessSettings> {
-    // Try to get existing business settings from database
-    const [existing] = await db.select().from(schema.businessSettings).limit(1);
+    // Try to get existing business settings from database.
+    // Deterministic ordering guards against stray duplicate rows for a tenant:
+    // prefer the canonical id='default' row, then the oldest. Without this,
+    // LIMIT 1 returned an arbitrary row and a tenant's name/contact details
+    // could silently flip to a junk duplicate's values.
+    const [existing] = await db
+      .select()
+      .from(schema.businessSettings)
+      .orderBy(sql`(${schema.businessSettings.id} = 'default') DESC`, asc(schema.businessSettings.createdAt))
+      .limit(1);
     if (existing) {
       return existing;
     }

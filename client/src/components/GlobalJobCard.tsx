@@ -94,6 +94,7 @@ import { InvoiceBuilder } from "./InvoiceBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { JobVideos } from "./JobVideos";
 import { JobChecklistPanel } from "./JobChecklistPanel";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 import { JobQuotingPanel } from "./JobQuotingPanel";
 import { JobCardMobile } from "./JobCardMobile";
 import { JobCardDesktop } from "./JobCardDesktop";
@@ -429,6 +430,8 @@ export function GlobalJobCard({
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { isAdmin, currentUser } = useAuth();
+  // Role checklist (Kaitiaki / Kaiwhangai / Kaitirotiro) is Treemarkables-only.
+  const roleChecklistEnabled = useRoleChecklistFeature();
 
   // Fetch customers for the dropdown (needed upfront)
   const { data: customersData, isLoading: customersLoading } = useQuery({
@@ -5213,6 +5216,7 @@ The Treemarkables Team`;
           >
             Billing
           </button>
+          {roleChecklistEnabled && (
           <button
             className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b inline-flex items-center justify-center gap-1.5 ${
               currentStatus === "completed"
@@ -5263,6 +5267,7 @@ The Treemarkables Team`;
             <ListChecks className="w-3.5 h-3.5" />
             Checklist
           </button>
+          )}
           {/* On-site quoting process — only relevant while a job is in lead/quote
               stage. Once it advances to work_order/scheduled/completed the tab
               hides so the sidebar stays focused on the job's current state. */}
@@ -9917,7 +9922,7 @@ The Treemarkables Team`;
                     </div>
                   )}
 
-                  {sidebarTab === "checklist" && (
+                  {sidebarTab === "checklist" && roleChecklistEnabled && (
                     <>
                       {editingJob ? (
                         <>

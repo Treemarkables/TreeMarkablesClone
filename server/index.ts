@@ -128,11 +128,11 @@ app.use(
       pruneSessionInterval: 60 * 15,
     }),
     cookie: {
-      // Production runs behind HTTPS, so secure + SameSite=None (needed for the
-      // installed PWA's cross-context requests). Local dev runs on plain
-      // http://localhost, where browsers SILENTLY DROP a Secure cookie — so the
-      // session would never persist and every /api/auth/me returns 401. Relax to
-      // an http-friendly cookie in development only; prod is unchanged.
+      // Local dev runs over http://localhost, where browsers silently drop a
+      // `Secure` cookie — and `SameSite=None` *requires* Secure, so the session
+      // cookie would never persist and every post-login /api/auth/me would 401,
+      // bouncing the user back to /login. Use lax + non-secure in dev. Production
+      // (https, PWA/iOS webview cross-site context) keeps secure + sameSite:none.
       secure: !isDevelopment,
       httpOnly: true,
       maxAge: isDevelopment
