@@ -13,13 +13,15 @@ import { Mic, MicOff, Volume2, Phone } from "lucide-react";
 // i.e. when the call is answered from the lock screen or with the app in the
 // background. In those cases iOS owns the whole screen and we render nothing.
 //
-// When the app is already in the FOREGROUND, iOS deliberately does NOT take
-// over the screen after you answer — it tucks the call into the Dynamic Island.
-// There's no API to force the native full-screen call UI in that case, so to
-// keep the experience consistent we draw our own call screen styled to match
-// iOS. It is shown ONLY for calls that arrived in the foreground (the native
-// `foreground` flag on the incomingCall event), so it never competes with the
-// real native UI in the lock-screen case.
+// When the app is on screen during a live call, iOS deliberately does NOT take
+// over the display — it tucks the call into the Dynamic Island. There's no API
+// to force the native full-screen call UI in that case, so to keep the
+// experience consistent we draw our own call screen styled to match iOS,
+// shown whenever the webview is visible and a call is connecting/active. We key
+// off the webview's visibility (not just where the call arrived) so it also
+// covers answering a backgrounded call from CallKit and then opening the app —
+// while staying hidden when the app is backgrounded/locked so it never competes
+// with the real native UI on the lock screen.
 
 type CallState = "idle" | "connecting" | "active" | "ended";
 
@@ -35,6 +37,20 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
+  // Whether the app/webview is currently on screen. iOS owns the display while
+  // the app is backgrounded or the phone is locked (native CallKit), so we only
+  // draw our own call screen when the webview is actually visible.
+  const [appVisible, setAppVisible] = useState(
+    typeof document === "undefined" || document.visibilityState === "visible",
+  );
+
+  useEffect(() => {
+    const onVisibility = () =>
+      setAppVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   const refreshCallHistory = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
@@ -104,10 +120,16 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     });
   }, [setSpeaker]);
 
-  // Only our own call screen for foreground calls that have been answered.
+  // Show our in-app call screen whenever there's a live call AND the app is on
+  // screen — NOT only when the call happened to arrive in the foreground. This
+  // covers the common case: a call arrives while the app is backgrounded/locked,
+  // the user answers from the native CallKit UI, then opens the app — without
+  // this they'd land on the dispatch board with the call hidden in the Dynamic
+  // Island and no controls. When the app is backgrounded/locked the webview is
+  // not visible, so we stay out of the way and let native CallKit own the screen.
   const showOverlay =
     isNative &&
-    !!callInfo?.foreground &&
+    appVisible &&
     (callState === "connecting" || callState === "active");
 
   return (
