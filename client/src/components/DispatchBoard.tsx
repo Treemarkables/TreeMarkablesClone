@@ -1017,10 +1017,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       if (isActivelyEditingRef.current) {
         return;
       }
-      setJobToEdit(null);
-      setInitialJobData({ status: "work_order" });
-      setGlobalJobCardMode("create");
-      setShowGlobalJobCard(true);
+      // Route through createDraftMutation — same path as ?newJob=true and the
+      // empty-state "Create Job" button — so the card mounts the redesigned
+      // JobCardDesktop/Mobile look. The old create-mode path opened against no
+      // jobId and fell through to the legacy jobCardContent, which is why
+      // "+ New Job" while already on /dispatch showed the old card and the raw
+      // "Work_order" status badge instead of the new design.
+      handleCreateJob();
     };
 
     // popstate fires with a PopStateEvent — pass no arg so handleUrlChange
