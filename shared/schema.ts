@@ -2955,6 +2955,68 @@ export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
 export type InsertInvoiceLineItem = z.infer<typeof insertInvoiceLineItemSchema>;
 export type UpdateInvoiceLineItem = z.infer<typeof updateInvoiceLineItemSchema>;
 
+// Supplier Invoices — bills FROM suppliers/subcontractors (the merchant/sparky/
+// plumber's own purchases) attached to a job. Captured by photographing or
+// attaching the supplier's invoice (image or PDF); GPT-5 vision extracts the
+// fields, the tradie confirms, and the cost rolls into job costing. Each line
+// can optionally be rebilled to the customer with a markup (which appends a
+// priced item to the job's lineItems, flowing to the customer invoice).
+export const supplierInvoices = pgTable("supplier_invoices", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: 'cascade' }).notNull(),
+  supplierName: text("supplier_name").notNull(),
+  invoiceNumber: text("invoice_number"),
+  invoiceDate: timestamp("invoice_date"),
+  dueDate: timestamp("due_date"),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }), // ex-GST, used for margin
+  gst: decimal("gst", { precision: 10, scale: 2 }),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull().default("0"), // inc-GST
+  currency: text("currency").notNull().default("NZD"),
+  // Which actual-cost bucket this maps to for reporting/back-costing.
+  costCategory: text("cost_category").notNull().default("materials"), // materials | subcontractor | equipment | disposal | other
+  // Stored document (photo or PDF) in GCS, served via /objects/photos/.
+  documentUrl: text("document_url"),
+  thumbnailUrl: text("thumbnail_url"),
+  originalFilename: text("original_filename"),
+  mimeType: text("mime_type"),
+  fileSize: integer("file_size"),
+  // Confirmed line items: array of
+  // { description, quantity, unitCost, totalCost, rebill, markupPercent, category }
+  lineItems: jsonb("line_items").default([]),
+  // Header-level rebill controls (line-level overrides live in lineItems).
+  rebill: boolean("rebill").notNull().default(false),
+  markupPercent: decimal("markup_percent", { precision: 10, scale: 2 }).default("0"),
+  rebilledAt: timestamp("rebilled_at"), // when rebilled items were pushed onto the job's line items
+  status: text("status").notNull().default("confirmed"), // pending_review | confirmed
+  notes: text("notes"),
+  rawExtraction: jsonb("raw_extraction"), // raw GPT-5 output, kept for audit/debugging
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type SupplierInvoiceLineItem = {
+  description: string;
+  quantity?: number;
+  unitCost?: number;
+  totalCost: number;
+  rebill?: boolean;
+  markupPercent?: number;
+  category?: string;
+};
+
+export const insertSupplierInvoiceSchema = createInsertSchema(supplierInvoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateSupplierInvoiceSchema = insertSupplierInvoiceSchema.partial();
+
+export type SupplierInvoice = typeof supplierInvoices.$inferSelect;
+export type InsertSupplierInvoice = z.infer<typeof insertSupplierInvoiceSchema>;
+export type UpdateSupplierInvoice = z.infer<typeof updateSupplierInvoiceSchema>;
+
 // Invoice Section Schema Exports
 export const insertInvoiceSectionSchema = createInsertSchema(invoiceSections).omit({
   id: true,

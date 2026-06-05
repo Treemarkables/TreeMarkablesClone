@@ -270,6 +270,29 @@ export class PhotoStorageService {
     }
   }
 
+  // Store an arbitrary document (e.g. a supplier-invoice PDF) verbatim in GCS,
+  // without the image/thumbnail pipeline (sharp would choke on a PDF). Served
+  // back via the same /objects/photos/ route, which streams with the stored
+  // contentType so browsers render the PDF inline.
+  async uploadDocument(fileBuffer: Buffer, originalFilename: string, mimeType: string): Promise<{ url: string }> {
+    const privateDir = this.getPrivateObjectDir();
+    const timestamp = Date.now();
+    const extension = originalFilename.split('.').pop()?.toLowerCase() || 'bin';
+    const uniqueFilename = `${timestamp}_${randomUUID()}.${extension}`;
+
+    const bucket = objectStorageClient.bucket(this.parseObjectPath(privateDir).bucketName);
+    const fullPath = `${privateDir}/photos/${uniqueFilename}`;
+    const fullFile = bucket.file(this.parseObjectPath(fullPath).objectName);
+
+    await fullFile.save(fileBuffer, {
+      metadata: {
+        contentType: mimeType || 'application/octet-stream',
+      },
+    });
+
+    return { url: `/objects/photos/${uniqueFilename}` };
+  }
+
   async getPhoto(photoPath: string): Promise<{ file: any; exists: boolean }> {
     if (!photoPath.startsWith("/objects/photos/")) {
       return { file: null, exists: false };

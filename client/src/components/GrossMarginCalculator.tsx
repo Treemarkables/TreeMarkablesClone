@@ -133,6 +133,32 @@ export function GrossMarginCalculator({
     enabled: !!jobId,
   });
 
+  // Supplier invoices attached to this job — their own cost ledger. Counted
+  // ex-GST (subtotal when available, else total / 1.15) so they sit alongside
+  // ex-GST revenue. Rebilled lines only add revenue to job.lineItems, never
+  // cost, so there's no double-counting here.
+  const { data: supplierInvoicesData } = useQuery({
+    queryKey: ["/api/jobs", jobId, "supplier-invoices"],
+    queryFn: async () => {
+      const response = await fetch(`/api/jobs/${jobId}/supplier-invoices`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch supplier invoices");
+      return response.json();
+    },
+    enabled: !!jobId,
+  });
+  const supplierInvoices = (supplierInvoicesData as any)?.data || [];
+  const supplierInvoiceCosts = supplierInvoices.reduce(
+    (sum: number, inv: any) => {
+      const subtotal = parseFloat(inv.subtotal);
+      const total = parseFloat(inv.total) || 0;
+      const exGst = Number.isFinite(subtotal) && subtotal > 0 ? subtotal : total / 1.15;
+      return sum + (Number.isFinite(exGst) ? exGst : 0);
+    },
+    0,
+  );
+
   const hasStaffTimeEntries = (staffTimeData as any)?.data?.length > 0;
   const staffTimeEntries = (staffTimeData as any)?.data || [];
   // Labour cost = employees' cost rate (employees.hourlyRate) × hours, NOT
@@ -379,7 +405,8 @@ export function GrossMarginCalculator({
     materialsCosts +
     otherCosts +
     costOfGoods +
-    totalExpenses;
+    totalExpenses +
+    supplierInvoiceCosts;
   const calculatedLaborCosts =
     (formData.laborHours || 0) * (formData.hourlyRate || 0);
 
@@ -628,6 +655,12 @@ export function GrossMarginCalculator({
               <div className="flex justify-between">
                 <span>Cost of Goods:</span>
                 <span>${costOfGoods.toFixed(2)}</span>
+              </div>
+            )}
+            {supplierInvoiceCosts > 0 && (
+              <div className="flex justify-between">
+                <span>Supplier Invoices (exc. GST):</span>
+                <span>${supplierInvoiceCosts.toFixed(2)}</span>
               </div>
             )}
             <div className="border-t pt-2 font-semibold">

@@ -8381,6 +8381,312 @@ Draft the reply now.`;
     }
   });
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Supplier invoices — bills FROM suppliers/subcontractors attached to a job.
+  // Flow: snap a photo or attach a PDF → /extract uploads it to GCS and runs
+  // GPT-5 over it to pre-fill the fields → tradie confirms → POST persists the
+  // record. Costs surface in the gross-margin breakdown; rebillable lines get
+  // pushed onto the job's lineItems (which flow to the customer invoice).
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const SUPPLIER_COST_CATEGORIES = ['materials', 'subcontractor', 'equipment', 'disposal', 'other'];
+  const normaliseSupplierCategory = (v: any): string =>
+    SUPPLIER_COST_CATEGORIES.includes(String(v)) ? String(v) : 'materials';
+  const toNum = (v: any): number | undefined => {
+    if (v === null || v === undefined || v === '') return undefined;
+    const n = typeof v === 'number' ? v : parseFloat(String(v));
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const toDate = (v: any): Date | undefined => {
+    if (!v) return undefined;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? undefined : d;
+  };
+
+  // Distinct supplier names for autocomplete. Registered before the parameterised
+  // routes so "supplier-names" isn't captured as an :id.
+  app.get('/api/supplier-invoices/supplier-names', async (_req: Request, res: Response) => {
+    try {
+      const names = await storage.getSupplierNames();
+      res.json({ success: true, data: names });
+    } catch (error) {
+      console.error('Error fetching supplier names:', error);
+      res.status(500).json({ success: false, message: 'Error fetching supplier names' });
+    }
+  });
+
+  // Upload a supplier invoice (image or PDF), store it in GCS, and run GPT-5
+  // over it to extract the fields. Returns the extracted data + stored document
+  // reference — nothing is persisted to supplier_invoices until the user
+  // confirms via POST below.
+  app.post('/api/jobs/:jobId/supplier-invoices/extract', imageUpload.single('file'), async (req: Request, res: Response) => {
+    try {
+      const file = req.file as Express.Multer.File | undefined;
+      if (!file) {
+        return res.status(400).json({ success: false, message: 'No file provided' });
+      }
+
+      const isPdf = file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
+      const base64 = file.buffer.toString('base64');
+
+      // Store the document so the extract → confirm round-trip only uploads once.
+      const photoStorage = new PhotoStorageService();
+      let documentUrl = '';
+      let thumbnailUrl: string | null = null;
+      if (isPdf) {
+        const { url } = await photoStorage.uploadDocument(file.buffer, file.originalname, file.mimetype || 'application/pdf');
+        documentUrl = url;
+      } else {
+        const { url, thumbnailUrl: thumb } = await photoStorage.uploadPhoto(file.buffer, file.originalname, file.mimetype);
+        documentUrl = url;
+        thumbnailUrl = thumb;
+      }
+
+      const extractionInstruction = `You are extracting data from a supplier / purchase invoice for a New Zealand trades business (electrician, plumber, or builder). This is a bill the tradie received from a supplier or subcontractor.
+
+Return ONLY JSON with these keys:
+{
+  "supplierName": string,            // the company that issued the invoice
+  "invoiceNumber": string|null,
+  "invoiceDate": string|null,        // YYYY-MM-DD
+  "dueDate": string|null,            // YYYY-MM-DD
+  "subtotal": number|null,           // ex-GST total
+  "gst": number|null,                // GST amount (NZ GST is 15%)
+  "total": number|null,              // inc-GST grand total
+  "currency": string,                // default "NZD"
+  "costCategory": string,            // one of: materials, subcontractor, equipment, disposal, other — infer from supplier/items
+  "lineItems": [
+    { "description": string, "quantity": number|null, "unitCost": number|null, "totalCost": number }
+  ]
+}
+
+Rules: use numbers (not strings) for amounts, null when a value is genuinely absent, amounts in NZD. unitCost is the per-unit ex-GST price when determinable, otherwise the line total. totalCost is the line total. Do NOT invent values you cannot see.`;
+
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const visionResponse = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: extractionInstruction },
+              isPdf
+                ? ({ type: 'file', file: { filename: file.originalname || 'invoice.pdf', file_data: `data:application/pdf;base64,${base64}` } } as any)
+                : ({ type: 'image_url', image_url: { url: `data:${file.mimetype};base64,${base64}` } } as any),
+            ],
+          },
+        ],
+        response_format: { type: 'json_object' },
+        max_completion_tokens: 3000,
+      });
+
+      const raw = visionResponse.choices[0]?.message?.content || '{}';
+      let extracted: any = {};
+      try {
+        extracted = JSON.parse(raw);
+      } catch {
+        extracted = {};
+      }
+
+      res.json({
+        success: true,
+        data: {
+          extracted,
+          document: {
+            url: documentUrl,
+            thumbnailUrl,
+            originalFilename: file.originalname,
+            mimeType: file.mimetype,
+            fileSize: file.size,
+            isPdf,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Error extracting supplier invoice:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Error extracting supplier invoice' });
+    }
+  });
+
+  // List supplier invoices for a job.
+  app.get('/api/jobs/:jobId/supplier-invoices', async (req: Request, res: Response) => {
+    try {
+      const invoices = await storage.getSupplierInvoicesByJob(req.params.jobId);
+      res.json({ success: true, data: invoices });
+    } catch (error) {
+      console.error('Error fetching supplier invoices:', error);
+      res.status(500).json({ success: false, message: 'Error fetching supplier invoices' });
+    }
+  });
+
+  // Persist a confirmed supplier invoice.
+  app.post('/api/jobs/:jobId/supplier-invoices', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const b = req.body || {};
+      if (!b.supplierName || !String(b.supplierName).trim()) {
+        return res.status(400).json({ success: false, message: 'Supplier name is required' });
+      }
+
+      const lineItems = Array.isArray(b.lineItems) ? b.lineItems.map((li: any) => ({
+        description: String(li.description || ''),
+        quantity: toNum(li.quantity),
+        unitCost: toNum(li.unitCost),
+        totalCost: toNum(li.totalCost) ?? 0,
+        rebill: !!li.rebill,
+        markupPercent: toNum(li.markupPercent),
+        category: li.category ? String(li.category) : undefined,
+      })) : [];
+
+      const created = await storage.createSupplierInvoice({
+        jobId,
+        supplierName: String(b.supplierName).trim(),
+        invoiceNumber: b.invoiceNumber ? String(b.invoiceNumber) : null,
+        invoiceDate: toDate(b.invoiceDate) ?? null,
+        dueDate: toDate(b.dueDate) ?? null,
+        subtotal: toNum(b.subtotal)?.toString() ?? null,
+        gst: toNum(b.gst)?.toString() ?? null,
+        total: (toNum(b.total) ?? 0).toString(),
+        currency: b.currency ? String(b.currency) : 'NZD',
+        costCategory: normaliseSupplierCategory(b.costCategory),
+        documentUrl: b.documentUrl || null,
+        thumbnailUrl: b.thumbnailUrl || null,
+        originalFilename: b.originalFilename || null,
+        mimeType: b.mimeType || null,
+        fileSize: toNum(b.fileSize) ?? null,
+        lineItems,
+        rebill: !!b.rebill,
+        markupPercent: (toNum(b.markupPercent) ?? 0).toString(),
+        status: b.status === 'pending_review' ? 'pending_review' : 'confirmed',
+        notes: b.notes ? String(b.notes) : null,
+        rawExtraction: b.rawExtraction ?? null,
+        createdBy: (req as any).user?.id || null,
+      } as any);
+
+      res.json({ success: true, data: created });
+    } catch (error) {
+      console.error('Error creating supplier invoice:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Error creating supplier invoice' });
+    }
+  });
+
+  // Update a supplier invoice.
+  app.patch('/api/supplier-invoices/:id', async (req: Request, res: Response) => {
+    try {
+      const b = req.body || {};
+      const updates: any = {};
+      if (b.supplierName !== undefined) updates.supplierName = String(b.supplierName).trim();
+      if (b.invoiceNumber !== undefined) updates.invoiceNumber = b.invoiceNumber ? String(b.invoiceNumber) : null;
+      if (b.invoiceDate !== undefined) updates.invoiceDate = toDate(b.invoiceDate) ?? null;
+      if (b.dueDate !== undefined) updates.dueDate = toDate(b.dueDate) ?? null;
+      if (b.subtotal !== undefined) updates.subtotal = toNum(b.subtotal)?.toString() ?? null;
+      if (b.gst !== undefined) updates.gst = toNum(b.gst)?.toString() ?? null;
+      if (b.total !== undefined) updates.total = (toNum(b.total) ?? 0).toString();
+      if (b.currency !== undefined) updates.currency = String(b.currency);
+      if (b.costCategory !== undefined) updates.costCategory = normaliseSupplierCategory(b.costCategory);
+      if (b.notes !== undefined) updates.notes = b.notes ? String(b.notes) : null;
+      if (b.rebill !== undefined) updates.rebill = !!b.rebill;
+      if (b.markupPercent !== undefined) updates.markupPercent = (toNum(b.markupPercent) ?? 0).toString();
+      if (b.status !== undefined) updates.status = b.status === 'pending_review' ? 'pending_review' : 'confirmed';
+      if (Array.isArray(b.lineItems)) {
+        updates.lineItems = b.lineItems.map((li: any) => ({
+          description: String(li.description || ''),
+          quantity: toNum(li.quantity),
+          unitCost: toNum(li.unitCost),
+          totalCost: toNum(li.totalCost) ?? 0,
+          rebill: !!li.rebill,
+          markupPercent: toNum(li.markupPercent),
+          category: li.category ? String(li.category) : undefined,
+        }));
+      }
+
+      const updated = await storage.updateSupplierInvoice(req.params.id, updates);
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error updating supplier invoice' });
+    }
+  });
+
+  // Delete a supplier invoice.
+  app.delete('/api/supplier-invoices/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteSupplierInvoice(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error deleting supplier invoice' });
+    }
+  });
+
+  // Rebill a supplier invoice's flagged lines onto the job's line items, marking
+  // them up. The appended job line items are revenue and flow into the customer
+  // invoice through the existing convert-to-invoice path. Idempotent-ish: sets
+  // rebilledAt so the UI can show it's already been rebilled.
+  app.post('/api/supplier-invoices/:id/rebill', async (req: Request, res: Response) => {
+    try {
+      const supplierInvoice = await storage.getSupplierInvoice(req.params.id);
+      if (!supplierInvoice) {
+        return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+      }
+      const job = await storage.getJob(supplierInvoice.jobId);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      const headerMarkup = toNum(supplierInvoice.markupPercent) ?? 0;
+      const lines = (Array.isArray(supplierInvoice.lineItems) ? supplierInvoice.lineItems : []) as any[];
+      // If specific lines are flagged, rebill those; otherwise (header rebill)
+      // rebill every line. Fall back to a single line for the whole total when
+      // there are no extracted line items.
+      const flagged = lines.filter(li => li.rebill);
+      const toRebill = flagged.length > 0 ? flagged : (supplierInvoice.rebill ? lines : []);
+
+      const newJobLineItems: any[] = [];
+      // The rebilled line carries REVENUE only (unitPrice). The underlying cost
+      // is already counted once via the supplier-invoice cost ledger, so we
+      // deliberately omit unitCost/totalCost here to avoid double-counting it in
+      // the gross-margin calculation.
+      const pushLine = (description: string, cost: number, markup: number) => {
+        const price = +(cost * (1 + (markup || 0) / 100)).toFixed(2);
+        newJobLineItems.push({
+          id: randomUUID(),
+          description,
+          quantity: 1,
+          unitPrice: price,
+          priceIncludesTax: false,
+          taxRate: 15,
+          rebilledFromSupplierInvoiceId: supplierInvoice.id,
+        });
+      };
+
+      if (toRebill.length > 0) {
+        for (const li of toRebill) {
+          const cost = toNum(li.totalCost) ?? ((toNum(li.unitCost) ?? 0) * (toNum(li.quantity) ?? 1));
+          const markup = toNum(li.markupPercent) ?? headerMarkup;
+          pushLine(`${supplierInvoice.supplierName}: ${li.description || 'Supplied item'}`, cost, markup);
+        }
+      } else {
+        // No itemised lines — rebill the whole ex-GST cost as one line.
+        const cost = toNum(supplierInvoice.subtotal) ?? ((toNum(supplierInvoice.total) ?? 0) / 1.15);
+        pushLine(`${supplierInvoice.supplierName}${supplierInvoice.invoiceNumber ? ` (inv ${supplierInvoice.invoiceNumber})` : ''}`, cost, headerMarkup);
+      }
+
+      if (newJobLineItems.length === 0) {
+        return res.status(400).json({ success: false, message: 'No rebillable lines on this supplier invoice' });
+      }
+
+      const existingLineItems = Array.isArray((job as any).lineItems) ? (job as any).lineItems : [];
+      const updatedJob = await storage.updateJob(job.id, { lineItems: [...existingLineItems, ...newJobLineItems] } as any);
+      await storage.updateSupplierInvoice(supplierInvoice.id, { rebilledAt: new Date() } as any);
+
+      res.json({ success: true, data: { job: updatedJob, addedLineItems: newJobLineItems } });
+    } catch (error) {
+      console.error('Error rebilling supplier invoice:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Error rebilling supplier invoice' });
+    }
+  });
+
   // Check invoice eligibility
   app.get('/api/jobs/:id/invoice-eligibility', async (req: Request, res: Response) => {
     try {

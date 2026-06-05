@@ -73,7 +73,9 @@ import {
   type EquipmentInduction, type InsertEquipmentInduction, type UpdateEquipmentInduction,
   type InductionResponse, type InsertInductionResponse,
   // Marketing Campaign types
-  type MarketingCampaign, type InsertMarketingCampaign
+  type MarketingCampaign, type InsertMarketingCampaign,
+  // Supplier Invoice types
+  type SupplierInvoice, type InsertSupplierInvoice, type UpdateSupplierInvoice
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
@@ -833,6 +835,14 @@ export interface IStorage {
   getAllInvoices(): Promise<Invoice[]>;
   updateInvoice(id: string, updates: Partial<InsertInvoice>): Promise<Invoice>;
   deleteInvoice(id: string): Promise<void>;
+
+  // Supplier Invoice Management (bills FROM suppliers attached to a job)
+  createSupplierInvoice(invoice: InsertSupplierInvoice): Promise<SupplierInvoice>;
+  getSupplierInvoice(id: string): Promise<SupplierInvoice | undefined>;
+  getSupplierInvoicesByJob(jobId: string): Promise<SupplierInvoice[]>;
+  updateSupplierInvoice(id: string, updates: UpdateSupplierInvoice): Promise<SupplierInvoice>;
+  deleteSupplierInvoice(id: string): Promise<void>;
+  getSupplierNames(): Promise<string[]>;
 
   // Invoice Section Management
   createInvoiceSection(section: InsertInvoiceSection): Promise<InvoiceSection>;
@@ -5694,6 +5704,43 @@ class DatabaseStorage implements IStorage {
   async deleteInvoice(id: string): Promise<void> {
     await db.delete(schema.invoices)
       .where(eq(schema.invoices.id, id));
+  }
+
+  async createSupplierInvoice(invoice: InsertSupplierInvoice): Promise<SupplierInvoice> {
+    const [result] = await db.insert(schema.supplierInvoices).values(withTenant(invoice)).returning();
+    return result;
+  }
+  async getSupplierInvoice(id: string): Promise<SupplierInvoice | undefined> {
+    const [row] = await db.select()
+      .from(schema.supplierInvoices)
+      .where(eq(schema.supplierInvoices.id, id))
+      .limit(1);
+    return row;
+  }
+  async getSupplierInvoicesByJob(jobId: string): Promise<SupplierInvoice[]> {
+    return await db.select()
+      .from(schema.supplierInvoices)
+      .where(eq(schema.supplierInvoices.jobId, jobId))
+      .orderBy(desc(schema.supplierInvoices.createdAt));
+  }
+  async updateSupplierInvoice(id: string, updates: UpdateSupplierInvoice): Promise<SupplierInvoice> {
+    const [result] = await db.update(schema.supplierInvoices)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.supplierInvoices.id, id))
+      .returning();
+    return result;
+  }
+  async deleteSupplierInvoice(id: string): Promise<void> {
+    await db.delete(schema.supplierInvoices)
+      .where(eq(schema.supplierInvoices.id, id));
+  }
+  // Distinct supplier names previously used by this tenant, for autocomplete.
+  // RLS scopes the rows to the tenant when running as the 'authenticated' role.
+  async getSupplierNames(): Promise<string[]> {
+    const rows = await db.selectDistinct({ name: schema.supplierInvoices.supplierName })
+      .from(schema.supplierInvoices)
+      .orderBy(asc(schema.supplierInvoices.supplierName));
+    return rows.map(r => r.name).filter((n): n is string => !!n);
   }
 
   async createInvoiceSection(section: InsertInvoiceSection): Promise<InvoiceSection> {
