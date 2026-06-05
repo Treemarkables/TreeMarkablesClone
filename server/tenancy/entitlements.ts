@@ -46,24 +46,35 @@ export async function resolveEntitlements(businessId: string): Promise<BusinessE
     .where(eq(schema.subscriptions.businessId, businessId))
     .limit(1);
 
-  // No subscription row (or a dead one) → freemium. Fail-closed: no paid gates.
-  const planKey = sub && isEntitledStatus(sub.status) ? sub.planKey : "freemium";
+  // Resolve the plan via the FK (subscriptions.plan_id → subscription_plans.key).
+  // No subscription / dead status / missing plan → freemium. Fail-closed.
+  let planKey = "freemium";
+  if (sub && isEntitledStatus(sub.status) && sub.planId) {
+    const [plan] = await db
+      .select({ key: schema.subscriptionPlans.key })
+      .from(schema.subscriptionPlans)
+      .where(eq(schema.subscriptionPlans.id, sub.planId))
+      .limit(1);
+    if (plan?.key) planKey = plan.key;
+  }
 
   const entitlements = new Set<Entitlement>();
   const rank = PLAN_RANK[planKey] ?? 0;
   if (rank >= PLAN_RANK.crew) entitlements.add("plan:crew");
   if (rank >= PLAN_RANK.business) entitlements.add("plan:business");
 
+  // Active add-ons → addon:<key>, resolved through add_ons.id.
   const addons = await db
-    .select()
+    .select({ key: schema.addOns.key })
     .from(schema.businessAddOns)
+    .innerJoin(schema.addOns, eq(schema.businessAddOns.addOnId, schema.addOns.id))
     .where(
       and(
         eq(schema.businessAddOns.businessId, businessId),
         eq(schema.businessAddOns.status, "active"),
       ),
     );
-  for (const a of addons) entitlements.add(`addon:${a.addOnKey}` as Entitlement);
+  for (const a of addons) entitlements.add(`addon:${a.key}` as Entitlement);
 
   return { planKey, entitlements };
 }

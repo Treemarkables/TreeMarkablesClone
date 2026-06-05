@@ -19,10 +19,11 @@ export type User = typeof users.$inferSelect;
 
 // ============================================================================
 // Inflow multi-tenant SaaS — tenant root + subscription billing (Phase 4)
-// See INFLOW_SAAS_PLAN.md. `businesses` already exists in the DB (created by
-// INFLOW_PHASE1_tenancy.sql); this is the Drizzle declaration mirroring it.
-// The subscription tables below are net-new and require a migration (gated on
-// explicit DB approval per CLAUDE.md — see INFLOW_PHASE4_billing.sql).
+// See INFLOW_SAAS_PLAN.md. ALL of these tables already exist on the Neon dev
+// branch (businesses from INFLOW_PHASE1_tenancy.sql; the billing tables seeded
+// 2026-06-05 with live Stripe price IDs by an earlier effort). These Drizzle
+// declarations mirror the live columns exactly. Prod parity is unverified —
+// confirm in the DO console before relying on them there.
 // ============================================================================
 
 // Tenant root — one row per subscriber business. Treemarkables = tenant #1.
@@ -44,20 +45,20 @@ export type Business = typeof businesses.$inferSelect;
 // Base membership tiers (global catalog — not per-tenant). `key` is the stable
 // code reference used by the entitlements layer; it matches the `plan:<key>`
 // entitlement strings in server/tenancy/capabilities.ts.
+// NOTE: mirrors the tables already present on the Neon dev branch (seeded
+// 2026-06-05 with live Stripe price IDs) — single price/interval per row,
+// `active_job_cap` is the job limit. Annual billing, if added later, is a new
+// plan row per interval (or an added column).
 export const subscriptionPlans = pgTable("subscription_plans", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  key: text("key").notNull().unique(), // 'freemium' | 'crew' | 'business'
+  key: text("key").notNull(), // 'freemium' | 'crew' | 'business'
   name: text("name").notNull(),
-  // Stripe price IDs (set per environment; null on Freemium — no charge)
-  stripePriceIdMonthly: text("stripe_price_id_monthly"),
-  stripePriceIdYearly: text("stripe_price_id_yearly"),
-  // Display prices, NZD ex-GST (GST added at checkout). For UI + sanity only.
-  priceNzdMonthly: decimal("price_nzd_monthly", { precision: 10, scale: 2 }).default("0"),
-  priceNzdYearly: decimal("price_nzd_yearly", { precision: 10, scale: 2 }).default("0"),
-  jobsPerMonth: integer("jobs_per_month"), // null = unlimited
-  maxUsers: integer("max_users"), // null = unlimited
-  sortOrder: integer("sort_order").notNull().default(0),
+  stripePriceId: text("stripe_price_id"), // null on Freemium (no charge)
+  priceNzd: decimal("price_nzd", { precision: 10, scale: 2 }).notNull().default("0"), // NZD ex-GST
+  interval: text("interval").notNull().default("month"), // month | year
+  activeJobCap: integer("active_job_cap"), // null = unlimited
   isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -68,19 +69,19 @@ export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans
 export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
 export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
 
-// One active subscription per business (the base tier). Per-tenant.
+// One subscription per business (the base tier). Per-tenant. `plan_id` is an FK
+// into subscription_plans.id (not a plan key string).
 export const subscriptions = pgTable("subscriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   businessId: varchar("business_id").notNull(),
-  planKey: text("plan_key").notNull(), // references subscriptionPlans.key
-  // trialing | active | past_due | canceled | incomplete (mirrors Stripe)
-  status: text("status").notNull().default("trialing"),
-  billingInterval: text("billing_interval").notNull().default("month"), // month | year
+  planId: varchar("plan_id"), // → subscription_plans.id
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  // active | trialing | past_due | canceled | incomplete (mirrors Stripe)
+  status: text("status").notNull().default("active"),
   currentPeriodEnd: timestamp("current_period_end"),
-  trialEnd: timestamp("trial_end"),
   cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  trialEnd: timestamp("trial_end"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -97,41 +98,30 @@ export type Subscription = typeof subscriptions.$inferSelect;
 // `key` matches the `addon:<key>` entitlement strings in capabilities.ts.
 export const addOns = pgTable("add_ons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  key: text("key").notNull().unique(), // 'call_recording' | 'ai' | 'sms' | 'payments'
+  key: text("key").notNull(), // 'call_recording' | 'ai' | 'sms' | 'payments'
   name: text("name").notNull(),
   stripePriceId: text("stripe_price_id"),
-  priceNzd: decimal("price_nzd", { precision: 10, scale: 2 }).default("0"),
+  priceNzd: decimal("price_nzd", { precision: 10, scale: 2 }),
   billingType: text("billing_type").notNull().default("flat"), // flat | metered
   isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertAddOnSchema = createInsertSchema(addOns).omit({
-  id: true,
-  createdAt: true,
-});
+export const insertAddOnSchema = createInsertSchema(addOns).omit({ id: true });
 export type InsertAddOn = z.infer<typeof insertAddOnSchema>;
 export type AddOn = typeof addOns.$inferSelect;
 
-// Which add-ons a business has switched on. Per-tenant.
+// Which add-ons a business has switched on. Per-tenant. `add_on_id` is an FK
+// into add_ons.id.
 export const businessAddOns = pgTable("business_add_ons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   businessId: varchar("business_id").notNull(),
-  addOnKey: text("add_on_key").notNull(), // references addOns.key
+  addOnId: varchar("add_on_id"), // → add_ons.id
   status: text("status").notNull().default("active"), // active | canceled
   stripeSubscriptionItemId: text("stripe_subscription_item_id"),
   activatedAt: timestamp("activated_at").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (t) => [
-  unique("business_add_ons_business_key_uq").on(t.businessId, t.addOnKey),
-]);
-
-export const insertBusinessAddOnSchema = createInsertSchema(businessAddOns).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
 });
+
+export const insertBusinessAddOnSchema = createInsertSchema(businessAddOns).omit({ id: true });
 export type InsertBusinessAddOn = z.infer<typeof insertBusinessAddOnSchema>;
 export type BusinessAddOn = typeof businessAddOns.$inferSelect;
 

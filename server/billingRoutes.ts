@@ -47,7 +47,6 @@ export function registerBillingRoutes(app: any) {
       return res.json({
         planKey,
         status: sub?.status ?? "none",
-        billingInterval: sub?.billingInterval ?? null,
         currentPeriodEnd: sub?.currentPeriodEnd ?? null,
         cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
         entitlements: Array.from(entitlements),
@@ -68,11 +67,10 @@ export function registerBillingRoutes(app: any) {
     if (!isBillingConfigured()) {
       return res.status(503).json({ error: "Billing is not configured yet" });
     }
-    const { planKey, interval } = req.body ?? {};
+    const { planKey } = req.body ?? {};
     if (planKey !== "crew" && planKey !== "business") {
       return res.status(400).json({ error: "planKey must be 'crew' or 'business'" });
     }
-    const billingInterval = interval === "year" ? "year" : "month";
     try {
       const [emp] = await db
         .select({ email: schema.employees.email })
@@ -83,7 +81,6 @@ export function registerBillingRoutes(app: any) {
       const { url } = await createSubscriptionCheckout({
         businessId,
         planKey,
-        interval: billingInterval,
         customerEmail: emp?.email ?? undefined,
         successUrl: `${origin}/settings/billing?status=success`,
         cancelUrl: `${origin}/settings/billing?status=cancelled`,

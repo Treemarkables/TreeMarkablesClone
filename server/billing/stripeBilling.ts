@@ -1,28 +1,29 @@
 /**
  * Inflow — Stripe platform billing (Phase 4).
  *
- * This is PLATFORM billing: Inflow charging a subscriber their monthly/annual
- * tier fee. It is DISTINCT from server/stripe.ts, which is the subscriber's
- * customers paying *them* (deposits/invoices, and later the Connect-based
- * Payments add-on). See INFLOW_SAAS_PLAN.md "Two distinct Stripe roles".
+ * This is PLATFORM billing: Inflow charging a subscriber their tier fee. It is
+ * DISTINCT from server/stripe.ts, which is the subscriber's customers paying
+ * *them* (deposits/invoices, and later the Connect-based Payments add-on). See
+ * INFLOW_SAAS_PLAN.md "Two distinct Stripe roles".
  *
- * Account flexibility: platform billing may run on its own Stripe account or
- * share the one used for customer payments. It reads STRIPE_BILLING_SECRET_KEY
- * and falls back to STRIPE_SECRET_KEY — so one account works out of the box, and
- * splitting them later is an env change, not a code change. The webhook secret
- * (STRIPE_BILLING_WEBHOOK_SECRET) is always distinct: webhook secrets are
- * per-endpoint, and /api/billing/webhook is a different endpoint from the
- * existing /api/stripe/webhook.
+ * Schema note: aligns to the billing tables already on the Neon dev branch —
+ * subscription_plans has a single stripe_price_id + interval per row, and
+ * subscriptions/business_add_ons reference plans/add-ons by ID (plan_id /
+ * add_on_id), not by key string.
  *
- * Env vars (set in DO App Platform once the Stripe products exist):
+ * Account flexibility: reads STRIPE_BILLING_SECRET_KEY, falls back to
+ * STRIPE_SECRET_KEY — one account works out of the box, splitting later is an
+ * env change. The webhook secret (STRIPE_BILLING_WEBHOOK_SECRET) is always
+ * distinct: /api/billing/webhook is a different endpoint from /api/stripe/webhook.
+ *
+ * Env vars:
  *   STRIPE_BILLING_SECRET_KEY      sk_... (optional; falls back to STRIPE_SECRET_KEY)
  *   STRIPE_BILLING_WEBHOOK_SECRET  whsec_... (required for /api/billing/webhook)
  *   STRIPE_GST_TAX_RATE_ID         txr_... (optional; NZ GST 15% — else no tax line)
- * Price IDs live in the subscription_plans rows (stripe_price_id_monthly/yearly),
- * not env — set them via UPDATE once the Stripe Prices are created.
+ * Price IDs live in subscription_plans.stripe_price_id (already set on dev).
  *
- * STATUS: routes are registered but inert until the env + price IDs exist —
- * checkout/portal return a clear 503, the webhook 400s without its secret.
+ * STATUS: routes registered but inert until env exists — checkout/portal 503,
+ * webhook 400s without its secret.
  */
 
 import { db } from "../db";
@@ -71,23 +72,23 @@ async function getPlanByKey(planKey: string): Promise<schema.SubscriptionPlan | 
   return plan;
 }
 
-/** Map a Stripe price ID back to a plan key (for subscription.updated events). */
-async function planKeyForPrice(priceId: string | null | undefined): Promise<string | null> {
+/** Map a Stripe price ID back to its plan row (for subscription.* events). */
+async function planForPrice(priceId: string | null | undefined): Promise<schema.SubscriptionPlan | null> {
   if (!priceId) return null;
-  const plans = await db.select().from(schema.subscriptionPlans);
-  const match = plans.find(
-    (p) => p.stripePriceIdMonthly === priceId || p.stripePriceIdYearly === priceId,
-  );
-  return match?.key ?? null;
+  const [plan] = await db
+    .select()
+    .from(schema.subscriptionPlans)
+    .where(eq(schema.subscriptionPlans.stripePriceId, priceId))
+    .limit(1);
+  return plan ?? null;
 }
 
-// ── Subscription row upsert (one per business) ──────────────────────────────
+// ── Subscription row upsert (one per business, keyed by business_id) ─────────
 
 interface SubUpsert {
   businessId: string;
-  planKey?: string;
+  planId?: string | null;
   status?: string;
-  billingInterval?: string;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
   currentPeriodEnd?: Date | null;
@@ -103,9 +104,8 @@ async function upsertSubscription(data: SubUpsert): Promise<void> {
     .limit(1);
 
   const fields = {
-    planKey: data.planKey,
+    planId: data.planId ?? undefined,
     status: data.status,
-    billingInterval: data.billingInterval,
     stripeCustomerId: data.stripeCustomerId ?? undefined,
     stripeSubscriptionId: data.stripeSubscriptionId ?? undefined,
     currentPeriodEnd: data.currentPeriodEnd ?? undefined,
@@ -123,9 +123,7 @@ async function upsertSubscription(data: SubUpsert): Promise<void> {
   } else {
     await db.insert(schema.subscriptions).values({
       businessId: data.businessId,
-      planKey: data.planKey ?? "freemium",
       status: data.status ?? "incomplete",
-      billingInterval: data.billingInterval ?? "month",
       ...clean,
     } as schema.InsertSubscription);
   }
@@ -136,7 +134,6 @@ async function upsertSubscription(data: SubUpsert): Promise<void> {
 export interface CheckoutInput {
   businessId: string;
   planKey: string; // 'crew' | 'business' (freemium needs no checkout)
-  interval: "month" | "year";
   customerEmail?: string;
   successUrl: string;
   cancelUrl: string;
@@ -147,11 +144,8 @@ export interface CheckoutInput {
 export async function createSubscriptionCheckout(input: CheckoutInput): Promise<{ url: string }> {
   const plan = await getPlanByKey(input.planKey);
   if (!plan) throw new Error(`Unknown plan: ${input.planKey}`);
-  const priceId = input.interval === "year" ? plan.stripePriceIdYearly : plan.stripePriceIdMonthly;
-  if (!priceId) {
-    throw new Error(
-      `Plan '${input.planKey}' has no Stripe ${input.interval} price configured — set subscription_plans.stripe_price_id_${input.interval === "year" ? "yearly" : "monthly"}`,
-    );
+  if (!plan.stripePriceId) {
+    throw new Error(`Plan '${input.planKey}' has no Stripe price configured (subscription_plans.stripe_price_id)`);
   }
 
   const stripe = await getBillingStripe();
@@ -159,13 +153,13 @@ export async function createSubscriptionCheckout(input: CheckoutInput): Promise<
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
-    line_items: [{ price: priceId, quantity: 1, ...(taxRateId ? { tax_rates: [taxRateId] } : {}) }],
+    line_items: [{ price: plan.stripePriceId, quantity: 1, ...(taxRateId ? { tax_rates: [taxRateId] } : {}) }],
     ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
     subscription_data: {
-      metadata: { businessId: input.businessId, planKey: input.planKey },
+      metadata: { businessId: input.businessId, planKey: input.planKey, planId: plan.id },
       ...(input.trialDays ? { trial_period_days: input.trialDays } : {}),
     },
-    metadata: { businessId: input.businessId, planKey: input.planKey },
+    metadata: { businessId: input.businessId, planKey: input.planKey, planId: plan.id },
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
   });
@@ -211,6 +205,10 @@ function toDate(unixSeconds: number | null | undefined): Date | null {
   return unixSeconds ? new Date(unixSeconds * 1000) : null;
 }
 
+function businessIdFromInvoice(inv: any): string | undefined {
+  return inv.subscription_details?.metadata?.businessId || inv.lines?.data?.[0]?.metadata?.businessId;
+}
+
 /**
  * Apply a verified billing event to the subscriptions table. Idempotent: every
  * handler is a full upsert keyed by businessId, so Stripe retries are safe.
@@ -221,9 +219,10 @@ export async function handleBillingEvent(event: any): Promise<void> {
       const s = event.data.object;
       const businessId = s.metadata?.businessId;
       if (!businessId) return;
+      const planId = s.metadata?.planId ?? (s.metadata?.planKey ? (await getPlanByKey(s.metadata.planKey))?.id : undefined);
       await upsertSubscription({
         businessId,
-        planKey: s.metadata?.planKey,
+        planId,
         status: "active",
         stripeCustomerId: typeof s.customer === "string" ? s.customer : s.customer?.id,
         stripeSubscriptionId: typeof s.subscription === "string" ? s.subscription : s.subscription?.id,
@@ -236,13 +235,12 @@ export async function handleBillingEvent(event: any): Promise<void> {
       const businessId = sub.metadata?.businessId;
       if (!businessId) return;
       const priceId = sub.items?.data?.[0]?.price?.id;
-      const planKey = (await planKeyForPrice(priceId)) ?? sub.metadata?.planKey;
-      const interval = sub.items?.data?.[0]?.price?.recurring?.interval; // 'month' | 'year'
+      const plan = await planForPrice(priceId);
+      const planId = plan?.id ?? sub.metadata?.planId;
       await upsertSubscription({
         businessId,
-        planKey,
+        planId,
         status: sub.status, // active | trialing | past_due | canceled | incomplete
-        billingInterval: interval,
         stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer?.id,
         stripeSubscriptionId: sub.id,
         currentPeriodEnd: toDate(sub.current_period_end),
@@ -256,20 +254,19 @@ export async function handleBillingEvent(event: any): Promise<void> {
       const sub = event.data.object;
       const businessId = sub.metadata?.businessId;
       if (!businessId) return;
-      await upsertSubscription({ businessId, planKey: "freemium", status: "canceled" });
+      const freemium = await getPlanByKey("freemium");
+      await upsertSubscription({ businessId, planId: freemium?.id ?? null, status: "canceled" });
       return;
     }
     case "invoice.payment_failed": {
-      const inv = event.data.object;
-      const businessId = inv.subscription_details?.metadata?.businessId || inv.lines?.data?.[0]?.metadata?.businessId;
+      const businessId = businessIdFromInvoice(event.data.object);
       if (!businessId) return;
       // Stay entitled through dunning (the resolver treats past_due as entitled).
       await upsertSubscription({ businessId, status: "past_due" });
       return;
     }
     case "invoice.paid": {
-      const inv = event.data.object;
-      const businessId = inv.subscription_details?.metadata?.businessId || inv.lines?.data?.[0]?.metadata?.businessId;
+      const businessId = businessIdFromInvoice(event.data.object);
       if (!businessId) return;
       await upsertSubscription({ businessId, status: "active" });
       return;
