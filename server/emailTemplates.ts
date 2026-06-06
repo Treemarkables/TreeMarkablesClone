@@ -49,6 +49,16 @@ export interface BrandedEmailOptions {
   ctaHint?: string;
   /** Optional extra small note shown below the CTA hint. */
   fineprint?: string;
+  /** Business identity for the footer — defaults to Treemarkables (COMPANY) per
+   *  field. Pass from getBusinessIdentity() so other trades aren't branded as
+   *  Treemarkables. (GST number still falls back to COMPANY — needs its own
+   *  settings field; tracked as a follow-up.) */
+  company?: {
+    name?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+  };
 }
 
 function money(n: number): string {
@@ -115,9 +125,9 @@ export function renderBrandedEmail(opts: BrandedEmailOptions): string {
 
       <!-- Footer -->
       <tr><td style="padding:22px 28px;border-top:1px solid ${BRAND.line};color:${BRAND.muted};font-size:12px;line-height:1.6;text-align:center;background:#fafbfc;">
-        <div style="font-weight:600;color:${BRAND.ink};">${COMPANY.name}</div>
-        <div>${COMPANY.address} &middot; ${COMPANY.phone}</div>
-        <div><a href="mailto:${COMPANY.email}" style="color:${BRAND.muted};text-decoration:none;">${COMPANY.email}</a> &middot; GST ${COMPANY.gstNumber}</div>
+        <div style="font-weight:600;color:${BRAND.ink};">${opts.company?.name || COMPANY.name}</div>
+        <div>${opts.company?.address || COMPANY.address} &middot; ${opts.company?.phone || COMPANY.phone}</div>
+        <div><a href="mailto:${opts.company?.email || COMPANY.email}" style="color:${BRAND.muted};text-decoration:none;">${opts.company?.email || COMPANY.email}</a> &middot; GST ${COMPANY.gstNumber}</div>
       </td></tr>
 
     </table>

@@ -16,6 +16,7 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
+import { getBusinessIdentity } from "./businessIdentity";
 import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
 import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
 import { jwksHandler } from "./tenancy/jwksHandler";
@@ -895,6 +896,7 @@ async function generateProposalPDFBuffer(
   console.log(`📄 Generating ${docTitle.toLowerCase()} PDF for ${proposalId} (${sections.length} sections, ${lineItems.length} line items)`);
 
   const PDFDoc = (await import('pdfkit')).default;
+  const __pdfIdentity = getBusinessIdentity(await storage.getBusinessSettings());
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDoc({ size: 'A4', margin: 50 });
     const chunks: Buffer[] = [];
@@ -1053,8 +1055,8 @@ async function generateProposalPDFBuffer(
     const footerY = doc.page.height - 70;
     doc.moveTo(50, footerY).lineTo(50 + pageW, footerY).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
     doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
-      .text('Treemarkables LTD — Qualified Arborists', 50, footerY + 8, { width: pageW, align: 'center' });
-    doc.text('info@treemarkables.co.nz | 027 216 6882', 50, footerY + 20, { width: pageW, align: 'center' });
+      .text(`${__pdfIdentity.name} — ${__pdfIdentity.tagline}`, 50, footerY + 8, { width: pageW, align: 'center' });
+    doc.text(`${__pdfIdentity.email || 'info@treemarkables.co.nz'} | ${__pdfIdentity.phone || '027 216 6882'}`, 50, footerY + 20, { width: pageW, align: 'center' });
 
     doc.end();
   });
@@ -1070,6 +1072,7 @@ async function generateProposalPDFBuffer(
 async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
   const proposal = await storage.getProposal(proposalId);
   if (!proposal) throw new Error('Proposal not found');
+  const __htmlIdentity = getBusinessIdentity(await storage.getBusinessSettings());
   const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
   const sections = await storage.getProposalSectionsByProposal(proposalId);
   const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
@@ -1107,7 +1110,7 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
   const gstFmt = `$${gst.toFixed(2)}`;
   const totalFmt = `$${total.toFixed(2)}`;
   const subtotalFmt = `$${subtotal.toFixed(2)}`;
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${docLabel} ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">Treemarkables ${docLabel}</h1><p><strong>${docLabel} #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr><tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">Treemarkables LTD | info@treemarkables.co.nz | 027 216 6882</p></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${docLabel} ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">${__htmlIdentity.name} ${docLabel}</h1><p><strong>${docLabel} #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr><tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">${__htmlIdentity.name} | ${__htmlIdentity.email || 'info@treemarkables.co.nz'} | ${__htmlIdentity.phone || '027 216 6882'}</p></body></html>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -7842,7 +7845,8 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
       // Step 4: clean the transcript into a quote-ready job description.
       // GPT-5 doesn't accept temperature; rely on the model's defaults.
-      const prompt = `You are a quote-writing assistant for a New Zealand tree services company. An arborist recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
+      const __idQuote = getBusinessIdentity(await storage.getBusinessSettings());
+      const prompt = `You are a quote-writing assistant for a New Zealand ${__idQuote.discipline} company. Someone from the business recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
 
 STRUCTURE
 - For multiple work items: list them as bullets directly. NO lead-in, header, or intro line (no "We'll:", "Scope of work:", "The job involves:", etc.) — just the bullets. Each bullet is a concise imperative-style phrase: "Remove all four Gleditsias", "Mulch the branches", "Cut the wood into firewood lengths", "Grind the stumps".
@@ -8183,7 +8187,7 @@ Return only the cleaned job description.`;
 
       const subject = `Re: Booking J-${job.jobNumber}`;
 
-      const systemPrompt = `You are Jules, the owner of Treemarkables, a New Zealand arborist business. The customer has just confirmed a scheduled booking. Draft an extremely brief acknowledgement — essentially one short casual line.
+      const __idAck = getBusinessIdentity(await storage.getBusinessSettings()); const systemPrompt = `You are ${__idAck.ownerName}, the owner of ${__idAck.name}, a New Zealand ${__idAck.discipline} business. The customer has just confirmed a scheduled booking. Draft an extremely brief acknowledgement — essentially one short casual line.
 
 Strict rules:
 - Plain text only. No HTML, no markdown, no emoji.
@@ -8287,7 +8291,7 @@ Draft the reply now.`;
 
       const subject = `Re: ${entry.metadata?.subject || `Job J-${job.jobNumber}`}`;
 
-      const systemPrompt = `You are Jules, the owner of Treemarkables, a New Zealand arborist business. A customer has just replied to a message you sent. Draft a short, natural reply that responds to what they actually said.
+      const __idReply = getBusinessIdentity(await storage.getBusinessSettings()); const systemPrompt = `You are ${__idReply.ownerName}, the owner of ${__idReply.name}, a New Zealand ${__idReply.discipline} business. A customer has just replied to a message you sent. Draft a short, natural reply that responds to what they actually said.
 
 Strict rules:
 - Plain text only. No HTML, no markdown, no emoji.
@@ -9455,7 +9459,9 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
       // Generate proposal acceptance URL - goes directly to acceptance page
       const proposalAcceptUrl = `${baseUrl}/proposal/${proposalId}/accept`;
       
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const htmlContent = renderBrandedEmail({
+        company: { name: __emailIdentity.name, address: __emailIdentity.address, phone: __emailIdentity.phone, email: __emailIdentity.email },
         customerName,
         intro: message || 'Thank you for your enquiry — we\'re pleased to provide the following proposal. Tap the button below to review the full scope, pricing, and accept online.',
         documentLabel: `Proposal #${proposalNumber}`,
@@ -9685,7 +9691,9 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         ? message
         : `Thank you for your enquiry. Please find your quote attached as a PDF.`;
 
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const htmlContent = renderBrandedEmail({
+        company: { name: __emailIdentity.name, address: __emailIdentity.address, phone: __emailIdentity.phone, email: __emailIdentity.email },
         customerName,
         intro: `${bodyLead}\n\nThe full quote is attached as a PDF.`,
         documentLabel: `Quote #${quoteNumber}`,
@@ -12643,7 +12651,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const htmlContent = renderBrandedEmail({
+        company: { name: __emailIdentity.name, address: __emailIdentity.address, phone: __emailIdentity.phone, email: __emailIdentity.email },
         customerName,
         intro: message || 'Your invoice is ready. Tap below to view the full breakdown and payment details — bank transfer instructions are on the invoice.',
         documentLabel: `Invoice #${invoice.invoiceNumber}`,
@@ -21603,7 +21613,8 @@ Transcription: ${transcriptText}`;
       }));
       
       // Build AI prompt
-      const prompt = `You are an AI assistant for a tree removal business called Treemarkables. Analyze the dispatch board data and provide a concise business insight summary.
+      const __idDispatch = getBusinessIdentity(await storage.getBusinessSettings());
+      const prompt = `You are an AI assistant for a ${__idDispatch.discipline} business called ${__idDispatch.name}. Analyze the dispatch board data and provide a concise business insight summary.
 
 DISPATCH BOARD DATA:
 - Work Orders (ready to schedule): ${workOrderJobs.length} jobs worth $${workOrderJobs.reduce((s, j) => s + parseFloat(j.totalAmount || '0'), 0).toFixed(2)} NZD

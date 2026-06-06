@@ -189,3 +189,32 @@ This slots alongside `INFLOW_SAAS_PLAN.md`'s phases. **Track A (identity tokeniz
 | `businessSettings` per-tenant | Phase 1 | Host for `industry` + identity fields |
 
 **Sequencing:** Phases A and C can land before SaaS Phase 4 (they only de-hardcode, benefiting Treemarkables). Phase B's seeding hooks into the SaaS Phase 4 signup flow — so trade generalization is *substantially independent* and only joins the SaaS track at onboarding.
+
+---
+
+## Phase A — Part 2: email sending domain (deferred task)
+
+Phase A "Part 1" de-hardcodes the *content* of emails (footer, body, AI persona) — done via `getBusinessIdentity()`. The *from / reply-to addresses* are a separate, deliverability problem and are **not** done yet. Captured here so it can be picked up cleanly.
+
+**The decision (made 2026-06-06):** use the **shared-domain model** (what ServiceM8-style tools do — simplest for the client, zero setup on their end):
+- Send `from: "{businessName}" <noreply@inflowapp.co.nz>` — the subscriber's business name as the **display name**, on Inflow's verified domain.
+- Set `reply-to = {businessEmail}` so customer replies go to the subscriber.
+- The subscriber configures **nothing** — they just fill in business name + email in settings (already wired).
+
+**Why not just swap to the subscriber's email:** you can only send "from" a domain verified in Resend; sending from an arbitrary `info@theirbusiness.co.nz` bounces / lands in spam.
+
+**The task (when ready):**
+1. **One-time platform setup:** verify `inflowapp.co.nz` (or `mail.inflowapp.co.nz`) as a sending domain in Resend (DNS records). Done once, for all subscribers.
+2. **Code:** in `server/services/emailService.ts`, change `defaultFromEmail` to `"{businessName}" <noreply@inflowapp.co.nz>` (built from settings) and set `replyTo` to `businessSettings.businessEmail` when no job-specific reply address applies. Today's reply routing (`job-{n}@jobs.treemarkables.co.nz` → Gmail) is Treemarkables-specific infra — keep it for TM, fall back to the per-business `reply-to` for everyone else.
+3. **Treemarkables stays as-is** (its own domain is already verified) — only *new* trades use the shared domain.
+
+**Effort:** small code change; the gate is the one-time Resend domain verification. **Not blocking** — email content is already trade-neutral; this only changes the envelope addresses.
+
+### Remaining Phase A — Part 1 follow-ups (mechanical, same `getBusinessIdentity()` pattern)
+- `emailService.ts` — 4 job-status text emails ("tree service", "Treemarkables Team"). Needs care: don't import `storage` into the service (circular-import risk) — pass identity in, or fetch at the caller.
+- `routes.ts` — ~20 scattered HTML email-signature literals.
+- PDF footers (`routes.ts` proposal/invoice generation) — "Treemarkables LTD — Qualified Arborists" + contact line → use `getBusinessIdentity()` (`name`, `tagline`, `phone`, `email`).
+- **Customer-facing document viewers** (`ProposalViewer`/`ProposalAccept`/`InvoiceViewer`/`QuoteViewer`) — ⚠️ **bigger than a literal swap.** These are **public routes** (`/proposal/:id`, `/invoice/:id`, `/quote/:id`) opened by customers who are **not logged in**, so they can't call `/api/business-settings`. The identity must instead be **included in the document API payload** (`/api/proposals/:id/public`, `/api/invoices/:id`, the `DocumentTemplate` object) — then the viewers read it instead of the hardcoded fallbacks (`companyPhone: '+64 6 867 1234'`, `quotes@treemarkables.nz`, etc.). A **server-payload + client** slice — scope it as its own effort.
+- Client-side admin template defaults (`ProposalBuilder`/`TemplateManagement`/`EmailComposerModal`) — hardcoded phone/email/owner form defaults (admin-side, lower priority).
+- **GST number** — the branded-email footer + PDFs still use `COMPANY.gstNumber` (Treemarkables' GST). Needs a `businessGstNumber` settings field before it's truly per-business.
+- The 2 AI **extraction** prompts (`routes.ts` contact-extraction + SMS-screenshot) — `content:`/`text:` inside request objects; need the identity fetch hoisted to the handler top.

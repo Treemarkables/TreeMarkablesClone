@@ -1,6 +1,7 @@
 import { emailService } from './emailService';
 import { smsService } from './smsService';
 import { storage } from '../storage';
+import { getBusinessIdentity } from '../businessIdentity';
 import { insertNotificationSchema, type Customer, type Job } from '@shared/schema';
 import { formatNZTime } from '@shared/dateUtils';
 
@@ -253,6 +254,7 @@ class NotificationService {
 
     // Send email notification
     if (customer.email && customer.communicationPreferences?.emailEnabled !== false) {
+      const __notifIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       if (type === 'job_status_update' && status !== 'completed') {
         // Skip email for 'completed' status - disabled per user request
         await emailService.sendJobStatusEmail(
@@ -261,7 +263,8 @@ class NotificationService {
           jobTitle,
           status,
           { scheduledDate: scheduledDate || jobData?.scheduledDate },
-          jobData?.jobNumber // Pass job number for job-specific reply-to
+          jobData?.jobNumber, // Pass job number for job-specific reply-to
+          __notifIdentity.name
         );
       } else if (type === 'job_scheduled' && scheduledDate) {
         const formattedDate = formatNZTime(scheduledDate, 'full');
@@ -274,7 +277,7 @@ class NotificationService {
             <p>Hi ${customer.name},</p>
             <p>Your job "${jobTitle}" has been scheduled for ${formattedDate} (NZ time).</p>
             <p>We'll be in touch with any updates.</p>
-            <p>Best regards,<br>Treemarkables Team</p>
+            <p>Best regards,<br>${__notifIdentity.name} Team</p>
           `,
           jobNumber: jobData?.jobNumber // Pass job number for job-specific reply-to
         });

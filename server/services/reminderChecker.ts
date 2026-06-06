@@ -1,5 +1,6 @@
 import { storage } from '../storage.js';
 import { generateQuoteFollowupDraft } from './quoteFollowupAi.js';
+import { getBusinessIdentity } from '../businessIdentity.js';
 
 // De-duplication helper: check if a reminder of this type for this entity was already sent in the last 24 hours
 async function wasReminderSentRecently(type: string, entityId: string, entityField: 'jobId' | 'quoteId'): Promise<boolean> {
@@ -90,6 +91,7 @@ async function checkStaleQuotes(): Promise<void> {
     }
 
     try {
+      const identity = getBusinessIdentity(settings);
       const { body } = await generateQuoteFollowupDraft({
         customerFirstName: firstNameFrom(customer?.name),
         jobDescription: null,
@@ -98,6 +100,9 @@ async function checkStaleQuotes(): Promise<void> {
         daysSince,
         attemptNumber: currentAttempts + 1,
         channel,
+        businessName: identity.name,
+        ownerName: identity.ownerName,
+        discipline: identity.discipline,
       });
 
       await storage.createPendingOutboundMessage({

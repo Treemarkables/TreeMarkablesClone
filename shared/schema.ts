@@ -1242,7 +1242,15 @@ export const businessSettings = pgTable("business_settings", {
   businessEmail: text("business_email").default(""),
   businessWebsite: text("business_website").default(""),
   businessLogo: text("business_logo").default(""),
-  
+  // Identity de-hardcoding (Trade Generalization Phase A). Defaults reproduce
+  // Treemarkables' current literals so behaviour is unchanged until a business
+  // sets its own. ownerName → AI persona / email sign-offs; businessDiscipline
+  // → "a New Zealand {discipline} business" in AI prompts; businessTagline →
+  // PDF/email footer line. See INFLOW_TRADE_GENERALIZATION_PLAN.md + businessIdentity.ts.
+  ownerName: text("owner_name").default("Jules"),
+  businessTagline: text("business_tagline").default("Qualified Arborists"),
+  businessDiscipline: text("business_discipline").default("arborist"),
+
   // Business Rules & Workflow
   leadAssignmentMethod: text("lead_assignment_method").default("round_robin"), // round_robin, skill_based, manual
   autoFollowUpDays: integer("auto_follow_up_days").default(3),

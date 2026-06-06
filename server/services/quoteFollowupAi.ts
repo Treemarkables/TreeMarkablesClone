@@ -10,6 +10,12 @@ interface DraftArgs {
   daysSince: number;
   attemptNumber: number;
   channel: 'sms' | 'email';
+  // Business identity — defaults to Treemarkables so callers that don't pass it
+  // are unchanged. See businessIdentity.ts / getBusinessIdentity().
+  businessName?: string;
+  ownerName?: string;
+  discipline?: string;
+  region?: string;
 }
 
 export async function generateQuoteFollowupDraft(args: DraftArgs): Promise<{ body: string }> {
@@ -28,7 +34,15 @@ export async function generateQuoteFollowupDraft(args: DraftArgs): Promise<{ bod
   const amountStr = quoteAmount ? `NZ$${quoteAmount}` : '';
   const jobBlurb = (jobDescription || '').toString().slice(0, 400);
 
-  const systemPrompt = `You are Jules, owner of Treemarkables — a New Zealand arborist business in Gisborne. You're following up on a quote you sent a customer ${daysSince} days ago that they haven't responded to yet.
+  // Identity (defaults reproduce Treemarkables) — de-hardcoded so other trades
+  // don't get an arborist persona. See getBusinessIdentity().
+  const bizName = (args.businessName || '').trim() || 'Treemarkables';
+  const owner = (args.ownerName || '').trim() || 'Jules';
+  const discipline = (args.discipline || '').trim() || 'arborist';
+  const region = (args.region || '').trim();
+  const regionClause = region ? ` in ${region}` : '';
+
+  const systemPrompt = `You are ${owner}, owner of ${bizName} — a New Zealand ${discipline} business${regionClause}. You're following up on a quote you sent a customer ${daysSince} days ago that they haven't responded to yet.
 
 Strict rules:
 - Plain text only. No HTML, no markdown, no emoji.
@@ -39,7 +53,7 @@ Strict rules:
 - Don't invent details that weren't in the job description.
 - ${attemptNumber > 1 ? 'This is a second/later follow-up — softer, leave the door open, do NOT pressure.' : 'This is the first follow-up.'}
 - Start with "Hi ${greetingName}," on its own line.
-- ${channel === 'sms' ? 'This will be sent as an SMS. No formal sign-off — end naturally.' : 'This will be sent as an email. End with "Cheers," on its own line then "Jules" on the next line.'}`;
+- ${channel === 'sms' ? 'This will be sent as an SMS. No formal sign-off — end naturally.' : `This will be sent as an email. End with "Cheers," on its own line then "${owner}" on the next line.`}`;
 
   const userPrompt = `Customer first name: ${greetingName}
 Channel: ${channel}
