@@ -16,6 +16,7 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
+import { getBusinessIdentity } from "./businessIdentity";
 import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
 import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
 import { jwksHandler } from "./tenancy/jwksHandler";
@@ -7842,7 +7843,8 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
       // Step 4: clean the transcript into a quote-ready job description.
       // GPT-5 doesn't accept temperature; rely on the model's defaults.
-      const prompt = `You are a quote-writing assistant for a New Zealand tree services company. An arborist recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
+      const __idQuote = getBusinessIdentity(await storage.getBusinessSettings());
+      const prompt = `You are a quote-writing assistant for a New Zealand ${__idQuote.discipline} company. Someone from the business recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
 
 STRUCTURE
 - For multiple work items: list them as bullets directly. NO lead-in, header, or intro line (no "We'll:", "Scope of work:", "The job involves:", etc.) — just the bullets. Each bullet is a concise imperative-style phrase: "Remove all four Gleditsias", "Mulch the branches", "Cut the wood into firewood lengths", "Grind the stumps".
@@ -8183,7 +8185,7 @@ Return only the cleaned job description.`;
 
       const subject = `Re: Booking J-${job.jobNumber}`;
 
-      const systemPrompt = `You are Jules, the owner of Treemarkables, a New Zealand arborist business. The customer has just confirmed a scheduled booking. Draft an extremely brief acknowledgement — essentially one short casual line.
+      const __idAck = getBusinessIdentity(await storage.getBusinessSettings()); const systemPrompt = `You are ${__idAck.ownerName}, the owner of ${__idAck.name}, a New Zealand ${__idAck.discipline} business. The customer has just confirmed a scheduled booking. Draft an extremely brief acknowledgement — essentially one short casual line.
 
 Strict rules:
 - Plain text only. No HTML, no markdown, no emoji.
@@ -8287,7 +8289,7 @@ Draft the reply now.`;
 
       const subject = `Re: ${entry.metadata?.subject || `Job J-${job.jobNumber}`}`;
 
-      const systemPrompt = `You are Jules, the owner of Treemarkables, a New Zealand arborist business. A customer has just replied to a message you sent. Draft a short, natural reply that responds to what they actually said.
+      const __idReply = getBusinessIdentity(await storage.getBusinessSettings()); const systemPrompt = `You are ${__idReply.ownerName}, the owner of ${__idReply.name}, a New Zealand ${__idReply.discipline} business. A customer has just replied to a message you sent. Draft a short, natural reply that responds to what they actually said.
 
 Strict rules:
 - Plain text only. No HTML, no markdown, no emoji.
@@ -21603,7 +21605,8 @@ Transcription: ${transcriptText}`;
       }));
       
       // Build AI prompt
-      const prompt = `You are an AI assistant for a tree removal business called Treemarkables. Analyze the dispatch board data and provide a concise business insight summary.
+      const __idDispatch = getBusinessIdentity(await storage.getBusinessSettings());
+      const prompt = `You are an AI assistant for a ${__idDispatch.discipline} business called ${__idDispatch.name}. Analyze the dispatch board data and provide a concise business insight summary.
 
 DISPATCH BOARD DATA:
 - Work Orders (ready to schedule): ${workOrderJobs.length} jobs worth $${workOrderJobs.reduce((s, j) => s + parseFloat(j.totalAmount || '0'), 0).toFixed(2)} NZD
