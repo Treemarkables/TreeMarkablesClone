@@ -236,6 +236,28 @@ export function JobVideos({ jobId }: JobVideosProps) {
       toast({ title: "Could not delete video", variant: "destructive" }),
   });
 
+  // Retry the automatic caption pass when it errored (or for videos uploaded
+  // before captions existed). The server kicks off Whisper async; we re-poll
+  // the list a few times so the status flips from processing → ready.
+  const captionsRetryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/videos/${id}/captions/regenerate`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("Caption retry failed");
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: videosKey });
+      // Captions land asynchronously — refresh the list shortly after so the
+      // "ready" status (and the CC track) appears without a manual reload.
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: videosKey }), 8000);
+    },
+    onError: () =>
+      toast({ title: "Could not regenerate captions", variant: "destructive" }),
+  });
+
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) uploadMutation.mutate(file);
@@ -415,7 +437,36 @@ export function JobVideos({ jobId }: JobVideosProps) {
                   preload="metadata"
                   playsInline
                   className="w-full max-h-80 rounded bg-black object-contain"
-                />
+                >
+                  {v.captionsStatus === "ready" && (
+                    <track
+                      kind="captions"
+                      srcLang="en"
+                      label="English"
+                      src={`/api/videos/${v.id}/captions.vtt`}
+                      default
+                    />
+                  )}
+                </video>
+                {/* Caption status — captions are generated automatically on
+                    upload; surface progress and a retry if the pass errored. */}
+                {v.captionsStatus === "processing" && (
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Generating captions…
+                  </p>
+                )}
+                {v.captionsStatus === "error" && (
+                  <button
+                    type="button"
+                    onClick={() => captionsRetryMutation.mutate(v.id)}
+                    disabled={captionsRetryMutation.isPending}
+                    className="text-xs text-muted-foreground underline underline-offset-2"
+                    data-testid={`button-retry-captions-${v.id}`}
+                  >
+                    Captions failed — retry
+                  </button>
+                )}
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Switch

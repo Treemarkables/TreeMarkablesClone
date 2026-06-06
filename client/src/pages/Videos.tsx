@@ -280,7 +280,17 @@ export default function Videos() {
                   preload="metadata"
                   playsInline
                   className="w-full max-h-72 rounded bg-black object-contain"
-                />
+                >
+                  {v.captionsStatus === "ready" && (
+                    <track
+                      kind="captions"
+                      srcLang="en"
+                      label="English"
+                      src={`/api/videos/${v.id}/captions.vtt`}
+                      default
+                    />
+                  )}
+                </video>
                 <div className="flex items-center justify-end gap-1">
                   <Button
                     type="button"

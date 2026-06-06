@@ -482,7 +482,17 @@ export default function QuoteViewer({}: QuoteViewerProps) {
                           playsInline
                           className="w-full max-h-[480px] rounded-lg bg-black object-contain"
                           data-testid={`video-${v.id}`}
-                        />
+                        >
+                          {v.captionsStatus === "ready" && (
+                            <track
+                              kind="captions"
+                              srcLang="en"
+                              label="English"
+                              src={`/api/videos/${v.id}/captions.vtt`}
+                              default
+                            />
+                          )}
+                        </video>
                         {v.description && (
                           <p className="text-xs text-gray-600 mt-2 whitespace-pre-wrap">
                             {v.description}

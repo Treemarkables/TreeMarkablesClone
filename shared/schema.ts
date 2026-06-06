@@ -893,6 +893,15 @@ export const videos = pgTable("videos", {
   generatedDescription: text("generated_description"),
   transcriptStatus: text("transcript_status").default("none"), // 'none' | 'processing' | 'ready' | 'error'
   transcriptError: text("transcript_error"),
+  // Loom-style on-video captions. Generated automatically on upload: Whisper
+  // transcribes with segment timestamps, which we render to a WebVTT document
+  // stored inline here (captions are a few KB) and served as text/vtt for the
+  // <video><track> element. Independent of the quote-gen transcript above —
+  // that pass is opt-in and produces a cleaned description, this one is
+  // automatic and produces timed cues.
+  captionsVtt: text("captions_vtt"),
+  captionsStatus: text("captions_status").default("none"), // 'none' | 'processing' | 'ready' | 'error'
+  captionsError: text("captions_error"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
