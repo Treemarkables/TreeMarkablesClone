@@ -54,14 +54,18 @@ export async function upsertSubscription(businessId: string, data: SubscriptionW
 
 /** Mirror a Stripe subscription object into our `subscriptions` row (called from the webhook). */
 export async function syncFromStripeSubscription(businessId: string, sub: any): Promise<void> {
-  const priceId = sub?.items?.data?.[0]?.price?.id as string | undefined;
+  const item = sub?.items?.data?.[0];
+  const priceId = item?.price?.id as string | undefined;
   const plan = priceId ? await getPlanByStripePriceId(priceId) : undefined;
+  // Stripe API ≥2025-03 moved current_period_end onto the subscription item;
+  // fall back to the subscription-level field for older API versions.
+  const periodEnd = item?.current_period_end ?? sub.current_period_end;
   await upsertSubscription(businessId, {
     stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer?.id,
     stripeSubscriptionId: sub.id,
     planId: plan?.id ?? null,
     status: sub.status,                                                   // active|trialing|past_due|canceled|...
-    currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : null,
+    currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
     cancelAtPeriodEnd: !!sub.cancel_at_period_end,
     trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
   });
