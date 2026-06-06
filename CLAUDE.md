@@ -92,11 +92,21 @@ These files are critical infrastructure or tooling-owned:
 
 ## Branch + commit workflow
 
-The `claude` branch convention is retired with Replit Agent. Work directly on `main` — there is no other writer to coordinate with.
+The `claude` branch convention is retired with Replit Agent. Work on a feature branch off `main`.
 
 - Make targeted, surgical edits — not broad refactors. Never rewrite files that are currently working.
 - Don't push `main` to `subrepl-k6pnm9de` (GitHub) without explicit user approval — every push triggers a production deploy on DO. Local commits are safe; the push is the side effect.
 - Old branches (`claude`, `subrepl-*`, `replit-agent`) are historical; don't recreate the merge-from-main dance on them.
+
+### Avoiding duplicate work — MANY parallel sessions write to this repo
+
+**There IS more than one writer.** Many Claude Code sessions run concurrently in separate git worktrees against this repo; they cannot see each other and have collided by building the same feature twice (e.g. two complete billing systems shipped in parallel). Git worktrees isolate *files*, not *logical work*.
+
+**Before starting any substantial feature, check for existing/in-flight work — then claim yours:**
+1. `git fetch origin main && git log origin/main --oneline -25` and `gh pr list` — does this feature already exist or is a branch already building it?
+2. Scan `WORK_REGISTRY.md` for an overlapping claim.
+3. If it already exists on `main` or in an open PR, build the **delta** — do **not** create a parallel implementation. Reconcile with that branch instead.
+4. If it's clear, add a one-line claim to `WORK_REGISTRY.md` before you start, and remove it (or move it to Done) when your PR merges.
 
 ---
 
