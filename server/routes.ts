@@ -7339,6 +7339,22 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // GET /api/videos kicks off one job per refresh otherwise; this keeps the
   // request from re-firing while ffmpeg is still working.
   const thumbnailJobsInFlight = new Set<string>();
+  // Same de-dupe guard for in-flight caption (Whisper) jobs per video id.
+  const captionJobsInFlight = new Set<string>();
+
+  // Domain bias prompt for Whisper (≤224 tokens). Seeding NZ tree species +
+  // arborist operations stops it inventing words like "gladitziers" for
+  // "gleditsias". Shared by both the auto-caption pass and the opt-in
+  // quote-gen transcription below.
+  const WHISPER_BIAS_PROMPT = [
+    'New Zealand tree services walkthrough.',
+    'Species: pohutukawa, manuka, kanuka, kauri, totara, rimu, kahikatea,',
+    'miro, tawa, rewarewa, kowhai, ribbonwood, pittosporum, cabbage tree,',
+    'ti kouka, gleditsia, magnolia, oak, pine, eucalyptus, gum tree,',
+    'macrocarpa, leyland cypress, willow, poplar, silver birch, plum.',
+    'Operations: prune, lift, crown reduction, deadwood, remove, fell,',
+    'dismantle, stump grind, mulch, chip, firewood lengths, cleanup.',
+  ].join(' ');
 
   // Extract a poster frame from a GCS-hosted video, encode as webp, upload back
   // to GCS, and persist the URL on the row. Best-effort: any failure is logged
@@ -7404,6 +7420,113 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
     }
   }
 
+  // ---- Loom-style auto-captions -------------------------------------------
+  // Format a seconds value as a WebVTT timestamp: HH:MM:SS.mmm.
+  function secondsToVttTimestamp(totalSeconds: number): string {
+    const safe = Number.isFinite(totalSeconds) && totalSeconds > 0 ? totalSeconds : 0;
+    const hours = Math.floor(safe / 3600);
+    const minutes = Math.floor((safe % 3600) / 60);
+    const seconds = Math.floor(safe % 60);
+    const millis = Math.round((safe - Math.floor(safe)) * 1000);
+    const pad = (n: number, width = 2) => String(n).padStart(width, '0');
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(millis, 3)}`;
+  }
+
+  // Build a WebVTT document from Whisper verbose_json segments. Each segment
+  // becomes one cue; we drop empty/whitespace-only text and clamp end>start so
+  // the browser's <track> parser never rejects the file.
+  function segmentsToVtt(segments: Array<{ start: number; end: number; text: string }>): string {
+    const cues: string[] = ['WEBVTT', ''];
+    for (const seg of segments) {
+      const text = (seg.text || '').trim();
+      if (!text) continue;
+      const start = seg.start ?? 0;
+      let end = seg.end ?? start;
+      if (end <= start) end = start + 0.5; // guard against zero/negative-length cues
+      cues.push(`${secondsToVttTimestamp(start)} --> ${secondsToVttTimestamp(end)}`);
+      cues.push(text);
+      cues.push('');
+    }
+    return cues.join('\n');
+  }
+
+  // Fire-and-forget caption generation, mirroring generateVideoThumbnail:
+  // download from GCS → extract audio → Whisper with segment timestamps →
+  // render WebVTT → persist inline on the video row. Automatic on every upload
+  // so captions "just appear" like Loom. Idempotent: re-running re-transcribes
+  // (used by the retry endpoint when a pass errored).
+  async function generateVideoCaptions(videoId: string): Promise<void> {
+    if (captionJobsInFlight.has(videoId)) return;
+    captionJobsInFlight.add(videoId);
+    let videoTmpPath: string | null = null;
+    let audioTmpPath: string | null = null;
+    try {
+      const video = await storage.getVideo(videoId);
+      if (!video) return;
+      // Already captioned — nothing to do (retry endpoint forces via reset).
+      if (video.captionsStatus === 'ready' && video.captionsVtt) return;
+      if (video.fileSize > MAX_VIDEO_BYTES) {
+        await storage.updateVideo(videoId, {
+          captionsStatus: 'error',
+          captionsError: 'Video too large to caption (over 500MB).',
+        });
+        return;
+      }
+
+      await storage.updateVideo(videoId, { captionsStatus: 'processing', captionsError: null });
+
+      const rawExt = (video.filename.split('.').pop() || 'mp4').toLowerCase();
+      videoTmpPath = path.join(os.tmpdir(), `tm-cap-src-${randomUUID()}.${rawExt}`);
+      audioTmpPath = path.join(os.tmpdir(), `tm-cap-audio-${randomUUID()}.mp3`);
+      await videoStorage.downloadToFile(video.url, videoTmpPath);
+      await extractAudio(videoTmpPath, audioTmpPath);
+
+      // verbose_json + segment granularity gives us timed cues (plain 'text'
+      // would lose the timestamps captions need). Same domain bias prompt as
+      // the quote-gen pass so NZ species aren't mangled in the captions.
+      const transcription: any = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(audioTmpPath),
+        model: 'whisper-1',
+        language: 'en',
+        prompt: WHISPER_BIAS_PROMPT,
+        response_format: 'verbose_json',
+        timestamp_granularities: ['segment'],
+      });
+
+      const segments: Array<{ start: number; end: number; text: string }> =
+        Array.isArray(transcription?.segments) ? transcription.segments : [];
+      if (segments.length === 0) {
+        await storage.updateVideo(videoId, {
+          captionsStatus: 'error',
+          captionsError: 'No speech detected in video',
+        });
+        return;
+      }
+
+      const vtt = segmentsToVtt(segments);
+      await storage.updateVideo(videoId, {
+        captionsVtt: vtt,
+        captionsStatus: 'ready',
+        captionsError: null,
+      });
+      console.log(`💬 Video captions generated: ${videoId} (${segments.length} cues)`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Caption generation failed';
+      console.warn(`Could not generate captions for video ${videoId}:`, err);
+      try {
+        await storage.updateVideo(videoId, {
+          captionsStatus: 'error',
+          captionsError: message.slice(0, 500),
+        });
+      } catch {/* best-effort status write */}
+    } finally {
+      captionJobsInFlight.delete(videoId);
+      for (const p of [videoTmpPath, audioTmpPath]) {
+        if (p) fs.promises.unlink(p).catch(() => {});
+      }
+    }
+  }
+
   // Stream a video (public, range-aware so the <video> player can seek).
   app.get('/objects/videos/:filename', async (req: Request, res: Response) => {
     try {
@@ -7411,6 +7534,49 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
     } catch (error) {
       console.error('Error serving video:', error);
       if (!res.headersSent) res.status(500).json({ error: 'Error serving video' });
+    }
+  });
+
+  // Serve a video's WebVTT captions for the <video><track> element. Public on
+  // the same unguessable-UUID basis as the /watch share page — the id is the
+  // access token. 404 (not error) when captions aren't ready, so the player
+  // simply shows no CC track until the async pass finishes.
+  app.get('/api/videos/:id/captions.vtt', async (req: Request, res: Response) => {
+    try {
+      const video = await storage.getVideo(req.params.id);
+      if (!video || video.captionsStatus !== 'ready' || !video.captionsVtt) {
+        return res.status(404).type('text/plain').send('Captions not available');
+      }
+      res.status(200).set({
+        'Content-Type': 'text/vtt; charset=utf-8',
+        'Cache-Control': 'private, max-age=3600',
+      }).send(video.captionsVtt);
+    } catch (error) {
+      console.error('Error serving captions:', error);
+      if (!res.headersSent) res.status(500).type('text/plain').send('Error serving captions');
+    }
+  });
+
+  // Manually (re)generate captions for a video — used by the per-row retry
+  // when the automatic pass errored or was added before this feature existed.
+  // Resets status and re-runs the async worker; returns immediately.
+  app.post('/api/videos/:id/captions/regenerate', async (req: Request, res: Response) => {
+    try {
+      const video = await storage.getVideo(req.params.id);
+      if (!video) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      // Clear so generateVideoCaptions doesn't short-circuit on a ready/cached row.
+      await storage.updateVideo(req.params.id, {
+        captionsStatus: 'processing',
+        captionsVtt: null,
+        captionsError: null,
+      });
+      generateVideoCaptions(req.params.id).catch(() => {});
+      res.json({ success: true, data: { captionsStatus: 'processing' } });
+    } catch (error) {
+      console.error('Error regenerating captions:', error);
+      res.status(500).json({ success: false, message: 'Error regenerating captions' });
     }
   });
 
@@ -7458,6 +7624,8 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       // Fire-and-forget: extract a poster frame so the card stops showing
       // a black <video> placeholder. Don't block the upload response on it.
       generateVideoThumbnail(video.id).catch(() => {});
+      // Fire-and-forget: auto-generate Loom-style captions (Whisper → WebVTT).
+      generateVideoCaptions(video.id).catch(() => {});
 
       res.json({ success: true, data: video });
     } catch (error) {
@@ -7507,6 +7675,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
           description: video.description,
           url: video.url,
           thumbnailUrl: video.thumbnailUrl,
+          captionsStatus: video.captionsStatus,
           createdAt: video.createdAt,
         },
       });
@@ -7568,6 +7737,8 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
       // Fire-and-forget: poster frame so the library card isn't a black box.
       generateVideoThumbnail(video.id).catch(() => {});
+      // Fire-and-forget: auto-generate Loom-style captions (Whisper → WebVTT).
+      generateVideoCaptions(video.id).catch(() => {});
 
       res.json({ success: true, data: video });
     } catch (error) {
@@ -7807,20 +7978,8 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       audioTmpPath = path.join(os.tmpdir(), `tm-audio-${randomUUID()}.mp3`);
       await extractAudio(videoTmpPath, audioTmpPath);
 
-      // Step 3: Whisper transcription. The `prompt` parameter biases the
-      // model toward domain-specific terms (Whisper accepts up to 224 tokens
-      // here as a style/vocabulary hint). Seeding it with NZ tree species
-      // + common arborist operations stops it from inventing words like
-      // "gladitziers" when the arborist said "gleditsias".
-      const WHISPER_BIAS_PROMPT = [
-        'New Zealand tree services walkthrough.',
-        'Species: pohutukawa, manuka, kanuka, kauri, totara, rimu, kahikatea,',
-        'miro, tawa, rewarewa, kowhai, ribbonwood, pittosporum, cabbage tree,',
-        'ti kouka, gleditsia, magnolia, oak, pine, eucalyptus, gum tree,',
-        'macrocarpa, leyland cypress, willow, poplar, silver birch, plum.',
-        'Operations: prune, lift, crown reduction, deadwood, remove, fell,',
-        'dismantle, stump grind, mulch, chip, firewood lengths, cleanup.',
-      ].join(' ');
+      // Step 3: Whisper transcription, biased toward NZ arborist vocabulary
+      // (see WHISPER_BIAS_PROMPT above, shared with the auto-caption pass).
       const rawTranscription = await openai.audio.transcriptions.create({
         file: fs.createReadStream(audioTmpPath),
         model: 'whisper-1',

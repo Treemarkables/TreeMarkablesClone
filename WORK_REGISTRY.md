@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- video auto-captions — branch `claude/romantic-blackburn-e8634c` — 2026-06-07 — Loom-style WebVTT captions on walkthrough videos (Whisper segment timestamps, auto on upload, `<track>` on all players). videos.captions_* columns applied to dev + prod Neon branches
 - entitlement enforcement — branch `inflow-entitlement-enforcement` — 2026-06-06 — gate RBAC features by subscription tier, flag-gated [PR #132]
 - work registry / collision-prevention — branch `inflow-work-registry` — 2026-06-06 — this file + CLAUDE.md rule
 
