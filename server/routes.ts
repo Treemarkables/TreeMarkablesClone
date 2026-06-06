@@ -9457,7 +9457,9 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
       // Generate proposal acceptance URL - goes directly to acceptance page
       const proposalAcceptUrl = `${baseUrl}/proposal/${proposalId}/accept`;
       
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const htmlContent = renderBrandedEmail({
+        company: { name: __emailIdentity.name, address: __emailIdentity.address, phone: __emailIdentity.phone, email: __emailIdentity.email },
         customerName,
         intro: message || 'Thank you for your enquiry — we\'re pleased to provide the following proposal. Tap the button below to review the full scope, pricing, and accept online.',
         documentLabel: `Proposal #${proposalNumber}`,
@@ -9687,7 +9689,9 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         ? message
         : `Thank you for your enquiry. Please find your quote attached as a PDF.`;
 
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const htmlContent = renderBrandedEmail({
+        company: { name: __emailIdentity.name, address: __emailIdentity.address, phone: __emailIdentity.phone, email: __emailIdentity.email },
         customerName,
         intro: `${bodyLead}\n\nThe full quote is attached as a PDF.`,
         documentLabel: `Quote #${quoteNumber}`,
@@ -12645,7 +12649,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const htmlContent = renderBrandedEmail({
+        company: { name: __emailIdentity.name, address: __emailIdentity.address, phone: __emailIdentity.phone, email: __emailIdentity.email },
         customerName,
         intro: message || 'Your invoice is ready. Tap below to view the full breakdown and payment details — bank transfer instructions are on the invoice.',
         documentLabel: `Invoice #${invoice.invoiceNumber}`,
