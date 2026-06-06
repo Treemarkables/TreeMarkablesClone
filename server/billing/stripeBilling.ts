@@ -231,7 +231,8 @@ export async function handleBillingEvent(event: any): Promise<void> {
       const sub = event.data.object;
       const businessId = sub.metadata?.businessId;
       if (!businessId) return;
-      const priceId = sub.items?.data?.[0]?.price?.id;
+      const item = sub.items?.data?.[0];
+      const priceId = item?.price?.id;
       const plan = await planForPrice(priceId);
       const planId = plan?.id ?? sub.metadata?.planId;
       await upsertSubscription({
@@ -240,7 +241,9 @@ export async function handleBillingEvent(event: any): Promise<void> {
         status: sub.status, // active | trialing | past_due | canceled | incomplete
         stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer?.id,
         stripeSubscriptionId: sub.id,
-        currentPeriodEnd: toDate(sub.current_period_end),
+        // Stripe API ≥2025-03 moved current_period_end onto the subscription item;
+        // fall back to the subscription-level field for older versions.
+        currentPeriodEnd: toDate(item?.current_period_end ?? sub.current_period_end),
         trialEnd: toDate(sub.trial_end),
         cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
       });
