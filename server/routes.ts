@@ -896,6 +896,7 @@ async function generateProposalPDFBuffer(
   console.log(`📄 Generating ${docTitle.toLowerCase()} PDF for ${proposalId} (${sections.length} sections, ${lineItems.length} line items)`);
 
   const PDFDoc = (await import('pdfkit')).default;
+  const __pdfIdentity = getBusinessIdentity(await storage.getBusinessSettings());
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDoc({ size: 'A4', margin: 50 });
     const chunks: Buffer[] = [];
@@ -1054,8 +1055,8 @@ async function generateProposalPDFBuffer(
     const footerY = doc.page.height - 70;
     doc.moveTo(50, footerY).lineTo(50 + pageW, footerY).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
     doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
-      .text('Treemarkables LTD — Qualified Arborists', 50, footerY + 8, { width: pageW, align: 'center' });
-    doc.text('info@treemarkables.co.nz | 027 216 6882', 50, footerY + 20, { width: pageW, align: 'center' });
+      .text(`${__pdfIdentity.name} — ${__pdfIdentity.tagline}`, 50, footerY + 8, { width: pageW, align: 'center' });
+    doc.text(`${__pdfIdentity.email || 'info@treemarkables.co.nz'} | ${__pdfIdentity.phone || '027 216 6882'}`, 50, footerY + 20, { width: pageW, align: 'center' });
 
     doc.end();
   });
@@ -1071,6 +1072,7 @@ async function generateProposalPDFBuffer(
 async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
   const proposal = await storage.getProposal(proposalId);
   if (!proposal) throw new Error('Proposal not found');
+  const __htmlIdentity = getBusinessIdentity(await storage.getBusinessSettings());
   const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
   const sections = await storage.getProposalSectionsByProposal(proposalId);
   const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
@@ -1108,7 +1110,7 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
   const gstFmt = `$${gst.toFixed(2)}`;
   const totalFmt = `$${total.toFixed(2)}`;
   const subtotalFmt = `$${subtotal.toFixed(2)}`;
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${docLabel} ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">Treemarkables ${docLabel}</h1><p><strong>${docLabel} #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr><tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">Treemarkables LTD | info@treemarkables.co.nz | 027 216 6882</p></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${docLabel} ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">${__htmlIdentity.name} ${docLabel}</h1><p><strong>${docLabel} #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr><tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">${__htmlIdentity.name} | ${__htmlIdentity.email || 'info@treemarkables.co.nz'} | ${__htmlIdentity.phone || '027 216 6882'}</p></body></html>`;
 }
 
 // ---------------------------------------------------------------------------
