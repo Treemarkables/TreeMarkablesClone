@@ -15,6 +15,12 @@ import {
   isValidPermissionKey,
 } from '@shared/permissions';
 import type { Employee, RoleTier } from '@shared/schema';
+import { resolveEntitlements, filterPermissionsByEntitlements } from './tenancy/entitlements';
+
+// Subscription-entitlement gating of RBAC permissions. Flag-gated OFF by default
+// so the live single-tenant app is unaffected; enable per-environment once each
+// business's plan/add-ons are provisioned. See INFLOW_SAAS_PLAN.md.
+const ENTITLEMENT_ENFORCEMENT = process.env.ENTITLEMENT_ENFORCEMENT === 'true';
 
 export async function getEmployeePermissions(employee: Employee): Promise<Set<string>> {
   let tierPermissions: string[] | null = null;
@@ -32,11 +38,19 @@ export async function getEmployeePermissions(employee: Employee): Promise<Set<st
     if (def) tierPermissions = (def.permissions ?? []) as string[];
   }
 
-  return resolvePermissions({
+  const perms = resolvePermissions({
     legacyRole: employee.role,
     tierPermissions,
     overrides: employee.permissionOverrides ?? null,
   });
+
+  // Effective = RBAC ∩ subscription entitlements. Gates by BUSINESS (what was
+  // paid for), so it applies even to admins. No-op unless the flag is set.
+  if (ENTITLEMENT_ENFORCEMENT && employee.businessId) {
+    const { entitlements } = await resolveEntitlements(employee.businessId);
+    return filterPermissionsByEntitlements(perms, entitlements);
+  }
+  return perms;
 }
 
 export function requirePermission(key: string) {

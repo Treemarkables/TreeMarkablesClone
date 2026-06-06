@@ -93,3 +93,54 @@ export function hasEntitlement(entitlements: Set<Entitlement>, requires: Entitle
 export function unlockedCapabilities(entitlements: Set<Entitlement>, catalog: Capability[]): Capability[] {
   return catalog.filter((c) => hasEntitlement(entitlements, c.requires));
 }
+
+// ============================================================================
+// Entitlement gating of the LIVE permission system (shared/permissions.ts keys).
+//
+// The live RBAC keys (~50) are a different, smaller set than capabilities.ts.
+// This maps the live keys that should be gated behind a subscription tier to
+// the entitlement that unlocks them. Keys NOT in this map are ungated (core
+// features available on every tier — jobs, customers, quotes, invoices, etc.).
+//
+// TIER GATES ONLY for now (plan:crew / plan:business). Add-on gates (calls,
+// sms, ai, payments) are intentionally DEFERRED — gating them would strip the
+// comped Treemarkables (Business, no add-ons) of features it uses today.
+// Placement follows the feature→tier mapping in INFLOW_SAAS_PLAN.md.
+// ============================================================================
+export const PERMISSION_ENTITLEMENTS: Record<string, Entitlement> = {
+  // Crew tier — dispatch board, equipment register, advanced finance,
+  // custom RBAC, integrations.
+  "dispatch.view": "plan:crew",
+  "dispatch.manage": "plan:crew",
+  "equipment.view": "plan:crew",
+  "equipment.manage": "plan:crew",
+  "reconciliation.view": "plan:crew",
+  "reconciliation.manage": "plan:crew",
+  "profitability.view": "plan:crew",
+  "staff.manage_permissions": "plan:crew",
+  "settings.integrations": "plan:crew",
+  // Business tier — marketing/reputation + advanced analytics.
+  "reviews.view": "plan:business",
+  "reviews.respond": "plan:business",
+  "reporting.export": "plan:business",
+  "reporting.metrics": "plan:business",
+};
+
+/**
+ * Intersect a resolved permission set with a business's entitlements: drop any
+ * permission key whose required tier the business hasn't unlocked. Ungated keys
+ * (not in PERMISSION_ENTITLEMENTS) always pass. A Business subscriber keeps
+ * everything (satisfies plan:crew + plan:business); a Freemium one loses all
+ * gated keys.
+ */
+export function filterPermissionsByEntitlements(
+  perms: Set<string>,
+  entitlements: Set<Entitlement>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const key of perms) {
+    const required = PERMISSION_ENTITLEMENTS[key];
+    if (!required || entitlements.has(required)) out.add(key);
+  }
+  return out;
+}
