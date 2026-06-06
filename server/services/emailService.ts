@@ -184,7 +184,8 @@ class EmailService {
     jobTitle: string,
     status: string,
     additionalData?: Record<string, any>,
-    jobNumber?: string // Job number for job-specific reply-to address
+    jobNumber?: string, // Job number for job-specific reply-to address
+    businessName: string = 'Treemarkables' // de-hardcoded — caller passes the business name; default keeps Treemarkables unchanged
   ): Promise<EmailResult> {
     const statusTemplates = {
       // 'scheduled' status retired 2026-05. The template body lives on under
@@ -192,22 +193,22 @@ class EmailService {
       // wording still works when a work_order gets a scheduledDate set.
       scheduled: {
         subject: `Job Scheduled: ${jobTitle}`,
-        text: `Hi ${customerName},\n\nGood news! Your tree service job "${jobTitle}" has been scheduled.\n\nWe'll send you more details soon.\n\nBest regards,\nTreemarkables Team`,
+        text: `Hi ${customerName},\n\nGood news! Your job "${jobTitle}" has been scheduled.\n\nWe'll send you more details soon.\n\nBest regards,\n${businessName} Team`,
         html: this.getJobStatusEmailHTML(customerName, jobTitle, 'scheduled', additionalData)
       },
       in_progress: {
         subject: `Job Started: ${jobTitle}`,
-        text: `Hi ${customerName},\n\nOur team has arrived and started working on "${jobTitle}".\n\nWe'll update you when the job is complete.\n\nBest regards,\nTreemarkables Team`,
+        text: `Hi ${customerName},\n\nOur team has arrived and started working on "${jobTitle}".\n\nWe'll update you when the job is complete.\n\nBest regards,\n${businessName} Team`,
         html: this.getJobStatusEmailHTML(customerName, jobTitle, 'in_progress', additionalData)
       },
       completed: {
         subject: `Job Completed: ${jobTitle}`,
-        text: `Hi ${customerName},\n\nGreat news! Your tree service job "${jobTitle}" has been completed successfully.\n\nThank you for choosing Treemarkables!\n\nBest regards,\nTreemarkables Team`,
+        text: `Hi ${customerName},\n\nGreat news! Your job "${jobTitle}" has been completed successfully.\n\nThank you for choosing ${businessName}!\n\nBest regards,\n${businessName} Team`,
         html: this.getJobStatusEmailHTML(customerName, jobTitle, 'completed', additionalData)
       },
       cancelled: {
         subject: `Job Update: ${jobTitle}`,
-        text: `Hi ${customerName},\n\nWe need to update you about your job "${jobTitle}". Please contact us for more information.\n\nBest regards,\nTreemarkables Team`,
+        text: `Hi ${customerName},\n\nWe need to update you about your job "${jobTitle}". Please contact us for more information.\n\nBest regards,\n${businessName} Team`,
         html: this.getJobStatusEmailHTML(customerName, jobTitle, 'cancelled', additionalData)
       }
     };
@@ -301,7 +302,7 @@ class EmailService {
     quoteData: any
   ): Promise<EmailResult> {
     const subject = `Your Quote #${quoteNumber} - Treemarkables`;
-    const text = `Hi ${customerName},\n\nThank you for your interest in our tree services. Please find your quote #${quoteNumber} attached.\n\nQuote Amount: $${amount.toFixed(2)} NZD\n\nThis quote is valid for 30 days. Please contact us if you have any questions.\n\nBest regards,\nTreemarkables Team`;
+    const text = `Hi ${customerName},\n\nThank you for your interest in our tree services. Please find your quote #${quoteNumber} attached.\n\nQuote Amount: $${amount.toFixed(2)} NZD\n\nThis quote is valid for 30 days. Please contact us if you have any questions.\n\nBest regards,\n${businessName} Team`;
     
     const html = `
       <!DOCTYPE html>
