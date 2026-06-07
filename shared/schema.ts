@@ -1251,6 +1251,10 @@ export const businessSettings = pgTable("business_settings", {
   businessEmail: text("business_email").default(""),
   businessWebsite: text("business_website").default(""),
   businessLogo: text("business_logo").default(""),
+  // Trade Generalization Phase B — which trade's preset this business uses
+  // (tree | plumbing | electrical | building | general). Default 'tree' keeps
+  // Treemarkables on the arborist preset. See server/trades/presets.ts.
+  industry: text("industry").default("tree"),
   // Identity de-hardcoding (Trade Generalization Phase A). Defaults reproduce
   // Treemarkables' current literals so behaviour is unchanged until a business
   // sets its own. ownerName → AI persona / email sign-offs; businessDiscipline
