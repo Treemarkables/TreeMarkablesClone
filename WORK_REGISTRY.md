@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- add-ons / extras subscribe layer + tier-matrix builder — branch `claude/elegant-lamport-be6dd6` — 2026-06-06 — SMS/Call/AI add-on catalog + Stripe subscription-item add/remove + `/api/billing/addons` + SettingsBilling Extras UI + flag-gated add-on enforcement (`requireEntitlement`) + `/admin/tiers` feature-matrix editor (`plan_features` table) — delta on Phase 4 billing
 - entitlement enforcement — branch `inflow-entitlement-enforcement` — 2026-06-06 — gate RBAC features by subscription tier, flag-gated [PR #132]
 - work registry / collision-prevention — branch `inflow-work-registry` — 2026-06-06 — this file + CLAUDE.md rule
 

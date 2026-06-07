@@ -37,6 +37,7 @@ const Tasks = lazy(() => import("@/pages/Tasks"));
 const Videos = lazy(() => import("@/pages/Videos"));
 const Help = lazy(() => import("@/pages/Help"));
 const HelpAdmin = lazy(() => import("@/pages/admin/HelpAdmin"));
+const TierMatrix = lazy(() => import("@/pages/admin/TierMatrix"));
 const Pipeline = lazy(() => import("@/pages/Pipeline"));
 const Opportunities = lazy(() => import("@/pages/Opportunities"));
 const ConversationDetail = lazy(() => import("@/pages/ConversationDetail"));
@@ -965,6 +966,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <HelpAdmin />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/tiers">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <TierMatrix />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

@@ -51,4 +51,19 @@ INSERT INTO subscription_plans (key, name, stripe_price_id, price_nzd, active_jo
   ('business','Business', 'price_1Tf0Z7LboGXT31TYR2GirPLw', 189, NULL, 2)
 ON CONFLICT (key) DO NOTHING;
 
+-- Add-on catalog (the "extras"). Keys MUST match the capability `requires` keys in
+-- server/tenancy/capabilities.ts. price_nzd is ex-GST: for `flat` add-ons it's the
+-- monthly price; for `metered` (SMS) it's the per-message rate (0.15 = 15c, ~36%
+-- margin on the 11c/msg SMS Everyone cost). stripe_price_id is NULL until the
+-- recurring prices are created in the Stripe dashboard — until then activating an
+-- add-on unlocks the entitlement with no charge. DO UPDATE keeps name/price/type in
+-- sync on re-run but never touches stripe_price_id, so dashboard wiring survives.
+-- (server/billing.ts seedAddOnCatalog() also seeds these idempotently at boot.)
+INSERT INTO add_ons (key, name, price_nzd, billing_type) VALUES
+  ('sms','SMS & booking reminders', 0.15, 'metered'),
+  ('call_recording','Call recording & in-app calling', 55, 'flat'),
+  ('ai','AI assist bundle', 15, 'flat')
+ON CONFLICT (key) DO UPDATE SET
+  name = EXCLUDED.name, price_nzd = EXCLUDED.price_nzd, billing_type = EXCLUDED.billing_type;
+
 COMMIT;

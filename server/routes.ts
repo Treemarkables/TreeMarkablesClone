@@ -13,12 +13,16 @@ declare module 'express-session' {
   interface SessionData {
     employeeId?: string;
     businessId?: string;
+    customerId?: string;   // customer-portal session (separate from staff employeeId)
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
-import { getBusinessIdentity } from "./businessIdentity";
+import { getBusinessIdentity, buildBusinessContext } from "./businessIdentity";
+import { getTradePreset, ALL_TRADE_PRESETS } from "./trades/presets";
 import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
-import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
+import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
+import { buildTierMatrix, savePlanFeatures, invalidFeatureKeys, savePlanLimits, invalidLimits } from "./tierMatrix";
+import { jobCapMessage, seatCapMessage, photoCapMessage, smsCapMessage, recordSmsUsage, aiUsageGate } from "./usageLimits";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
@@ -83,6 +87,8 @@ import {
   getOrCreateStripeCustomer,
   retrieveStripeSubscription,
   createBillingPortalSession,
+  addSubscriptionItem,
+  removeSubscriptionItem,
 } from "./stripe";
 import * as billing from "./billing";
 import { createTenant } from "./onboarding";
@@ -91,6 +97,8 @@ import {
   ensureRoleTiersSeeded,
   getEmployeePermissions,
   requirePermission,
+  requireEntitlement,
+  requireCapability,
   validatePermissionKeys,
 } from "./permissions";
 import {
@@ -3047,7 +3055,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
   });
 
   // POST /api/leads/extract-from-message - Extract lead details from pasted text message using AI
-  app.post('/api/leads/extract-from-message', async (req: Request, res: Response) => {
+  app.post('/api/leads/extract-from-message', requireCapability('aiDispatch.use'), aiUsageGate(), async (req: Request, res: Response) => {
     try {
       const { message, phone } = req.body;
       
@@ -3058,16 +3066,21 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      // Trade-neutral business/trade context (Trade Generalization Phase C).
+      const __extractSettings = await storage.getBusinessSettings();
+      const __extractId = getBusinessIdentity(__extractSettings);
+      const __extractCtx = buildBusinessContext(__extractSettings);
+
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       const extractionResponse = await openai.chat.completions.create({
         model: "gpt-5",
         messages: [
           {
             role: "system",
-            content: `You are an expert at extracting customer contact information from messages and emails for a tree removal/arborist company in New Zealand called Treemarkables.
+            content: `You are an expert at extracting customer contact information from messages and emails for ${__extractCtx}
 
 Extract the following information:
-- name: The REQUESTER's name — the person or company requesting the tree service (not Treemarkables staff). Check:
+- name: The REQUESTER's name — the person or company requesting the service (not ${__extractId.name} staff). Check:
   • Email signature block (lines at the end with a person's name, company, and phone)
   • "For access contact" table field (may be a tenant, not the requester — prefer the sender's name)
   • "From" line or opening greeting
@@ -3075,13 +3088,13 @@ Extract the following information:
   • Fallback: if no explicit name is found anywhere, derive one from the email address local part (the bit before @): split on dots, underscores, hyphens or digits, drop digits, and Title Case the words. e.g. "debmasters18@gmail.com" → "Deb Masters", "john.smith@…" → "John Smith". Skip this fallback for generic local parts like "info", "admin", "contact", "hello", "sales", "office", "enquiries", "noreply".
 - phone: The REQUESTER's phone number (from signature block or "contact" field). Format NZ numbers as 02X XXX XXXX.
 - email: The REQUESTER's email address (from signature block or From/Reply-To)
-- address: The SERVICE ADDRESS (the property where tree work is needed). Look for:
+- address: The SERVICE ADDRESS (the property where the work is needed). Look for:
   • Table fields labelled "Address", "Property address", "Location", or "at <address>"
   • "67A Valley Rd", "2/2 Maclean Street" style NZ addresses
   • Do NOT use business addresses from email signatures
-- description: Summary of the tree work requested. Combine:
+- description: Summary of the work requested. Combine:
   • "Quote summary", "Quote details", "Service", or "Message" table fields
-  • Any description of the tree issue, size, or access notes
+  • Any description of the issue, size, or access notes
   • Keep it concise but include the key service requested
 
 Common email formats to handle:
@@ -3130,7 +3143,7 @@ Use empty string if a field cannot be determined.`
   });
 
   // POST /api/leads/extract-from-screenshot - Extract lead details from SMS screenshot using AI vision
-  app.post('/api/leads/extract-from-screenshot', async (req: Request, res: Response) => {
+  app.post('/api/leads/extract-from-screenshot', requireCapability('aiDispatch.use'), aiUsageGate(), async (req: Request, res: Response) => {
     try {
       const { image } = req.body;
       
@@ -3141,6 +3154,9 @@ Use empty string if a field cannot be determined.`
         });
       }
 
+      // Trade-neutral business/trade context (Trade Generalization Phase C).
+      const __ssCtx = buildBusinessContext(await storage.getBusinessSettings());
+
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       const visionResponse = await openai.chat.completions.create({
         model: "gpt-5",
@@ -3150,14 +3166,14 @@ Use empty string if a field cannot be determined.`
             content: [
               {
                 type: "text",
-                text: `Analyze this screenshot of an SMS/text message conversation from an iPhone or Android phone. This is for a tree removal/arborist company in New Zealand.
+                text: `Analyze this screenshot of an SMS/text message conversation from an iPhone or Android phone. This is for ${__ssCtx}
 
 Extract the following information:
 1. Phone number - Look at the TOP of the screen where the contact info is shown (usually shows the phone number like "+64 21 231 8338")
 2. Customer name - Look for names in the messages, especially after "Thank you," or in greetings. If no explicit name is given anywhere, try to derive one from the email address local part (the bit before @): split it on dots, underscores, hyphens or digits, drop digits, and Title Case the remaining words. e.g. "debmasters18@gmail.com" → "Deb Masters", "john.smith@…" → "John Smith", "jane_doe2@…" → "Jane Doe". Only do this fallback when no real name is found, and never invent a name from a generic local part like "info", "admin", "contact", "hello", "sales", "office", "enquiries".
 3. Email address - Look for any email addresses mentioned anywhere in the messages (e.g. someone@example.com, someone@gmail.com)
 4. Address - Look for street addresses, often marked with a 📍 pin emoji or containing road/street names
-5. Job description - Any details about tree work, removal, pruning, stump grinding, etc.
+5. Job description - Any details about the work, service, or job requested.
 
 Return your response as JSON in this exact format:
 {
@@ -3989,7 +4005,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   // CALL MANAGEMENT API ROUTES
   // ========================================
 
-  app.post('/api/calls', async (req: Request, res: Response) => {
+  app.post('/api/calls', requireEntitlement('addon:call_recording'), async (req: Request, res: Response) => {
     try {
       const validation = insertCallSchema.safeParse(req.body);
       if (!validation.success) {
@@ -4008,7 +4024,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
-  app.get('/api/calls', async (req: Request, res: Response) => {
+  app.get('/api/calls', requireEntitlement('addon:call_recording'), async (req: Request, res: Response) => {
     try {
       const { customerId, leadId, limit } = req.query;
       let calls;
@@ -4504,6 +4520,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.post('/api/jobs', async (req: Request, res: Response) => {
     try {
+      // Plan usage cap: active jobs / month (no-op unless enforcement is on).
+      const jobCap = await jobCapMessage(req.session.businessId ?? '');
+      if (jobCap) return res.status(403).json({ success: false, message: jobCap });
       // Preprocess date fields - convert strings to Date objects
       const processedBody = { ...req.body };
       if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
@@ -7015,7 +7034,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   app.post('/api/jobs/:jobId/photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
-      
+
+      // Plan usage cap: photos / job (no-op unless enforcement is on).
+      const photoCap = await photoCapMessage(req.session.businessId ?? '', jobId, 1);
+      if (photoCap) return res.status(403).json({ success: false, message: photoCap });
+
       if (!req.file) {
         return res.status(400).json({ 
           success: false, 
@@ -7748,7 +7771,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // before applying it to jobs.description. Synchronous on purpose — quote
   // videos are short, the arborist is actively waiting, and there's no queue
   // infra in the app yet. Phase 2 may move this to a background job.
-  app.post('/api/videos/:id/transcribe', async (req: Request, res: Response) => {
+  app.post('/api/videos/:id/transcribe', requireCapability('videos.transcribe'), aiUsageGate(), async (req: Request, res: Response) => {
     const videoId = req.params.id;
     // ?force=1 (or { force: true } in the body) bypasses the cached-result
     // fast-path below, so the user can iterate on a generated description
@@ -7809,18 +7832,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
       // Step 3: Whisper transcription. The `prompt` parameter biases the
       // model toward domain-specific terms (Whisper accepts up to 224 tokens
-      // here as a style/vocabulary hint). Seeding it with NZ tree species
-      // + common arborist operations stops it from inventing words like
-      // "gladitziers" when the arborist said "gleditsias".
-      const WHISPER_BIAS_PROMPT = [
-        'New Zealand tree services walkthrough.',
-        'Species: pohutukawa, manuka, kanuka, kauri, totara, rimu, kahikatea,',
-        'miro, tawa, rewarewa, kowhai, ribbonwood, pittosporum, cabbage tree,',
-        'ti kouka, gleditsia, magnolia, oak, pine, eucalyptus, gum tree,',
-        'macrocarpa, leyland cypress, willow, poplar, silver birch, plum.',
-        'Operations: prune, lift, crown reduction, deadwood, remove, fell,',
-        'dismantle, stump grind, mulch, chip, firewood lengths, cleanup.',
-      ].join(' ');
+      // here as a style/vocabulary hint) so it doesn't invent words like
+      // "gladitziers" when the arborist said "gleditsias". The bias is now
+      // trade-specific (server/trades/presets.ts) — tree is unchanged; a plumber
+      // gets plumbing terms. Settings fetched once and reused for the GPT step.
+      const __sttSettings = await storage.getBusinessSettings();
+      const WHISPER_BIAS_PROMPT = getTradePreset(__sttSettings?.industry).whisperBias;
       const rawTranscription = await openai.audio.transcriptions.create({
         file: fs.createReadStream(audioTmpPath),
         model: 'whisper-1',
@@ -7845,7 +7862,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
       // Step 4: clean the transcript into a quote-ready job description.
       // GPT-5 doesn't accept temperature; rely on the model's defaults.
-      const __idQuote = getBusinessIdentity(await storage.getBusinessSettings());
+      const __idQuote = getBusinessIdentity(__sttSettings);
       const prompt = `You are a quote-writing assistant for a New Zealand ${__idQuote.discipline} company. Someone from the business recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
 
 STRUCTURE
@@ -10464,7 +10481,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
   });
 
   // Send SMS invoice
-  app.post('/api/sms/send', async (req: Request, res: Response) => {
+  app.post('/api/sms/send', requireCapability('sms.send'), async (req: Request, res: Response) => {
     try {
       const { phone, message, jobId, customerId, invoiceId } = req.body;
       
@@ -10485,6 +10502,10 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
           message: 'SMS message must be 459 characters or less (3 SMS segments)' 
         });
       }
+
+      // Plan usage cap: SMS / month allowance (no-op unless enforcement is on).
+      const smsBlocked = await smsCapMessage(req.session.businessId ?? '', 1);
+      if (smsBlocked) return res.status(403).json({ success: false, message: smsBlocked });
 
       // Get related data for SMS context
       let job, customer, invoice;
@@ -10507,6 +10528,9 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
       if (!success) {
         throw new Error('SMS service failed to send message');
       }
+
+      // Count this send against the monthly allowance (no-op unless enforcement is on).
+      await recordSmsUsage(req.session.businessId ?? '', 1);
 
       // Log successful SMS for audit trail
       console.log(`📱 SMS sent successfully to ${phone}`);
@@ -15013,6 +15037,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const { jobId } = req.params;
       const { type } = req.body; // 'before' or 'after'
 
+      // Plan usage cap: photos / job — count the incoming batch (no-op unless enforced).
+      const incoming = Array.isArray(req.files) ? req.files.length : 0;
+      const photoCap = await photoCapMessage(req.session.businessId ?? '', jobId, incoming || 1);
+      if (photoCap) return res.status(403).json({ success: false, message: photoCap });
+
       // Validate job ID format
       if (!jobId || typeof jobId !== 'string' || jobId.length < 1) {
         return res.status(400).json({ success: false, message: 'Invalid job ID' });
@@ -15806,6 +15835,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Create new employee
   app.post('/api/employees', async (req: Request, res: Response) => {
     try {
+      // Plan usage cap: seats / users (no-op unless enforcement is on).
+      const seatCap = await seatCapMessage(req.session.businessId ?? '');
+      if (seatCap) return res.status(403).json({ success: false, message: seatCap });
       // Convert hourlyRate to string if it's a number
       const bodyData = { ...req.body };
       if (typeof bodyData.hourlyRate === 'number') {
@@ -17902,6 +17934,33 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Trade presets (for the trade picker in settings). Public list of key + label.
+  app.get('/api/trades', (_req: Request, res: Response) => {
+    res.json({ success: true, data: ALL_TRADE_PRESETS.map((t) => ({ key: t.key, label: t.label })) });
+  });
+
+  // The current business's trade catalogs (service types, equipment, staff positions),
+  // resolved from its trade preset. UI dropdowns read these so a plumber sees plumbing
+  // options, an arborist sees tree options. {key, label} — label is the humanised key.
+  app.get('/api/catalogs', async (req: Request, res: Response) => {
+    try {
+      const settings = await storage.getBusinessSettings();
+      const preset = getTradePreset((settings as any)?.industry);
+      const humanize = (k: string) => k.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+      const toOpts = (keys: string[]) => keys.map((k) => ({ key: k, label: humanize(k) }));
+      res.json({
+        success: true,
+        data: {
+          serviceTypes: toOpts(preset.serviceTypes),
+          equipmentTypes: toOpts(preset.equipmentTypes),
+          staffPositions: toOpts(preset.staffPositions),
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Failed to load catalogs' });
+    }
+  });
+
   // Update business settings
   app.put('/api/business-settings', async (req: Request, res: Response) => {
     try {
@@ -18019,7 +18078,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Send a reminder right now (manual button in diary)
-  app.post('/api/jobs/:id/booking-reminders/send-now', async (req: Request, res: Response) => {
+  app.post('/api/jobs/:id/booking-reminders/send-now', requireCapability('sms.send'), async (req: Request, res: Response) => {
     try {
       const { channel } = req.body || {};
       const { createAndSendManualReminder } = await import('./services/bookingReminderService');
@@ -21157,7 +21216,13 @@ Transcription: ${transcriptText}`;
       // Get customer details
       const customer = await storage.getCustomer(customerAuth.customerId);
       console.log('Authentication successful for customer:', customer?.name);
-      
+
+      // Establish a tenant-scoped portal session: subsequent /api/customer/:id/* calls are
+      // authorised by req.session.customerId (not the URL id), and run under the customer's
+      // business via session.businessId (so RLS scopes them to the right tenant).
+      req.session.customerId = customerAuth.customerId;
+      req.session.businessId = customer?.businessId ?? undefined;
+
       res.json({
         success: true,
         data: {
@@ -21172,7 +21237,22 @@ Transcription: ${transcriptText}`;
   });
 
   // Get customer jobs
-  app.get('/api/customer/:id/jobs', async (req: Request, res: Response) => {
+  // Customer-portal authorization: requires a portal session (from /api/customer-auth)
+  // and that the requested :id is the signed-in customer — never trust the URL id alone.
+  const requireCustomerSelf = (req: Request, res: Response, next: express.NextFunction): void => {
+    const sessionCustomerId = req.session.customerId;
+    if (!sessionCustomerId) {
+      res.status(401).json({ success: false, message: 'Please sign in to your portal.' });
+      return;
+    }
+    if (req.params.id && req.params.id !== sessionCustomerId) {
+      res.status(403).json({ success: false, message: 'Forbidden' });
+      return;
+    }
+    next();
+  };
+
+  app.get('/api/customer/:id/jobs', requireCustomerSelf, async (req: Request, res: Response) => {
     try {
       const jobs = await storage.getCustomerJobs(req.params.id);
       
@@ -21190,7 +21270,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Get customer invoices  
-  app.get('/api/customer/:id/invoices', async (req: Request, res: Response) => {
+  app.get('/api/customer/:id/invoices', requireCustomerSelf, async (req: Request, res: Response) => {
     try {
       const invoices = await storage.getCustomerInvoices(req.params.id);
       res.json({ success: true, data: invoices });
@@ -21201,7 +21281,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Get customer photos
-  app.get('/api/customer/:id/photos', async (req: Request, res: Response) => {
+  app.get('/api/customer/:id/photos', requireCustomerSelf, async (req: Request, res: Response) => {
     try {
       const { jobId } = req.query;
       const photos = await storage.getCustomerPhotos(req.params.id, jobId as string);
@@ -21213,7 +21293,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Create service request
-  app.post('/api/customer/:id/service-requests', async (req: Request, res: Response) => {
+  app.post('/api/customer/:id/service-requests', requireCustomerSelf, async (req: Request, res: Response) => {
     try {
       console.log(`Creating service request for customer ${req.params.id}:`, req.body);
       
@@ -21248,7 +21328,7 @@ Transcription: ${transcriptText}`;
   });
 
   // Get customer service requests
-  app.get('/api/customer/:id/service-requests', async (req: Request, res: Response) => {
+  app.get('/api/customer/:id/service-requests', requireCustomerSelf, async (req: Request, res: Response) => {
     try {
       console.log(`Getting service requests for customer ${req.params.id}`);
       const serviceRequests = await storage.getServiceRequestsByCustomer(req.params.id);
@@ -23882,6 +23962,147 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
+  // ── Tier feature-matrix (platform-operator only) ────────────────────────────
+  // Global config: which capability keys each subscription tier includes. Gated to
+  // the Inflow operator (Treemarkables) — tier definitions are platform-wide, so a
+  // regular tenant admin must not edit them. (Pre-dates a dedicated platformAdmins
+  // table; reuses the Treemarkables businessId allowlist.)
+  const requirePlatformOperator = (req: Request, res: Response, next: express.NextFunction): void => {
+    const isOperator = TREEMARKABLES_BUSINESS_IDS.includes(req.session.businessId ?? '');
+    // Local dev only: any business admin (already past requireAdmin) may edit the matrix,
+    // so testing isn't blocked by which tenant you're logged in as. Fail-safe — only a
+    // literal NODE_ENV=development opens this; production (or an unset env) stays operator-locked.
+    const devBypass = process.env.NODE_ENV === 'development';
+    if (!isOperator && !devBypass) {
+      res.status(403).json({ success: false, message: 'Platform operator only' });
+      return;
+    }
+    next();
+  };
+
+  app.get('/api/admin/tier-matrix', requireAdmin, requirePlatformOperator, async (_req: Request, res: Response) => {
+    try {
+      res.json({ success: true, data: await buildTierMatrix() });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Failed to load tier matrix' });
+    }
+  });
+
+  app.put('/api/admin/tier-matrix/:planKey', requireAdmin, requirePlatformOperator, async (req: Request, res: Response) => {
+    try {
+      const { features, limits } = req.body ?? {};
+      if (features !== undefined) {
+        if (!Array.isArray(features) || features.some((f: unknown) => typeof f !== 'string')) {
+          return res.status(400).json({ success: false, message: 'features must be an array of capability keys' });
+        }
+        const bad = invalidFeatureKeys(features);
+        if (bad.length) return res.status(400).json({ success: false, message: `Unknown capability keys: ${bad.join(', ')}` });
+        await savePlanFeatures(req.params.planKey, features);
+      }
+      if (limits !== undefined) {
+        if (typeof limits !== 'object' || limits === null || Array.isArray(limits)) {
+          return res.status(400).json({ success: false, message: 'limits must be an object of dimension -> number|null' });
+        }
+        const bad = invalidLimits(limits);
+        if (bad.length) return res.status(400).json({ success: false, message: `Invalid limits: ${bad.join(', ')}` });
+        await savePlanLimits(req.params.planKey, limits);
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      // Most likely the plan_features / plan_limits tables aren't migrated yet.
+      if (/relation .*(plan_features|plan_limits).* does not exist|no such table/i.test(e?.message || '')) {
+        return res.status(503).json({ success: false, message: 'Tier-matrix store not set up yet — run INFLOW_TIER_MATRIX.sql.' });
+      }
+      res.status(500).json({ success: false, message: e?.message || 'Failed to save tier' });
+    }
+  });
+
+  // ── Add-ons ("extras") — cost-incurring features on top of a paid plan ──────
+  // Seed the catalog once at boot (idempotent; no-op if the table isn't migrated).
+  void billing.seedAddOnCatalog().catch((e: any) =>
+    console.warn('add-on catalog seed skipped:', e?.message),
+  );
+
+  // Catalog of available add-ons + which ones this business has switched on.
+  app.get('/api/billing/addons', async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      const [catalog, activeKeys] = await Promise.all([
+        billing.getActiveAddOns(),
+        billing.getBusinessAddOnKeys(businessId),
+      ]);
+      const active = new Set(activeKeys);
+      res.json({ success: true, data: catalog.map((a) => ({ ...a, active: active.has(a.key) })) });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Failed to load add-ons' });
+    }
+  });
+
+  // Switch an add-on ON. Adds a recurring line item to the live subscription when
+  // the business is on a paying plan and the add-on has a configured Stripe price;
+  // otherwise (comped tenant / price not yet set up) it just unlocks the entitlement
+  // locally at no charge. Requires a paid plan — add-ons can't ride on Freemium.
+  app.post('/api/billing/addons/:key/activate', requireAdmin, async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      const addOn = await billing.getAddOnByKey(req.params.key);
+      if (!addOn || !addOn.isActive) return res.status(404).json({ success: false, message: 'Unknown add-on' });
+
+      // Add-ons require a paid plan (Crew/Business). A comped tenant counts — it has a
+      // Business subscription row with no Stripe id, so it unlocks the add-on for free.
+      const sub = await billing.getSubscriptionByBusiness(businessId);
+      const planKey = sub?.planId ? (await billing.getPlanById(sub.planId))?.key : undefined;
+      const entitledStatus = !!sub && ['active', 'trialing', 'past_due'].includes(sub.status);
+      const onPaidPlan = entitledStatus && !!planKey && planKey !== 'freemium';
+      if (!onPaidPlan) {
+        return res.status(400).json({ success: false, message: 'Add-ons require a paid plan. Upgrade to Crew or Business first.' });
+      }
+
+      // Bill it as a line item only for a real Stripe subscriber with a configured price;
+      // comped tenants (no Stripe id) just get the entitlement unlocked at no charge.
+      let itemId: string | null = null;
+      if (sub!.stripeSubscriptionId && addOn.stripePriceId && isStripeConfigured()) {
+        itemId = await addSubscriptionItem(sub!.stripeSubscriptionId, addOn.stripePriceId, {
+          metered: addOn.billingType === 'metered',
+        });
+      }
+
+      await billing.setBusinessAddOn(businessId, addOn.id, { status: 'active', stripeSubscriptionItemId: itemId });
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('add-on activate error:', e?.message);
+      res.status(500).json({ success: false, message: e?.message || 'Failed to activate add-on' });
+    }
+  });
+
+  // Switch an add-on OFF. Removes its Stripe line item (if billed) and locks the
+  // entitlement again. Data the add-on produced is retained, just gated.
+  app.post('/api/billing/addons/:key/deactivate', requireAdmin, async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      const addOn = await billing.getAddOnByKey(req.params.key);
+      if (!addOn) return res.status(404).json({ success: false, message: 'Unknown add-on' });
+
+      const existing = await billing.getBusinessAddOn(businessId, addOn.id);
+      if (existing?.stripeSubscriptionItemId && isStripeConfigured()) {
+        try {
+          await removeSubscriptionItem(existing.stripeSubscriptionItemId);
+        } catch (e: any) {
+          // Item may already be gone in Stripe (e.g. subscription cancelled) — log and proceed.
+          console.warn('add-on Stripe item removal failed (continuing):', e?.message);
+        }
+      }
+      await billing.setBusinessAddOn(businessId, addOn.id, { status: 'cancelled', stripeSubscriptionItemId: null });
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('add-on deactivate error:', e?.message);
+      res.status(500).json({ success: false, message: e?.message || 'Failed to deactivate add-on' });
+    }
+  });
+
   app.post('/api/stripe/webhook', async (req: Request, res: Response) => {
     const rawBody: Buffer | undefined = (req as any).rawBody;
     const signature = req.headers['stripe-signature'] as string | undefined;
@@ -23908,6 +24129,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const businessId: string | undefined = sub?.metadata?.businessId;
         if (businessId) {
           await billing.syncFromStripeSubscription(businessId, sub);
+          // Extras ride on the plan subscription — when it's deleted, drop them too so
+          // a cancelled business doesn't keep paid add-on entitlements.
+          if (event.type === 'customer.subscription.deleted') {
+            await billing.cancelAllBusinessAddOns(businessId);
+          }
           console.log(`Stripe webhook: synced subscription ${sub.id} for business ${businessId} -> ${sub.status}`);
         }
         return res.json({ received: true });
@@ -26652,7 +26878,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Speech to Quote - Convert recorded speech to quote data
-  app.post('/api/speech-to-quote', audioUpload.single('audio'), async (req, res) => {
+  app.post('/api/speech-to-quote', requireCapability('speechToQuote.use'), aiUsageGate(), audioUpload.single('audio'), async (req, res) => {
     let audioFilePath: string | null = null;
     
     try {
@@ -28836,7 +29062,7 @@ Transcription: ${transcriptText}`;
   });
 
   // ─── AI: Extract lead details from pasted Facebook message ──────────────────
-  app.post('/api/ai/extract-facebook-message', async (req: Request, res: Response) => {
+  app.post('/api/ai/extract-facebook-message', requireCapability('aiDispatch.use'), aiUsageGate(), async (req: Request, res: Response) => {
     try {
       const { messageText } = req.body;
       if (!messageText || typeof messageText !== 'string' || !messageText.trim()) {
@@ -28877,7 +29103,7 @@ ${messageText}`
   });
 
   // ─── Screenshot extraction for Mulch Drops ─────────────────────────────────
-  app.post('/api/ai/extract-screenshot', imageUpload.single('image'), async (req: Request, res: Response) => {
+  app.post('/api/ai/extract-screenshot', requireCapability('aiDispatch.use'), aiUsageGate(), imageUpload.single('image'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No image uploaded' });

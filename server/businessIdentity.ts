@@ -12,6 +12,7 @@
  */
 
 import type { BusinessSettings } from "@shared/schema";
+import { getTradePreset } from "./trades/presets";
 
 export interface BusinessIdentity {
   name: string;        // "Treemarkables"
@@ -45,6 +46,7 @@ type SettingsLike = Partial<
     | "businessPhone"
     | "businessEmail"
     | "businessAddress"
+    | "industry"
   >
 > | null | undefined;
 
@@ -58,4 +60,18 @@ export function getBusinessIdentity(settings: SettingsLike): BusinessIdentity {
     email: settings?.businessEmail || DEFAULTS.email,
     address: settings?.businessAddress || DEFAULTS.address,
   };
+}
+
+/**
+ * Trade-aware AI context (Trade Generalization Phase C). Builds the one line every
+ * AI prompt should lead with — this business's name + trade + the trade's domain
+ * vocabulary — from settings + the selected trade preset. No prompt should contain
+ * a literal trade term or business name again. On the tree preset (default) this
+ * reads equivalently to today: "…Treemarkables, a New Zealand arborist business.
+ * Relevant work includes: tree removal, stump grind, mulch, …".
+ */
+export function buildBusinessContext(settings: SettingsLike): string {
+  const id = getBusinessIdentity(settings);
+  const preset = getTradePreset(settings?.industry);
+  return `${id.name}, a New Zealand ${id.discipline} business. Relevant work for this trade includes: ${preset.aiVocabulary}.`;
 }

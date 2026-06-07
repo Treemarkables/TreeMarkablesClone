@@ -33,6 +33,9 @@ const OWNER_PATHS = [
   "/api/stripe/webhook",
   "/api/health",
   "/api/firebase-config",
+  // Customer-portal login: resolves the customer (and their business) across tenants,
+  // then stamps session.businessId so subsequent portal calls run tenant-scoped.
+  "/api/customer-auth",
 ];
 
 function isOwnerPath(path: string): boolean {

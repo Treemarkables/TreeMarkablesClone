@@ -102,9 +102,12 @@ export function unlockedCapabilities(entitlements: Set<Entitlement>, catalog: Ca
 // the entitlement that unlocks them. Keys NOT in this map are ungated (core
 // features available on every tier — jobs, customers, quotes, invoices, etc.).
 //
-// TIER GATES ONLY for now (plan:crew / plan:business). Add-on gates (calls,
-// sms, ai, payments) are intentionally DEFERRED — gating them would strip the
-// comped Treemarkables (Business, no add-ons) of features it uses today.
+// Tier gates (plan:crew / plan:business) AND add-on gates (sms, call_recording).
+// Add-on gates flip the SMS/Calls UI on/off with the matching add-on. They only
+// bite when ENTITLEMENT_ENFORCEMENT is ON — before flipping that flag, every
+// business that uses these features (incl. comped Treemarkables) must have the
+// add-on activated, or it loses them. The AI add-on has no RBAC key and is gated
+// at the route level via requireEntitlement("addon:ai") instead.
 // Placement follows the feature→tier mapping in INFLOW_SAAS_PLAN.md.
 // ============================================================================
 export const PERMISSION_ENTITLEMENTS: Record<string, Entitlement> = {
@@ -124,6 +127,11 @@ export const PERMISSION_ENTITLEMENTS: Record<string, Entitlement> = {
   "reviews.respond": "plan:business",
   "reporting.export": "plan:business",
   "reporting.metrics": "plan:business",
+  // Add-ons — cost-incurring extras. Each key is intersected away unless the
+  // business has switched the matching add-on on.
+  "sms.send": "addon:sms",
+  "calls.view": "addon:call_recording",
+  "calls.make": "addon:call_recording",
 };
 
 /**
@@ -132,6 +140,8 @@ export const PERMISSION_ENTITLEMENTS: Record<string, Entitlement> = {
  * (not in PERMISSION_ENTITLEMENTS) always pass. A Business subscriber keeps
  * everything (satisfies plan:crew + plan:business); a Freemium one loses all
  * gated keys.
+ *
+ * SUPERSEDED by filterPermissionsByFeatureSet (matrix-driven). Kept for reference.
  */
 export function filterPermissionsByEntitlements(
   perms: Set<string>,
@@ -141,6 +151,82 @@ export function filterPermissionsByEntitlements(
   for (const key of perms) {
     const required = PERMISSION_ENTITLEMENTS[key];
     if (!required || entitlements.has(required)) out.add(key);
+  }
+  return out;
+}
+
+// ============================================================================
+// MATRIX-DRIVEN gating (the tier feature-matrix is the source of truth).
+//
+// Maps each gated LIVE RBAC key (shared/permissions.ts) to the CAPABILITY key
+// (server/tenancy/capabilities.ts) whose presence in a business's plan feature
+// set unlocks it. The two key spaces were authored separately, so the names
+// don't always match 1:1 — this is the bridge. Keys NOT in this map are core
+// (available on every tier) and never gated.
+//
+// A whole feature AREA can be gated by one capability: every live `safety.*`
+// key maps to `safety.view`, so ticking/unticking Safety for a tier flips the
+// entire safety surface for that tier.
+// ============================================================================
+export const PERMISSION_TO_CAPABILITY: Record<string, string> = {
+  // Jobs & Dispatch
+  "dispatch.view": "dispatch.view",
+  "dispatch.manage": "dispatch.manage",
+  // Finance (advanced)
+  "reconciliation.view": "reconciliation.view",
+  "reconciliation.manage": "reconciliation.manage",
+  "profitability.view": "profitability.view",
+  // Staff & scheduling
+  "staff.manage_permissions": "permissions.manage",
+  "schedule.view": "staffSchedule.view",
+  "schedule.manage": "staffSchedule.manage",
+  "timetracking.view_all": "timeTracking.view",
+  "timetracking.edit": "timeTracking.manage",
+  // Safety & compliance — whole area gated by the Safety hub capability
+  "safety.jha.view": "safety.view",
+  "safety.jha.create": "safety.view",
+  "safety.jha.manage_templates": "safety.view",
+  "safety.nearmiss.view": "safety.view",
+  "safety.nearmiss.report": "safety.view",
+  "safety.inductions.view": "safety.view",
+  "safety.inductions.manage": "safety.view",
+  "safety.inspections.view": "safety.view",
+  "safety.inspections.create": "safety.view",
+  "safety.inspections.manage_templates": "safety.view",
+  // Communications
+  "inbox.view": "inbox.view",
+  "inbox.send": "inbox.reply",
+  "sms.send": "sms.send",
+  "calls.view": "calls.view",
+  "calls.make": "calls.record",
+  "reviews.view": "reputation.view",
+  "reviews.respond": "reviews.manage",
+  "templates.manage": "commTemplates.manage",
+  // Inventory & Equipment
+  "materials.manage": "materials.manage",
+  "equipment.view": "equipment.view",
+  "equipment.manage": "equipment.manage",
+  // Reporting & Analytics (advanced)
+  "reporting.metrics": "analytics.advanced",
+  "reporting.export": "analytics.advanced",
+  // Settings
+  "settings.integrations": "integrations.view",
+  "settings.templates": "documents.build",
+};
+
+/**
+ * Drop any RBAC permission key whose mapped capability is NOT in the business's
+ * plan feature set (from the tier matrix). Unmapped keys are core → always kept.
+ * `featureSet` is capability keys (server/tierMatrix.getBusinessFeatureSet).
+ */
+export function filterPermissionsByFeatureSet(
+  perms: Set<string>,
+  featureSet: Set<string>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const key of perms) {
+    const cap = PERMISSION_TO_CAPABILITY[key];
+    if (!cap || featureSet.has(cap)) out.add(key);
   }
   return out;
 }

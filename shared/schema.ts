@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real, index, unique, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1250,6 +1250,10 @@ export const businessSettings = pgTable("business_settings", {
   ownerName: text("owner_name").default("Jules"),
   businessTagline: text("business_tagline").default("Qualified Arborists"),
   businessDiscipline: text("business_discipline").default("arborist"),
+  // Trade Generalization Phase B — preset key selecting per-trade catalogs + AI
+  // vocabulary (server/trades/presets.ts). Default 'tree' keeps every existing row
+  // (incl. Treemarkables) on the arborist preset; new businesses pick at signup.
+  industry: text("industry").notNull().default("tree"),
 
   // Business Rules & Workflow
   leadAssignmentMethod: text("lead_assignment_method").default("round_robin"), // round_robin, skill_based, manual
@@ -4944,6 +4948,40 @@ export const businessAddOns = pgTable("business_add_ons", {
   stripeSubscriptionItemId: text("stripe_subscription_item_id"),
   activatedAt: timestamp("activated_at").defaultNow(),
 });
+
+// Global platform config: which capability keys each subscription tier includes.
+// One row per plan; `features` is the array of capability keys ticked for that tier
+// in the platform-operator tier-matrix editor. Deliberately ISOLATED from the billing
+// queries (its own table, queried only by the matrix admin API) so a missing table can
+// never break checkout. Global — no businessId, no RLS.
+export const planFeatures = pgTable("plan_features", {
+  planKey: text("plan_key").primaryKey(),              // 'freemium' | 'crew' | 'business'
+  features: jsonb("features").$type<string[]>().notNull().default([]),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type PlanFeatures = typeof planFeatures.$inferSelect;
+
+// Global platform config: per-tier usage caps (capacity layer). One row per
+// (plan, dimension); `value` NULL = unlimited, 0 = none. Dimension keys are
+// code-defined (server/tierMatrix.ts LIMIT_CATALOG). Same isolation rationale as
+// plan_features — never touched by the billing path.
+export const planLimits = pgTable("plan_limits", {
+  planKey: text("plan_key").notNull(),                 // 'freemium' | 'crew' | 'business'
+  limitKey: text("limit_key").notNull(),               // e.g. 'activeJobs' | 'seats' | 'smsPerMonth'
+  value: integer("value"),                             // NULL = unlimited
+}, (t) => ({ pk: primaryKey({ columns: [t.planKey, t.limitKey] }) }));
+export type PlanLimit = typeof planLimits.$inferSelect;
+
+// Per-business monthly usage counters for metered caps (SMS, AI). `period` is the
+// NZ calendar month "YYYY-MM"; the row is upsert-incremented on each use and read
+// before the action to enforce the plan's cap. Tenant-scoped (has businessId).
+export const usageCounters = pgTable("usage_counters", {
+  businessId: varchar("business_id").notNull(),
+  metric: text("metric").notNull(),                    // 'sms' | 'ai'
+  period: text("period").notNull(),                    // 'YYYY-MM' (Pacific/Auckland)
+  count: integer("count").notNull().default(0),
+}, (t) => ({ pk: primaryKey({ columns: [t.businessId, t.metric, t.period] }) }));
+export type UsageCounter = typeof usageCounters.$inferSelect;
 
 export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({ id: true, createdAt: true });
 export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;

@@ -7,9 +7,9 @@
  * explicitly, so subscription writes always set the right owner.
  */
 import { db } from "./db";
-import { subscriptions, subscriptionPlans } from "@shared/schema";
-import { eq } from "drizzle-orm";
-import type { Subscription } from "@shared/schema";
+import { subscriptions, subscriptionPlans, addOns, businessAddOns } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
+import type { Subscription, AddOn, BusinessAddOn } from "@shared/schema";
 
 export async function getActivePlans() {
   return db.select().from(subscriptionPlans)
@@ -19,6 +19,11 @@ export async function getActivePlans() {
 
 export async function getPlanByKey(key: string) {
   const [p] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.key, key));
+  return p;
+}
+
+export async function getPlanById(id: string) {
+  const [p] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, id));
   return p;
 }
 
@@ -50,6 +55,99 @@ export async function upsertSubscription(businessId: string, data: SubscriptionW
   } else {
     await db.insert(subscriptions).values({ businessId, ...data });
   }
+}
+
+// ── Add-ons ("extras") — cost-incurring features sold on top of a paid plan ────
+// Catalog keys MUST match the capability `requires` entitlement keys in
+// server/tenancy/capabilities.ts ("sms" | "call_recording" | "ai") so activating
+// an add-on flips the matching `addon:<key>` entitlement on. priceNzd is ex-GST,
+// a DRAFT placeholder; stripePriceId is null until the prices are created in the
+// Stripe dashboard (mirrors how the plan prices are managed).
+// priceNzd is ex-GST. For `flat` add-ons it's the monthly price; for `metered`
+// (SMS) it's the per-message rate (15c — a ~36% margin on the 11c/msg SMS Everyone cost).
+const ADDON_SEED: { key: string; name: string; priceNzd: string; billingType: string }[] = [
+  { key: "sms", name: "SMS & booking reminders", priceNzd: "0.15", billingType: "metered" },
+  { key: "call_recording", name: "Call recording & in-app calling", priceNzd: "55.00", billingType: "flat" },
+  { key: "ai", name: "AI assist bundle", priceNzd: "15.00", billingType: "flat" },
+];
+
+/**
+ * Idempotently ensure the add-on catalog rows exist. Called once at boot. Inserts
+ * any missing seed row. For an existing row that has NOT yet been wired to a Stripe
+ * price, it keeps name/price/billingType synced to the seed (the catalog value is
+ * ours to control until a Stripe price exists). Once `stripePriceId` is set, the row
+ * is left untouched so dashboard-managed prices survive. Safe to no-op if the table
+ * isn't migrated yet — the caller wraps this in try/catch.
+ */
+export async function seedAddOnCatalog(): Promise<void> {
+  for (const a of ADDON_SEED) {
+    const [existing] = await db.select().from(addOns).where(eq(addOns.key, a.key));
+    if (!existing) {
+      await db.insert(addOns).values(a);
+    } else if (!existing.stripePriceId) {
+      await db
+        .update(addOns)
+        .set({ name: a.name, priceNzd: a.priceNzd, billingType: a.billingType })
+        .where(eq(addOns.id, existing.id));
+    }
+  }
+}
+
+export async function getActiveAddOns(): Promise<AddOn[]> {
+  return db.select().from(addOns).where(eq(addOns.isActive, true));
+}
+
+export async function getAddOnByKey(key: string): Promise<AddOn | undefined> {
+  const [a] = await db.select().from(addOns).where(eq(addOns.key, key));
+  return a;
+}
+
+/** The add-on keys a business currently has switched on (status='active'). */
+export async function getBusinessAddOnKeys(businessId: string): Promise<string[]> {
+  const rows = await db
+    .select({ key: addOns.key })
+    .from(businessAddOns)
+    .innerJoin(addOns, eq(businessAddOns.addOnId, addOns.id))
+    .where(and(eq(businessAddOns.businessId, businessId), eq(businessAddOns.status, "active")));
+  return rows.map((r) => r.key);
+}
+
+/** The business_add_ons row for one add-on, if any (regardless of status). */
+export async function getBusinessAddOn(businessId: string, addOnId: string): Promise<BusinessAddOn | undefined> {
+  const [row] = await db
+    .select()
+    .from(businessAddOns)
+    .where(and(eq(businessAddOns.businessId, businessId), eq(businessAddOns.addOnId, addOnId)));
+  return row;
+}
+
+/**
+ * Upsert the business_add_ons row for one add-on. businessId is passed explicitly;
+ * inside a tenant request RLS WITH CHECK ties it to the session business.
+ */
+export async function setBusinessAddOn(
+  businessId: string,
+  addOnId: string,
+  data: { status: string; stripeSubscriptionItemId?: string | null },
+): Promise<void> {
+  const existing = await getBusinessAddOn(businessId, addOnId);
+  if (existing) {
+    await db.update(businessAddOns).set(data).where(eq(businessAddOns.id, existing.id));
+  } else {
+    await db.insert(businessAddOns).values({ businessId, addOnId, ...data });
+  }
+}
+
+/**
+ * Cancel every add-on for a business — used when its subscription is deleted so
+ * extras don't outlive the plan they ride on. Called from the webhook (owner
+ * connection), so businessId is explicit.
+ */
+export async function cancelAllBusinessAddOns(businessId: string): Promise<void> {
+  await db
+    .update(businessAddOns)
+    .set({ status: "cancelled", stripeSubscriptionItemId: null })
+    .where(eq(businessAddOns.businessId, businessId));
 }
 
 /** Mirror a Stripe subscription object into our `subscriptions` row (called from the webhook). */

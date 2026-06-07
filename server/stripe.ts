@@ -284,6 +284,31 @@ export async function retrieveStripeSubscription(subscriptionId: string): Promis
   return stripe.subscriptions.retrieve(subscriptionId);
 }
 
+// ── Add-ons: recurring line items on an existing subscription ─────────────────
+// An add-on (SMS, call recording, AI) is billed as an extra recurring line item on
+// the business's existing plan subscription — not a separate subscription. Stripe
+// prorates the change by default. Returns the new subscription-item id so we can
+// remove it again when the add-on is switched off.
+export async function addSubscriptionItem(
+  subscriptionId: string,
+  priceId: string,
+  opts?: { metered?: boolean },
+): Promise<string> {
+  const stripe = await getStripe();
+  const params: Record<string, any> = { subscription: subscriptionId, price: priceId };
+  // Usage-based (metered) prices must NOT carry a quantity — Stripe meters it via
+  // usage records instead. Flat add-ons take quantity 1.
+  if (!opts?.metered) params.quantity = 1;
+  const item = await stripe.subscriptionItems.create(params);
+  return item.id;
+}
+
+// Removes a previously-added add-on line item (switching the add-on off).
+export async function removeSubscriptionItem(itemId: string): Promise<void> {
+  const stripe = await getStripe();
+  await stripe.subscriptionItems.del(itemId);
+}
+
 // Billing-portal session so a subscriber can update their card / cancel.
 export async function createBillingPortalSession(customerId: string, returnUrl: string): Promise<{ url: string }> {
   const stripe = await getStripe();

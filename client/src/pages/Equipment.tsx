@@ -177,6 +177,14 @@ export default function Equipment() {
     queryKey: ["/api/equipment"],
   });
 
+  // Equipment-type options come from the business's trade preset (server/trades/presets.ts)
+  // so they match the trade. Falls back to the static list while loading / if unavailable.
+  const { data: catalogsData } = useQuery<{ success: boolean; data: { equipmentTypes: { key: string; label: string }[] } }>({
+    queryKey: ["/api/catalogs"],
+  });
+  const equipmentTypeOptions: string[] =
+    catalogsData?.data?.equipmentTypes?.map((t) => t.key) ?? equipmentTypes;
+
   // Fetch inspection templates for assignment
   const { data: inspectionTemplatesData } = useQuery({
     queryKey: ["/api/inspection-templates"],
@@ -559,7 +567,7 @@ export default function Equipment() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {equipmentTypes.map((type) => (
+                            {equipmentTypeOptions.map((type) => (
                               <SelectItem key={type} value={type}>
                                 {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                               </SelectItem>
@@ -819,7 +827,7 @@ export default function Equipment() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {equipmentTypes.map((type) => (
+                            {equipmentTypeOptions.map((type) => (
                               <SelectItem key={type} value={type}>
                                 {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                               </SelectItem>
@@ -1190,7 +1198,7 @@ export default function Equipment() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {equipmentTypes.map((type) => (
+                {equipmentTypeOptions.map((type) => (
                   <SelectItem key={type} value={type}>
                     {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                   </SelectItem>

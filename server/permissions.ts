@@ -15,7 +15,9 @@ import {
   isValidPermissionKey,
 } from '@shared/permissions';
 import type { Employee, RoleTier } from '@shared/schema';
-import { resolveEntitlements, filterPermissionsByEntitlements } from './tenancy/entitlements';
+import { resolveEntitlements, filterPermissionsByFeatureSet } from './tenancy/entitlements';
+import { getBusinessFeatureSet } from './tierMatrix';
+import type { Entitlement } from './tenancy/capabilities';
 
 // Subscription-entitlement gating of RBAC permissions. Flag-gated OFF by default
 // so existing behaviour is unchanged; enable per-environment once every business
@@ -45,13 +47,81 @@ export async function getEmployeePermissions(employee: Employee): Promise<Set<st
     overrides: employee.permissionOverrides ?? null,
   });
 
-  // Effective = RBAC ∩ subscription entitlements. Gates by BUSINESS (what was
-  // paid for), so it applies even to admins. No-op unless the flag is set.
+  // Effective = RBAC ∩ what the business's PLAN unlocks (the tier matrix is the
+  // source of truth). Gates by BUSINESS (what was paid for), so it applies even
+  // to admins. No-op unless the flag is set.
   if (ENTITLEMENT_ENFORCEMENT && employee.businessId) {
-    const { entitlements } = await resolveEntitlements(employee.businessId);
-    return filterPermissionsByEntitlements(perms, entitlements);
+    const featureSet = await getBusinessFeatureSet(employee.businessId);
+    return filterPermissionsByFeatureSet(perms, featureSet);
   }
   return perms;
+}
+
+/**
+ * Business-level add-on gate. Blocks a route unless the business has the required
+ * entitlement (e.g. an active add-on). Use for cost-incurring features that aren't a
+ * per-staff RBAC concern — primarily the AI bundle, which has no permission key.
+ *
+ * Flag-gated by the same ENTITLEMENT_ENFORCEMENT switch: a no-op until enforcement is
+ * turned on, so landing this changes nothing until the flag flips (at which point
+ * every business — incl. comped Treemarkables — must have the add-on activated).
+ */
+export function requireEntitlement(required: Entitlement) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!ENTITLEMENT_ENFORCEMENT) {
+      next();
+      return;
+    }
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) {
+        res.status(403).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      const { entitlements } = await resolveEntitlements(businessId);
+      if (!entitlements.has(required)) {
+        res.status(403).json({ success: false, message: `This feature needs the ${required} add-on.` });
+        return;
+      }
+      next();
+    } catch (error) {
+      console.error('Error in requireEntitlement middleware:', error);
+      res.status(403).json({ success: false, message: 'Entitlement check failed' });
+    }
+  };
+}
+
+/**
+ * Capability gate driven by the tier matrix: blocks a route unless the business's
+ * plan includes the given capability key (server/tenancy/capabilities.ts). Use for
+ * features gated by plan rather than per-staff RBAC — e.g. SMS and AI, which are now
+ * tier-bundled. Flag-gated by ENTITLEMENT_ENFORCEMENT (no-op until enforcement is on,
+ * so landing this changes nothing; comped Treemarkables is on Business, which unlocks
+ * everything in the matrix).
+ */
+export function requireCapability(capabilityKey: string) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!ENTITLEMENT_ENFORCEMENT) {
+      next();
+      return;
+    }
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) {
+        res.status(403).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      const featureSet = await getBusinessFeatureSet(businessId);
+      if (!featureSet.has(capabilityKey)) {
+        res.status(403).json({ success: false, message: "Your plan doesn't include this feature." });
+        return;
+      }
+      next();
+    } catch (error) {
+      console.error('Error in requireCapability middleware:', error);
+      res.status(403).json({ success: false, message: 'Capability check failed' });
+    }
+  };
 }
 
 export function requirePermission(key: string) {

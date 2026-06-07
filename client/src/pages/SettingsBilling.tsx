@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { ChevronLeft, Check, CreditCard, Loader2 } from "lucide-react";
+import { ChevronLeft, Check, CreditCard, Loader2, MessageSquare, Phone, Sparkles } from "lucide-react";
 
 interface Plan {
   id: string;
@@ -22,6 +23,22 @@ interface Subscription {
   cancelAtPeriodEnd: boolean;
   stripeCustomerId: string | null;
 }
+interface AddOn {
+  id: string;
+  key: string;
+  name: string;
+  priceNzd: string | null;
+  billingType: string;
+  active: boolean;
+}
+
+// Per-add-on copy + icon. Keyed by the catalog `key` (matches the capability
+// `requires` entitlement keys in server/tenancy/capabilities.ts).
+const ADDON_META: Record<string, { icon: typeof MessageSquare; blurb: string }> = {
+  sms: { icon: MessageSquare, blurb: "Text customers and send automated booking reminders." },
+  call_recording: { icon: Phone, blurb: "In-app calling with recorded, searchable call history." },
+  ai: { icon: Sparkles, blurb: "AI Smart Dispatch, Speech-to-Quote, lead & video transcription." },
+};
 
 const FEATURES: Record<string, string[]> = {
   freemium: ["15 active jobs / month", "1 user", "Core jobs, quotes & invoicing", "Up to 3 photos per job"],
@@ -46,7 +63,9 @@ const FEATURES: Record<string, string[]> = {
 
 export default function SettingsBilling() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [pending, setPending] = useState<string | null>(null);
+  const [togglingAddOn, setTogglingAddOn] = useState<string | null>(null);
 
   const { data: plansRes, isLoading: plansLoading } = useQuery<{ success: boolean; data: Plan[] }>({
     queryKey: ["/api/billing/plans"],
@@ -54,11 +73,18 @@ export default function SettingsBilling() {
   const { data: subRes } = useQuery<{ success: boolean; data: Subscription | null }>({
     queryKey: ["/api/billing/subscription"],
   });
+  const { data: addOnsRes } = useQuery<{ success: boolean; data: AddOn[] }>({
+    queryKey: ["/api/billing/addons"],
+  });
 
   const plans = plansRes?.data ?? [];
   const sub = subRes?.data ?? null;
-  const isLive = sub && (sub.status === "active" || sub.status === "trialing");
+  const addOns = addOnsRes?.data ?? [];
+  const isLive = sub && (sub.status === "active" || sub.status === "trialing" || sub.status === "past_due");
   const currentPlanId = isLive ? sub!.planId : null;
+  const currentPlanKey = plans.find((p) => p.id === currentPlanId)?.key;
+  // Extras ride on a paid plan — a comped Business sub (no Stripe id) counts too.
+  const onPaidPlan = !!isLive && !!currentPlanKey && currentPlanKey !== "freemium";
 
   const checkout = useMutation({
     mutationFn: async (planKey: string) => {
@@ -88,6 +114,21 @@ export default function SettingsBilling() {
       window.location.href = url;
     },
     onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't open billing", description: e.message }),
+  });
+
+  const toggleAddOn = useMutation({
+    mutationFn: async ({ key, on }: { key: string; on: boolean }) => {
+      const action = on ? "activate" : "deactivate";
+      const r = await apiRequest("POST", `/api/billing/addons/${key}/${action}`, {});
+      const j = await r.json();
+      if (!j.success) throw new Error(j.message || "Could not update add-on.");
+    },
+    onMutate: ({ key }: { key: string; on: boolean }) => setTogglingAddOn(key),
+    onSettled: () => {
+      setTogglingAddOn(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/billing/addons"] });
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't update add-on", description: e.message }),
   });
 
   return (
@@ -170,6 +211,61 @@ export default function SettingsBilling() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {addOns.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-xl font-semibold mb-1">Extras</h2>
+          <p className="text-muted-foreground mb-4">
+            {onPaidPlan
+              ? "Switch on the add-ons your team needs. Billed monthly on top of your plan, prorated. Turn off anytime."
+              : "Add-ons are available on the Crew and Business plans. Upgrade above to switch them on."}
+          </p>
+          <div className="grid gap-4 md:grid-cols-3">
+            {addOns.map((addOn) => {
+              const meta = ADDON_META[addOn.key];
+              const Icon = meta?.icon ?? CreditCard;
+              const busy = togglingAddOn === addOn.key;
+              return (
+                <Card key={addOn.id} className={`border-border flex flex-col ${addOn.active ? "ring-2 ring-primary" : ""}`}>
+                  <CardHeader>
+                    <CardTitle className="flex items-start justify-between gap-2">
+                      <span className="flex items-center gap-2">
+                        <Icon className="h-5 w-5 text-primary shrink-0" />
+                        <span className="text-base">{addOn.name}</span>
+                      </span>
+                      {busy ? (
+                        <Loader2 className="h-4 w-4 animate-spin mt-1" />
+                      ) : (
+                        <Switch
+                          checked={addOn.active}
+                          disabled={!onPaidPlan || toggleAddOn.isPending}
+                          onCheckedChange={(on) => toggleAddOn.mutate({ key: addOn.key, on })}
+                        />
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col flex-1">
+                    {meta?.blurb && <p className="text-sm text-muted-foreground mb-4 flex-1">{meta.blurb}</p>}
+                    {addOn.priceNzd && Number(addOn.priceNzd) > 0 && (
+                      addOn.billingType === "metered" ? (
+                        <p className="text-sm">
+                          <span className="text-lg font-bold">{(Number(addOn.priceNzd) * 100).toFixed(0)}c</span>
+                          <span className="text-muted-foreground"> / message · billed to usage</span>
+                        </p>
+                      ) : (
+                        <p className="text-sm">
+                          <span className="text-lg font-bold">${Number(addOn.priceNzd).toFixed(0)}</span>
+                          <span className="text-muted-foreground">/mo</span>
+                        </p>
+                      )
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

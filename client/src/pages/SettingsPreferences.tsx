@@ -16,6 +16,7 @@ import {
   Percent,
   FileText,
   Banknote,
+  Wrench,
 } from "lucide-react";
 import {
   Select,
@@ -49,10 +50,15 @@ export default function SettingsPreferences() {
   const [dailyRevenueTarget, setDailyRevenueTarget] = useState<string>("3500");
   const [defaultDepositType, setDefaultDepositType] = useState<"none" | "percent" | "fixed">("none");
   const [defaultDepositValue, setDefaultDepositValue] = useState<string>("");
+  const [industry, setIndustry] = useState<string>("tree");
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
     queryKey: ["/api/business-settings"],
+  });
+  // Trade options for the picker
+  const { data: trades } = useQuery<{ success: boolean; data: { key: string; label: string }[] }>({
+    queryKey: ["/api/trades"],
   });
 
   // Update local state when settings are loaded
@@ -72,6 +78,7 @@ export default function SettingsPreferences() {
     }
     const depValue = parseFloat(settings?.data?.defaultDepositValue || "0") || 0;
     setDefaultDepositValue(depValue > 0 ? String(depValue) : "");
+    if (settings?.data?.industry) setIndustry(settings.data.industry);
   }, [settings]);
 
   // Mutation to update settings
@@ -114,6 +121,7 @@ export default function SettingsPreferences() {
       defaultDepositType,
       defaultDepositValue:
         defaultDepositType === "none" || depositValueNum < 0 ? 0 : depositValueNum,
+      industry,
     });
   };
 
@@ -158,6 +166,44 @@ export default function SettingsPreferences() {
             Configure your business preferences and data tracking settings
           </p>
         </div>
+
+        {/* Trade Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Wrench className="w-5 h-5" />
+              Your trade
+            </CardTitle>
+            <CardDescription>
+              Tailors job types, equipment, staff roles and AI features (speech-to-quote,
+              lead capture) to your trade. Changing it doesn't alter existing data.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="trade-industry" className="text-base font-medium">Trade</Label>
+              <Select value={industry} onValueChange={setIndustry}>
+                <SelectTrigger id="trade-industry" className="w-72" data-testid="select-trade-industry">
+                  <SelectValue placeholder="Select your trade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(trades?.data ?? [{ key: "tree", label: "Tree services" }]).map((t) => (
+                    <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="pt-3">
+                <Button
+                  onClick={handleSave}
+                  disabled={updateSettingsMutation.isPending || isLoading}
+                  data-testid="button-save-trade"
+                >
+                  {updateSettingsMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Metrics Tracking Card */}
         <Card>
