@@ -40,6 +40,9 @@ export default function Footer() {
           </FooterCol>
 
           <FooterCol title="Get in touch">
+            <Link href="/support" className="text-ink-300 hover:text-paper">
+              Support
+            </Link>
             <a
               href={`mailto:${BRAND.contactEmail}`}
               className="text-ink-300 hover:text-paper"
@@ -54,8 +57,9 @@ export default function Footer() {
             © {new Date().getFullYear()} Inflow. All rights reserved.
           </p>
           <div className="flex gap-6 text-xs text-ink-400">
-            <a href="#" className="hover:text-paper">Privacy</a>
-            <a href="#" className="hover:text-paper">Terms</a>
+            <Link href="/privacy" className="hover:text-paper">Privacy</Link>
+            <Link href="/terms" className="hover:text-paper">Terms</Link>
+            <Link href="/support" className="hover:text-paper">Support</Link>
           </div>
         </div>
       </Container>
