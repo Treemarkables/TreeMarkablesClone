@@ -2571,7 +2571,7 @@ class DatabaseStorage implements IStorage {
   }
   
   async getCallsByCustomer(customerId: string): Promise<Call[]> {
-    return await db.select().from(schema.calls).where(eq(schema.calls.customerId, customerId));
+    return await db.select().from(schema.calls).where(eq(schema.calls.customerId, customerId)).orderBy(desc(schema.calls.createdAt));
   }
   
   async getCallsByJobId(jobId: string): Promise<Call[]> {
@@ -2579,11 +2579,11 @@ class DatabaseStorage implements IStorage {
   }
   
   async getCallsByLead(leadId: string): Promise<Call[]> {
-    return await db.select().from(schema.calls).where(eq(schema.calls.leadId, leadId));
+    return await db.select().from(schema.calls).where(eq(schema.calls.leadId, leadId)).orderBy(desc(schema.calls.createdAt));
   }
-  
+
   async getAllCalls(limit: number = 100): Promise<Call[]> {
-    return await db.select().from(schema.calls).limit(limit);
+    return await db.select().from(schema.calls).orderBy(desc(schema.calls.createdAt)).limit(limit);
   }
 
   async deleteCall(id: string): Promise<boolean> {

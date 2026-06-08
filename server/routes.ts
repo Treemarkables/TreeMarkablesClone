@@ -9648,7 +9648,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
       if (!emailResult.success) {
         return res.status(500).json({
           success: false,
-          message: 'Failed to send proposal email'
+          message: emailResult.error || 'Failed to send proposal email'
         });
       }
 
@@ -9731,10 +9731,14 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
       });
 
     } catch (error) {
-      console.error('Error sending proposal email:', error);
+      // Surface the real cause: the previous generic message hid the failing
+      // step (DB write, render, identity lookup) from both the user and logs,
+      // making "Email Failed" impossible to diagnose.
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`Error sending proposal email (proposal ${req.params.proposalId}, to ${req.body?.to}):`, error);
       res.status(500).json({
         success: false,
-        message: 'Error sending proposal email'
+        message: `Error sending proposal email: ${detail}`
       });
     }
   });
@@ -9967,10 +9971,11 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         },
       });
     } catch (error) {
-      console.error('Error sending quote email:', error);
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`Error sending quote email (proposal ${req.params.proposalId}, to ${req.body?.to}):`, error);
       res.status(500).json({
         success: false,
-        message: 'Error sending quote email',
+        message: `Error sending quote email: ${detail}`,
       });
     }
   });
