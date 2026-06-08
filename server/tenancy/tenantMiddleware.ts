@@ -24,7 +24,8 @@ import { runWithBusiness, runWithTenant } from "./tenantStore";
 
 const RLS_ENABLED = process.env.TENANT_RLS_ENABLED === "true";
 
-// Routes that run with cross-tenant (owner) access on purpose. Matched as prefixes.
+// Routes that run with cross-tenant (owner) access on purpose. Matched as prefixes
+// (exact match or `path` starts with `prefix + "/"`).
 const OWNER_PATHS = [
   "/api/auth/login",
   "/api/auth/logout",
@@ -33,10 +34,47 @@ const OWNER_PATHS = [
   "/api/stripe/webhook",
   "/api/health",
   "/api/firebase-config",
+  // Session-less integration callbacks — external services (Twilio, Vonage, Resend,
+  // Meta/Messenger) and our own contact form POST here with no user session. They
+  // legitimately need cross-tenant access and resolve the tenant from the payload, so
+  // they must run as owner rather than fail closed on an empty GUC. One prefix covers
+  // every /api/webhooks/* route. (Without this, RLS rejected the calls INSERT in the
+  // Twilio voice webhook — inbound recordings silently stopped saving.)
+  "/api/webhooks",
+  // Anonymous public config reads (voicemail greeting, recording disclosure).
+  "/api/public",
+];
+
+// Session-less endpoints whose path carries a resource id MID-segment, so a simple prefix
+// can't match them. These are anonymous customer-facing reads/actions reached from an
+// emailed link: viewing or accepting a proposal/quote/invoice by its unguessable id,
+// viewing a shared video/photo, and the public review-request flow. They run as owner
+// (the pre-RLS behaviour) so an unauthenticated visitor can reach the single resource the
+// link points to. (Without this, RLS pinned an empty-GUC connection for the anonymous
+// visitor and matched zero rows — the proposal viewer link 404'd for customers.)
+//
+// BEFORE TENANT #2: the WRITE endpoints here (accept, review submit) currently get their
+// business_id from the column DEFAULT (= Treemarkables) on the owner connection — correct
+// while single-tenant, but each must resolve the owning tenant from the target resource
+// before a second tenant is onboarded. Same class of gap as the customer-portal session,
+// tracked in INFLOW_PHASE2_PROD_RUNBOOK.md.
+const OWNER_PATH_PATTERNS: RegExp[] = [
+  /^\/api\/proposals\/[^/]+\/public$/,
+  /^\/api\/proposals\/[^/]+\/accept$/,
+  /^\/api\/quotes\/[^/]+\/accept$/,
+  /^\/api\/invoices\/[^/]+\/public$/,
+  /^\/api\/videos\/[^/]+\/public$/,
+  /^\/api\/jobs\/[^/]+\/videos\/public$/,
+  /^\/api\/photos\/public$/,
+  /^\/api\/reviews\/request\/[^/]+$/,
+  /^\/api\/reviews\/submit$/,
 ];
 
 function isOwnerPath(path: string): boolean {
-  return OWNER_PATHS.some((p) => path === p || path.startsWith(p + "/"));
+  return (
+    OWNER_PATHS.some((p) => path === p || path.startsWith(p + "/")) ||
+    OWNER_PATH_PATTERNS.some((re) => re.test(path))
+  );
 }
 
 export async function tenantContextMiddleware(req: Request, res: Response, next: NextFunction) {

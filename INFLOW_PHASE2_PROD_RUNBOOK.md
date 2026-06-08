@@ -65,3 +65,39 @@ Prereqs before merging: `TENANT_RLS_ENABLED` must NOT be set in prod yet (so the
 SQL (Step 1) and deploy (Step 2) are both inert on their own — only Step 3 activates anything. So
 Steps 1–2 can land any time, in any order, with zero risk; Step 3 is the single deliberate switch,
 and it's instantly reversible.
+
+---
+
+## Post-mortem — session-less paths broke under RLS (2026-06-08)
+
+First live flip (2026-06-05) regressed three customer-facing flows because the owner-path
+allowlist only covered login/signup/Stripe/health — not the **legitimately session-less request
+paths**. With RLS on, the middleware fails closed (empty GUC → zero rows / rejected writes) for
+any request without a `session.businessId`:
+
+- **Public proposal viewer** (`/api/proposals/:id/public`): anonymous customer → empty GUC →
+  `getProposal` SELECT matched 0 rows → link 404'd.
+- **Twilio voice webhook** (`/api/webhooks/twilio-voice`): no session → the `calls` INSERT's
+  `WITH CHECK (business_id = current_business)` failed (row defaulted to the TM id, GUC was empty)
+  → inbound recordings stopped saving.
+- (Authenticated proposal **email send** was a separate failure — surfaced via better error
+  reporting in that route; not RLS.)
+
+**Immediate mitigation:** unset `TENANT_RLS_ENABLED` (Step 3 instant rollback). Safe — still
+single-tenant, so RLS isolates nothing in use yet.
+
+**Fix (shipped on the fix branch):** `server/tenancy/tenantMiddleware.ts` now routes all
+session-less paths to the owner connection — prefix `/api/webhooks` (every external callback) and
+`/api/public`, plus an `OWNER_PATH_PATTERNS` regex list for the mid-segment public viewer/accept and
+review-request/submit endpoints. This restores the exact pre-RLS behaviour for anonymous traffic.
+
+**Before re-flipping `TENANT_RLS_ENABLED=true`:** re-verify the public viewer link AND an inbound
+recorded call both work with the flag on (these are the two that broke). The full session-less
+inventory is the prefix + regex lists in `tenantMiddleware.ts`.
+
+**Still open before tenant #2** (all the same class — session-less write needs per-resource tenant
+resolution, not the column DEFAULT):
+- Customer-portal login doesn't set `session.businessId` (already noted in INFLOW_SAAS_PLAN.md).
+- Public **write** endpoints (proposal/quote accept, review submit, contact-form, inbound webhooks
+  that write) currently stamp `business_id` via the column DEFAULT (= Treemarkables). Each must
+  derive the owning tenant from the target resource / inbound number / token before a 2nd tenant.
