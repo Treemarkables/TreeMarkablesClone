@@ -225,6 +225,59 @@ export function isBetweenNZ(
   const nzDateStr = getNZDateString(utcDate);
   const start = typeof startDate === 'string' ? startDate : getNZDateString(startDate);
   const end = typeof endDate === 'string' ? endDate : getNZDateString(endDate);
-  
+
   return nzDateStr >= start && nzDateStr <= end;
+}
+
+/** A job's scheduling fields as far as the date helpers care. */
+export interface JobScheduleLike {
+  scheduledDate?: Date | string | null;
+  scheduledEndDate?: Date | string | null;
+  scheduledDates?: string[] | null;
+}
+
+/**
+ * The set of NZ calendar dates (YYYY-MM-DD, sorted ascending) a job actually
+ * runs on.
+ *
+ * Honours an explicit `scheduledDates` array when present — this lets a multi-day
+ * booking skip days inside its span (e.g. Wednesday–Monday excluding the weekend).
+ * Otherwise it falls back to the contiguous scheduledDate..scheduledEndDate span,
+ * or to the single scheduledDate when there's no end date.
+ */
+export function getJobScheduledNZDates(job: JobScheduleLike): string[] {
+  if (Array.isArray(job.scheduledDates) && job.scheduledDates.length > 0) {
+    return [...job.scheduledDates].sort();
+  }
+  if (!job.scheduledDate) return [];
+  const start = getNZDateString(job.scheduledDate);
+  if (!job.scheduledEndDate) return [start];
+  const end = getNZDateString(job.scheduledEndDate);
+  if (end <= start) return [start];
+
+  // Noon-UTC anchoring avoids DST boundary drift while iterating day-by-day.
+  const days: string[] = [];
+  const d = new Date(start + 'T12:00:00Z');
+  const last = new Date(end + 'T12:00:00Z');
+  while (d <= last) {
+    days.push(d.toISOString().split('T')[0]);
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return days;
+}
+
+/**
+ * Whether a job runs on a given NZ calendar date. Respects an explicit
+ * non-contiguous `scheduledDates` set, so excluded days (e.g. weekends carved
+ * out of a span) correctly return false.
+ *
+ * `date` may be a UTC Date/ISO string (converted to its NZ calendar date) or an
+ * already-NZ YYYY-MM-DD string.
+ */
+export function jobRunsOnNZDate(job: JobScheduleLike, date: Date | string): boolean {
+  const nzDateStr =
+    typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? date
+      : getNZDateString(date);
+  return getJobScheduledNZDates(job).includes(nzDateStr);
 }

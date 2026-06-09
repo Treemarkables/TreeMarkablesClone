@@ -90,7 +90,7 @@ import {
   isWithinInterval,
   addMinutes,
 } from "date-fns";
-import { nzTimeToUTC, utcToNZTime } from "@shared/dateUtils";
+import { nzTimeToUTC, utcToNZTime, getJobScheduledNZDates } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -179,7 +179,8 @@ interface JobAssignment {
   totalAmount?: string; // Job price for display on dispatch board (exc-GST normalised)
   subtotal?: string; // Exc-GST subtotal from job record (preferred price source)
   scheduledDate?: string; // The job's scheduled start date from the API. Used by the "Scheduled" filter post-2026-05 ('scheduled' status retired — date presence is the new signal).
-  scheduledEndDate?: string; // For multi-day jobs
+  scheduledEndDate?: string; // For multi-day jobs (last day)
+  scheduledDates?: string[] | null; // Explicit NZ day set for multi-day jobs that skip days (e.g. weekends)
   inQueue?: boolean; // Whether job is parked in the dispatch queue
   queueReason?: string | null; // Reason for being in queue
   customerConfirmed?: boolean; // Whether the customer has confirmed the booking
@@ -308,9 +309,9 @@ const calculateJobTotal = (job: any): number => {
 const calculateDailyTotal = (job: any): number => {
   const total = calculateJobTotal(job);
   if (!total || !job.scheduledDate || !job.scheduledEndDate) return total;
-  const startDay = startOfDay(new Date(job.scheduledDate)).getTime();
-  const endDay = startOfDay(new Date(job.scheduledEndDate)).getTime();
-  const numDays = Math.round((endDay - startDay) / 86_400_000) + 1;
+  // Divide by the actual day count — honours a non-contiguous scheduledDates set
+  // so a Wed–Mon-minus-weekend job splits across the days it really runs.
+  const numDays = Math.max(1, getJobScheduledNZDates(job).length);
   return numDays > 1 ? Math.round((total / numDays) * 100) / 100 : total;
 };
 
@@ -1218,6 +1219,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           createdAt: apiJob.createdAt,
           scheduledDate: apiJob.scheduledDate || undefined,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
+          scheduledDates: apiJob.scheduledDates || null,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
@@ -1313,6 +1315,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           createdAt: apiJob.createdAt,
           scheduledDate: apiJob.scheduledDate || undefined,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
+          scheduledDates: apiJob.scheduledDates || null,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,

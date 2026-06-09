@@ -20,9 +20,10 @@ import {
 import { toZonedTime } from "date-fns-tz";
 import {
   isSameDayNZ,
-  isBetweenNZ,
   getNZDateString,
   nzTimeToUTC,
+  getJobScheduledNZDates,
+  jobRunsOnNZDate,
 } from "@shared/dateUtils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
@@ -134,6 +135,7 @@ interface Job {
   address: string;
   scheduledDate: string;
   scheduledEndDate?: string;
+  scheduledDates?: string[] | null;
   scheduledStartTime?: string;
   scheduledEndTime?: string;
   status: string;
@@ -357,9 +359,11 @@ export function CalendarGrid({
   // AND whose start date is NOT the same as that date (so we don't double-count day 1).
   const multiDaySpanningDate = (employeeId: string, dateKey: string) =>
     (multiDayByEmployee.get(employeeId) || []).filter(({ job }) => {
-      const startNZ = getNZDateString(new Date(job.scheduledDate!));
-      const endNZ = getNZDateString(new Date(job.scheduledEndDate!));
-      return dateKey > startNZ && dateKey <= endNZ;
+      // Honour a non-contiguous scheduledDates set so carved-out days (e.g.
+      // weekends) don't render a phantom block. Exclude day 1 — it's handled
+      // by the per-day assignment index, not the multi-day fallback.
+      const days = getJobScheduledNZDates(job);
+      return days.includes(dateKey) && dateKey !== days[0];
     });
 
   // ── Navigation ─────────────────────────────────────────────────────────────
@@ -517,13 +521,7 @@ export function CalendarGrid({
         return false;
       if (!job.assignedTo?.includes(employeeId)) return false;
       if (!job.scheduledDate) return false;
-      return job.scheduledEndDate
-        ? isBetweenNZ(
-            date,
-            new Date(job.scheduledDate),
-            new Date(job.scheduledEndDate),
-          )
-        : isSameDayNZ(job.scheduledDate, date);
+      return jobRunsOnNZDate(job, date);
     });
   };
 
@@ -546,9 +544,7 @@ export function CalendarGrid({
       if (job.status === "archived" || job.status === "unsuccessful") return false;
       if (!job.assignedTo?.includes(employeeId)) return false;
       if (!job.scheduledDate) return false;
-      return job.scheduledEndDate
-        ? isBetweenNZ(date, new Date(job.scheduledDate), new Date(job.scheduledEndDate))
-        : isSameDayNZ(job.scheduledDate, date);
+      return jobRunsOnNZDate(job, date);
     }).map((job) => ({ job, assignment: null }));
   };
 
@@ -595,9 +591,7 @@ export function CalendarGrid({
       if (EXCLUDE.has(job.status)) return false;
       if (assignedJobIds.has(job.id)) return false;
       if (!job.scheduledDate) return false;
-      return job.scheduledEndDate
-        ? isBetweenNZ(currentDate, new Date(job.scheduledDate), new Date(job.scheduledEndDate))
-        : isSameDayNZ(job.scheduledDate, currentDate);
+      return jobRunsOnNZDate(job, currentDate);
     });
   }, [viewMode, currentDate, assignmentsByEmployeeDate, allJobs]);
 
@@ -670,14 +664,7 @@ export function CalendarGrid({
         !job.scheduledDate
       )
         return;
-      const spans = job.scheduledEndDate
-        ? isBetweenNZ(
-            date,
-            new Date(job.scheduledDate),
-            new Date(job.scheduledEndDate),
-          )
-        : isSameDayNZ(job.scheduledDate, date);
-      if (spans) {
+      if (jobRunsOnNZDate(job, date)) {
         seen.add(job.id);
         result.push(job);
       }
@@ -687,15 +674,11 @@ export function CalendarGrid({
 
   const DAY_TARGET = Number(businessSettingsData?.data?.dailyRevenueTarget) || 3500;
 
-  // Number of calendar days a job spans (minimum 1)
+  // Number of day cells a job renders in (minimum 1). Honours a non-contiguous
+  // scheduledDates set so per-day price division matches the cells actually drawn.
   const jobDayCount = (job: Job): number => {
-    if (!job.scheduledDate || !job.scheduledEndDate) return 1;
-    const startKey = getNZDateString(new Date(job.scheduledDate));
-    const endKey = getNZDateString(new Date(job.scheduledEndDate));
-    if (endKey <= startKey) return 1;
-    const startMs = new Date(startKey + "T12:00:00Z").getTime();
-    const endMs = new Date(endKey + "T12:00:00Z").getTime();
-    return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+    if (!job.scheduledDate) return 1;
+    return Math.max(1, getJobScheduledNZDates(job).length);
   };
 
   // Per-day share of a job's exc-GST price. Multi-day jobs render in N day cells
