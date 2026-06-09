@@ -385,6 +385,33 @@ export function ProposalBuilder({
       form.setValue("taxRate", proposal.taxRate || 15);
       form.setValue("deliveryMethod", proposal.deliveryMethod || "email");
 
+      // Restore the discount. Without this, reopening a proposal reset the
+      // discount to the default of 0 and it silently disappeared.
+      //
+      // The DB stores discountAmount as the pre-computed DOLLAR discount (the
+      // server subtracts it directly regardless of discountType — see
+      // server/routes.ts CREATE/PUT). The form, however, treats discountAmount
+      // as a percentage when discountType === "percentage"
+      // (discountValue = subtotal * discountAmount / 100). So we can't load the
+      // stored dollar value straight into a "percentage" field — it would get
+      // re-multiplied. Reconstruct the original percent from the stored dollar
+      // amount and the pre-discount subtotal; fall back to a fixed dollar
+      // discount when that isn't possible.
+      const savedDiscountDollars = parseFloat(proposal.discountAmount) || 0;
+      const preDiscountSubtotal = parseFloat(proposal.subtotal) || 0;
+      if (
+        proposal.discountType === "percentage" &&
+        savedDiscountDollars > 0 &&
+        preDiscountSubtotal > 0
+      ) {
+        const pct = (savedDiscountDollars / preDiscountSubtotal) * 100;
+        form.setValue("discountAmount", Math.round(pct * 100) / 100);
+        form.setValue("discountType", "percentage");
+      } else {
+        form.setValue("discountAmount", savedDiscountDollars);
+        form.setValue("discountType", "fixed");
+      }
+
       // Load sections with photos and line items properly mapped
       if (proposal.sections && Array.isArray(proposal.sections)) {
         const loadedSections = proposal.sections.map((section: any) => ({

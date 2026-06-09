@@ -885,8 +885,12 @@ async function generateProposalPDFBuffer(
       subtotal += parseFloat(item.totalPrice || '0');
     }
   }
-  const gst = subtotal * 0.15;
-  const total = subtotal + gst;
+  // Apply the proposal-level discount (stored in dollars) so the PDF totals
+  // match the customer-facing proposal page.
+  const pdfDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
+  const subtotalAfterDiscount = Math.max(0, subtotal - pdfDiscountAmt);
+  const gst = subtotalAfterDiscount * 0.15;
+  const total = subtotalAfterDiscount + gst;
 
   const customerName = customer?.name || 'Valued Customer';
   const proposalNumber = proposal.proposalNumber || 'N/A';
@@ -981,6 +985,11 @@ async function generateProposalPDFBuffer(
     doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
       .text('Subtotal (excl. GST)', tX, doc.y, { width: vW - 70, align: 'left' });
     doc.fillColor('#111827').text(fmtCurrency(subtotal), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+    if (pdfDiscountAmt > 0) {
+      doc.moveDown(0.4);
+      doc.fillColor('#6b7280').text('Discount', tX, doc.y, { width: vW - 70, align: 'left' });
+      doc.fillColor('#f97316').text(`-${fmtCurrency(pdfDiscountAmt)}`, tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+    }
     doc.moveDown(0.4);
     doc.fillColor('#6b7280').text('GST (15%)', tX, doc.y, { width: vW - 70 });
     doc.fillColor('#111827').text(fmtCurrency(gst), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
@@ -1088,8 +1097,12 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
   for (const item of lineItems) {
     if (item.selected !== false) subtotal += parseFloat(item.totalPrice || '0');
   }
-  const gst = subtotal * 0.15;
-  const total = subtotal + gst;
+  // Apply the proposal-level discount (stored in dollars) so the summary's
+  // totals match the customer-facing proposal page.
+  const summaryDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
+  const subtotalAfterDiscount = Math.max(0, subtotal - summaryDiscountAmt);
+  const gst = subtotalAfterDiscount * 0.15;
+  const total = subtotalAfterDiscount + gst;
   const isQuote = proposal.templateUsed === 'quote';
   const docLabel = isQuote ? 'Quote' : 'Proposal';
   const customerName = customer?.name || 'Valued Customer';
@@ -1110,7 +1123,10 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
   const gstFmt = `$${gst.toFixed(2)}`;
   const totalFmt = `$${total.toFixed(2)}`;
   const subtotalFmt = `$${subtotal.toFixed(2)}`;
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${docLabel} ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">${__htmlIdentity.name} ${docLabel}</h1><p><strong>${docLabel} #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr><tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">${__htmlIdentity.name} | ${__htmlIdentity.email || 'info@treemarkables.co.nz'} | ${__htmlIdentity.phone || '027 216 6882'}</p></body></html>`;
+  const discountRow = summaryDiscountAmt > 0
+    ? `<tr><td>Discount</td><td style="text-align:right">-$${summaryDiscountAmt.toFixed(2)}</td></tr>`
+    : '';
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${docLabel} ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">${__htmlIdentity.name} ${docLabel}</h1><p><strong>${docLabel} #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr>${discountRow}<tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">${__htmlIdentity.name} | ${__htmlIdentity.email || 'info@treemarkables.co.nz'} | ${__htmlIdentity.phone || '027 216 6882'}</p></body></html>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -9570,8 +9586,14 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
           subtotal += parseFloat(item.totalPrice || '0');
         }
       }
-      const gst = subtotal * 0.15;
-      const total = subtotal + gst;
+      // Apply the proposal-level discount so the emailed headline total matches
+      // the discounted total shown on the customer-facing proposal page. Without
+      // this the email advertised the pre-discount total. discountAmount is
+      // stored as a dollar amount (see the CREATE/PUT/accept handlers).
+      const emailDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
+      const subtotalAfterDiscount = Math.max(0, subtotal - emailDiscountAmt);
+      const gst = subtotalAfterDiscount * 0.15;
+      const total = subtotalAfterDiscount + gst;
 
       // Pre-send validation — block silent rendering failures from reaching the customer.
       // Mirrors what buildProposalRenderContext (BlockRenderedProposal.tsx) reads:
@@ -9810,8 +9832,12 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
       for (const item of lineItems) {
         if (item.selected !== false) subtotal += parseFloat(item.totalPrice || '0');
       }
-      const gst = subtotal * 0.15;
-      const total = subtotal + gst;
+      // Apply the proposal-level discount so the emailed total matches the
+      // discounted total on the proposal page (discountAmount is in dollars).
+      const quoteDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
+      const subtotalAfterDiscount = Math.max(0, subtotal - quoteDiscountAmt);
+      const gst = subtotalAfterDiscount * 0.15;
+      const total = subtotalAfterDiscount + gst;
 
       // Pre-send validation — block silent rendering failures from reaching the customer.
       // Same checks as /send-email; the failure modes (missing description, no line items,
