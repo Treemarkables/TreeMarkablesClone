@@ -5746,8 +5746,30 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         processedBody.customerId = null;
       }
 
-      // Lead source is editable on update — no auto-classification override here.
-      // Gisborne District Council jobs default to "repeat" at creation time only.
+      // Lead source stays editable on update — we never override a value the
+      // user chose. The one exception: linking an existing customer to a job
+      // that has no lead source yet. The redesigned job card creates a blank
+      // draft first, then attaches the customer via this PUT, so the POST
+      // /api/jobs "repeat for existing customer" default never fires. Mirror it
+      // here: if the (re)linked customer already has prior jobs, default to
+      // "repeat".
+      if (
+        processedBody.customerId &&
+        !processedBody.isNewCustomer &&
+        (processedBody.leadSource === undefined ||
+          processedBody.leadSource === null ||
+          processedBody.leadSource === '')
+      ) {
+        const existingJob = await storage.getJob(req.params.id).catch(() => null);
+        if (!existingJob?.leadSource) {
+          const priorJobs = await storage.getJobsByCustomer(processedBody.customerId).catch(() => []);
+          // Exclude this job itself; any other job means a repeat customer.
+          if (priorJobs.some((j) => j.id !== req.params.id)) {
+            processedBody.leadSource = 'repeat';
+            console.log('✅ Auto-set lead source to "repeat" for existing customer (PUT link)');
+          }
+        }
+      }
 
       const validation = insertJobSchema.partial().safeParse(processedBody);
       if (!validation.success) {
