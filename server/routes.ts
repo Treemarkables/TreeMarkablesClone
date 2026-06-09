@@ -9179,11 +9179,19 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
       const invoice = await storage.createInvoice(invoiceData);
 
       // Update job to store invoice reference AND sync total amount for revenue metrics
-      await storage.updateJob(id, { 
+      const jobUpdate: Record<string, unknown> = {
         invoiceId: invoice.id,
         invoiceBlocked: false,
         totalAmount: amount.toString() // Sync invoice amount to job for revenue tracking
-      });
+      };
+      // Backfill the job description from the invoice when the job has none yet,
+      // so a description typed straight into the invoice surfaces on the job card.
+      // Only fill when empty — never clobber an existing job description.
+      const invoiceDescription = (customData.description || '').trim();
+      if (invoiceDescription && !(job.description || '').trim()) {
+        jobUpdate.description = invoiceDescription;
+      }
+      await storage.updateJob(id, jobUpdate);
 
       // Compute exc-GST and inc-GST totals per line item so the diary entry
       // can show both, clearly labelled. Without this, the diary dumped the
@@ -12548,6 +12556,23 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           console.log('💰 Synced invoice amount to job total_amount:', updateData.amount);
         } catch (syncErr) {
           console.error('⚠️ Failed to sync invoice amount to job:', syncErr);
+        }
+      }
+
+      // Backfill the job description from the invoice when the job has none yet,
+      // so a description typed into the invoice surfaces on the job card.
+      // Only fill when empty — never clobber an existing job description.
+      if (typeof updateData.description === 'string' && updateData.description.trim() && invoice.jobId) {
+        try {
+          const linkedJob = await storage.getJob(invoice.jobId);
+          if (linkedJob && !(linkedJob.description || '').trim()) {
+            await storage.updateJob(invoice.jobId, {
+              description: updateData.description.trim()
+            });
+            console.log('📝 Backfilled empty job description from invoice');
+          }
+        } catch (syncErr) {
+          console.error('⚠️ Failed to sync invoice description to job:', syncErr);
         }
       }
 

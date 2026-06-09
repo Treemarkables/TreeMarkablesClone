@@ -2660,6 +2660,40 @@ export function GlobalJobCard({
       );
       return response.json();
     },
+    // Optimistically patch every cached jobs list (incl. the Despatch Board) so a
+    // status change shows instantly instead of waiting for the post-success refetch.
+    onMutate: async (data: GlobalJobCardFormData) => {
+      const jobId = (data as any)._jobId || editingJob?.id;
+      if (!jobId) return { previous: [] as [readonly unknown[], unknown][] };
+      const { _jobId, ...patch } = data as any;
+      await queryClient.cancelQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          (query.queryKey[0] as string).startsWith("/api/jobs"),
+      });
+      const previous = queryClient.getQueriesData({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          (query.queryKey[0] as string).startsWith("/api/jobs"),
+      });
+      queryClient.setQueriesData(
+        {
+          predicate: (query) =>
+            typeof query.queryKey[0] === "string" &&
+            (query.queryKey[0] as string).startsWith("/api/jobs"),
+        },
+        (old: any) => {
+          if (!old || !Array.isArray(old.data)) return old;
+          return {
+            ...old,
+            data: old.data.map((j: any) =>
+              j?.id === jobId ? { ...j, ...patch } : j,
+            ),
+          };
+        },
+      );
+      return { previous };
+    },
     onSuccess: (updatedJob) => {
       // Invalidate all jobs queries to update dispatch board and job lists
       queryClient.invalidateQueries({
@@ -2684,8 +2718,14 @@ export function GlobalJobCard({
       queryClient.refetchQueries({ queryKey: ["/api/customers"] });
       onJobUpdated?.(updatedJob);
     },
-    onError: (error) => {
+    onError: (error, _vars, context: any) => {
       console.error("Error updating job:", error);
+      // Roll back the optimistic cache patch so the board reflects the real state.
+      if (context?.previous) {
+        for (const [key, data] of context.previous) {
+          queryClient.setQueryData(key, data);
+        }
+      }
       toast({
         title: "Update Error",
         description: "Failed to update job. Please try again.",
