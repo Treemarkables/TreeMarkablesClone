@@ -19,6 +19,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Phone,
   PhoneIncoming,
   PhoneOutgoing,
@@ -26,6 +36,7 @@ import {
   Pause,
   Search,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +56,7 @@ export default function Calls() {
   const [directionFilter, setDirectionFilter] = useState<string>("all");
   const [playingCallId, setPlayingCallId] = useState<string | null>(null);
   const [expandedTranscript, setExpandedTranscript] = useState<string | null>(null);
+  const [callToDelete, setCallToDelete] = useState<Call | null>(null);
 
   const { data: callsResponse, isLoading } = useQuery<{
     success: boolean;
@@ -102,6 +114,29 @@ export default function Calls() {
     onError: (err: Error) => {
       toast({
         title: "Couldn't create job",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCallMutation = useMutation({
+    mutationFn: async (callId: string) => {
+      const res = await apiRequest("DELETE", `/api/calls/${callId}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Failed to delete call");
+      return json;
+    },
+    onSuccess: (_data, callId) => {
+      if (playingCallId === callId) setPlayingCallId(null);
+      if (expandedTranscript === callId) setExpandedTranscript(null);
+      setCallToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
+    },
+    onError: (err: Error) => {
+      setCallToDelete(null);
+      toast({
+        title: "Couldn't delete call",
         description: err.message,
         variant: "destructive",
       });
@@ -315,6 +350,23 @@ export default function Calls() {
                               Create Job
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setCallToDelete(call)}
+                            disabled={
+                              deleteCallMutation.isPending &&
+                              deleteCallMutation.variables === call.id
+                            }
+                            data-testid={`button-delete-call-${call.id}`}
+                          >
+                            {deleteCallMutation.isPending &&
+                            deleteCallMutation.variables === call.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            )}
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -342,6 +394,38 @@ export default function Calls() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={!!callToDelete}
+        onOpenChange={(open) => {
+          if (!open) setCallToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this call?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {callToDelete &&
+                `The call from ${
+                  resolveCustomerName(callToDelete) ?? callToDelete.phoneNumber
+                } on ${formatCallTime(callToDelete.createdAt)}`}
+              {" "}will be permanently removed, including its recording and
+              transcript. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (callToDelete) deleteCallMutation.mutate(callToDelete.id);
+              }}
+              data-testid="button-confirm-delete-call"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
