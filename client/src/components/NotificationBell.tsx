@@ -253,7 +253,7 @@ export function NotificationBell() {
                   diaryTypes.includes(latestNotification.type) &&
                   latestNotification.jobId
                 ) {
-                  targetUrl = `/dispatch?job=${latestNotification.jobId}&tab=diary`;
+                  targetUrl = `/dispatch?job=${latestNotification.jobId}&tab=diary${latestNotification.diaryEntryId ? `&entry=${latestNotification.diaryEntryId}` : ""}`;
                 } else if (latestNotification.jobId) {
                   targetUrl = `/dispatch?job=${latestNotification.jobId}`;
                 } else if (latestNotification.proposalId) {
@@ -513,7 +513,7 @@ export function NotificationBell() {
         "holding_message_pending",
       ];
       if (diaryTypes.includes(notification.type)) {
-        const url = `/dispatch?job=${notification.jobId}&tab=diary`;
+        const url = `/dispatch?job=${notification.jobId}&tab=diary${notification.diaryEntryId ? `&entry=${notification.diaryEntryId}` : ""}`;
         console.log("🔀 Navigating to job card with diary tab:", url);
         setLocation(url);
 

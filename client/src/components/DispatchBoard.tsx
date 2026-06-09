@@ -98,6 +98,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { JobTemplate } from "@shared/schema";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { requestDiaryHighlight } from "@/components/JobDiarySection";
 import { JobCardErrorBoundary } from "@/components/JobCardErrorBoundary";
 import { CustomerAvatar } from "@/components/CustomerAvatar";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
@@ -890,6 +891,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       const jobId = params.get("job");
       const tab = params.get("tab");
       const newJob = params.get("newJob");
+      // Optional deep-link target: a specific diary entry to scroll to and
+      // highlight (e.g. the email reply a notification is about).
+      const entryId = params.get("entry");
 
       // Handle ?newJob=true — open the create job flow (same as the global
       // top-bar "+ New Job" button, which navigates here with this param).
@@ -952,6 +956,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 new CustomEvent("job-card-switch-tab", { detail: tabParam }),
               );
             }
+            // Card already open — the diary is mounted, so fire the highlight
+            // request now; JobDiarySection's event listener picks it up.
+            if (entryId) requestDiaryHighlight(entryId);
             return;
           }
           window.history.replaceState({}, "", "/dispatch");
@@ -959,6 +966,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           setShowGlobalJobCard(true);
           setGlobalJobCardMode("edit");
           setJobToEdit(jobData as JobAssignment);
+          // Card is mounting fresh — park the highlight target so the diary
+          // picks it up from the module bus the moment it mounts.
+          if (entryId) requestDiaryHighlight(entryId);
         };
 
         if (job) {
