@@ -20314,7 +20314,7 @@ Transcription: ${transcriptText}`;
       if (jobFromUuid) {
         const job = jobFromUuid;
         console.log(`✅ Found job ${job.jobNumber} by UUID - creating diary entry`);
-        await storage.createJobDiaryEntry({
+        const diaryEntry = await storage.createJobDiaryEntry({
           jobId: job.id,
           entryType: 'email',
           title: `Email from ${actualFromName || actualFromEmail}`,
@@ -20334,32 +20334,63 @@ Transcription: ${transcriptText}`;
         console.log(`📝 Email logged to job ${job.jobNumber} diary (matched by UUID)`);
         
         try {
-          const notificationHelper = await import('./services/notificationHelper.js');
-          // De-dup against gmailReplyService (which polls the inbox) so the same email
-          // doesn't produce two bell entries. Matches the 24h/per-job guard there.
+          // NOTE: this used to call notificationHelper.createNotification(),
+          // which does not exist — it threw on every UUID-addressed reply and
+          // was swallowed by the catch below, so these replies landed in the
+          // diary but never produced a bell notification. Use storage
+          // .createNotification (same as the job-number / quote paths) and dedup
+          // by the inbound Message-ID so re-deliveries / the poller don't double
+          // up, while genuinely distinct replies each notify.
           const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
           const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
-          const alreadyNotified = recentNotifs.some(
-            (n) => n.type === 'email_reply' && n.jobId === job.id,
-          );
+          const alreadyNotified = inboundMessageId
+            ? recentNotifs.some(
+                (n) =>
+                  n.type === 'email_reply' &&
+                  (n.metadata as any)?.emailMessageId === inboundMessageId,
+              )
+            : recentNotifs.some(
+                (n) =>
+                  n.type === 'email_reply' &&
+                  n.jobId === job.id &&
+                  Date.now() - new Date(n.createdAt as any).getTime() <
+                    5 * 60 * 1000,
+              );
           if (!alreadyNotified) {
-            await notificationHelper.createNotification({
+            const previewText = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
+            await storage.createNotification({
+              title: 'Customer Email Reply',
+              message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}`,
               type: 'email_reply',
-              title: `Email reply on Job #${job.jobNumber}`,
-              message: `${actualFromName || actualFromEmail} replied to Job #${job.jobNumber}`,
+              priority: 'high',
+              isRead: false,
+              diaryEntryId: diaryEntry?.id,
+              actionUrl: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
+              entityType: 'job',
+              entityId: job.id,
+              relatedEntityType: 'job',
+              relatedEntityId: job.id,
               jobId: job.id,
-              metadata: { emailAddress: actualFromEmail || actualFrom }
+              metadata: {
+                preview: previewText,
+                senderEmail: actualFromEmail || actualFrom,
+                senderName: actualFromName,
+                emailMessageId: inboundMessageId,
+              },
             });
+            console.log(`🔔 Notification created for email reply on job ${job.jobNumber} (UUID path)`);
           } else {
             console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber} (UUID path)`);
           }
           // Detect reschedule intent → alert dispatcher to re-propose a time slot
           const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
           if (rescheduleKeywords.test(cleanedBody)) {
-            await notificationHelper.createNotification({
+            await storage.createNotification({
               type: 'reschedule_request',
               title: `Reschedule requested — Job #${job.jobNumber}`,
               message: `Customer may be requesting a new time slot for Job #${job.jobNumber}. Consider re-proposing via AI Smart Dispatch.`,
+              priority: 'high',
+              isRead: false,
               jobId: job.id,
               metadata: { emailAddress: actualFromEmail || actualFrom, trigger: 'email_reply' },
               actionUrl: '/ai-scheduler',
