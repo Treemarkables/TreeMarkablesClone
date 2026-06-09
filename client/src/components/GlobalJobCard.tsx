@@ -10793,6 +10793,10 @@ The Treemarkables Team`;
       {showMobileCard ? (
         <JobCardMobile
           jobId={editingJob!.id}
+          // Honour the deep-link tab (e.g. a notification opening straight to
+          // the diary). Without this the mobile card always defaulted to
+          // Details, so notification clicks opened the job but never the diary.
+          initialTab={initialSidebarTab}
           onClose={() => handleDialogClose(false)}
           onDuplicated={(newJobId) => {
             // Swap the open modal over to the duplicate. setCreatedJobId

@@ -10,7 +10,7 @@
  * preview route /job-card-preview/:jobId for visual + interaction QA before
  * we wire it into the real flow.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useJobActions } from "@/hooks/useJobActions";
@@ -184,6 +184,21 @@ export function JobCardMobile({
   actions,
 }: JobCardMobileProps) {
   const [activeTab, setActiveTab] = useState<JobCardMobileTab>(initialTab);
+
+  // When a notification arrives for the job that's already open, DispatchBoard
+  // fires `job-card-switch-tab` so the card jumps to the right tab (e.g. diary)
+  // without remounting. GlobalJobCard handles this for desktop; the mobile card
+  // owns its own tab state, so it has to listen too — otherwise tapping a
+  // diary notification while the card is open does nothing.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const requested = (event as CustomEvent<JobCardMobileTab>).detail;
+      if (requested) setActiveTab(requested);
+    };
+    window.addEventListener("job-card-switch-tab", handler);
+    return () => window.removeEventListener("job-card-switch-tab", handler);
+  }, []);
+
   // Role checklist (Kaitiaki / Kaiwhangai / Kaitirotiro) is Treemarkables-only.
   const roleChecklistEnabled = useRoleChecklistFeature();
 
