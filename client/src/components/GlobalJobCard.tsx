@@ -193,6 +193,7 @@ import {
   type Customer,
 } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { registerReloadGuard } from "@/lib/foregroundReloadGuard";
 import { formatTime12Hour, nzTimeToUTC, utcToNZTime, getNZDateString, getJobScheduledNZDates } from "@shared/dateUtils";
 import { Calendar as DayCalendar } from "@/components/ui/calendar";
 import { statusAfterBooking } from "@shared/jobStatus";
@@ -1234,6 +1235,15 @@ export function GlobalJobCard({
       setLocalQuoteMethod(jobQuoteMethod);
     }
   }, [editingJob?.id]);
+
+  // While the job card is open the user is mid-edit, so block the foreground
+  // staleness reload (client/src/main.tsx) from refreshing the page out from
+  // under them and wiping anything not yet auto-saved. Fresh code is picked up
+  // on the next foreground after they close the card.
+  useEffect(() => {
+    if (!isOpen) return;
+    return registerReloadGuard(() => true);
+  }, [isOpen]);
 
   // Reset internal state when modal closes
   useEffect(() => {
