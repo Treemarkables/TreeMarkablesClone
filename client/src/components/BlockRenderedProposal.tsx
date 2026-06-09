@@ -25,6 +25,7 @@ interface ProposalLike {
   subtotal?: string | number;
   gstAmount?: string | number;
   totalAmount?: string | number;
+  discountAmount?: string | number;
   customerSignature?: string | null;
   signedDate?: string | Date | null;
   sections?: Array<{
@@ -98,13 +99,30 @@ export function buildProposalRenderContext(
   const issueDate = toDate(proposal.createdAt) ?? new Date();
   const expiryDate = toDate(proposal.expiryDate ?? proposal.validUntil);
   const subtotal = toNum(proposal.subtotal);
-  const gstAmount = toNum(proposal.gstAmount);
-  const totalAmount = toNum(proposal.totalAmount);
+  let gstAmount = toNum(proposal.gstAmount);
+  let totalAmount = toNum(proposal.totalAmount);
   // Derive the dollar discount from the stored totals rather than the raw
   // discountAmount/discountType fields (whose units are inconsistent across
   // the codebase). subtotal is pre-discount ex-GST; (totalAmount - gstAmount)
   // is post-discount ex-GST, so the difference is the discount in dollars.
-  const discountAmount = Math.round((subtotal - (totalAmount - gstAmount)) * 100) / 100;
+  let discountAmount = Math.round((subtotal - (totalAmount - gstAmount)) * 100) / 100;
+
+  // Fallback: some proposals were saved before the totals were recomputed with
+  // the discount applied, so the stored totals don't reflect it and the
+  // derivation above comes out ~0 — the discount then silently vanished from
+  // the customer-facing page even though the in-app preview (which reads the
+  // discountAmount field directly) still showed it. When that happens, trust
+  // the explicit discountAmount field (stored in dollars, matching the
+  // server's save/accept/email handlers) and recompute the discounted GST and
+  // total so the page stays internally consistent.
+  const explicitDiscount = toNum(proposal.discountAmount);
+  if (discountAmount < 0.005 && explicitDiscount > 0.005 && subtotal > explicitDiscount) {
+    const rate = subtotal > 0 ? gstAmount / subtotal : 0;
+    const afterDiscount = subtotal - explicitDiscount;
+    gstAmount = Math.round(afterDiscount * rate * 100) / 100;
+    totalAmount = Math.round((afterDiscount + gstAmount) * 100) / 100;
+    discountAmount = explicitDiscount;
+  }
 
   // Flatten line items from either proposal.lineItems or nested in sections
   const rawLineItems: ProposalLineItemLike[] = proposal.lineItems
