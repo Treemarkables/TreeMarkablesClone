@@ -29,6 +29,97 @@ import type { CompanyInfo } from '@shared/documentBlockDefaults';
 import { LinkifiedText } from '@/utils/linkify';
 import { ProposalReviewsWidget } from '@/components/ProposalReviewsWidget';
 
+/**
+ * Open a full-screen photo lightbox with prev/next navigation, keyboard and
+ * touch-swipe support. Built with vanilla DOM because the renderer is a plain
+ * function (not a React component) and so cannot hold lightbox state in hooks.
+ * Mirrors the proven lightbox in ProposalTemplate.tsx so the block-rendered
+ * proposal behaves identically to the legacy template.
+ */
+function openPhotoLightbox(urls: string[], startIndex: number): void {
+  if (urls.length === 0) return;
+  let currentIndex = startIndex;
+
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-[200] flex items-center justify-center bg-black/95';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '×';
+  closeBtn.className = 'text-white text-4xl w-14 h-14 flex items-center justify-center bg-black/40 rounded-full transition-colors';
+  closeBtn.style.cssText = 'position:fixed;right:1rem;top:max(1rem,env(safe-area-inset-top));z-index:201;pointer-events:auto;';
+  closeBtn.onclick = (e) => { e.stopPropagation(); document.removeEventListener('keydown', handleKeyDown); modal.remove(); };
+
+  const imgContainer = document.createElement('div');
+  imgContainer.className = 'w-full h-full flex items-center justify-center p-4 sm:p-16';
+
+  const img = document.createElement('img');
+  img.style.cssText = 'max-width: calc(100vw - 4rem); max-height: calc(100vh - 4rem); width: auto; height: auto; object-fit: contain; display: block; border-radius: 4px;';
+  img.onclick = (e) => e.stopPropagation();
+
+  const counter = document.createElement('div');
+  counter.className = 'absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full';
+
+  const prevBtn = document.createElement('button');
+  prevBtn.innerHTML = '‹';
+  prevBtn.className = 'absolute left-2 sm:left-4 top-1/2 transform -translate-y-1/2 text-white text-5xl w-12 h-12 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors';
+
+  const nextBtn = document.createElement('button');
+  nextBtn.innerHTML = '›';
+  nextBtn.className = 'absolute right-2 sm:right-4 top-1/2 transform -translate-y-1/2 text-white text-5xl w-12 h-12 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors';
+
+  const updateImage = () => {
+    img.src = urls[currentIndex];
+    counter.textContent = `${currentIndex + 1} / ${urls.length}`;
+    prevBtn.style.display = currentIndex === 0 ? 'none' : 'flex';
+    nextBtn.style.display = currentIndex === urls.length - 1 ? 'none' : 'flex';
+  };
+
+  prevBtn.onclick = (e) => { e.stopPropagation(); if (currentIndex > 0) { currentIndex--; updateImage(); } };
+  nextBtn.onclick = (e) => { e.stopPropagation(); if (currentIndex < urls.length - 1) { currentIndex++; updateImage(); } };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'ArrowLeft' && currentIndex > 0) { currentIndex--; updateImage(); }
+    else if (e.key === 'ArrowRight' && currentIndex < urls.length - 1) { currentIndex++; updateImage(); }
+    else if (e.key === 'Escape') { document.removeEventListener('keydown', handleKeyDown); modal.remove(); }
+  };
+  document.addEventListener('keydown', handleKeyDown);
+
+  let touchStartX = 0;
+  imgContainer.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+  imgContainer.addEventListener('touchend', (e) => {
+    const touchEndX = e.changedTouches[0].screenX;
+    if (touchStartX - touchEndX > 50 && currentIndex < urls.length - 1) { currentIndex++; updateImage(); }
+    else if (touchEndX - touchStartX > 50 && currentIndex > 0) { currentIndex--; updateImage(); }
+  });
+
+  // Guard against ghost clicks on mobile: the same tap that opens the modal
+  // fires a synthetic click ~300ms later and would close it instantly.
+  const openedAt = Date.now();
+  const safeClose = () => {
+    if (Date.now() - openedAt < 400) return;
+    document.removeEventListener('keydown', handleKeyDown);
+    modal.remove();
+  };
+  modal.onclick = safeClose;
+
+  // Stop pointer/mouse events from bubbling to document so a Radix Dialog
+  // host doesn't interpret them as an "outside click" and close the viewer.
+  modal.addEventListener('pointerdown', (e) => e.stopPropagation());
+  modal.addEventListener('mousedown', (e) => e.stopPropagation());
+
+  imgContainer.appendChild(img);
+  modal.appendChild(closeBtn);
+  modal.appendChild(imgContainer);
+  modal.appendChild(counter);
+  if (urls.length > 1) {
+    modal.appendChild(prevBtn);
+    modal.appendChild(nextBtn);
+  }
+
+  updateImage();
+  document.body.appendChild(modal);
+}
+
 export interface DocumentRenderContext {
   invoiceNumber: string;
   issueDate: Date;
@@ -549,7 +640,10 @@ export function renderDocumentBlock(
         return (
           <div key={block.id} className="mb-4">
             {cfg.label && <h2 className="text-xs font-semibold text-black mb-2">{editText('label', cfg.label)}</h2>}
-            <div className={`w-full ${aspectClass} bg-gray-100 rounded overflow-hidden relative`}>
+            <div
+              className={`w-full ${aspectClass} bg-gray-100 rounded overflow-hidden relative${editable ? '' : ' cursor-pointer hover:opacity-90 transition-opacity'}`}
+              onClick={editable ? undefined : () => openPhotoLightbox(photos.map(ph => ph.url), 0)}
+            >
               <img src={p.url} alt={p.altText ?? p.caption ?? 'Photo'} className="w-full h-full object-cover" />
               {cfg.layout === 'slideshow' && photos.length > 1 && (
                 <div className="absolute bottom-1 right-1 text-[10px] bg-black/60 text-white px-1.5 rounded">1 / {photos.length}</div>
@@ -565,9 +659,12 @@ export function renderDocumentBlock(
         <div key={block.id} className="mb-4">
           {cfg.label && <h2 className="text-xs font-semibold text-black mb-2">{editText('label', cfg.label)}</h2>}
           <div className={`grid ${gridClass} gap-2`}>
-            {photos.map(p => (
+            {photos.map((p, i) => (
               <div key={p.id}>
-                <div className={`w-full ${aspectClass} bg-gray-100 rounded overflow-hidden`}>
+                <div
+                  className={`w-full ${aspectClass} bg-gray-100 rounded overflow-hidden${editable ? '' : ' cursor-pointer hover:opacity-90 transition-opacity'}`}
+                  onClick={editable ? undefined : () => openPhotoLightbox(photos.map(ph => ph.url), i)}
+                >
                   <img src={p.url} alt={p.altText ?? p.caption ?? 'Photo'} className="w-full h-full object-cover" />
                 </div>
                 {cfg.showCaptions && p.caption && <p className="text-[10px] text-gray-600 mt-1">{p.caption}</p>}
