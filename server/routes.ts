@@ -129,7 +129,7 @@ if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic as unknown as string);
 }
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
-import { formatNZTime } from "@shared/dateUtils";
+import { formatNZTime, getJobScheduledNZDates } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { workflowAutomationService } from "./services/workflowAutomation";
@@ -5641,6 +5641,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (processedBody.scheduledEndDate === '' || processedBody.scheduledEndDate === null) {
         processedBody.scheduledEndDate = null;
       }
+      // Explicit per-day schedule set (multi-day jobs that may skip days, e.g.
+      // weekends). Normalise to a clean string[] or null so single-day re-bookings
+      // clear any stale set.
+      if ('scheduledDates' in processedBody) {
+        processedBody.scheduledDates = Array.isArray(processedBody.scheduledDates) && processedBody.scheduledDates.length > 0
+          ? processedBody.scheduledDates.filter((d: unknown): d is string => typeof d === 'string')
+          : null;
+      }
       if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
@@ -6272,6 +6280,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
       if (processedBody.scheduledEndDate === '' || processedBody.scheduledEndDate === null) {
         processedBody.scheduledEndDate = null;
+      }
+      // Explicit per-day schedule set (multi-day jobs that may skip days, e.g.
+      // weekends). Normalise to a clean string[] or null so single-day re-bookings
+      // clear any stale set.
+      if ('scheduledDates' in processedBody) {
+        processedBody.scheduledDates = Array.isArray(processedBody.scheduledDates) && processedBody.scheduledDates.length > 0
+          ? processedBody.scheduledDates.filter((d: unknown): d is string => typeof d === 'string')
+          : null;
       }
       if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
         processedBody.completedDate = new Date(processedBody.completedDate);
@@ -16608,16 +16624,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         notes?: string | null;
       }> = [];
 
-      if (job?.scheduledDate && job?.scheduledEndDate) {
-        // Multi-day job: generate one assignment per employee per day
-        const startNZDate = format(toZonedTime(new Date(job.scheduledDate), 'Pacific/Auckland'), 'yyyy-MM-dd');
-        const endNZDate = format(toZonedTime(new Date(job.scheduledEndDate), 'Pacific/Auckland'), 'yyyy-MM-dd');
+      // The exact NZ calendar days this job runs on. Respects an explicit
+      // scheduledDates set (so a span with carved-out days — e.g. weekends —
+      // only books the selected days) and otherwise falls back to the contiguous
+      // scheduledDate..scheduledEndDate span.
+      const jobDays = job ? getJobScheduledNZDates(job) : [];
 
-        // Iterate day-by-day using noon-UTC anchoring to avoid DST boundary issues
-        const d = new Date(startNZDate + 'T12:00:00Z');
-        const last = new Date(endNZDate + 'T12:00:00Z');
-        while (d <= last) {
-          const dayNZDate = d.toISOString().split('T')[0];
+      if (jobDays.length > 1) {
+        // Multi-day job: generate one assignment per employee per selected day
+        for (const dayNZDate of jobDays) {
           const dayStartUTC = fromZonedTime(`${dayNZDate}T${nzTimeStr}:00`, 'Pacific/Auckland');
           const dayEndUTC = new Date(dayStartUTC.getTime() + durationMs);
           for (const employeeId of uniqueEmployeeIds) {
@@ -16629,9 +16644,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
               notes: templateAssignment.notes || null,
             });
           }
-          d.setUTCDate(d.getUTCDate() + 1);
         }
-        console.log(`📅 Multi-day job: generating ${allAssignmentsToCreate.length} assignments across ${Math.round((last.getTime() - new Date(startNZDate + 'T12:00:00Z').getTime()) / 86400000) + 1} day(s) for ${uniqueEmployeeIds.length} employee(s)`);
+        console.log(`📅 Multi-day job: generating ${allAssignmentsToCreate.length} assignments across ${jobDays.length} day(s) for ${uniqueEmployeeIds.length} employee(s)`);
       } else {
         // Single-day or no end date: use submitted assignments as-is
         for (const assignment of staffAssignments) {

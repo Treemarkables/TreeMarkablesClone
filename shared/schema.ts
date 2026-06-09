@@ -386,6 +386,12 @@ export const jobs = pgTable("jobs", {
   address: text("address").notNull().default("Address not specified"),
   scheduledDate: timestamp("scheduled_date"),
   scheduledEndDate: timestamp("scheduled_end_date"), // For multi-day jobs — last day of the job
+  // Explicit set of NZ calendar dates (YYYY-MM-DD) the job actually runs on. Lets a
+  // multi-day booking skip days inside the span (e.g. Wed–Mon excluding the weekend).
+  // When null/empty, consumers fall back to the contiguous scheduledDate..scheduledEndDate
+  // span. scheduledDate/scheduledEndDate stay populated as the first/last day for
+  // backward compatibility with range-based readers.
+  scheduledDates: jsonb("scheduled_dates").$type<string[]>(),
   scheduledStartTime: text("scheduled_start_time"), // e.g., "08:00"
   scheduledEndTime: text("scheduled_end_time"), // e.g., "10:00"
   completedDate: timestamp("completed_date"),
