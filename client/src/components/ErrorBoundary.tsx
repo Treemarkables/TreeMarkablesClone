@@ -11,18 +11,71 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  recovering: boolean;
+}
+
+// A lazy()/dynamic-import that 404s after a deploy (old index.html points at
+// JS chunk hashes that no longer exist) throws one of these messages. Phrasing
+// is browser-specific: Chrome "Failed to fetch dynamically imported module",
+// iOS/Safari "Importing a module script failed", Firefox/webpack "Loading
+// chunk"/"ChunkLoadError".
+function isChunkLoadError(error: Error | null | undefined): boolean {
+  const msg = error?.message || '';
+  const name = error?.name || '';
+  return (
+    name === 'ChunkLoadError' ||
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('error loading dynamically imported module') ||
+    msg.includes('Importing a module script failed') ||
+    msg.includes('Loading chunk') ||
+    msg.includes('ChunkLoadError')
+  );
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   private capturedComponentStack: string = '';
+  // sessionStorage key holding the timestamp of our last stale-bundle reload,
+  // so a genuinely-missing chunk can't put us in an endless reload loop.
+  private static readonly RELOAD_GUARD_KEY = 'chunkReloadAt';
 
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, recovering: false };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
-    return { hasError: true, error };
+    // recovering === "we're about to hard-reload", so render a calm "Updating"
+    // screen instead of the scary error card for that split second.
+    return { hasError: true, error, recovering: ErrorBoundary.willReload(error) };
+  }
+
+  // Whether a stale-bundle reload is warranted: a chunk error that we haven't
+  // already tried to reload from in the last 20s (read-only — no side effects).
+  private static willReload(error: Error): boolean {
+    if (!isChunkLoadError(error)) return false;
+    try {
+      const last = Number(
+        sessionStorage.getItem(ErrorBoundary.RELOAD_GUARD_KEY) || '0',
+      );
+      return Date.now() - last >= 20000;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  // Hard-reload once to pull the fresh index.html + chunk hashes when a lazy
+  // import fails because the bundle is stale. Returns true if a reload was
+  // kicked off (caller should skip error reporting — it's not a real bug).
+  private recoverFromStaleBundle(error: Error): boolean {
+    if (!ErrorBoundary.willReload(error)) return false;
+    try {
+      sessionStorage.setItem(ErrorBoundary.RELOAD_GUARD_KEY, String(Date.now()));
+    } catch (_) {
+      // sessionStorage unavailable (private mode / webview) — reload anyway,
+      // the browser's own loop protection is the backstop.
+    }
+    window.location.reload();
+    return true;
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
@@ -30,6 +83,15 @@ export class ErrorBoundary extends Component<Props, State> {
     // which can cause infinite loops when the error itself is a maximum-update-depth error.
     // Instead, store the component stack in a class property.
     this.capturedComponentStack = errorInfo.componentStack || '';
+
+    // Stale-bundle recovery FIRST. These import failures surface through
+    // Suspense into this boundary, so the global window 'error' /
+    // 'unhandledrejection' handlers in main.tsx never see them — we have to
+    // trigger the reload here. Skip Sentry/server logging for them: it's a
+    // deploy artifact, not a code bug.
+    if (this.recoverFromStaleBundle(error)) {
+      return;
+    }
 
     // Report to Sentry with the React component stack as extra context.
     // No-op when VITE_SENTRY_DSN is unset (Sentry.init was skipped).
@@ -74,7 +136,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   handleRetry = () => {
     this.capturedComponentStack = '';
-    this.setState({ hasError: false, error: null });
+    this.setState({ hasError: false, error: null, recovering: false });
   };
 
   handleGoHome = () => {
@@ -83,6 +145,20 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      // Stale-bundle reload is in flight — show a calm "updating" screen for the
+      // split second before the hard reload swaps in the fresh app. Avoids
+      // flashing the scary error card on a routine post-deploy chunk miss.
+      if (this.state.recovering) {
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+            <div className="text-center">
+              <RefreshCw className="w-8 h-8 text-orange-600 mx-auto mb-3 animate-spin" />
+              <p className="text-gray-600">Updating to the latest version…</p>
+            </div>
+          </div>
+        );
+      }
+
       if (this.props.fallback) {
         return this.props.fallback;
       }
