@@ -20364,7 +20364,7 @@ Transcription: ${transcriptText}`;
         if (job) {
           console.log(`✅ Found job ${job.jobNumber} - creating diary entry`);
           // Create diary entry in the job
-          await storage.createJobDiaryEntry({
+          const diaryEntry = await storage.createJobDiaryEntry({
             jobId: job.id,
             entryType: 'email',
             title: `Email from ${actualFromName || actualFromEmail}`,
@@ -20404,7 +20404,8 @@ Transcription: ${transcriptText}`;
                 type: 'email_reply',
                 priority: 'high' as const,
                 isRead: false,
-                actionUrl: `/dispatch?job=${job.id}&tab=diary`,
+                diaryEntryId: diaryEntry?.id,
+                actionUrl: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
                 entityType: 'job',
                 entityId: job.id,
                 relatedEntityType: 'job',
@@ -20452,7 +20453,7 @@ Transcription: ${transcriptText}`;
           const job = jobs[0];
           console.log(`✅ Found job ${job.jobNumber} via quote - creating diary entry`);
           // Create diary entry in the job
-          await storage.createJobDiaryEntry({
+          const diaryEntry = await storage.createJobDiaryEntry({
             jobId: job.id,
             entryType: 'email',
             title: `Email from ${actualFromName || actualFromEmail}`,
@@ -20492,7 +20493,8 @@ Transcription: ${transcriptText}`;
                 type: 'email_reply',
                 priority: 'high' as const,
                 isRead: false,
-                actionUrl: `/dispatch?job=${job.id}&tab=diary`,
+                diaryEntryId: diaryEntry?.id,
+                actionUrl: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
                 entityType: 'job',
                 entityId: job.id,
                 relatedEntityType: 'job',

@@ -503,3 +503,26 @@
 svg.lucide-loader-circle {
   display: none !important;
 }
+
+/* Deep-link highlight: when a notification opens the diary at a specific entry
+   (e.g. an email reply), the target row briefly pulses a violet ring so the
+   user's eye lands on it. Violet matches the diary's incoming-message accent.
+   Added/removed imperatively by JobDiarySection (see `diary-entry-highlight`). */
+@keyframes diaryEntryHighlightPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
+  }
+  12% {
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.32);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
+  }
+}
+.diary-entry-highlight {
+  animation: diaryEntryHighlightPulse 2.4s ease-out;
+  border-radius: 0.75rem;
+}

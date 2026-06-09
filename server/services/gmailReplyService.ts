@@ -505,8 +505,10 @@ class GmailReplyService {
           }
         }
 
-        // Create job diary entry for the email reply
-        await db.insert(jobDiaryEntries).values({
+        // Create job diary entry for the email reply.
+        // Capture the inserted id so the notification can deep-link straight to
+        // this entry in the diary (scroll + highlight), not just the diary tab.
+        const [insertedDiaryEntry] = await db.insert(jobDiaryEntries).values({
           jobId: job.id,
           entryType: 'email',
           title: `Email reply: ${email.subject}`,
@@ -529,7 +531,8 @@ class GmailReplyService {
             rawBody: email.textBody, // Store raw body for debugging
             ...(photoUrls.length > 0 && { attachmentCount: photoUrls.length }),
           }
-        });
+        }).returning({ id: jobDiaryEntries.id });
+        const diaryEntryId = insertedDiaryEntry?.id;
 
         console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
         
@@ -552,7 +555,8 @@ class GmailReplyService {
               priority: 'medium',
               jobId: job.id,
               customerId: job.customerId,
-              actionUrl: `/dispatch?job=${job.id}`
+              ...(diaryEntryId && { diaryEntryId }),
+              actionUrl: `/dispatch?job=${job.id}&tab=diary${diaryEntryId ? `&entry=${diaryEntryId}` : ''}`
             });
             console.log(`🔔 Created notification for email reply from ${customer.name} on job #${job.jobNumber}`);
 
@@ -560,7 +564,7 @@ class GmailReplyService {
             const pushCount = await pushToAdminsWithCustomerMessages({
               title: `Email Reply — ${customer.name}`,
               body: emailPreview || `Re: ${email.subject}`,
-              clickAction: `/dispatch?job=${job.id}&tab=diary`,
+              clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntryId ? `&entry=${diaryEntryId}` : ''}`,
               data: {
                 type: 'email_reply',
                 jobId: job.id,
