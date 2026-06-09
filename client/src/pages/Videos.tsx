@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X, Briefcase } from "lucide-react";
+import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X, Briefcase, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
 
 export default function Videos() {
   const { toast } = useToast();
@@ -21,6 +22,7 @@ export default function Videos() {
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
 
   const videosKey = ["/api/videos"];
   const { data: response, isLoading } = useQuery({
@@ -35,32 +37,31 @@ export default function Videos() {
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const form = new FormData();
+      setUploadProgress({ loaded: 0, total: file.size, percent: 0, phase: "uploading" });
       // Text fields must precede the file part so the streaming upload parses them in time.
-      if (title.trim()) form.append("title", title.trim());
-      form.append("video", file);
-      const r = await fetch(`/api/videos`, {
-        method: "POST",
-        body: form,
-        credentials: "include",
+      const fields: Record<string, string> = {};
+      if (title.trim()) fields.title = title.trim();
+      return uploadFileWithProgress<any>({
+        url: `/api/videos`,
+        file,
+        fields,
+        onProgress: setUploadProgress,
       });
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
-        throw new Error(body.message || "Upload failed");
-      }
-      return r.json();
     },
     onSuccess: () => {
       setTitle("");
       if (fileRef.current) fileRef.current.value = "";
+      setUploadProgress(null);
       queryClient.invalidateQueries({ queryKey: videosKey });
     },
-    onError: (error: any) =>
+    onError: (error: any) => {
+      setUploadProgress(null);
       toast({
         title: "Video upload failed",
         description: error?.message || "Please try again.",
         variant: "destructive",
-      }),
+      });
+    },
   });
 
   const deleteMutation = useMutation({
@@ -165,9 +166,39 @@ export default function Videos() {
             disabled={uploadMutation.isPending}
             data-testid="button-library-upload"
           >
-            <Upload className="w-4 h-4 mr-2" />
-            {uploadMutation.isPending ? "Uploading…" : "Upload video"}
+            {uploadMutation.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4 mr-2" />
+            )}
+            {!uploadMutation.isPending
+              ? "Upload video"
+              : uploadProgress?.phase === "processing"
+                ? "Processing…"
+                : uploadProgress && uploadProgress.percent >= 0
+                  ? `Uploading ${uploadProgress.percent}%`
+                  : "Uploading…"}
           </Button>
+          {uploadMutation.isPending && (
+            <div className="space-y-1" data-testid="library-video-upload-progress">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{
+                    width:
+                      uploadProgress?.phase === "processing"
+                        ? "100%"
+                        : `${uploadProgress?.percent && uploadProgress.percent > 0 ? uploadProgress.percent : 3}%`,
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {uploadProgress?.phase === "processing"
+                  ? "Finalizing on the server — almost done."
+                  : "Large videos can take a few minutes on mobile data. Keep this open."}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
