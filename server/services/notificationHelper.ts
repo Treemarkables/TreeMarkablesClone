@@ -540,19 +540,30 @@ export async function notifyConversationReply(conversation: {
   title: string | null;
   source: string | null;
   customerName?: string | null;
-}, replyPreview?: string) {
+}, replyPreview?: string, messageId?: string) {
   try {
-    // De-dup: skip if a notification for this conversation was already created in the last 24h.
-    // Match on conversationId in metadata rather than the exact action URL, since the URL
-    // now varies (job-card diary vs conversation page) depending on whether the conversation
-    // has been converted to a job.
+    // De-dup: avoid notifying twice for the SAME inbound message. When the
+    // caller knows the message's Message-ID we match on that exactly (robust
+    // across the poller/webhook race and across a "Clear all"), so genuinely
+    // distinct replies in the same conversation each notify. Without a
+    // messageId we fall back to a SHORT per-conversation window — long enough
+    // to swallow a near-instant double-call, short enough that a real follow-up
+    // message still gets its own bell entry. (The old guard blanket-suppressed
+    // every reply on a conversation for a whole 24h.)
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const recentNotifications = await storage.getNotificationsCreatedSince(since);
-    const alreadyNotified = recentNotifications.some(
-      (n) =>
-        n.type === 'new_conversation' &&
-        (n.metadata as any)?.conversationId === conversation.id,
-    );
+    const alreadyNotified = messageId
+      ? recentNotifications.some(
+          (n) =>
+            n.type === 'new_conversation' &&
+            (n.metadata as any)?.messageId === messageId,
+        )
+      : recentNotifications.some(
+          (n) =>
+            n.type === 'new_conversation' &&
+            (n.metadata as any)?.conversationId === conversation.id &&
+            Date.now() - new Date(n.createdAt as any).getTime() < 5 * 60 * 1000,
+        );
     if (alreadyNotified) {
       console.log(`✅ Skipping duplicate conversation reply notification for: ${conversation.id}`);
       return true;
@@ -583,6 +594,7 @@ export async function notifyConversationReply(conversation: {
         conversationId: conversation.id,
         source: conversation.source,
         jobId: jobId || undefined,
+        ...(messageId && { messageId }),
       }
     });
 

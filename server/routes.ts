@@ -20274,6 +20274,21 @@ Transcription: ${transcriptText}`;
       
       // Clean email body for conversation display
       const cleanedBody = cleanEmailBody(actualText, html);
+
+      // Stable identity for this inbound email. Used to dedup the bell
+      // notification by the exact message rather than blanket-suppressing every
+      // reply on a job (the old 24h/per-job guard hid genuine distinct replies).
+      // headers can arrive as a raw header string or a parsed object depending
+      // on the provider, so handle both.
+      const inboundMessageId: string | null = (() => {
+        const h: any = headers;
+        if (!h) return null;
+        if (typeof h === 'string') {
+          const m = h.match(/^message-id:\s*(.+)$/im);
+          return m ? m[1].trim() : null;
+        }
+        return h['message-id'] || h['Message-ID'] || h['messageId'] || null;
+      })();
       
       // Extract job/quote reference from TO address or subject line
       // Check TO address first for patterns like: job-3316@jobs.treemarkables.co.nz or job-UUID@jobs.treemarkables.co.nz
@@ -20390,12 +20405,26 @@ Transcription: ${transcriptText}`;
             const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
             const previewText = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
 
-            // De-dup against gmailReplyService: same 24h/per-job guard used there.
+            // Dedup by the email's Message-ID, not "any reply on this job in
+            // 24h" — otherwise every reply after the first is silently dropped
+            // for a whole day. This also dedups against gmailReplyService's
+            // poller, which stamps the same emailMessageId. Falls back to a
+            // short per-job window only when the email carries no Message-ID.
             const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
             const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
-            const alreadyNotified = recentNotifs.some(
-              (n) => n.type === 'email_reply' && n.jobId === job.id,
-            );
+            const alreadyNotified = inboundMessageId
+              ? recentNotifs.some(
+                  (n) =>
+                    n.type === 'email_reply' &&
+                    (n.metadata as any)?.emailMessageId === inboundMessageId,
+                )
+              : recentNotifs.some(
+                  (n) =>
+                    n.type === 'email_reply' &&
+                    n.jobId === job.id &&
+                    Date.now() - new Date(n.createdAt as any).getTime() <
+                      5 * 60 * 1000,
+                );
 
             if (!alreadyNotified) {
               const notificationData = {
@@ -20414,7 +20443,8 @@ Transcription: ${transcriptText}`;
                 metadata: {
                   preview: previewText,
                   senderEmail: actualFromEmail || actualFrom,
-                  senderName: actualFromName
+                  senderName: actualFromName,
+                  emailMessageId: inboundMessageId
                 }
               };
 
@@ -20479,12 +20509,26 @@ Transcription: ${transcriptText}`;
             const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
             const previewText = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
 
-            // De-dup against gmailReplyService: same 24h/per-job guard used there.
+            // Dedup by the email's Message-ID, not "any reply on this job in
+            // 24h" — otherwise every reply after the first is silently dropped
+            // for a whole day. This also dedups against gmailReplyService's
+            // poller, which stamps the same emailMessageId. Falls back to a
+            // short per-job window only when the email carries no Message-ID.
             const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
             const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
-            const alreadyNotified = recentNotifs.some(
-              (n) => n.type === 'email_reply' && n.jobId === job.id,
-            );
+            const alreadyNotified = inboundMessageId
+              ? recentNotifs.some(
+                  (n) =>
+                    n.type === 'email_reply' &&
+                    (n.metadata as any)?.emailMessageId === inboundMessageId,
+                )
+              : recentNotifs.some(
+                  (n) =>
+                    n.type === 'email_reply' &&
+                    n.jobId === job.id &&
+                    Date.now() - new Date(n.createdAt as any).getTime() <
+                      5 * 60 * 1000,
+                );
 
             if (!alreadyNotified) {
               const notificationData = {
@@ -20503,7 +20547,8 @@ Transcription: ${transcriptText}`;
                 metadata: {
                   preview: previewText,
                   senderEmail: actualFromEmail || actualFrom,
-                  senderName: actualFromName
+                  senderName: actualFromName,
+                  emailMessageId: inboundMessageId
                 }
               };
 
@@ -20700,7 +20745,8 @@ Transcription: ${transcriptText}`;
           console.log(`✅ Found existing open conversation for ${actualFromEmail}, adding message to: ${conversation.id}`);
           await notificationHelper.notifyConversationReply(
             { id: conversation.id, title: conversation.title, source: 'email', customerName: actualFromName || actualFromEmail },
-            cleanedBody
+            cleanedBody,
+            inboundMessageId || undefined,
           );
         }
         
