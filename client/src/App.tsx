@@ -108,6 +108,7 @@ const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
 const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
 const SettingsQuoteFollowup = lazy(() => import("@/pages/SettingsQuoteFollowup"));
 const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoReply"));
+const SettingsVoiceAgent = lazy(() => import("@/pages/SettingsVoiceAgent"));
 const TimeTracking = lazy(() => import("@/pages/TimeTracking"));
 const FollowUpQueue = lazy(() => import("@/pages/FollowUpQueue"));
 const UnlinkedCalls = lazy(() => import("@/pages/UnlinkedCalls"));
@@ -1382,6 +1383,11 @@ function Router() {
       <Route path="/settings/inquiry-auto-reply">
         <SidebarLayout>
           <SettingsInquiryAutoReply />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/voice-agent">
+        <SidebarLayout>
+          <SettingsVoiceAgent />
         </SidebarLayout>
       </Route>
       <Route path="/settings/booking-reminders">

@@ -97,6 +97,19 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // AI voice agent (inbound IVR triage) settings + add-on catalog entry.
+    name: "business-settings-voice-agent-columns",
+    statements: [
+      `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS voice_agent_enabled boolean DEFAULT false`,
+      `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS voice_agent_greeting text DEFAULT 'Thanks for calling {businessName}. For a quick quote with our A.I. assistant, press 1. To speak to {ownerName}, press 2.'`,
+      `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS voice_agent_voice text DEFAULT 'marin'`,
+      `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS voice_agent_extra_instructions text DEFAULT ''`,
+      `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS voice_agent_max_minutes integer DEFAULT 10`,
+      `INSERT INTO add_ons (key, name, billing_type) VALUES ('voice_agent', 'AI Voice Agent', 'flat')
+        ON CONFLICT (key) DO NOTHING`,
+    ],
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

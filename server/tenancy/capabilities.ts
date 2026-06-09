@@ -19,7 +19,7 @@
  *  - `requires` gates a capability behind an entitlement (tier or add-on). null = available
  *    on every tier incl. Freemium. The RBAC UI shows gated caps as locked upsells until the
  *    business's plan/add-ons unlock them. Values: "plan:crew" | "plan:business" |
- *    "addon:call_recording" | "addon:ai" | "addon:sms".
+ *    "addon:call_recording" | "addon:ai" | "addon:sms" | "addon:voice_agent".
  */
 
 export type CapabilityKind = "view" | "action";
@@ -28,7 +28,8 @@ export type Entitlement =
   | "plan:business"
   | "addon:call_recording"
   | "addon:ai"
-  | "addon:sms";
+  | "addon:sms"
+  | "addon:voice_agent";
 
 export interface Capability {
   key: string;
@@ -124,6 +125,8 @@ export const CAPABILITY_CATALOG: Capability[] = [
   { key: "calls.view", module: "Calls", label: "View call records", kind: "view", requires: "addon:call_recording" },
   { key: "calls.record", module: "Calls", label: "Record calls", kind: "action", requires: "addon:call_recording" },
   { key: "calls.playback", module: "Calls", label: "Play call recordings", kind: "action", requires: "addon:call_recording" },
+  { key: "voiceAgent.use", module: "Calls", label: "AI voice agent (inbound quote triage)", kind: "action", requires: "addon:voice_agent" },
+  { key: "voiceAgent.settings", module: "Calls", label: "Configure AI voice agent", kind: "view", requires: "addon:voice_agent" },
 
   // ── Marketing & reputation (Business tier) ─────────────────────────
   { key: "marketing.view", module: "Marketing", label: "View marketing planner", kind: "view", requires: "plan:business" },

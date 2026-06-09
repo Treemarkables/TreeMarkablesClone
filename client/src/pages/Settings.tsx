@@ -34,7 +34,8 @@ import {
   PhoneOff,
   Receipt,
   FileStack,
-  CreditCard
+  CreditCard,
+  PhoneCall
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -137,6 +138,14 @@ const settingsOptions = [
     icon: Mail,
     color: "bg-orange-100 text-orange-600",
     path: "/settings/inquiry-auto-reply"
+  },
+  {
+    id: "voice-agent",
+    title: "AI Phone Assistant",
+    description: "Inbound call menu — callers can get a quick quote with the AI assistant",
+    icon: PhoneCall,
+    color: "bg-indigo-100 text-indigo-600",
+    path: "/settings/voice-agent"
   },
   {
     id: "quote-followup",
