@@ -77,23 +77,64 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
-// Reload on foreground if backgrounded for >5 minutes.
-// In Capacitor (iOS WKWebView) and PWAs, users can sit on a stale JS bundle indefinitely
-// — the page only refetches HTML on a full reload, not on background→foreground transitions.
-// This means a deploy can ship to web but iOS users stay on the old code until they force-quit.
-// Threshold is intentionally generous (5 min) so quick app-switches don't trash in-progress state.
+// The hashed entry bundle this page loaded with. index.html is served
+// no-store, so re-fetching it later reveals whether a new build has shipped
+// (the entry filename's hash changes every deploy). Lets us reload the moment
+// a user returns to the app after a deploy, instead of leaving them on stale
+// code until something 404s — the root cause behind features (deep links,
+// notification highlights) silently not working right after a release.
+const loadedEntryBundle = (() => {
+  const scripts = Array.from(
+    document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]'),
+  );
+  return (
+    scripts.map((s) => s.getAttribute('src') || '').find((src) => src.includes('/assets/index-')) ||
+    null
+  );
+})();
+
+// True when prod is serving a newer entry bundle than the one we booted with.
+async function hasNewDeployShipped(): Promise<boolean> {
+  if (!loadedEntryBundle) return false;
+  try {
+    const res = await fetch('/', { cache: 'no-store' });
+    if (!res.ok) return false;
+    const html = await res.text();
+    const match = html.match(/\/assets\/index-[A-Za-z0-9_.-]+\.js/);
+    return !!match && match[0] !== loadedEntryBundle;
+  } catch {
+    return false; // offline / transient — try again next foreground
+  }
+}
+
+// Reload on foreground when EITHER we've been backgrounded a while OR a new
+// build has shipped. Only ever fires on a background→foreground transition, so
+// it never yanks the page out from under an in-progress edit (important given
+// the job-card auto-save history) — returning to the app is a safe reload point.
+// In Capacitor (iOS WKWebView) and PWAs the page otherwise only refetches HTML
+// on a manual full reload, so users sit on stale code indefinitely.
 const STALE_RELOAD_THRESHOLD_MS = 5 * 60 * 1000;
 let lastVisibleAt = Date.now();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     lastVisibleAt = Date.now();
-  } else if (document.visibilityState === 'visible') {
-    const elapsed = Date.now() - lastVisibleAt;
-    if (elapsed > STALE_RELOAD_THRESHOLD_MS) {
-      console.warn(`↻ App backgrounded for ${Math.round(elapsed / 1000)}s — reloading to get fresh code`);
+    return;
+  }
+  if (document.visibilityState !== 'visible') return;
+
+  const elapsed = Date.now() - lastVisibleAt;
+  if (elapsed > STALE_RELOAD_THRESHOLD_MS) {
+    console.warn(`↻ App backgrounded for ${Math.round(elapsed / 1000)}s — reloading to get fresh code`);
+    window.location.reload();
+    return;
+  }
+  // Even after a brief away, pick up a fresh deploy on return.
+  hasNewDeployShipped().then((isStale) => {
+    if (isStale) {
+      console.warn('↻ New build detected on foreground — reloading to get fresh code');
       window.location.reload();
     }
-  }
+  });
 });
 
 // Keep cache cleanup to remove any old service worker / cache that was left behind
