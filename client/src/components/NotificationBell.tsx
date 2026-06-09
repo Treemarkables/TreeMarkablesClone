@@ -172,10 +172,16 @@ export function NotificationBell() {
     };
   }, []);
 
-  // Fetch notification summary for badge count
+  // Fetch notification summary for badge count. Poll every 20s (was 60s, which
+  // left the bell looking dead for up to a minute after a reply arrived) and
+  // refetch the moment the window regains focus / the tab becomes visible — so
+  // returning to the app lights the bell up immediately instead of on the next
+  // tick. Keep polling while the tab is in the background so a backgrounded PWA
+  // still surfaces the count on return.
   const { data: summaryData } = useQuery({
     queryKey: ["/api/notifications/summary"],
-    refetchInterval: 60000, // Poll every 60 seconds
+    refetchInterval: 20000,
+    refetchOnWindowFocus: true,
   });
 
   // Always fetch the list (same cadence as the summary) so the badge count
@@ -183,7 +189,8 @@ export function NotificationBell() {
   const { data: notificationsData, isLoading: isLoadingNotifications } =
     useQuery({
       queryKey: ["/api/notifications"],
-      refetchInterval: 60000,
+      refetchInterval: 20000,
+      refetchOnWindowFocus: true,
     });
 
   // Check for new notifications and show browser notification

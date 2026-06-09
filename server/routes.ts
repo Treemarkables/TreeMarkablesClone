@@ -20379,6 +20379,20 @@ Transcription: ${transcriptText}`;
               },
             });
             console.log(`🔔 Notification created for email reply on job ${job.jobNumber} (UUID path)`);
+            // Push to admins' devices too (web + mobile), gated by the same
+            // dedup so the poller/webhook can't double-push. Without this the
+            // webhook only wrote an in-app bell entry and never a push.
+            try {
+              const { pushToAdminsWithCustomerMessages } = await import('./services/notificationHelper.js');
+              await pushToAdminsWithCustomerMessages({
+                title: `Email Reply — ${actualFromName || actualFromEmail}`,
+                body: previewText,
+                clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
+                data: { type: 'email_reply', jobId: job.id, jobNumber: String(job.jobNumber) },
+              });
+            } catch (pushErr) {
+              console.error('Failed to push email-reply notification (UUID path):', pushErr);
+            }
           } else {
             console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber} (UUID path)`);
           }
@@ -20481,6 +20495,17 @@ Transcription: ${transcriptText}`;
 
               await storage.createNotification(notificationData);
               console.log(`🔔 Notification created for email reply on job ${job.jobNumber}`);
+              try {
+                const { pushToAdminsWithCustomerMessages } = await import('./services/notificationHelper.js');
+                await pushToAdminsWithCustomerMessages({
+                  title: `Email Reply — ${actualFromName || actualFromEmail}`,
+                  body: previewText,
+                  clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
+                  data: { type: 'email_reply', jobId: job.id, jobNumber: String(job.jobNumber) },
+                });
+              } catch (pushErr) {
+                console.error('Failed to push email-reply notification (job-number path):', pushErr);
+              }
             } else {
               console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber} (job-number path)`);
             }
@@ -20585,6 +20610,17 @@ Transcription: ${transcriptText}`;
 
               await storage.createNotification(notificationData);
               console.log(`🔔 Notification created for email reply on job ${job.jobNumber} (via quote)`);
+              try {
+                const { pushToAdminsWithCustomerMessages } = await import('./services/notificationHelper.js');
+                await pushToAdminsWithCustomerMessages({
+                  title: `Email Reply — ${actualFromName || actualFromEmail}`,
+                  body: previewText,
+                  clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
+                  data: { type: 'email_reply', jobId: job.id, jobNumber: String(job.jobNumber) },
+                });
+              } catch (pushErr) {
+                console.error('Failed to push email-reply notification (quote path):', pushErr);
+              }
             } else {
               console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber} (quote-number path)`);
             }
