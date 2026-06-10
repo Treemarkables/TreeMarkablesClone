@@ -110,6 +110,14 @@ const MIGRATIONS: Migration[] = [
         ON CONFLICT (key) DO NOTHING`,
     ],
   },
+  {
+    // Shared AI knowledge document (Settings → AI Knowledge), injected into
+    // AI prompts via buildBusinessKnowledgeBlock().
+    name: "business-settings-ai-knowledge-column",
+    statements: [
+      `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS ai_knowledge text DEFAULT ''`,
+    ],
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

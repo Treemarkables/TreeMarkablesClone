@@ -17,6 +17,7 @@ declare module 'express-session' {
 }
 import { storage, invoiceRevenueExGst } from "./storage";
 import { getBusinessIdentity } from "./businessIdentity";
+import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
 import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
 import { jwksHandler } from "./tenancy/jwksHandler";
@@ -19959,12 +19960,16 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
       console.log('📝 Mobile Transcription:', transcriptText);
 
       // Step 2: Extract quote details using GPT-5
-      const extractionPrompt = `You are a quote assistant for a tree removal service company in New Zealand. 
+      let __mobileQuoteKnowledge = '';
+      try {
+        __mobileQuoteKnowledge = buildBusinessKnowledgeBlock(await storage.getBusinessSettings());
+      } catch { /* knowledge is optional context */ }
+      const extractionPrompt = `You are a quote assistant for a tree removal service company in New Zealand.
 Extract the following information from this conversation transcription and return it as JSON:
 
 {
   "customerName": "customer's full name or null if not mentioned",
-  "customerPhone": "phone number or null if not mentioned", 
+  "customerPhone": "phone number or null if not mentioned",
   "customerEmail": "email or null if not mentioned",
   "address": "property address or null if not mentioned",
   "jobDescription": "detailed description of the work needed",
@@ -19973,7 +19978,7 @@ Extract the following information from this conversation transcription and retur
   "urgency": "urgent/normal/low based on conversation tone",
   "notes": "any additional important details"
 }
-
+${__mobileQuoteKnowledge}
 Transcription: ${transcriptText}`;
 
       const extractionResponse = await openai.chat.completions.create({
@@ -27208,12 +27213,16 @@ Formatted task list:`;
 
       // Step 2: Extract quote details using GPT-5 (full quote mode only)
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-      const extractionPrompt = `You are a quote assistant for a tree removal service company in New Zealand. 
+      let __webQuoteKnowledge = '';
+      try {
+        __webQuoteKnowledge = buildBusinessKnowledgeBlock(await storage.getBusinessSettings());
+      } catch { /* knowledge is optional context */ }
+      const extractionPrompt = `You are a quote assistant for a tree removal service company in New Zealand.
 Extract the following information from this conversation transcription and return it as JSON:
 
 {
   "customerName": "customer's full name or null if not mentioned",
-  "customerPhone": "phone number or null if not mentioned", 
+  "customerPhone": "phone number or null if not mentioned",
   "customerEmail": "email or null if not mentioned",
   "address": "property address or null if not mentioned",
   "jobDescription": "detailed description of the work needed",
@@ -27222,7 +27231,7 @@ Extract the following information from this conversation transcription and retur
   "urgency": "urgent/normal/low based on conversation tone",
   "notes": "any additional important details"
 }
-
+${__webQuoteKnowledge}
 Transcription: ${transcriptText}`;
 
       const extractionResponse = await openai.chat.completions.create({

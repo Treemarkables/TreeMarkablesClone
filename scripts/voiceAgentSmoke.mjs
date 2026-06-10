@@ -141,11 +141,15 @@ check("pipeline: call record created", calls.rowCount === 1, `rows=${calls.rowCo
 if (calls.rowCount === 1) {
   console.log(`   transcript: ${String(calls.rows[0].transcript_text || "").slice(0, 200)}`);
 }
-const jobs = await pool.query(
-  "SELECT job_number, title, status, lead_source, created_at FROM jobs WHERE lead_source = 'voice_agent' AND created_at > now() - interval '2 minutes' ORDER BY created_at DESC LIMIT 1",
+// The pipeline either creates a fresh lead job or reuses the caller's open
+// lead job (repeat-caller dedupe) — either way, THIS call's diary entry must
+// land on a job. The entry stores the callSid in its metadata.
+const diary = await pool.query(
+  "SELECT d.job_id, j.job_number, j.title, j.status FROM job_diary_entries d JOIN jobs j ON j.id = d.job_id WHERE d.metadata->>'callSid' = $1",
+  [CALL_SID],
 );
-check("pipeline: voice_agent lead job from THIS run", jobs.rowCount === 1);
-if (jobs.rowCount === 1) console.log(`   job: #${jobs.rows[0].job_number} "${jobs.rows[0].title}" (${jobs.rows[0].status})`);
+check("pipeline: diary entry landed on a lead job", diary.rowCount === 1, `rows=${diary.rowCount}`);
+if (diary.rowCount === 1) console.log(`   job: #${diary.rows[0].job_number} "${diary.rows[0].title}" (${diary.rows[0].status})`);
 
 // ── cleanup: revert toggle ────────────────────────────────────────────────────
 await setEnabled(false);

@@ -24,6 +24,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import WebSocket, { WebSocketServer } from "ws";
 import { storage } from "../storage";
 import { getBusinessIdentity } from "../businessIdentity";
+import { buildBusinessKnowledgeBlock } from "../aiKnowledge";
 import { getTradePreset } from "../trades/presets";
 import { getTwilioClient } from "./twilioClient";
 import { processVoiceAgentCall, type CapturedLead, type TranscriptTurn } from "./voiceAgentLead";
@@ -97,6 +98,7 @@ function buildAgentInstructions(settings: BusinessSettings | null, callerPhone: 
     `- Call the capture_lead tool whenever you have new or corrected details, and set conversationComplete to true once everything is covered.`,
     `- Close the call by telling them ${identity.ownerName} will come back to them with a quote shortly, and thank them for calling.`,
     `- If the caller asks for something you can't help with (existing job queries, invoices, complaints), take a message in the notes and let them know ${identity.ownerName} will follow up.`,
+    buildBusinessKnowledgeBlock(settings),
     extra ? `\nAdditional instructions from the business owner:\n${extra}` : ``,
   ].join("\n");
 }

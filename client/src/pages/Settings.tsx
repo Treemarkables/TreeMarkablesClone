@@ -35,7 +35,8 @@ import {
   Receipt,
   FileStack,
   CreditCard,
-  PhoneCall
+  PhoneCall,
+  BookOpen
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -146,6 +147,14 @@ const settingsOptions = [
     icon: PhoneCall,
     color: "bg-indigo-100 text-indigo-600",
     path: "/settings/voice-agent"
+  },
+  {
+    id: "ai-knowledge",
+    title: "AI Knowledge",
+    description: "Business facts every AI feature reads — services, service area, policies",
+    icon: BookOpen,
+    color: "bg-violet-100 text-violet-600",
+    path: "/settings/ai-knowledge"
   },
   {
     id: "quote-followup",

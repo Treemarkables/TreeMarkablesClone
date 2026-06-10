@@ -1369,6 +1369,11 @@ export const businessSettings = pgTable("business_settings", {
   voiceAgentExtraInstructions: text("voice_agent_extra_instructions").default(""),
   voiceAgentMaxMinutes: integer("voice_agent_max_minutes").default(10),
 
+  // Shared AI knowledge document — business facts (services, service area,
+  // policies, FAQs) injected into every AI prompt via buildBusinessKnowledgeBlock()
+  // (server/aiKnowledge.ts): voice agent, speech-to-quote, and future surfaces.
+  aiKnowledge: text("ai_knowledge").default(""),
+
   // Metadata
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -1416,6 +1421,7 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
   voiceAgentGreeting: z.string().max(500).optional(),
   voiceAgentExtraInstructions: z.string().max(2000).optional(),
   voiceAgentMaxMinutes: z.number().int().min(2).max(30).optional(),
+  aiKnowledge: z.string().max(20000).optional(),
 });
 
 // Business Settings Update Schema - partial with same constraints
