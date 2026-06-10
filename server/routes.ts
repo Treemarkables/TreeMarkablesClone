@@ -16614,7 +16614,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Create staff assignments for a job (with conflict checking and notifications)
   app.post('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
     try {
-      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false, scheduleBookingReminders = false } = req.body;
+      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false, scheduleBookingReminders = false, checkConflicts = false, overrideConflicts = false } = req.body;
       const jobId = req.params.jobId;
 
       if (!staffAssignments || !Array.isArray(staffAssignments) || staffAssignments.length === 0) {
@@ -16681,6 +16681,42 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             endTime: new Date(assignment.endTime),
             role: assignment.role || null,
             notes: assignment.notes || null,
+          });
+        }
+      }
+
+      // Opt-in double-booking guard (defence in depth behind the client-side
+      // pre-drop check). Only callers that send checkConflicts:true get the
+      // 409 — existing GlobalJobCard / QuickAssign flows are unaffected.
+      // This job's own rows are excluded: they're replaced/deduped below.
+      if (checkConflicts && !overrideConflicts) {
+        const conflictRows: Array<{ employeeId: string; jobId: string; jobNumber: string | null; startTime: string; endTime: string }> = [];
+        for (const planned of allAssignmentsToCreate) {
+          const found = await storage.checkStaffConflicts(
+            [planned.employeeId],
+            planned.startTime,
+            planned.endTime,
+            jobId,
+          );
+          for (const f of found) {
+            for (const c of f.conflicts) {
+              const conflictJob = await storage.getJob(c.jobId);
+              conflictRows.push({
+                employeeId: f.employeeId,
+                jobId: c.jobId,
+                jobNumber: conflictJob?.jobNumber ?? null,
+                startTime: new Date(c.startTime).toISOString(),
+                endTime: new Date(c.endTime).toISOString(),
+              });
+            }
+          }
+        }
+        if (conflictRows.length > 0) {
+          return res.status(409).json({
+            success: false,
+            error: 'conflict',
+            message: 'One or more crew members are already booked in that window',
+            conflicts: conflictRows,
           });
         }
       }
@@ -16906,18 +16942,21 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           }
 
           const staffList = employeeNames.join(', ');
-          const scheduleDate = startTime.toLocaleDateString('en-NZ', {
+          // templateStartUTC/templateEndUTC are the in-scope times here — this
+          // block previously referenced undefined `startTime`/`endTime`, so the
+          // ReferenceError was swallowed and the diary entry silently never wrote.
+          const scheduleDate = templateStartUTC.toLocaleDateString('en-NZ', {
             timeZone: 'Pacific/Auckland',
             year: 'numeric',
             month: 'long',
             day: 'numeric'
           });
-          const startTimeStr = startTime.toLocaleTimeString('en-NZ', {
+          const startTimeStr = templateStartUTC.toLocaleTimeString('en-NZ', {
             timeZone: 'Pacific/Auckland',
             hour: '2-digit',
             minute: '2-digit'
           });
-          const endTimeStr = endTime.toLocaleTimeString('en-NZ', {
+          const endTimeStr = templateEndUTC.toLocaleTimeString('en-NZ', {
             timeZone: 'Pacific/Auckland',
             hour: '2-digit',
             minute: '2-digit'
@@ -16936,8 +16975,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
               staffIds: employeeIds,
               staffNames: employeeNames,
               date: scheduleDate,
-              startTime: startTime.toISOString(),
-              endTime: endTime.toISOString()
+              startTime: templateStartUTC.toISOString(),
+              endTime: templateEndUTC.toISOString()
             }),
             isPrivate: false
           });
@@ -17006,7 +17045,42 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Update a staff assignment (reschedule drag-and-drop)
   app.put('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {
-      const { startTime, endTime, employeeId, notes, status } = req.body;
+      const { startTime, endTime, employeeId, notes, status, checkConflicts = false, overrideConflicts = false } = req.body;
+
+      // Opt-in double-booking guard (same contract as the batch-create route).
+      // Excludes the moved assignment's own job so a within-job time tweak
+      // never conflicts with itself.
+      if (checkConflicts && !overrideConflicts) {
+        const existing = await storage.getJobStaffAssignment(req.params.id);
+        if (existing) {
+          const effEmployeeId = employeeId ?? existing.employeeId;
+          const effStart = startTime ? new Date(startTime) : new Date(existing.startTime);
+          const effEnd = endTime ? new Date(endTime) : new Date(existing.endTime);
+          const found = await storage.checkStaffConflicts([effEmployeeId], effStart, effEnd, existing.jobId);
+          const conflictRows: Array<{ employeeId: string; jobId: string; jobNumber: string | null; startTime: string; endTime: string }> = [];
+          for (const f of found) {
+            for (const c of f.conflicts) {
+              const conflictJob = await storage.getJob(c.jobId);
+              conflictRows.push({
+                employeeId: f.employeeId,
+                jobId: c.jobId,
+                jobNumber: conflictJob?.jobNumber ?? null,
+                startTime: new Date(c.startTime).toISOString(),
+                endTime: new Date(c.endTime).toISOString(),
+              });
+            }
+          }
+          if (conflictRows.length > 0) {
+            return res.status(409).json({
+              success: false,
+              error: 'conflict',
+              message: 'Crew member is already booked in that window',
+              conflicts: conflictRows,
+            });
+          }
+        }
+      }
+
       const updates: Record<string, unknown> = {};
       if (startTime) updates.startTime = new Date(startTime);
       if (endTime) updates.endTime = new Date(endTime);
