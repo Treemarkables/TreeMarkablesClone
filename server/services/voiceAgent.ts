@@ -236,8 +236,9 @@ class VoiceAgentSession {
     const ws = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(this.model)}`, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        // Required by the preview models; ignored by GA.
-        "OpenAI-Beta": "realtime=v1",
+        // The beta header is required by the preview models but actively
+        // rejected by GA (`beta_api_shape_disabled`) — send it only for legacy.
+        ...(isLegacyRealtimeModel(this.model) ? { "OpenAI-Beta": "realtime=v1" } : {}),
       },
     });
     this.openaiWs = ws;
