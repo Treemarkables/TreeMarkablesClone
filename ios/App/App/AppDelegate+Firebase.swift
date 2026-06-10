@@ -230,44 +230,71 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
     }
 
     private func navigateWebView(to path: String, attempt: Int = 0) {
-        guard attempt < 10 else {
-            print("⚠️ Navigation: WebView not found after 10 attempts")
+        // Up to ~6s of retries (20 × 0.3s). A cold launch from a notification tap
+        // fires this before the WebView has even loaded the app origin, so we
+        // can't just deliver once — we retry until the document is actually on
+        // app.treemarkables.co.nz, otherwise the localStorage write below would
+        // land on about:blank and be lost.
+        guard attempt < 20 else {
+            print("⚠️ Navigation: gave up delivering deep link after 20 attempts: \(path)")
             return
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + (attempt == 0 ? 0 : 0.5)) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + (attempt == 0 ? 0 : 0.3)) {
             guard let webView = self.findCapacitorWebView() else {
                 self.navigateWebView(to: path, attempt: attempt + 1)
                 return
             }
 
-            // Single-quote-escape the path for safe interpolation, then dispatch a
-            // CustomEvent so the web app's SPA router can handle the navigation
-            // without a full reload. Fall back to window.location.assign if no
-            // listener picks it up within 100ms.
             let escaped = path.replacingOccurrences(of: "\\", with: "\\\\")
                               .replacingOccurrences(of: "'", with: "\\'")
+
+            // Two delivery channels, because the right one depends on app state:
+            //   • Warm start (app already running): the CustomEvent reaches the
+            //     mounted React listener → instant SPA navigation, no reload.
+            //   • Cold start (app was killed): this script runs before React —
+            //     even before index.html — so the event is lost. We instead
+            //     persist the target in localStorage; the web app consumes it on
+            //     mount (see App.tsx). This is the same persist-and-replay pattern
+            //     the FCM-token bridge already uses.
+            // We return a status so Swift can retry until the document is on the
+            // app origin (localStorage is per-origin; writing at about:blank is
+            // useless). The window.location.assign fallback is gated on a fully
+            // loaded document so it can NEVER race the cold-boot render — that
+            // race is exactly what used to dump every tap onto the dashboard.
             let js = """
             (function() {
+              if (location.origin.indexOf('app.treemarkables.co.nz') === -1) return 'wrong-origin';
               var path = '\(escaped)';
+              try {
+                localStorage.setItem('pendingNotificationNav', JSON.stringify({ path: path, ts: Date.now() }));
+              } catch (e) {}
+              window.__pendingNotificationPath = path;
               var handled = false;
               var ack = function() { handled = true; };
               window.addEventListener('nativeNotificationTapAck', ack, { once: true });
               window.dispatchEvent(new CustomEvent('nativeNotificationTap', { detail: path }));
               setTimeout(function() {
                 window.removeEventListener('nativeNotificationTapAck', ack);
-                if (!handled) {
-                  try { window.location.assign(path); } catch(e) {}
+                if (!handled && document.readyState === 'complete') {
+                  try { window.location.assign(path); } catch (e) {}
                 }
-              }, 100);
+              }, 150);
+              return 'ok';
             })();
             """
 
-            webView.evaluateJavaScript(js) { _, error in
+            webView.evaluateJavaScript(js) { result, error in
                 if let error = error {
-                    print("⚠️ Navigation JS error: \(error)")
+                    print("⚠️ Navigation JS error: \(error) — retrying")
+                    self.navigateWebView(to: path, attempt: attempt + 1)
+                    return
+                }
+                if let status = result as? String, status == "ok" {
+                    print("✅ Deep link delivered to WebView: \(path)")
                 } else {
-                    print("✅ Sent navigation request to WebView: \(path)")
+                    // Document not yet on the app origin (about:blank / mid-load).
+                    self.navigateWebView(to: path, attempt: attempt + 1)
                 }
             }
         }
