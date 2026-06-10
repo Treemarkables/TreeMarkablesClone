@@ -43,6 +43,7 @@ export function WeekView({
     getJobColor,
     revenueForDate,
     DAY_TARGET,
+    getBusyBlocksForEmployee,
   } = data;
 
   const dateRange = useMemo(
@@ -195,6 +196,21 @@ export function WeekView({
                         </div>
                       );
                     })}
+                    {/* Google Calendar busy blocks — gray chips, non-interactive */}
+                    {getBusyBlocksForEmployee(employee.id, dateKey).map((busy) => (
+                      <div
+                        key={busy.id}
+                        className="text-[10px] px-1.5 py-0.5 rounded mb-0.5 truncate pointer-events-none"
+                        title={`Google Calendar: ${busy.summary || 'Busy'}`}
+                        style={{
+                          background: 'repeating-linear-gradient(45deg,#e5e7eb 0px,#e5e7eb 3px,#f3f4f6 3px,#f3f4f6 6px)',
+                          border: '1px solid #9ca3af',
+                          color: '#6b7280',
+                        }}
+                      >
+                        {busy.summary || 'Busy'}
+                      </div>
+                    ))}
                   </div>
                 );
               })}

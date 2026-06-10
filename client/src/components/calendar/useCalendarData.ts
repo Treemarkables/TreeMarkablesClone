@@ -39,6 +39,17 @@ export interface AssignmentItem {
   job: CalendarJob;
 }
 
+export interface BusyBlock {
+  id: string;
+  connectionId: string;
+  googleEventId: string;
+  summary: string | null;
+  startTime: string; // ISO UTC
+  endTime: string;   // ISO UTC
+  status: string | null;
+  userId: string;    // employees.id of the connected user
+}
+
 // Statuses that never render on the calendar's unassigned lane: pre-schedule
 // statuses (lead/quote/work_order) aren't on the calendar yet — if a stale
 // scheduledDate lingers on one of those, don't surface it.
@@ -71,6 +82,30 @@ export function useCalendarData(filter?: CalendarFilter) {
   }>({
     queryKey: ["/api/business-settings"],
   });
+
+  // Google Calendar busy blocks — ±60 day window, refreshed every 5 min (matches poller cadence)
+  const busyWindowStart = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 60);
+    return d.toISOString();
+  }, []);
+  const busyWindowEnd = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 60);
+    return d.toISOString();
+  }, []);
+  const { data: busyEventsData } = useQuery<{ success: boolean; data: BusyBlock[] }>({
+    queryKey: ["/api/google-calendar/busy", busyWindowStart.slice(0, 10)],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/google-calendar/busy?start=${encodeURIComponent(busyWindowStart)}&end=${encodeURIComponent(busyWindowEnd)}`,
+      );
+      return res.json();
+    },
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 4 * 60 * 1000,
+  });
+  const allBusyBlocks = useMemo(() => busyEventsData?.data || [], [busyEventsData]);
 
   const employees = employeesData?.data || [];
   const allJobs = useMemo(() => jobsData?.data || [], [jobsData]);
@@ -371,6 +406,32 @@ export function useCalendarData(filter?: CalendarFilter) {
     [getUniqueJobsForDate],
   );
 
+  // Busy blocks that overlap with a given UTC time window
+  const getBusyBlocksInRange = useCallback(
+    (startUtc: Date, endUtc: Date): BusyBlock[] =>
+      allBusyBlocks.filter((b) => {
+        const bStart = new Date(b.startTime);
+        const bEnd = new Date(b.endTime);
+        return bStart < endUtc && bEnd > startUtc;
+      }),
+    [allBusyBlocks],
+  );
+
+  // Busy blocks for a specific employee on a specific date (NZ date string "YYYY-MM-DD")
+  const getBusyBlocksForEmployee = useCallback(
+    (userId: string, dateKey: string): BusyBlock[] => {
+      const dayStart = new Date(`${dateKey}T00:00:00+12:00`);
+      const dayEnd = new Date(`${dateKey}T23:59:59+12:00`);
+      return allBusyBlocks.filter((b) => {
+        if (b.userId !== userId) return false;
+        const bStart = new Date(b.startTime);
+        const bEnd = new Date(b.endTime);
+        return bStart < dayEnd && bEnd > dayStart;
+      });
+    },
+    [allBusyBlocks],
+  );
+
   return {
     isLoading,
     employees,
@@ -395,6 +456,9 @@ export function useCalendarData(filter?: CalendarFilter) {
     revenueForDate,
     DAY_TARGET,
     businessName,
+    allBusyBlocks,
+    getBusyBlocksInRange,
+    getBusyBlocksForEmployee,
   };
 }
 

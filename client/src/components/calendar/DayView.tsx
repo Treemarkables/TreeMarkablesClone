@@ -28,6 +28,8 @@ import {
   revenueColor,
   type CalendarJob,
 } from "./calendarMath";
+import { toZonedTime } from "date-fns-tz";
+import { NZ_TZ } from "./calendarMath";
 import type { CalendarData } from "./useCalendarData";
 import type { CalendarDnD } from "./useCalendarDnD";
 
@@ -49,6 +51,7 @@ export function DayView({ currentDate, onJobClick, data, dnd }: DayViewProps) {
     getUniqueJobsForDate,
     revenueForDate,
     DAY_TARGET,
+    getBusyBlocksForEmployee,
   } = data;
 
   const [showRevBreakdown, setShowRevBreakdown] = useState(false);
@@ -365,6 +368,37 @@ export function DayView({ currentDate, onJobClick, data, dnd }: DayViewProps) {
                       </>
                     );
                   })()}
+                  {/* Google Calendar busy blocks (gray, hatched, non-interactive) */}
+                  {getBusyBlocksForEmployee(employee.id, dateStr).map((busy) => {
+                    const busyNzStart = toZonedTime(new Date(busy.startTime), NZ_TZ);
+                    const busyNzEnd = toZonedTime(new Date(busy.endTime), NZ_TZ);
+                    const startMins = busyNzStart.getHours() * 60 + busyNzStart.getMinutes();
+                    const endMins = busyNzEnd.getHours() * 60 + busyNzEnd.getMinutes();
+                    const startPct = ganttMinsToPercent(Math.max(startMins, ganttStartH * 60));
+                    const endPct = ganttMinsToPercent(Math.min(endMins, GANTT_END_H * 60));
+                    const blockW = Math.max(2, endPct - startPct);
+                    const label = busy.summary || 'Busy';
+                    return (
+                      <div
+                        key={busy.id}
+                        className="absolute pointer-events-none rounded overflow-hidden"
+                        title={`Google Calendar: ${label}`}
+                        style={{
+                          left: `${startPct}%`,
+                          width: `${blockW}%`,
+                          top: 4,
+                          bottom: 4,
+                          background: 'repeating-linear-gradient(45deg,#9ca3af33 0px,#9ca3af33 4px,#d1d5db22 4px,#d1d5db22 8px)',
+                          border: '1px solid #9ca3af66',
+                          minWidth: 8,
+                        }}
+                      >
+                        <span className="text-[9px] text-gray-500 px-1 truncate block leading-tight">
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })}
                   {/* Job blocks */}
                   {empDayItems.map(({ job, assignment }) => {
                     const eff = effectiveGanttMins(job, assignment);

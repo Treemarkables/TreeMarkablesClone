@@ -49,7 +49,7 @@ const MOUSE_ARM_DISTANCE_PX = 4;
 const TOUCH_CANCEL_DISTANCE_PX = 10;
 
 export function useCalendarDnD(data: CalendarData) {
-  const { allAssignments, jobMap } = data;
+  const { allAssignments, jobMap, getBusyBlocksInRange } = data;
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -162,12 +162,16 @@ export function useCalendarDnD(data: CalendarData) {
   const attemptDrop = useCallback(
     (item: DragItem, hover: DropHover) => {
       const { startUtc, endUtc } = computeWindow(item, hover.dateStr, hover.hour);
+      const busyBlocks = getBusyBlocksInRange(startUtc, endUtc)
+        .filter((b) => b.userId === hover.employeeId)
+        .map((b) => ({ startTime: new Date(b.startTime), endTime: new Date(b.endTime), summary: b.summary ?? undefined }));
       const conflicts = findAssignmentConflicts({
         employeeId: hover.employeeId,
         startUtc,
         endUtc,
         assignments: allAssignments,
         excludeJobId: item.jobId,
+        busyBlocks,
       });
       if (conflicts.length > 0) {
         setPendingDrop({
