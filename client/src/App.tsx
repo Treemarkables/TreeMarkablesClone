@@ -118,7 +118,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft } from "lucide-react";
 import { useJobFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useSSE } from "@/hooks/useSSE";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -802,10 +802,35 @@ function Router() {
   }, [setLocation]);
 
   // Handle push notification taps from the iOS Capacitor native shell.
-  // AppDelegate+Firebase.swift injects a `nativeNotificationTap` CustomEvent
-  // and waits 100ms for `nativeNotificationTapAck` — if we don't ack it falls
-  // back to window.location.assign (full reload). Acking gives us SPA-smooth
-  // routing instead.
+  //
+  // Two arrival paths, because the right one depends on whether the app was
+  // already running when the notification was tapped:
+  //   • Warm tap: AppDelegate+Firebase.swift dispatches a `nativeNotificationTap`
+  //     CustomEvent that the live listener below catches → instant SPA routing.
+  //   • Cold tap (app was killed): the native event fires during boot, before
+  //     this listener — even before index.html — exists, so it can't be caught
+  //     live. The native layer instead persists the target to localStorage
+  //     (`pendingNotificationNav`) and to window.__pendingNotificationPath; the
+  //     mount-consumer below replays it once React is ready. Without this, every
+  //     cold tap fell through to the default `/` → `/dispatch` redirect and
+  //     landed on the dashboard instead of the job/conversation.
+  const navigateFromNotification = useCallback((url: string) => {
+    setLocation(url);
+    // Fire the dispatch-board signal immediately AND again at 150ms — the first
+    // catches the case where DispatchBoard is already mounted and wouter's
+    // same-pathname setLocation doesn't trigger a re-render; the second catches
+    // the case where setLocation needed a tick to settle (or the board is still
+    // mounting after a cold start).
+    if (url.startsWith('/dispatch')) {
+      const fire = () => window.dispatchEvent(
+        new CustomEvent('notification-navigation', { detail: { url } }),
+      );
+      fire();
+      setTimeout(fire, 150);
+    }
+  }, [setLocation]);
+
+  // Live listener — warm taps.
   useEffect(() => {
     const handler = (event: Event) => {
       const url = (event as CustomEvent<string>).detail;
@@ -815,23 +840,49 @@ function Router() {
         return;
       }
       window.dispatchEvent(new Event('nativeNotificationTapAck'));
-      setLocation(url);
-      // Fire the dispatch-board signal immediately AND again at 150ms — the
-      // first catches the case where DispatchBoard is already mounted and
-      // wouter's same-pathname setLocation doesn't trigger a re-render; the
-      // second catches the case where setLocation needed a tick to settle.
-      if (url.startsWith('/dispatch')) {
-        const fire = () => window.dispatchEvent(
-          new CustomEvent('notification-navigation', { detail: { url } }),
-        );
-        fire();
-        setTimeout(fire, 150);
-      }
+      // Clear the persisted/early-captured copies so the cold-start consumer
+      // doesn't replay this same tap on the next reload.
+      (window as any).__pendingNotificationPath = null;
+      try { localStorage.removeItem('pendingNotificationNav'); } catch {}
+      navigateFromNotification(url);
     };
     window.addEventListener('nativeNotificationTap', handler);
     return () => window.removeEventListener('nativeNotificationTap', handler);
-  }, [setLocation]);
-  
+  }, [navigateFromNotification]);
+
+  // Mount-consumer — cold taps. Runs once when the app boots and replays any
+  // deep-link the native layer captured before React was ready.
+  useEffect(() => {
+    // 1) In-memory global set by index.html's early-capture listener.
+    const early: string | null = (window as any).__pendingNotificationPath ?? null;
+    (window as any).__pendingNotificationPath = null;
+    if (early) {
+      console.log('🔔 Consuming early-captured notification path:', early);
+      navigateFromNotification(early);
+      try { localStorage.removeItem('pendingNotificationNav'); } catch {}
+      return;
+    }
+
+    // 2) localStorage fallback persisted natively on cold launch. Gated on a
+    //    60s freshness window so a normal app open never jumps to a stale job.
+    try {
+      const raw = localStorage.getItem('pendingNotificationNav');
+      if (raw) {
+        localStorage.removeItem('pendingNotificationNav');
+        const parsed = JSON.parse(raw);
+        if (parsed?.path && typeof parsed.path === 'string'
+            && Date.now() - (parsed.ts || 0) < 60_000) {
+          console.log('🔔 Consuming persisted notification path:', parsed.path);
+          navigateFromNotification(parsed.path);
+        }
+      }
+    } catch {
+      /* localStorage unavailable — nothing to replay */
+    }
+    // Run once on mount; navigateFromNotification is stable via useCallback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Detect Capacitor (iOS Inflow app) once — used to keep marketing/customer pages
   // out of the native app shell. The iOS WebView loads the same URL as the website,
   // but the staff app shouldn't expose Treemarkables marketing content (tree services,

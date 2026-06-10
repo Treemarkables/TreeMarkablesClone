@@ -130,6 +130,21 @@
         window.__pendingNativeFcmToken = e.detail || null;
         console.log('[FCM] Native token captured early:', e.detail ? e.detail.substring(0, 20) + '...' : 'none');
       });
+
+      // iOS Capacitor notification deep-link: capture the tapped destination
+      // before React mounts. On a cold launch the native layer dispatches this
+      // event during boot — earlier than the React listener exists — so we stash
+      // it on a global and ack immediately. Acking stops the native side from
+      // doing a full-page reload that would race the boot and land on the default
+      // dashboard. App.tsx consumes __pendingNotificationPath once it mounts.
+      window.__pendingNotificationPath = null;
+      window.addEventListener('nativeNotificationTap', function(e) {
+        if (e && typeof e.detail === 'string' && e.detail) {
+          window.__pendingNotificationPath = e.detail;
+          try { window.dispatchEvent(new Event('nativeNotificationTapAck')); } catch (err) {}
+          console.log('[Notif] Native tap path captured early:', e.detail);
+        }
+      });
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
