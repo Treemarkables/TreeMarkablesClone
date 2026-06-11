@@ -942,34 +942,45 @@ async function generateProposalPDFBuffer(
     doc.moveTo(50, sepY).lineTo(50 + pageW, sepY).lineWidth(1).strokeColor('#e5e7eb').stroke();
     doc.y = sepY + 10;
 
-    // Line items per section
+    // Section content + line items. The builder stores the typed job description
+    // as per-section content (proposals.introduction is legacy), so description-only
+    // sections must render too — skipping them drops the description from the PDF.
     for (const section of sections) {
+      if (section.sectionType === 'photos') continue;
       const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
-      if (items.length === 0) continue;
+      const sectionContent = (section.content || '').trim();
+      if (items.length === 0 && !sectionContent) continue;
 
-      doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text(section.title, { width: pageW });
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text(section.title, 50, doc.y, { width: pageW });
       doc.moveDown(0.3);
 
-      const col = { desc: 50, qty: 360, unit: 405, price: 450, total: 495 };
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#6b7280');
-      doc.text('Description', col.desc, doc.y, { width: 300 });
-      doc.text('Qty', col.qty, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
-      doc.text('Unit', col.unit, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
-      doc.text('Total', col.total, doc.y - doc.currentLineHeight(), { width: 50, align: 'right' });
-      doc.moveDown(0.3);
-      doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#d1d5db').stroke();
-      doc.moveDown(0.3);
+      if (sectionContent) {
+        doc.fontSize(9).font('Helvetica').fillColor('#374151').text(sectionContent, 50, doc.y, { width: pageW });
+        doc.moveDown(0.5);
+      }
 
-      for (const item of items) {
-        const itemTotal = parseFloat(item.totalPrice || '0');
-        const rowY = doc.y;
-        doc.fontSize(9).font('Helvetica').fillColor('#111827')
-          .text(item.description || '', col.desc, rowY, { width: 300 });
-        const rowH = doc.y - rowY;
-        doc.text(`${item.quantity || 1}`, col.qty, rowY, { width: 40, align: 'right' });
-        doc.text(item.unit || '', col.unit, rowY, { width: 40, align: 'right' });
-        doc.text(fmtCurrency(itemTotal), col.total, rowY, { width: 50, align: 'right' });
-        doc.y = rowY + Math.max(rowH, 14) + 2;
+      if (items.length > 0) {
+        const col = { desc: 50, qty: 360, unit: 405, price: 450, total: 495 };
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#6b7280');
+        doc.text('Description', col.desc, doc.y, { width: 300 });
+        doc.text('Qty', col.qty, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
+        doc.text('Unit', col.unit, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
+        doc.text('Total', col.total, doc.y - doc.currentLineHeight(), { width: 50, align: 'right' });
+        doc.moveDown(0.3);
+        doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#d1d5db').stroke();
+        doc.moveDown(0.3);
+
+        for (const item of items) {
+          const itemTotal = parseFloat(item.totalPrice || '0');
+          const rowY = doc.y;
+          doc.fontSize(9).font('Helvetica').fillColor('#111827')
+            .text(item.description || '', col.desc, rowY, { width: 300 });
+          const rowH = doc.y - rowY;
+          doc.text(`${item.quantity || 1}`, col.qty, rowY, { width: 40, align: 'right' });
+          doc.text(item.unit || '', col.unit, rowY, { width: 40, align: 'right' });
+          doc.text(fmtCurrency(itemTotal), col.total, rowY, { width: 50, align: 'right' });
+          doc.y = rowY + Math.max(rowH, 14) + 2;
+        }
       }
 
       doc.moveDown(0.5);
@@ -1033,8 +1044,15 @@ async function generateProposalPDFBuffer(
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text('Acceptance', { width: pageW });
     doc.moveDown(0.4);
     if (isQuote) {
+      const acceptUrl = `https://app.treemarkables.co.nz/proposal/${proposalId}/accept?type=quote`;
       doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
-        .text('To accept this quote, simply reply to our email — tap the "Accept Quote" button and press send. No signature required.', { width: pageW });
+        .text('To accept this quote, open the link below and tap "Accept Quote". No signature required.', 50, doc.y, { width: pageW });
+      doc.moveDown(0.3);
+      doc.fillColor('#f97316')
+        .text(acceptUrl, 50, doc.y, { width: pageW, link: acceptUrl, underline: true });
+      doc.moveDown(0.3);
+      doc.fillColor('#6b7280')
+        .text(`Prefer email? Simply reply to our quote email with "I accept quote ${proposalNumber}".`, 50, doc.y, { width: pageW });
     } else {
       doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
         .text('By signing below, you agree to the scope of works and pricing outlined in this proposal.', { width: pageW });
@@ -9789,8 +9807,9 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
     }
   });
 
-  // Send quote email — PDF attachment only, no public web viewer link.
-  // Accept is via mailto reply to the job-specific inbox (handled in /api/webhooks/email).
+  // Send quote email — "View Quote" CTA opens the online accept page; the quote
+  // PDF is attached. Replying "I accept quote Q-*" still auto-accepts via the
+  // email webhook as a fallback.
   app.post('/api/proposals/:proposalId/send-quote-email', async (req: Request, res: Response) => {
     try {
       const { proposalId } = req.params;
@@ -9887,43 +9906,37 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
       const { buffer: pdfBuffer } = await generateProposalPDFBuffer(proposalId);
       const pdfBase64 = pdfBuffer.toString('base64');
 
-      // Build the mailto "Accept Quote" button. Reply lands in the job-specific
-      // inbox (Cloudflare → Gmail IMAP) where the webhook parser detects the
-      // "ACCEPT QUOTE" subject and marks the quote accepted.
-      const jobReplyAddress = job?.jobNumber
-        ? `job-${job.jobNumber}@jobs.treemarkables.co.nz`
-        : 'info@treemarkables.co.nz';
-      const mailtoSubject = encodeURIComponent(`ACCEPT QUOTE ${quoteNumber}`);
-      const mailtoBody = encodeURIComponent(
-        `Hi Treemarkables,\n\nI accept quote ${quoteNumber}. Please proceed.\n\nRegards,`
-      );
-      const acceptMailto = `mailto:${jobReplyAddress}?subject=${mailtoSubject}&body=${mailtoBody}`;
+      // "View Quote" opens the online accept page (same page proposals use; the
+      // ?type=quote hint labels it as a quote before data loads). Replies still
+      // land in the job inbox via emailService's reply-to, so the
+      // "I accept quote Q-*" webhook fallback keeps working.
+      const quoteAcceptUrl = `https://app.treemarkables.co.nz/proposal/${proposalId}/accept?type=quote`;
 
       const customerName = customer?.name || 'Valued Customer';
       const bodyLead = message && message.trim().length > 0
         ? message
-        : `Thank you for your enquiry. Please find your quote attached as a PDF.`;
+        : `Thank you for your enquiry.`;
 
       const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const htmlContent = renderBrandedEmail({
         company: { name: __emailIdentity.name, address: __emailIdentity.address, phone: __emailIdentity.phone, email: __emailIdentity.email },
         customerName,
-        intro: `${bodyLead}\n\nThe full quote is attached as a PDF.`,
+        intro: `${bodyLead}\n\nTap the button below to review your quote and accept it online. The full quote is also attached as a PDF.`,
         documentLabel: `Quote #${quoteNumber}`,
         totalAmount: total,
         totalLabel: 'incl. GST',
-        ctaText: 'Accept Quote',
-        ctaUrl: acceptMailto,
-        ctaHint: 'Tap to open your email app — press send to confirm. No signature required.',
-        fineprint: `Button not working? Reply to this email with: "I accept quote ${quoteNumber}".`,
+        ctaText: 'View Quote',
+        ctaUrl: quoteAcceptUrl,
+        ctaHint: 'Opens your quote in the browser — review and accept online. No login required.',
+        fineprint: `Prefer email? Just reply to this email with: "I accept quote ${quoteNumber}".`,
       });
 
       const textContent = [
         `Quote ${quoteNumber} for ${customerName}.`,
         `Total (inc. GST): $${total.toFixed(2)} NZD.`,
         `${bodyLead}`,
-        `The quote is attached as a PDF.`,
-        `To accept, reply to this email with: I accept quote ${quoteNumber}`,
+        `View and accept your quote online: ${quoteAcceptUrl}`,
+        `The quote is attached as a PDF. Or reply to this email with: I accept quote ${quoteNumber}`,
       ].join('\n\n');
 
       const emailResult = await emailService.sendEmail({
@@ -23802,11 +23815,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         // Create diary entry for the view
         if (proposal.jobId) {
           const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
+          const viewedDocWord = proposal.templateUsed === 'quote' ? 'Quote' : 'Proposal';
           await storage.createJobDiaryEntry({
             jobId: proposal.jobId,
             entryType: 'note',
-            title: 'Proposal Viewed',
-            description: `Proposal "${proposal.title}" was viewed by ${customer?.name || customer?.firstName || 'the customer'}`,
+            title: `${viewedDocWord} Viewed`,
+            description: `${viewedDocWord} "${proposal.title || proposal.proposalNumber}" was viewed by ${customer?.name || customer?.firstName || 'the customer'}`,
             authorName: 'System',
             authorRole: 'system',
             metadata: {
@@ -23858,7 +23872,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           data: {
             proposal: proposal,
             workOrder: job,
-            message: 'Proposal accepted successfully'
+            message: `${proposal.templateUsed === 'quote' ? 'Quote' : 'Proposal'} accepted successfully`
           }
         });
       }
@@ -24052,7 +24066,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         data: {
           proposal: updatedProposal,
           workOrder: job,
-          message: 'Proposal accepted successfully and work order created'
+          message: `${proposal.templateUsed === 'quote' ? 'Quote' : 'Proposal'} accepted successfully and work order created`
         }
       });
     } catch (error) {
@@ -24642,7 +24656,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   //      and sent as email attachment via Resend — PDF is the correct format here)
   //   4. send-quote-email handler — attaches the generated buffer to outgoing emails.
   // When proposal.templateUsed === 'quote', the header renders as "QUOTE" (not
-  // "PROPOSAL") and the acceptance copy points to an email-reply flow.
+  // "PROPOSAL") and the acceptance copy shows the online accept-page link plus
+  // the email-reply fallback.
   // Default: application/pdf (binary, PDFKit-generated, branded layout)
   // Legacy HTML: append ?format=html to receive a plain HTML summary instead.
   app.get('/api/proposals/:id/pdf', async (req: Request, res: Response) => {
