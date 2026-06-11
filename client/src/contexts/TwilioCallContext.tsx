@@ -6,6 +6,7 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTwilioVoice, CallEvent } from "@/hooks/useTwilioVoice";
+import { useToast } from "@/hooks/use-toast";
 import { Mic, MicOff, Volume2, Phone } from "lucide-react";
 
 // Inbound calls use the native iOS CallKit UI whenever iOS will present it —
@@ -33,6 +34,7 @@ interface CallInfo {
 
 export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [callState, setCallState] = useState<CallState>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -75,6 +77,30 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setTimeout(reset, 800);
   }, [refreshCallHistory, reset]);
 
+  // Registration is the make-or-break for inbound ringing: if this device
+  // isn't bound to the Twilio identity, calls go straight to voicemail with
+  // no visible symptom. Log success and shout on failure.
+  const handleRegistered = useCallback((data: CallEvent) => {
+    console.log(
+      "[TwilioCall] voice registration OK — this device will ring for inbound calls",
+      { deviceToken: data.deviceToken?.slice(0, 8) },
+    );
+  }, []);
+
+  const handleRegistrationError = useCallback(
+    (data: CallEvent) => {
+      console.error("[TwilioCall] voice registration FAILED — inbound calls will NOT ring on this device", data);
+      toast({
+        variant: "destructive",
+        title: "Incoming calls won't ring",
+        description:
+          data.message ||
+          "This device couldn't register for incoming calls. Close and re-open the app; if it persists, log out and back in.",
+      });
+    },
+    [toast],
+  );
+
   const { isNative, hangup, mute, setSpeaker } = useTwilioVoice({
     onIncomingCall: handleIncomingCall,
     onCallAnswered: handleCallAnswered,
@@ -83,6 +109,8 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     onCallDisconnected: handleCallEnded,
     onCallCancelled: reset,
     onCallFailed: reset,
+    onRegistered: handleRegistered,
+    onRegistrationError: handleRegistrationError,
   });
 
   const onHangup = useCallback(() => {
