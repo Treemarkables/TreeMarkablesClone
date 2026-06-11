@@ -150,16 +150,37 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func setSpeaker(_ call: CAPPluginCall) {
         let on = call.getBool("on") ?? false
         let applyRoute = {
+            let session = AVAudioSession.sharedInstance()
             do {
-                try AVAudioSession.sharedInstance()
-                    .overrideOutputAudioPort(on ? .speaker : .none)
+                // A bare overrideOutputAudioPort(.speaker) is transient under
+                // CallKit: the next session reconfiguration (Twilio audio-unit
+                // restart, route recompute) silently reverts to the earpiece —
+                // the button stays "on" but the volume never changes. Adding
+                // .defaultToSpeaker to the category makes speaker the session's
+                // standing preference, which survives those cycles; the
+                // override still gives the immediate switch. Bluetooth options
+                // mirror Twilio's default config so paired headsets keep
+                // working and win over .defaultToSpeaker when connected.
+                var options: AVAudioSession.CategoryOptions = [
+                    .allowBluetoothHFP, .allowBluetoothA2DP,
+                ]
+                if on { options.insert(.defaultToSpeaker) }
+                try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
+                try session.overrideOutputAudioPort(on ? .speaker : .none)
             } catch {
                 NSLog("[TwilioVoice] Failed to set speaker route: \(error.localizedDescription)")
             }
+            // What iOS ACTUALLY routed to (expect "Speaker" when on=true,
+            // "Receiver" when off) — the ground truth when debugging reports
+            // of the toggle not matching the audible output.
+            let outputs = session.currentRoute.outputs
+                .map { $0.portType.rawValue }
+                .joined(separator: ",")
+            NSLog("[TwilioVoice] setSpeaker(\(on)) — current outputs: \(outputs)")
         }
-        // Twilio's DefaultAudioDevice owns the AVAudioSession, so a bare
-        // overrideOutputAudioPort gets reverted on the next audio-unit cycle.
-        // Routing changes must run inside the device's configuration block.
+        // Twilio's DefaultAudioDevice owns the AVAudioSession, so routing
+        // changes must also live inside the device's configuration block —
+        // that's what re-runs on each internal audio-unit cycle.
         if let audioDevice = TwilioVoiceSDK.audioDevice as? DefaultAudioDevice {
             audioDevice.block = {
                 DefaultAudioDevice.DefaultAVAudioSessionConfigurationBlock()
