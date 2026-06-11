@@ -68,11 +68,19 @@ final class NotificationHandler: NSObject {
     private override init() {}
 
     // Inject the FCM token into the Capacitor WKWebView so the web layer
-    // can register it with the server. Retries for up to 5 seconds to
-    // handle the case where the WebView isn't fully loaded yet on launch.
+    // can register it with the server. Retries for up to ~10 seconds.
+    //
+    // Must wait until the WebView's document is actually on the app origin:
+    // on a cold launch the WKWebView exists within milliseconds while still
+    // on about:blank, and an injection at that point silently lands on the
+    // wrong origin — localStorage write lost, event fired with no listener —
+    // while evaluateJavaScript reports success. That race meant a token
+    // rotated by a reinstall was never registered with the server, so the
+    // device silently stopped receiving pushes (same cold-boot race as the
+    // notification deep-link; same origin-guard fix).
     func bridgeTokenToWebView(_ token: String, attempt: Int = 0) {
-        guard attempt < 10 else {
-            print("⚠️ FCM bridge: WebView not found after 10 attempts")
+        guard attempt < 20 else {
+            print("⚠️ FCM bridge: gave up after 20 attempts — token not delivered to web layer")
             return
         }
 
@@ -87,16 +95,24 @@ final class NotificationHandler: NSObject {
             // listener will receive it, even across page reloads.
             let js = """
             (function() {
+              if (location.origin.indexOf('app.treemarkables.co.nz') === -1) return 'wrong-origin';
               try { localStorage.setItem('__nativeFcmToken', '\(token)'); } catch(e) {}
               window.__pendingNativeFcmToken = '\(token)';
               window.dispatchEvent(new CustomEvent('nativeFcmToken', { detail: '\(token)' }));
+              return 'ok';
             })();
             """
-            webView.evaluateJavaScript(js) { _, error in
+            webView.evaluateJavaScript(js) { result, error in
                 if let error = error {
-                    print("⚠️ FCM bridge JS error: \(error)")
-                } else {
+                    print("⚠️ FCM bridge JS error: \(error) — retrying")
+                    self.bridgeTokenToWebView(token, attempt: attempt + 1)
+                    return
+                }
+                if let status = result as? String, status == "ok" {
                     print("✅ FCM token bridged to WebView (event + localStorage)")
+                } else {
+                    // Document not yet on the app origin (about:blank / mid-load).
+                    self.bridgeTokenToWebView(token, attempt: attempt + 1)
                 }
             }
         }
