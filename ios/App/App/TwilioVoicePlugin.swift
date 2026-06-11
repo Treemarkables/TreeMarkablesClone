@@ -100,14 +100,29 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func answer(_ call: CAPPluginCall) {
-        guard let callInvite = self.callInvite else {
+        guard self.callInvite != nil, let uuid = self.callUUID else {
             call.reject("No active call invite")
             return
         }
-        let acceptOptions = AcceptOptions(callInvite: callInvite) { _ in }
-        self.activeCall = callInvite.accept(options: acceptOptions, delegate: self)
-        self.callInvite = nil
-        call.resolve()
+        // Answer THROUGH CallKit (request a CXAnswerCallAction) instead of
+        // accepting the invite directly here. This is what makes the in-app
+        // speaker toggle audible: CallKit only activates the VoIP audio session
+        // — and fires provider(didActivate:) — when it drives the answer itself.
+        // A bare callInvite.accept() leaves CallKit's managed session inactive,
+        // so a later overrideOutputAudioPort(.speaker) has no effect and audio
+        // stays on the earpiece even though the button shows "on". Routing both
+        // the lock-screen and in-app answers through the same CXAnswerCallAction
+        // path (handled in provider(perform:) below, which does the actual
+        // accept) keeps speaker routing consistent. callUUID is set in
+        // reportIncomingCall before JS is ever notified, so it's available here.
+        let answerAction = CXAnswerCallAction(call: uuid)
+        callKitCallController.request(CXTransaction(action: answerAction)) { error in
+            if let error = error {
+                call.reject("Answer failed: \(error.localizedDescription)")
+            } else {
+                call.resolve()
+            }
+        }
     }
 
     @objc func reject(_ call: CAPPluginCall) {
@@ -370,6 +385,13 @@ extension TwilioVoicePlugin: CXProviderDelegate {
     }
 
     public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        // Fires once CallKit owns and activates the VoIP audio session. This is
+        // the signal that the speaker override will actually engage — if you
+        // answer in the foreground and DON'T see this, the answer didn't go
+        // through CallKit and setSpeaker(.speaker) will silently stay on the
+        // earpiece. Both lock-screen and in-app answers route through
+        // CXAnswerCallAction, so it should fire for both.
+        NSLog("[TwilioVoice] CallKit didActivate audio session — speaker routing live")
         (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = true
     }
 
