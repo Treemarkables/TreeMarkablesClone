@@ -2,7 +2,6 @@ import {
   ReactNode,
   useCallback,
   useEffect,
-  useRef,
   useState,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,18 +9,19 @@ import { useTwilioVoice, CallEvent } from "@/hooks/useTwilioVoice";
 import { Mic, MicOff, Volume2, Phone } from "lucide-react";
 
 // Inbound calls use the native iOS CallKit UI whenever iOS will present it —
-// i.e. when the call is answered from the lock screen or with the app in the
-// background. In those cases iOS owns the whole screen and we render nothing.
+// full-screen on the lock screen, the compact banner/Dynamic Island when the
+// app is open. That split is an OS decision with no API to override.
 //
-// When the app is on screen during a live call, iOS deliberately does NOT take
-// over the display — it tucks the call into the Dynamic Island. There's no API
-// to force the native full-screen call UI in that case, so to keep the
-// experience consistent we draw our own call screen styled to match iOS,
-// shown whenever the webview is visible and a call is connecting/active. We key
-// off the webview's visibility (not just where the call arrived) so it also
-// covers answering a backgrounded call from CallKit and then opening the app —
-// while staying hidden when the app is backgrounded/locked so it never competes
-// with the real native UI on the lock screen.
+// After answering with the app open, iOS hands the screen back to the app, so
+// the in-call controls (mute/speaker/end) have to be ours. We render our call
+// screen UNCONDITIONALLY for the whole connecting/active window: when the
+// phone is locked or the app is backgrounded the webview isn't on screen, so
+// the overlay simply can't compete with the native UI — and the moment the
+// user opens the app mid-call it's already there. Earlier versions gated this
+// on a foreground flag + webview visibility; both signals proved flaky
+// (WKWebView visibility can stick "hidden" after returning from CallKit),
+// which intermittently dumped users onto the app with the call hidden in the
+// Dynamic Island and no controls.
 
 type CallState = "idle" | "connecting" | "active" | "ended";
 
@@ -37,28 +37,6 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
-  // Whether the app/webview is currently on screen. iOS owns the display while
-  // the app is backgrounded or the phone is locked (native CallKit), so we only
-  // draw our own call screen when the webview is actually visible.
-  const [appVisible, setAppVisible] = useState(
-    typeof document === "undefined" || document.visibilityState === "visible",
-  );
-
-  useEffect(() => {
-    const sync = () => setAppVisible(document.visibilityState === "visible");
-    // WKWebView's `visibilitychange → visible` is unreliable on the transition
-    // back from a native CallKit screen — it can fail to fire, leaving us stuck
-    // "hidden". Listen broadly (focus / pageshow too) and re-sync on each so the
-    // webview's visibility state recovers however iOS hands control back.
-    document.addEventListener("visibilitychange", sync);
-    window.addEventListener("focus", sync);
-    window.addEventListener("pageshow", sync);
-    return () => {
-      document.removeEventListener("visibilitychange", sync);
-      window.removeEventListener("focus", sync);
-      window.removeEventListener("pageshow", sync);
-    };
-  }, []);
 
   const refreshCallHistory = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
@@ -128,21 +106,14 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     });
   }, [setSpeaker]);
 
-  // Show our in-app call screen whenever there's a live call and either:
-  //   • the call arrived while the app was open (callInfo.foreground) — a flag
-  //     captured natively & reliably before CallKit was presented, OR
-  //   • the webview is currently visible (appVisible) — covers answering a
-  //     backgrounded/locked call from native CallKit, then opening the app.
-  // We need BOTH signals: the foreground flag alone misses the lock-screen
-  // case, and appVisible alone is flaky on the return-from-CallKit transition
-  // (WKWebView can stay stuck "hidden"), which left foreground calls dumping the
-  // user onto the dispatch board with the call hidden in the Dynamic Island.
-  // When the app is genuinely backgrounded the webview isn't on screen anyway,
-  // so rendering the overlay there is harmless and native CallKit still owns it.
+  // Render the overlay for the entire connecting/active window — no foreground
+  // or visibility gating (see the header comment for why those signals failed).
+  // callInfo can be null if the webview reloaded mid-call (e.g. the
+  // new-build-on-foreground reload) and the retained incomingCall event was
+  // already consumed; show the screen anyway with a generic caller label so
+  // the user always has mute/speaker/hang-up controls.
   const showOverlay =
-    isNative &&
-    (callInfo?.foreground || appVisible) &&
-    (callState === "connecting" || callState === "active");
+    isNative && (callState === "connecting" || callState === "active");
 
   // Diagnostic: surfaces in Safari Web Inspector why the overlay did/didn't show
   // during a live call. Gated on callState so it doesn't spam on idle renders.
@@ -151,7 +122,6 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
       showOverlay,
       isNative,
       foreground: callInfo?.foreground,
-      appVisible,
       callState,
     });
   }
@@ -159,10 +129,10 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   return (
     <>
       {children}
-      {showOverlay && callInfo && (
+      {showOverlay && (
         <CallScreen
           callState={callState}
-          callInfo={callInfo}
+          callInfo={callInfo ?? { foreground: false }}
           isMuted={isMuted}
           isSpeaker={isSpeaker}
           onHangup={onHangup}
