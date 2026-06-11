@@ -11606,7 +11606,12 @@ ${phoneTarget}
         const rawCallerPhone = callerFromQuery || ForwardedFrom || From || '';
         const callerPhone = normalizePhone(rawCallerPhone) || 'unknown';
         const callerSource = callerFromQuery ? 'query' : ForwardedFrom ? 'ForwardedFrom' : From ? 'From' : 'none';
-        console.log(`📞 Caller identified as: ${callerPhone} (raw: ${rawCallerPhone}, source: ${callerSource})`);
+        // The no-answer route tags its recording callback with &source=voicemail.
+        // A voicemail recording means nobody answered the dial — record it as a
+        // missed call, not 'answered', so the Calls page (and anyone debugging
+        // "why isn't my phone ringing") can tell the two apart.
+        const isVoicemail = String(req.query.source || '') === 'voicemail';
+        console.log(`📞 Caller identified as: ${callerPhone} (raw: ${rawCallerPhone}, source: ${callerSource}, voicemail: ${isVoicemail})`);
         
         // Download recording from Twilio and store in Object Storage (persistent across restarts)
         const recordingFilename = `twilio-${CallSid}-${Date.now()}.mp3`;
@@ -11658,7 +11663,7 @@ ${phoneTarget}
             const call = await storage.createCall({
               phoneNumber: callerPhone,
               direction: 'inbound',
-              status: 'answered',
+              status: isVoicemail ? 'missed' : 'answered',
               duration: parseInt(RecordingDuration || '0'),
               recordingUrl: servingUrl,
               twilioCallSid: CallSid
@@ -11921,7 +11926,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
     let recentCalls: any[] = [];
     try {
-      const calls = await storage.getCallRecords({ limit: 5 });
+      // Twilio inbound calls land in the `calls` table (storage.createCall in the
+      // twilio-voice webhook) — NOT `call_records`, which is a different feature.
+      // Querying the wrong table made this diagnostic report recentCalls: [] even
+      // while calls were flowing.
+      const calls = await storage.getAllCalls(5);
       recentCalls = calls.map((c: any) => ({
         id: c.id,
         phoneNumber: c.phoneNumber,
