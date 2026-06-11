@@ -10280,7 +10280,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         const pdfDownloadBanner = (recipientIsMicrosoft && invoiceDetails?.id)
           ? `<div style="margin: 0 0 30px 0; padding: 18px 20px; background: #fff7ed; border: 1px solid #f97316; border-radius: 8px; text-align: center;">
                <div style="font-size: 14px; color: #7c2d12; margin-bottom: 12px; font-weight: 600;">View your invoice online to see photos and download the PDF</div>
-               <a href="https://app.treemarkables.co.nz/invoice/${invoiceDetails.id}" style="display: inline-block; padding: 12px 24px; background: #f97316; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">View invoice online</a>
+               <a href="https://app.treemarkables.co.nz/invoice/${invoiceDetails.id}/view" style="display: inline-block; padding: 12px 24px; background: #f97316; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">View invoice online</a>
              </div>`
           : '';
 

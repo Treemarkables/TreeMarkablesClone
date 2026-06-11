@@ -151,7 +151,7 @@ export function SMSComposerModal({
         customer.firstName ||
         customer.name?.split(" ")[0] ||
         "there";
-      const defaultMessage = `Hi ${recipientFirstName}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${window.location.origin}/invoice/${invoiceData.id || "preview"}`;
+      const defaultMessage = `Hi ${recipientFirstName}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${window.location.origin}/invoice/${invoiceData.id || "preview"}/view`;
       form.setValue("message", defaultMessage);
       setCharacterCount(defaultMessage.length);
     }
