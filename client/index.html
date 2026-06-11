@@ -137,7 +137,9 @@
       // it on a global and ack immediately. Acking stops the native side from
       // doing a full-page reload that would race the boot and land on the default
       // dashboard. App.tsx consumes __pendingNotificationPath once it mounts.
-      window.__pendingNotificationPath = null;
+      // Preserve (don't wipe) a path the native layer may have injected before
+      // this script executed — Swift's evaluateJavaScript can land mid-parse.
+      window.__pendingNotificationPath = window.__pendingNotificationPath || null;
       window.addEventListener('nativeNotificationTap', function(e) {
         if (e && typeof e.detail === 'string' && e.detail) {
           window.__pendingNotificationPath = e.detail;
