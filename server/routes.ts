@@ -11945,6 +11945,53 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // non-fatal
     }
 
+    // Ground truth from Twilio's side, for debugging "phone not ringing":
+    // - call legs: each inbound call's child leg to client:<identity> reveals
+    //   whether a registered device existed and what the dial did (a leg that
+    //   goes straight to 'no-answer'/'failed' with ~0 duration means the VoIP
+    //   push never reached a live device).
+    // - debugger alerts: APNs/push delivery failures surface here with 52xxx
+    //   error codes (e.g. credential/environment mismatch, invalid device
+    //   token) that name the root cause outright.
+    let twilioCallLegs: any[] = [];
+    let twilioAlerts: any[] = [];
+    let twilioMonitorError: string | null = null;
+    try {
+      if (process.env.TWILIO_ACCOUNT_SID && (process.env.TWILIO_AUTH_TOKEN || (process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET))) {
+        const client = await getTwilioClient();
+        const legs = await client.calls.list({ limit: 20 });
+        twilioCallLegs = legs.map((c: any) => ({
+          sid: c.sid,
+          parentCallSid: c.parentCallSid || null,
+          from: c.from,
+          to: c.to,
+          status: c.status,
+          startTime: c.startTime,
+          duration: c.duration,
+        }));
+      }
+      if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+        const basic = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+        const alertsRes = await fetch('https://monitor.twilio.com/v1/Alerts?PageSize=20', {
+          headers: { Authorization: `Basic ${basic}` },
+        });
+        if (alertsRes.ok) {
+          const alertsJson: any = await alertsRes.json();
+          twilioAlerts = (alertsJson.alerts || []).map((a: any) => ({
+            dateCreated: a.date_created,
+            logLevel: a.log_level,
+            errorCode: a.error_code,
+            alertText: typeof a.alert_text === 'string' ? a.alert_text.slice(0, 300) : a.alert_text,
+            resourceSid: a.resource_sid,
+          }));
+        } else {
+          twilioMonitorError = `monitor API returned ${alertsRes.status}`;
+        }
+      }
+    } catch (err: any) {
+      twilioMonitorError = err?.message || String(err);
+    }
+
     const recommendations: string[] = [];
     if (!env.TWILIO_ACCOUNT_SID.set) recommendations.push('Set TWILIO_ACCOUNT_SID in DO env vars');
     if (!env.TWILIO_AUTH_TOKEN.set) recommendations.push('Set TWILIO_AUTH_TOKEN in DO env vars (needed for signature validation + recording download)');
@@ -11971,6 +12018,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       twilioPhoneNumber,
       twilioFetchError,
       recentCalls,
+      twilioCallLegs,
+      twilioAlerts,
+      twilioMonitorError,
       recommendations,
     });
   });
