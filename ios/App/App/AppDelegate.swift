@@ -33,10 +33,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
+        let center = UNUserNotificationCenter.current()
+
+        // Capacitor's bridge silently installs its CAPNotificationRouter as the
+        // UNUserNotificationCenter delegate when the WebView loads — AFTER
+        // FirebaseSetup registered NotificationHandler.shared during launch.
+        // With no Capacitor notification plugins installed, that router swallows
+        // every notification tap, so our deep-link handler never fired and taps
+        // always landed on the default dispatch board. didBecomeActive runs after
+        // the bridge loads (on launch and every foreground), and iOS delivers a
+        // cold-launch tap response only once the app is active — so reclaiming
+        // the delegate here wins both the warm and cold cases.
+        if !(center.delegate is NotificationHandler) {
+            print("📲 Reclaiming UNUserNotificationCenter delegate (was: \(String(describing: center.delegate)))")
+            center.delegate = NotificationHandler.shared
+        }
+
         // Server pushes hardcode aps.badge=1 and nothing ever decrements it, so the
         // home-screen badge sticks after the user opens the app. Clear it (and any
         // lingering delivered notifications) every time we come to the foreground.
-        let center = UNUserNotificationCenter.current()
         if #available(iOS 16.0, *) {
             center.setBadgeCount(0)
         } else {
