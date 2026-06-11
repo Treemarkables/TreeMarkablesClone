@@ -121,8 +121,9 @@ interface ProposalBuilderV2Props {
   lineItems?: unknown;
   // When "quote", the builder UI stays identical to proposal mode — only the
   // save payload (templateUsed='quote') and the email endpoint change. The
-  // quote email delivers a PDF attachment with a mailto "Accept Quote" button
-  // (no public viewer link).
+  // quote email delivers a PDF attachment with a "View Quote" button that
+  // opens the online accept page (replying "I accept quote Q-*" still works
+  // as a fallback).
   kind?: "proposal" | "quote";
 }
 

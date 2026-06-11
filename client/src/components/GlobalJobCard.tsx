@@ -10950,8 +10950,8 @@ The Treemarkables Team`;
       )}
 
       {/* Quote Builder — proposal-builder-style UI in quote mode.
-          Sends by email with a PDF attachment and a mailto "Accept Quote"
-          button (no public viewer link). */}
+          Sends by email with a PDF attachment and a "View Quote" button that
+          opens the online accept page (/proposal/:id/accept?type=quote). */}
       {isQuoteModalOpen && editingJob && (
         <ProposalBuilderV2
           kind="quote"
