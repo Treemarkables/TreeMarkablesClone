@@ -79,7 +79,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db, ownerDb } from "./db";
-import { withTenant } from "./tenancy/tenantStore";
+import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
@@ -1212,13 +1212,21 @@ class DatabaseStorage implements IStorage {
     // pitfalls in the query template.
     const key = (last8 || '').replace(/\D/g, '').slice(-8);
     if (key.length < 7) return undefined;
+    // Twilio webhooks run on the RLS-bypassing owner connection, so this query
+    // would otherwise search EVERY tenant's customers — leaking another
+    // business's customer name onto the caller-ID screen. Scope to the ambient
+    // tenant when one is set (webhook requests stamp it — same context that
+    // sets businessId on the call record).
+    const businessId = currentBusinessId();
+    const phoneMatch = sql`(right(regexp_replace(coalesce(${schema.customers.phone}, ''), '[^0-9]', '', 'g'), 8) = ${key}
+            or right(regexp_replace(coalesce(${schema.customers.mobile}, ''), '[^0-9]', '', 'g'), 8) = ${key})`;
     const [customer] = await db
       .select()
       .from(schema.customers)
-      .where(
-        sql`right(regexp_replace(coalesce(${schema.customers.phone}, ''), '[^0-9]', '', 'g'), 8) = ${key}
-            or right(regexp_replace(coalesce(${schema.customers.mobile}, ''), '[^0-9]', '', 'g'), 8) = ${key}`,
-      )
+      .where(businessId ? and(eq(schema.customers.businessId, businessId), phoneMatch) : phoneMatch)
+      // Deterministic pick if several records share a number (imports often
+      // duplicate contacts): oldest record wins instead of plan-dependent luck.
+      .orderBy(asc(schema.customers.createdAt))
       .limit(1);
     return customer || undefined;
   }
