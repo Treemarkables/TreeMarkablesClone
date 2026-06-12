@@ -6272,7 +6272,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
               month: 'short',
               day: 'numeric'
             });
-            for (const employeeId of job.assignedTeam) {
+            for (const employeeId of new Set(job.assignedTeam)) {
               await notificationHelper.notifyScheduleChange(
                 employeeId,
                 job.jobNumber || '',
@@ -16883,9 +16883,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // response is sent so the modal feels instant on the client.
       const deferredPushNotifications = sendNotifications
         ? async () => {
-            for (const assignment of created) {
+            // Multi-day bookings create one assignment per day per employee —
+            // notify each employee once, not once per day.
+            const employeeIdsToNotify = [...new Set(created.map(a => a.employeeId))];
+            for (const employeeId of employeeIdsToNotify) {
               try {
-                const employee = await storage.getEmployee(assignment.employeeId);
+                const employee = await storage.getEmployee(employeeId);
                 if (employee && job) {
                   await notificationHelper.notifyJobAssignment(
                     employee.id,
@@ -28843,6 +28846,9 @@ Transcription: ${transcriptText}`;
           console.log(`🔄 Reassigned FCM token from ${existingToken.employeeId} to ${employeeId}`);
         } else {
           await storage.markFcmTokenAsUsed(token);
+          if (!existingToken.isActive) {
+            await storage.updateFcmToken(existingToken.id, { isActive: true });
+          }
         }
         return res.json({ success: true, message: 'Token registered' });
       }
@@ -28871,6 +28877,29 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // One iOS device = one live token. A reinstall mints a NEW FCM token while
+  // the old ones keep delivering through APNs until Apple notices the
+  // uninstall, so an employee accumulates active tokens and every push fans
+  // out N times to the same phone (seen as triple "rescheduled" alerts after
+  // the June-11 delete-and-reinstall cycle). Whenever a native token checks
+  // in, retire any OLDER active native tokens for that employee — the app
+  // re-registers its current token on every launch, so a genuinely live
+  // second device reactivates itself the next time it's opened.
+  async function deactivateOlderNativeTokens(employeeId: string, currentToken: string, currentCreatedAt: Date | null) {
+    try {
+      const activeTokens = await storage.getActiveFcmTokens(employeeId);
+      for (const t of activeTokens) {
+        if (t.token === currentToken) continue;
+        if (!(t.deviceInfo || '').startsWith('iOS Native')) continue;
+        if (currentCreatedAt && t.createdAt && new Date(t.createdAt) >= currentCreatedAt) continue;
+        await storage.updateFcmToken(t.id, { isActive: false });
+        console.log(`🧹 Deactivated older native FCM token ${t.token.substring(0, 12)}… for employee ${employeeId}`);
+      }
+    } catch (err) {
+      console.error('Error deactivating older native FCM tokens:', err);
+    }
+  }
+
   // Native iOS FCM token registration (bypasses session auth using webhook secret)
   // Called directly by Swift code in the Capacitor app
   app.post("/api/notifications/register-native-fcm-token", async (req, res) => {
@@ -28896,6 +28925,10 @@ Transcription: ${transcriptText}`;
       const existingToken = await storage.getFcmTokenByToken(token);
       if (existingToken) {
         await storage.markFcmTokenAsUsed(token);
+        if (!existingToken.isActive) {
+          await storage.updateFcmToken(existingToken.id, { isActive: true });
+        }
+        await deactivateOlderNativeTokens(employeeId, token, existingToken.createdAt ? new Date(existingToken.createdAt) : null);
         console.log(`✅ Native FCM token already registered for employee ${employeeId}`);
         return res.json({ success: true, message: 'Token already registered' });
       }
@@ -28907,6 +28940,9 @@ Transcription: ${transcriptText}`;
         deviceInfo: deviceInfo || 'iOS Native',
         isActive: true
       });
+      // A brand-new token means this device just (re)installed — every other
+      // active native token for this employee predates it.
+      await deactivateOlderNativeTokens(employeeId, token, null);
 
       // Create default notification preferences if they don't exist
       const existingPrefs = await storage.getNotificationPreferences(employeeId);
