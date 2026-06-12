@@ -38,6 +38,7 @@ class FirebaseMessagingService {
     body: string;
     icon?: string;
     clickAction?: string;
+    collapseId?: string;
     data?: Record<string, string>;
   }): Promise<boolean> {
     if (!this.init()) return false;
@@ -48,6 +49,12 @@ class FirebaseMessagingService {
         dataPayload.clickAction = notification.clickAction;
       }
 
+      // collapseId makes APNs/FCM replace an undelivered or displayed copy of
+      // the same logical alert instead of stacking it — an employee whose
+      // reinstalls left several live tokens pointing at one phone sees a
+      // single banner, not one per token. apns-collapse-id max is 64 bytes.
+      const collapseId = notification.collapseId?.slice(0, 64);
+
       const message: admin.messaging.Message = {
         token,
         notification: {
@@ -56,11 +63,15 @@ class FirebaseMessagingService {
         },
         data: dataPayload,
         apns: {
-          headers: { 'apns-priority': '10' },
+          headers: {
+            'apns-priority': '10',
+            ...(collapseId ? { 'apns-collapse-id': collapseId } : {}),
+          },
           payload: { aps: { sound: 'default', badge: 1 } },
         },
         android: {
           priority: 'high',
+          ...(collapseId ? { collapseKey: collapseId } : {}),
           notification: {
             sound: 'default',
             ...(notification.clickAction ? { clickAction: notification.clickAction } : {}),

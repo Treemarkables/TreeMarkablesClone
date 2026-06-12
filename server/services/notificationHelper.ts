@@ -9,6 +9,7 @@ interface NotificationOptions {
   title: string;
   body: string;
   clickAction?: string;
+  collapseId?: string;
   data?: Record<string, any>;
 }
 
@@ -75,6 +76,7 @@ export async function notifyJobAssignment(employeeId: string, jobNumber: string,
     title: '📋 New Job Assignment',
     body: `You've been assigned to Job #${jobNumber}${jobTitle ? `: ${jobTitle}` : ''}`,
     clickAction: clickUrl,
+    collapseId: `job-assignment-${jobNumber}`,
     data: {
       type: 'job_assignment',
       jobNumber,
@@ -98,6 +100,7 @@ export async function notifyScheduleChange(employeeId: string, jobNumber: string
     title: '🕒 Schedule Update',
     body: `Job #${jobNumber} has been rescheduled to ${newDate}`,
     clickAction: clickUrl,
+    collapseId: `schedule-change-${jobNumber}`,
     data: {
       type: 'schedule_change',
       jobNumber,
