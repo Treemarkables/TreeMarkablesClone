@@ -1,15 +1,29 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
-import { addDays, format, isToday } from 'date-fns';
+import { addDays, format, isToday, startOfWeek } from 'date-fns';
 import { ChevronLeft, ChevronRight, MapPin, AlignJustify, Check, Reply, MessageSquare } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import type { Job as BaseJob, Employee } from '@shared/schema';
+import { getJobScheduledNZDates } from '@shared/dateUtils';
 
 type Job = BaseJob & {
   confirmationReplySentAt?: string | Date | null;
   customerReplyReceivedAt?: string | Date | null;
 };
 import { GlobalJobCard } from '@/components/GlobalJobCard';
+import { StaffMultiWeekGrid, type MultiWeekCellSlot } from '@/components/StaffMultiWeekGrid';
+
+// View modes: the classic single-day Gantt, plus 1–4 week availability grids
+// that fit the whole period in one viewport (no scrolling).
+type ViewMode = 'day' | '1w' | '2w' | '3w' | '4w';
+const VIEW_MODES: Array<{ value: ViewMode; label: string }> = [
+  { value: 'day', label: 'Day' },
+  { value: '1w', label: '1 wk' },
+  { value: '2w', label: '2 wks' },
+  { value: '3w', label: '3 wks' },
+  { value: '4w', label: '4 wks' },
+];
+const WEEKS_OF: Record<ViewMode, number> = { day: 0, '1w': 1, '2w': 2, '3w': 3, '4w': 4 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -90,6 +104,15 @@ function initials(name: string) {
 
 function nzDateStr(date: Date) {
   return formatInTimeZone(date, NZ_TZ, 'yyyy-MM-dd');
+}
+
+// Shift a YYYY-MM-DD key by whole days via noon-UTC anchoring — same DST-safe
+// technique as getJobScheduledNZDates, so iterating never drifts across the
+// NZ daylight-saving boundaries.
+function shiftDateKey(key: string, deltaDays: number): string {
+  const d = new Date(key + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toISOString().split('T')[0];
 }
 
 // Assigns overlapping items in a single row to vertical lanes so they don't cover each other.
@@ -220,6 +243,9 @@ export default function StaffSchedule() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
   const [rowHeight, setRowHeight] = useState(72);
+  const [viewMode, setViewMode] = useState<ViewMode>('day');
+  const isWeekMode = viewMode !== 'day';
+  const weeks = WEEKS_OF[viewMode];
 
   // Current-time line minutes-since-midnight (refreshed every minute).
   // Stored as raw minutes — the percent is derived later, after we know the
@@ -237,14 +263,33 @@ export default function StaffSchedule() {
 
   const dateStr = nzDateStr(selectedDate);
   const isTodaySelected = isToday(selectedDate);
+  const todayKey = nzDateStr(toZonedTime(new Date(), NZ_TZ));
+
+  // Week-mode date range: Monday-start week containing selectedDate, spanning
+  // `weeks` × 7 contiguous NZ days. Keys generated via noon-UTC anchoring (DST-safe).
+  const rangeDates = useMemo(() => {
+    if (!isWeekMode) return [] as string[];
+    const monday = startOfWeek(selectedDate, { weekStartsOn: 1 });
+    const startKey = nzDateStr(monday);
+    return Array.from({ length: weeks * 7 }, (_, i) => shiftDateKey(startKey, i));
+  }, [isWeekMode, weeks, selectedDate]);
+  const rangeSet = useMemo(() => new Set(rangeDates), [rangeDates]);
+  const rangeStart = rangeDates[0];
+  const rangeEnd = rangeDates[rangeDates.length - 1];
 
   const queryClient = useQueryClient();
 
   // ── Queries ──
-  // Use a date-scoped endpoint so we fetch only the few jobs for this day, not all 3500+
+  // Use a date-scoped endpoint so we fetch only the few jobs for this day (or
+  // visible week range), not all 3500+
   const { data: jobsData, isLoading: jobsLoading } = useQuery<{ success: boolean; data: Job[] }>({
-    queryKey: ['/api/jobs/for-date', dateStr],
-    queryFn: () => fetch(`/api/jobs/for-date?date=${dateStr}`).then(r => r.json()),
+    queryKey: isWeekMode
+      ? ['/api/jobs/for-date-range', rangeStart, rangeEnd]
+      : ['/api/jobs/for-date', dateStr],
+    queryFn: () => fetch(isWeekMode
+      ? `/api/jobs/for-date-range?start=${rangeStart}&end=${rangeEnd}`
+      : `/api/jobs/for-date?date=${dateStr}`
+    ).then(r => r.json()),
     staleTime: 30_000,
     refetchInterval: 30_000,
   });
@@ -373,6 +418,147 @@ export default function StaffSchedule() {
       });
   }, [dayJobs, slotsByEmployee]);
 
+  // ── Week-mode data (all guarded so Day mode pays nothing) ──
+
+  // Every employee on a job: union of assignment records and the job's
+  // assignedTeam array. Covers multi-day jobs whose assignment record only
+  // exists on day 1 — the team fallback fills the remaining days.
+  const employeesOnJob = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    if (!isWeekMode) return m;
+    allAssignments.forEach((a: any) => {
+      if (!jobMap.has(a.jobId)) return;
+      const s = m.get(a.jobId) ?? new Set<string>();
+      s.add(a.employeeId);
+      m.set(a.jobId, s);
+    });
+    dayJobs.forEach(job => {
+      (job.assignedTeam ?? []).forEach((empId: string) => {
+        const s = m.get(job.id) ?? new Set<string>();
+        s.add(empId);
+        m.set(job.id, s);
+      });
+    });
+    return m;
+  }, [isWeekMode, allAssignments, jobMap, dayJobs]);
+
+  // One CellSlot per employee × job × visible NZ day. Iterates
+  // getJobScheduledNZDates — never the raw start..end span — so non-contiguous
+  // bookings (weekends carved out of a multi-day run) don't paint phantom cells.
+  // Run start/end flags let the grid draw one continuous bar per run.
+  const slotsByEmployeeByDate = useMemo(() => {
+    const map = new Map<string, Map<string, MultiWeekCellSlot[]>>();
+    if (!isWeekMode) return map;
+
+    const add = (empId: string, dateKey: string, slot: MultiWeekCellSlot) => {
+      let byDate = map.get(empId);
+      if (!byDate) { byDate = new Map(); map.set(empId, byDate); }
+      const list = byDate.get(dateKey) ?? [];
+      list.push(slot);
+      byDate.set(dateKey, list);
+    };
+    const makeTimeLabel = (startMins: number, endMins: number) =>
+      `${formatTimeFromMins(startMins)}–${formatTimeFromMins(endMins)}`;
+
+    // Assignment records indexed by emp+job+NZ day, for per-day time overrides
+    const assignmentAt = new Map<string, any>();
+    allAssignments.forEach((a: any) => {
+      if (!jobMap.has(a.jobId)) return;
+      const dateKey = formatInTimeZone(new Date(a.startTime), NZ_TZ, 'yyyy-MM-dd');
+      if (!rangeSet.has(dateKey)) return;
+      assignmentAt.set(`${a.employeeId}::${a.jobId}::${dateKey}`, a);
+    });
+
+    dayJobs.forEach(job => {
+      const emps = employeesOnJob.get(job.id);
+      if (!emps || emps.size === 0) return; // unassigned lane handles these
+      const jobDates = getJobScheduledNZDates(job);
+      const jobDateSet = new Set(jobDates);
+      jobDates.forEach(dateKey => {
+        if (!rangeSet.has(dateKey)) return;
+        const isRunStart = !jobDateSet.has(shiftDateKey(dateKey, -1));
+        const isRunEnd = !jobDateSet.has(shiftDateKey(dateKey, 1));
+        emps.forEach(empId => {
+          const a = assignmentAt.get(`${empId}::${job.id}::${dateKey}`) ?? null;
+          const { startMins, endMins } = effectiveMins(job, a);
+          add(empId, dateKey, {
+            id: `${empId}::${job.id}::${dateKey}`,
+            job, startMins, endMins, isRunStart, isRunEnd,
+            timeLabel: makeTimeLabel(startMins, endMins),
+          });
+        });
+      });
+    });
+
+    // Stray assignments on days outside the job's scheduled dates still render
+    // (mirrors Day mode, which trusts the assignment's own date).
+    assignmentAt.forEach((a, key) => {
+      const [empId, jobId, dateKey] = key.split('::');
+      const job = jobMap.get(jobId);
+      if (!job || getJobScheduledNZDates(job).includes(dateKey)) return;
+      const { startMins, endMins } = effectiveMins(job, a);
+      add(empId, dateKey, {
+        id: key, job, startMins, endMins, isRunStart: true, isRunEnd: true,
+        timeLabel: makeTimeLabel(startMins, endMins),
+      });
+    });
+
+    return map;
+  }, [isWeekMode, allAssignments, jobMap, dayJobs, employeesOnJob, rangeSet]);
+
+  // Jobs with no crew at all, per visible day — the grid's amber top lane
+  const unassignedByDate = useMemo(() => {
+    const m = new Map<string, Job[]>();
+    if (!isWeekMode) return m;
+    dayJobs.forEach(job => {
+      const emps = employeesOnJob.get(job.id);
+      if (emps && emps.size > 0) return;
+      getJobScheduledNZDates(job).forEach(dateKey => {
+        if (!rangeSet.has(dateKey)) return;
+        const list = m.get(dateKey) ?? [];
+        list.push(job);
+        m.set(dateKey, list);
+      });
+    });
+    return m;
+  }, [isWeekMode, dayJobs, employeesOnJob, rangeSet]);
+
+  // Per-day revenue + job count for the footer row. Same REVENUE_EXCLUDE set
+  // as the Day tracker; multi-day prices split across the dates the job
+  // actually runs (the dates array, not the contiguous span).
+  const perDaySummary = useMemo(() => {
+    const m = new Map<string, { revenue: number; jobCount: number }>();
+    if (!isWeekMode) return m;
+    const REVENUE_EXCLUDE = new Set(['archived', 'unsuccessful', 'cancelled', 'quote', 'lead']);
+    rangeDates.forEach(k => m.set(k, { revenue: 0, jobCount: 0 }));
+    dayJobs.forEach(job => {
+      if (REVENUE_EXCLUDE.has(job.status)) return;
+      const jobDates = getJobScheduledNZDates(job);
+      const perDay = getJobPrice(job) / Math.max(1, jobDates.length);
+      jobDates.forEach(dateKey => {
+        const entry = m.get(dateKey);
+        if (!entry) return;
+        entry.revenue += perDay;
+        entry.jobCount += 1;
+      });
+    });
+    return m;
+  }, [isWeekMode, dayJobs, rangeDates]);
+
+  // Period roll-up for the week-mode summary strip
+  const periodSummary = useMemo(() => {
+    let revenue = 0;
+    perDaySummary.forEach(e => { revenue += e.revenue; });
+    const jobIds = new Set<string>();
+    unassignedByDate.forEach(list => list.forEach(j => jobIds.add(j.id)));
+    slotsByEmployeeByDate.forEach(byDate => byDate.forEach(list => list.forEach(s => jobIds.add(s.job.id))));
+    const weekdayCount = rangeDates.filter(k => {
+      const dow = new Date(k + 'T12:00:00Z').getUTCDay();
+      return dow !== 0 && dow !== 6;
+    }).length;
+    return { revenue, jobCount: jobIds.size, target: DAILY_TARGET * weekdayCount };
+  }, [perDaySummary, unassignedByDate, slotsByEmployeeByDate, rangeDates, DAILY_TARGET]);
+
   // Dynamic timeline start — default 8 AM, but expand backwards if the day
   // contains a job scheduled earlier (clamped to midnight). Hours before the
   // earliest job are hidden so the grid isn't padded with empty 6/7 AM cells.
@@ -402,11 +588,21 @@ export default function StaffSchedule() {
     return count;
   }, [crewMembers, slotsByEmployee]);
 
+  // Prev/next moves one day in Day mode, one full period in week modes
   const navigate = (delta: number) => {
+    const step = isWeekMode ? delta * 7 * weeks : delta;
     setSelectedDate(d => {
-      const next = addDays(d, delta);
+      const next = addDays(d, step);
       return next;
     });
+  };
+
+  // Clicking a day in the week grid drops into the Day Gantt for that date
+  const drillToDay = (dateKey: string) => {
+    const d = new Date(dateKey + 'T00:00:00');
+    d.setHours(0, 0, 0, 0);
+    setSelectedDate(d);
+    setViewMode('day');
   };
 
   // Swipe-to-navigate. The timeline grid scrolls horizontally on its own, so
@@ -450,33 +646,56 @@ export default function StaffSchedule() {
     >
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 shrink-0">
+      <div className="flex items-center justify-between flex-wrap gap-y-2 px-4 py-2.5 border-b border-gray-200 shrink-0">
         <div>
           <h1 className="text-base font-semibold text-gray-900">Live Roster</h1>
           <p className="text-xs text-gray-500">
-            {format(selectedDate, 'EEEE d MMMM yyyy')}
+            {isWeekMode
+              ? `${format(new Date(rangeStart + 'T12:00:00'), 'd MMM')} – ${format(new Date(rangeEnd + 'T12:00:00'), 'd MMM yyyy')}`
+              : format(selectedDate, 'EEEE d MMMM yyyy')}
             {' · '}
             {crewMembers.length} crew
             {' · '}
-            {totalAssigned} jobs
+            {isWeekMode ? periodSummary.jobCount : totalAssigned} jobs
           </p>
         </div>
+        {/* View-mode toggle — wraps to its own row on phones */}
+        <div className="flex items-center gap-1 w-full md:w-auto order-3 md:order-none">
+          {VIEW_MODES.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setViewMode(value)}
+              data-testid={`button-view-${value}`}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                viewMode === value
+                  ? 'bg-orange-500 text-white border-orange-500'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-3">
-          {/* Row height slider */}
-          <div className="flex items-center gap-1.5">
-            <AlignJustify className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-            <input
-              type="range"
-              min={44}
-              max={160}
-              step={4}
-              value={rowHeight}
-              onChange={e => setRowHeight(Number(e.target.value))}
-              className="w-20 accent-orange-500 cursor-pointer"
-              title={`Row height: ${rowHeight}px`}
-            />
-          </div>
-          <div className="w-px h-5 bg-gray-200" />
+          {/* Row height slider — only meaningful on the Day Gantt */}
+          {!isWeekMode && (
+            <>
+              <div className="flex items-center gap-1.5">
+                <AlignJustify className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <input
+                  type="range"
+                  min={44}
+                  max={160}
+                  step={4}
+                  value={rowHeight}
+                  onChange={e => setRowHeight(Number(e.target.value))}
+                  className="w-20 accent-orange-500 cursor-pointer"
+                  title={`Row height: ${rowHeight}px`}
+                />
+              </div>
+              <div className="w-px h-5 bg-gray-200" />
+            </>
+          )}
           <button
             onClick={() => navigate(-1)}
             className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 transition-colors"
@@ -490,7 +709,7 @@ export default function StaffSchedule() {
               setSelectedDate(now);
             }}
             className={`px-3 py-1 text-xs font-medium rounded-md border transition-colors ${
-              isTodaySelected
+              (isWeekMode ? rangeSet.has(todayKey) : isTodaySelected)
                 ? 'bg-orange-500 text-white border-orange-500'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
@@ -507,6 +726,31 @@ export default function StaffSchedule() {
       </div>
 
       {/* ── Revenue target tracker ── */}
+      {isWeekMode ? (
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0 flex-wrap gap-y-1">
+          <span className="text-xs text-gray-500 whitespace-nowrap">Period revenue:</span>
+          <span
+            className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
+              periodSummary.revenue < periodSummary.target
+                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                : 'bg-green-50 text-green-700 border-green-200'
+            }`}
+          >
+            ${periodSummary.revenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
+          </span>
+          <span className="text-xs text-gray-400 whitespace-nowrap">
+            {periodSummary.jobCount} job{periodSummary.jobCount !== 1 ? 's' : ''} · target ${periodSummary.target.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} exc. GST
+          </span>
+          <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                periodSummary.revenue < periodSummary.target ? 'bg-amber-400' : 'bg-green-500'
+              }`}
+              style={{ width: `${periodSummary.target > 0 ? Math.min(100, Math.round((periodSummary.revenue / periodSummary.target) * 100)) : 0}%` }}
+            />
+          </div>
+        </div>
+      ) : (
       <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0 flex-wrap gap-y-1">
         <span className="text-xs text-gray-500 whitespace-nowrap">
           {format(selectedDate, 'd MMM')} revenue:
@@ -540,8 +784,29 @@ export default function StaffSchedule() {
           </span>
         )}
       </div>
+      )}
+
+      {/* ── Multi-week availability grid ── */}
+      {isWeekMode && (
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <StaffMultiWeekGrid
+            rangeDates={rangeDates}
+            crewMembers={crewMembers}
+            slotsByEmployeeByDate={slotsByEmployeeByDate}
+            unassignedByDate={unassignedByDate}
+            perDaySummary={perDaySummary}
+            jobColorMap={jobColorMap}
+            customerMap={customerMap}
+            dailyTarget={DAILY_TARGET}
+            todayKey={todayKey}
+            onOpenJob={openJob}
+            onDrillToDay={drillToDay}
+          />
+        </div>
+      )}
 
       {/* ── Timeline grid ── */}
+      {!isWeekMode && (
       <div ref={timelineRef} className="flex-1 overflow-auto">
         <div style={{ minWidth: STAFF_COL_W + hourLabels.length * MIN_HOUR_COL_W }}>
 
@@ -830,6 +1095,7 @@ export default function StaffSchedule() {
           )}
         </div>
       </div>
+      )}
 
       {/* ── Legend: job identity colours (top row) + status reference (bottom row) ── */}
       <div className="shrink-0 border-t border-gray-100 px-4 py-2 bg-white space-y-1.5">

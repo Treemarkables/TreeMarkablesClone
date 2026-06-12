@@ -5305,6 +5305,52 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Range variant of /api/jobs/for-date for the Staff Schedule multi-week views.
+  // Same NZ timezone handling and diary subqueries as above; the overlap test
+  // (start <= job end AND job start <= end) keeps multi-day jobs that straddle
+  // either edge of the visible range — unlike /api/jobs/in-range below, which
+  // matches on start date only and would drop them.
+  app.get('/api/jobs/for-date-range', async (req: Request, res: Response) => {
+    try {
+      const { start, end } = req.query; // expects YYYY-MM-DD in NZ time
+      if (!start || typeof start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(start) ||
+          !end   || typeof end   !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+        return res.status(400).json({ success: false, message: 'start and end params required (YYYY-MM-DD)' });
+      }
+      const result = await db.execute(
+        sql`SELECT jobs.*, (
+              SELECT MAX(created_at)
+              FROM job_diary_entries
+              WHERE job_id = jobs.id
+                AND tags @> ARRAY['confirmation-reply-sent']::text[]
+            ) AS confirmation_reply_sent_at, (
+              SELECT MAX(created_at)
+              FROM job_diary_entries
+              WHERE job_id = jobs.id
+                AND tags @> ARRAY['customer-reply']::text[]
+            ) AS customer_reply_received_at
+            FROM jobs
+            WHERE scheduled_date IS NOT NULL
+              AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') <= ${end}::date
+              AND DATE((COALESCE(scheduled_end_date, scheduled_date) AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') >= ${start}::date
+              AND status NOT IN ('archived', 'unsuccessful')
+            ORDER BY scheduled_date ASC`
+      );
+      const jobs = (result.rows as any[]).map((row: any) => {
+        const job: any = {};
+        for (const [k, v] of Object.entries(row)) {
+          const camel = k.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
+          job[camel] = v;
+        }
+        return serializeJobTimestamps(job);
+      });
+      res.json({ success: true, data: jobs });
+    } catch (error) {
+      console.error('Error fetching jobs for date range:', error);
+      res.status(500).json({ success: false, message: 'Error fetching jobs for date range' });
+    }
+  });
+
   // Returns scheduled jobs whose NZ-local scheduled_date falls within [start, end).
   // Used by CalendarAvailabilityModal so the week-view calendar shows real jobs,
   // not only Google Calendar events.
