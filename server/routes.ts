@@ -11157,7 +11157,14 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
     // call webhook does. We need the caller's number to attribute the recording
     // to the right call record in our DB, so capture it here and pass it
     // through as a query param on the recordingStatusCallback URL.
-    const inboundFrom = String(req.body?.ForwardedFrom || req.body?.From || '');
+    //
+    // From = the original caller (CLI is preserved through carrier diversion).
+    // ForwardedFrom = the line that DID the forwarding — i.e. the owner's own
+    // mobile when a customer dials the advertised number and the carrier
+    // diverts here. Preferring ForwardedFrom made every forwarded call look
+    // like the owner's number (and caller-ID matched whichever customer record
+    // happened to hold it). Only fall back to it when From is withheld.
+    const inboundFrom = String(req.body?.From || req.body?.ForwardedFrom || '');
     const inboundTo = String(req.body?.To || '');
     // The URL is embedded in an XML attribute, so any `&` between query params
     // must be escaped as `&amp;` or Twilio fails to parse the TwiML.
@@ -11519,7 +11526,9 @@ ${phoneTarget}
     // (same reason as the answer webhook — recording callbacks don't include
     // From / ForwardedFrom natively). The action callback DOES include From
     // and To from the original call, so we can capture them here.
-    const inboundFrom = String(req.body?.ForwardedFrom || req.body?.From || '');
+    // From = original caller; ForwardedFrom = the diverting line (owner's
+    // mobile on forwarded calls) — fallback only.
+    const inboundFrom = String(req.body?.From || req.body?.ForwardedFrom || '');
     const inboundTo = String(req.body?.To || '');
     const recordingCallbackUrl =
       `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&amp;calledTo=${encodeURIComponent(inboundTo)}&amp;source=voicemail`;
@@ -11576,8 +11585,10 @@ ${phoneTarget}
         return res.status(403).send('Forbidden');
       }
 
-      // ForwardedFrom is set by the carrier when a call is forwarded from the owner's
-      // real number to the Twilio number. Use it so we get the customer's number, not the owner's.
+      // From = the original caller (preserved through carrier diversion).
+      // ForwardedFrom = the line that forwarded the call — the owner's own
+      // mobile when a customer dials the advertised number. Use From for the
+      // customer's number; ForwardedFrom is a last-resort fallback only.
       const { CallSid, CallStatus, RecordingStatus, From, ForwardedFrom, To, RecordingUrl, RecordingSid, RecordingDuration } = req.body;
       
       console.log(`📞 Twilio voice webhook - CallSid: ${CallSid}, Status: ${CallStatus}, RecordingStatus: ${RecordingStatus}, From: ${From}, ForwardedFrom: ${ForwardedFrom}`);
@@ -11603,9 +11614,9 @@ ${phoneTarget}
         // captured them on the answer webhook and passed them through as a
         // ?callerFrom=... query param on the recordingStatusCallback URL.
         const callerFromQuery = String(req.query.callerFrom || '');
-        const rawCallerPhone = callerFromQuery || ForwardedFrom || From || '';
+        const rawCallerPhone = callerFromQuery || From || ForwardedFrom || '';
         const callerPhone = normalizePhone(rawCallerPhone) || 'unknown';
-        const callerSource = callerFromQuery ? 'query' : ForwardedFrom ? 'ForwardedFrom' : From ? 'From' : 'none';
+        const callerSource = callerFromQuery ? 'query' : From ? 'From' : ForwardedFrom ? 'ForwardedFrom' : 'none';
         // The no-answer route tags its recording callback with &source=voicemail.
         // A voicemail recording means nobody answered the dial — record it as a
         // missed call, not 'answered', so the Calls page (and anyone debugging
