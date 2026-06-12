@@ -328,9 +328,11 @@ export function JobCardDesktop({
   const status = (job?.status as string | undefined) ?? "lead";
   const badge = STATUS_BADGE[status] ?? { label: status, bg: "#64748b" };
 
-  // Mirror the desktop-header price logic — line items (ex-GST) → subtotal
-  // → totalAmount/1.15. Identical math to JobCardMobile.tsx after the
-  // header-price fix landed.
+  // Canonical job-price hierarchy (mirrors StaffSchedule.getJobPrice / PR #24):
+  // line items (ex-GST) → job.subtotal → job.totalIncludingGst / 1.15 →
+  // job.totalAmount / 1.15. The totalIncludingGst step matters: jobs whose
+  // value lives only in total_including_gst (subtotal + totalAmount both 0)
+  // otherwise render as $0.00 here while the roster shows the real figure.
   const jobValue = (() => {
     const toNum = (v: unknown): number => {
       if (v == null) return 0;
@@ -345,6 +347,8 @@ export function JobCardDesktop({
     if (liTotal > 0) return liTotal;
     const subtotal = toNum(job?.subtotal);
     if (subtotal > 0) return subtotal;
+    const incGst = toNum(job?.totalIncludingGst);
+    if (incGst > 0) return incGst / 1.15;
     const total = toNum(job?.totalAmount);
     return total > 0 ? total / 1.15 : undefined;
   })();
