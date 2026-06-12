@@ -787,8 +787,10 @@ export default function StaffSchedule() {
       )}
 
       {/* ── Multi-week availability grid ── */}
+      {/* timelineRef doubles as the swipe-vs-scroll guard: only one grid is
+          mounted at a time, so Day and week modes can share the ref. */}
       {isWeekMode && (
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div ref={timelineRef} className="flex-1 overflow-auto">
           <StaffMultiWeekGrid
             rangeDates={rangeDates}
             crewMembers={crewMembers}

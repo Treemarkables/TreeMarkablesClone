@@ -3,9 +3,10 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 // Multi-week availability grid for the Staff Schedule page. Presentation-only:
 // the page computes every data structure (range, slots, revenue) and this
-// component just lays it out. Staff are rows, days are fluid-width columns —
-// `minmax(0, 1fr)` makes the whole period fit the viewport with no horizontal
-// scrolling, which is the entire point of the view.
+// component just lays it out. Staff are rows, days are columns. Columns keep a
+// readable minimum width — job names and times stay legible — and the grid
+// scrolls horizontally/vertically as needed (staff names and the day header
+// stay pinned while scrolling).
 
 type Job = BaseJob & {
   confirmationReplySentAt?: string | Date | null;
@@ -66,7 +67,10 @@ const WORK_START_MINS = 8 * 60;
 const WORK_END_MINS = 17 * 60;
 const BOOKED_OUT_MINS = 7 * 60;
 
-const MAX_BARS_PER_CELL = 3;
+// Minimum day-column width — wide enough that a customer name + time stays
+// readable. The grid scrolls horizontally when the period doesn't fit.
+const MIN_DAY_COL_W = 130;
+const MIN_DAY_COL_W_MOBILE = 104;
 
 function initials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
@@ -107,9 +111,9 @@ export function StaffMultiWeekGrid({
   onDrillToDay,
 }: StaffMultiWeekGridProps) {
   const isMobile = useIsMobile();
-  const labelColW = isMobile ? 44 : 148;
-  const rowH = isMobile ? 30 : 46;
-  const fourPlusWeeks = rangeDates.length > 14;
+  const labelColW = isMobile ? 72 : 148;
+  const dayColW = isMobile ? MIN_DAY_COL_W_MOBILE : MIN_DAY_COL_W;
+  const minRowH = isMobile ? 44 : 52;
   // Mirror Day mode: only show the Unassigned lane when the period has any
   const hasUnassigned = rangeDates.some(k => (unassignedByDate.get(k)?.length ?? 0) > 0);
 
@@ -118,7 +122,7 @@ export function StaffMultiWeekGrid({
     return custName || job.title || `#${job.jobNumber}`;
   };
 
-  // Per-column classes shared by every row so weekend / today / week-boundary
+  // Per-column metadata shared by every row so weekend / today / week-boundary
   // styling stays aligned down the whole grid.
   const colMeta = rangeDates.map((dateKey, idx) => {
     const dow = dayOfWeek(dateKey);
@@ -137,31 +141,64 @@ export function StaffMultiWeekGrid({
     `border-r border-b border-gray-100 ${meta.isWeekStart ? 'border-l-2 border-l-gray-300' : ''}`;
 
   const cellBg = (meta: (typeof colMeta)[0], booked: number) => {
-    if (booked >= BOOKED_OUT_MINS) return '#bfdbfe'; // blue-200 — booked out
-    if (booked > 0) return '#dbeafe'; // blue-100 — partially booked
+    if (booked >= BOOKED_OUT_MINS) return '#dbeafe'; // blue-100 — booked out
+    if (booked > 0) return '#eff6ff'; // blue-50 — partially booked
     if (meta.isToday) return '#fff7ed'; // orange-50
     if (meta.isWeekend) return '#f9fafb'; // gray-50
     return '#ffffff';
   };
 
   // One continuous strip per job run: square ends + edge-bleed margins on
-  // middle days so the bar visually crosses cell borders.
-  const barStyle = (slot: MultiWeekCellSlot, colors: JobColors, dashed: boolean) => ({
-    backgroundColor: colors.border,
+  // middle days so the chip visually crosses cell borders.
+  const chipStyle = (slot: MultiWeekCellSlot, colors: JobColors, dashed: boolean) => ({
+    backgroundColor: colors.bg,
+    borderLeft: slot.isRunStart ? `3px ${dashed ? 'dashed' : 'solid'} ${colors.border}` : undefined,
+    ...(dashed
+      ? {
+          borderTop: `1px dashed ${colors.border}`,
+          borderRight: slot.isRunEnd ? `1px dashed ${colors.border}` : undefined,
+          borderBottom: `1px dashed ${colors.border}`,
+        }
+      : {}),
     marginLeft: slot.isRunStart ? 2 : -2,
     marginRight: slot.isRunEnd ? 2 : -2,
-    borderRadius: `${slot.isRunStart ? 3 : 0}px ${slot.isRunEnd ? 3 : 0}px ${slot.isRunEnd ? 3 : 0}px ${slot.isRunStart ? 3 : 0}px`,
-    ...(dashed ? { backgroundColor: colors.bg, border: `1px dashed ${colors.border}` } : {}),
+    borderRadius: `${slot.isRunStart ? 4 : 0}px ${slot.isRunEnd ? 4 : 0}px ${slot.isRunEnd ? 4 : 0}px ${slot.isRunStart ? 4 : 0}px`,
   });
+
+  const renderJobChip = (slot: MultiWeekCellSlot, dashed: boolean) => {
+    const colors = jobColorMap.get(slot.job.id) ?? { bg: '#eff6ff', border: '#2563eb', text: '#1e3a8a' };
+    const label = jobLabel(slot.job);
+    return (
+      <button
+        key={slot.id}
+        onClick={e => { e.stopPropagation(); onOpenJob(slot.job); }}
+        title={`${label} — ${slot.timeLabel}${dashed ? ' (unassigned)' : ''}`}
+        className="block w-full text-left overflow-hidden shrink-0 hover:brightness-95 transition-all px-1 py-0.5"
+        style={chipStyle(slot, colors, dashed)}
+      >
+        <span className="block text-[10px] font-semibold leading-tight truncate" style={{ color: colors.text }}>
+          {label}
+        </span>
+        {slot.timeLabel && (
+          <span className="block text-[9px] leading-tight truncate" style={{ color: colors.border }}>
+            {slot.timeLabel}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   return (
     <div
-      className="grid w-full"
-      style={{ gridTemplateColumns: `${labelColW}px repeat(${rangeDates.length}, minmax(0, 1fr))` }}
+      className="grid"
+      style={{
+        gridTemplateColumns: `${labelColW}px repeat(${rangeDates.length}, minmax(${dayColW}px, 1fr))`,
+        minWidth: labelColW + rangeDates.length * dayColW,
+      }}
       data-testid="staff-multiweek-grid"
     >
       {/* ── Day header row ── */}
-      <div className="sticky top-0 z-20 bg-white border-r border-b border-gray-200 flex items-center px-1.5 md:px-3 py-1.5">
+      <div className="sticky top-0 left-0 z-30 bg-white border-r border-b border-gray-200 flex items-center px-1.5 md:px-3 py-1.5">
         <span className="text-[10px] md:text-xs font-semibold text-gray-500 uppercase tracking-wide">Crew</span>
       </div>
       {colMeta.map(meta => (
@@ -169,33 +206,31 @@ export function StaffMultiWeekGrid({
           key={`hdr-${meta.dateKey}`}
           onClick={() => onDrillToDay(meta.dateKey)}
           title={`Open ${meta.dateKey} in Day view`}
-          className={`sticky top-0 z-20 bg-white ${cellBorder(meta)} py-1 text-center cursor-pointer min-w-0 overflow-hidden ${
-            meta.isWeekend ? 'bg-gray-50' : ''
+          className={`sticky top-0 z-20 ${cellBorder(meta)} border-b-gray-200 py-1 text-center cursor-pointer min-w-0 overflow-hidden ${
+            meta.isWeekend ? 'bg-gray-50' : 'bg-white'
           }`}
         >
-          <span className={`block text-[8px] leading-tight ${meta.isToday ? 'font-bold text-orange-600' : 'text-gray-400'}`}>
+          <span className={`text-[9px] leading-tight ${meta.isToday ? 'font-bold text-orange-600' : 'text-gray-400'}`}>
             {meta.weekday}
-          </span>
+          </span>{' '}
           <span
-            className={`inline-block text-[10px] leading-tight font-medium rounded-full min-w-[16px] ${
+            className={`inline-block text-[11px] leading-tight font-medium rounded-full min-w-[18px] ${
               meta.isToday ? 'bg-orange-500 text-white px-1' : 'text-gray-600'
             }`}
           >
             {meta.dayNum}
           </span>
           {(meta.dayNum === 1 || meta.dateKey === rangeDates[0]) && (
-            <span className="block text-[8px] leading-tight text-gray-400">{meta.monthLabel}</span>
+            <span className="text-[9px] leading-tight text-gray-400"> {meta.monthLabel}</span>
           )}
         </button>
       ))}
 
       {/* ── Unassigned lane ── */}
       {hasUnassigned && (
-      <div className="border-r border-b-2 border-amber-200 bg-amber-50 flex items-center gap-1.5 px-1.5 md:px-3 py-1" style={{ minHeight: rowH }}>
+      <div className="sticky left-0 z-10 border-r border-b-2 border-amber-200 bg-amber-50 flex items-center gap-1.5 px-1.5 md:px-3 py-1" style={{ minHeight: minRowH }}>
         <div className="hidden md:flex w-6 h-6 rounded-full items-center justify-center text-white text-[10px] font-bold shrink-0 bg-amber-500">?</div>
-        <span className="text-[10px] md:text-xs font-semibold text-amber-900 truncate">
-          {isMobile ? '?' : 'Unassigned'}
-        </span>
+        <span className="text-[10px] md:text-xs font-semibold text-amber-900 truncate">Unassigned</span>
       </div>
       )}
       {hasUnassigned && colMeta.map(meta => {
@@ -204,26 +239,22 @@ export function StaffMultiWeekGrid({
           <div
             key={`un-${meta.dateKey}`}
             onClick={() => onDrillToDay(meta.dateKey)}
-            title={jobs.length ? jobs.map(j => jobLabel(j)).join(', ') : undefined}
-            className={`${cellBorder(meta)} border-b-2 border-b-amber-200 bg-amber-50/40 cursor-pointer min-w-0 overflow-hidden flex flex-col justify-center gap-px py-0.5`}
-            style={{ minHeight: rowH }}
+            className={`${cellBorder(meta)} border-b-2 border-b-amber-200 bg-amber-50/40 cursor-pointer min-w-0 flex flex-col justify-center gap-0.5 py-0.5`}
+            style={{ minHeight: minRowH }}
           >
-            {!isMobile && jobs.slice(0, MAX_BARS_PER_CELL).map(job => {
-              const colors = jobColorMap.get(job.id) ?? { bg: '#eff6ff', border: '#2563eb', text: '#1e3a8a' };
-              return (
-                <button
-                  key={job.id}
-                  onClick={e => { e.stopPropagation(); onOpenJob(job); }}
-                  title={`${jobLabel(job)} (unassigned)`}
-                  className="h-[7px] rounded-[3px] mx-0.5 shrink-0"
-                  style={{ backgroundColor: colors.bg, border: `1px dashed ${colors.border}` }}
-                />
-              );
-            })}
-            {jobs.length > 0 && (isMobile || jobs.length > MAX_BARS_PER_CELL) && (
-              <span className="text-[9px] font-semibold text-amber-700 text-center leading-none">
-                {isMobile ? jobs.length : `+${jobs.length - MAX_BARS_PER_CELL}`}
-              </span>
+            {jobs.map(job =>
+              renderJobChip(
+                {
+                  id: `un-${job.id}-${meta.dateKey}`,
+                  job,
+                  startMins: 0,
+                  endMins: 0,
+                  isRunStart: true,
+                  isRunEnd: true,
+                  timeLabel: '',
+                },
+                true,
+              ),
             )}
           </div>
         );
@@ -237,16 +268,23 @@ export function StaffMultiWeekGrid({
         return [
           <div
             key={`emp-${emp.id}`}
-            className="border-r border-b border-gray-100 flex items-center gap-1.5 px-1.5 md:px-3 py-1 min-w-0"
-            style={{ backgroundColor: palette.row + '80', minHeight: rowH }}
+            className="sticky left-0 z-10 border-r border-b border-gray-100 flex items-center gap-1.5 px-1.5 md:px-3 py-1 min-w-0"
+            style={{ backgroundColor: palette.row, minHeight: minRowH }}
           >
             <div
-              className="flex w-6 h-6 rounded-full items-center justify-center text-white text-[9px] font-bold shrink-0"
+              className="hidden md:flex w-6 h-6 rounded-full items-center justify-center text-white text-[9px] font-bold shrink-0"
               style={{ backgroundColor: palette.dot }}
             >
               {initials(empName || 'U')}
             </div>
-            <p className="hidden md:block text-xs font-semibold text-gray-800 truncate leading-tight">{empName}</p>
+            <div className="min-w-0 flex-1">
+              {/* Mobile: stacked first/last name (mirrors Day view) */}
+              <p className="md:hidden text-[11px] font-semibold text-gray-800 truncate leading-tight">{emp.firstName}</p>
+              {emp.lastName && (
+                <p className="md:hidden text-[11px] font-semibold text-gray-800 truncate leading-tight">{emp.lastName}</p>
+              )}
+              <p className="hidden md:block text-xs font-semibold text-gray-800 truncate leading-tight">{empName}</p>
+            </div>
           </div>,
           ...colMeta.map(meta => {
             const slots = byDate?.get(meta.dateKey) ?? [];
@@ -255,27 +293,10 @@ export function StaffMultiWeekGrid({
               <div
                 key={`${emp.id}-${meta.dateKey}`}
                 onClick={() => onDrillToDay(meta.dateKey)}
-                title={slots.length ? slots.map(s => `${jobLabel(s.job)} — ${s.timeLabel}`).join('\n') : undefined}
-                className={`${cellBorder(meta)} cursor-pointer min-w-0 flex flex-col justify-center gap-px py-0.5`}
-                style={{ backgroundColor: cellBg(meta, booked), minHeight: rowH }}
+                className={`${cellBorder(meta)} cursor-pointer min-w-0 flex flex-col justify-center gap-0.5 py-0.5`}
+                style={{ backgroundColor: cellBg(meta, booked), minHeight: minRowH }}
               >
-                {!isMobile && slots.slice(0, MAX_BARS_PER_CELL).map(slot => {
-                  const colors = jobColorMap.get(slot.job.id) ?? { bg: '#eff6ff', border: '#2563eb', text: '#1e3a8a' };
-                  return (
-                    <button
-                      key={slot.id}
-                      onClick={e => { e.stopPropagation(); onOpenJob(slot.job); }}
-                      title={`${jobLabel(slot.job)} — ${slot.timeLabel}`}
-                      className="h-[7px] shrink-0 hover:brightness-90 transition-all"
-                      style={barStyle(slot, colors, false)}
-                    />
-                  );
-                })}
-                {slots.length > 0 && (isMobile || slots.length > MAX_BARS_PER_CELL) && (
-                  <span className="text-[9px] font-semibold text-gray-600 text-center leading-none">
-                    {isMobile ? slots.length : `+${slots.length - MAX_BARS_PER_CELL}`}
-                  </span>
-                )}
+                {slots.map(slot => renderJobChip(slot, false))}
               </div>
             );
           }),
@@ -283,10 +304,8 @@ export function StaffMultiWeekGrid({
       })}
 
       {/* ── Per-day revenue footer ── */}
-      <div className="border-r border-t border-gray-200 bg-gray-50 flex items-center px-1.5 md:px-3 py-1" style={{ minHeight: rowH }}>
-        <span className="text-[9px] md:text-[10px] font-semibold text-gray-500 uppercase tracking-wide truncate">
-          {isMobile ? '$' : 'Revenue'}
-        </span>
+      <div className="sticky left-0 z-10 border-r border-t border-gray-200 bg-gray-50 flex items-center px-1.5 md:px-3 py-1" style={{ minHeight: 32 }}>
+        <span className="text-[9px] md:text-[10px] font-semibold text-gray-500 uppercase tracking-wide truncate">Revenue</span>
       </div>
       {colMeta.map(meta => {
         const summary = perDaySummary.get(meta.dateKey) ?? { revenue: 0, jobCount: 0 };
@@ -305,10 +324,10 @@ export function StaffMultiWeekGrid({
             key={`rev-${meta.dateKey}`}
             onClick={() => onDrillToDay(meta.dateKey)}
             className={`${cellBorder(meta)} border-t border-t-gray-200 bg-gray-50 cursor-pointer min-w-0 overflow-hidden flex items-center justify-center`}
-            style={{ minHeight: rowH }}
+            style={{ minHeight: 32 }}
             title={summary.jobCount > 0 ? `${formatNZDShort(summary.revenue)} · ${summary.jobCount} job${summary.jobCount !== 1 ? 's' : ''}` : undefined}
           >
-            <span className={`${fourPlusWeeks ? 'text-[8px]' : 'text-[9px]'} font-semibold rounded px-0.5 leading-tight ${chipClass}`}>
+            <span className={`text-[10px] font-semibold rounded px-1 leading-tight ${chipClass}`}>
               {summary.jobCount === 0 ? '–' : formatNZDShort(summary.revenue)}
             </span>
           </div>
