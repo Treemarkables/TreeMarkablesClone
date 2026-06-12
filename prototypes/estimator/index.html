@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BuildQuote — Estimator Prototype</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel2: #243449;
+    --line: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #22c55e;
+    --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.45;
+  }
+  header {
+    padding: 24px 28px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #16233c, #0f172a);
+  }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: -0.3px; }
+  header h1 span { color: var(--accent); }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  .pill {
+    display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: .3px;
+    background: rgba(245,158,11,.15); color: var(--warn); border: 1px solid rgba(245,158,11,.35);
+    vertical-align: middle;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 60px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    margin-bottom: 20px; overflow: hidden;
+  }
+  .card h2 {
+    margin: 0; padding: 14px 18px; font-size: 14px; font-weight: 600;
+    border-bottom: 1px solid var(--line); color: var(--text);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .card h2 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 12px 14px; font-size: 13px; vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--line); }
+  tr.line + tr.line td { border-top: 1px solid var(--line); }
+  td.measure strong { display:block; font-size:13px; }
+  td.measure span { color: var(--muted); font-size: 11px; }
+  select {
+    width: 100%; max-width: 230px; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px;
+    cursor: pointer;
+  }
+  select:focus { outline: none; border-color: var(--accent); }
+  .breakdown { color: var(--muted); font-size: 11.5px; margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .qtycol { white-space: nowrap; }
+  .qtycol b { color: var(--accent); }
+  td.cost { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .totals { padding: 6px 18px 16px; }
+  .totals .row { display:flex; justify-content: space-between; padding: 8px 0; font-size: 14px; border-bottom: 1px dashed var(--line); }
+  .totals .row:last-child { border-bottom: none; }
+  .totals .grand { font-size: 20px; font-weight: 700; padding-top: 14px; }
+  .totals .grand b { color: var(--accent2); }
+  .totals .muted { color: var(--muted); }
+  .controls { display:flex; gap: 18px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .controls label { font-size: 12px; color: var(--muted); display:flex; flex-direction: column; gap: 4px; }
+  .controls input {
+    width: 90px; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 9px; font-size: 13px;
+  }
+  .controls input:focus { outline:none; border-color: var(--accent); }
+  .note { font-size: 12px; color: var(--muted); padding: 12px 18px; background: rgba(56,189,248,.06); border-top: 1px solid var(--line); }
+  .note b { color: var(--accent); }
+  footer { text-align:center; color: var(--muted); font-size: 12px; padding: 10px 0 30px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Build<span>Quote</span> <span class="pill">PROTOTYPE · placeholder data</span></h1>
+  <p>Apply materials to a takeoff and watch the job price itself. All products &amp; prices below are made up for demonstration.</p>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>1 · Takeoff <small>normally measured off the plan — hard-coded here</small></h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30%">Element</th>
+          <th style="width:32%">Selected product</th>
+          <th style="width:22%">Order qty</th>
+          <th style="width:16%; text-align:right">Line cost</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="note">
+      <b>Try it:</b> change any dropdown — e.g. swap the external wall from Axon sheets to brick veneer — and the order quantity, waste rounding and totals all recompute instantly.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2 · Margins &amp; tax</h2>
+    <div class="controls">
+      <label>Margin %
+        <input id="margin" type="number" value="20" min="0" step="1" />
+      </label>
+      <label>Overheads %
+        <input id="overhead" type="number" value="8" min="0" step="1" />
+      </label>
+      <label>GST %
+        <input id="gst" type="number" value="15" min="0" step="1" />
+      </label>
+    </div>
+    <div class="totals" id="totals"></div>
+  </div>
+
+  <footer>BuildQuote prototype · the engine is real, the numbers are placeholders.</footer>
+</div>
+
+<script>
+/* ----------------------------------------------------------------------
+   PLACEHOLDER DATA — swap for your builder mate's real numbers later.
+   ---------------------------------------------------------------------- */
+
+// A measurement = what the plan takeoff produces.
+// category drives which products are offered; unit drives the maths.
+const MEASUREMENTS = [
+  { id:'floor',    label:'Floor area',            note:'Whole house',          category:'flooring', qty:200, unit:'m²' },
+  { id:'extwall',  label:'External walls',        note:'40m × 2.4m = 96 m²',   category:'cladding', qty:96,  unit:'m²' },
+  { id:'roof',     label:'Roof area',             note:'incl. pitch factor',   category:'roofing',  qty:180, unit:'m²' },
+  { id:'lining',   label:'Internal wall lining',  note:'walls + ceilings',     category:'lining',   qty:240, unit:'m²' },
+  { id:'framing',  label:'Internal wall framing', note:'internal wall runs',   category:'framing',  qty:120, unit:'LM' },
+  { id:'skirting', label:'Skirting',              note:'room perimeters',      category:'skirting', qty:140, unit:'LM' },
+];
+
+// A product = how a material is bought + how much it covers.
+//   discrete:true  -> bought in whole units (sheets/boxes), round UP after waste
+//   discrete:false -> bought continuously (m²/LM), waste just inflates quantity
+//   coverage       -> how much measured qty ONE sell-unit covers
+//   labour         -> $ per measured unit (per m² / per LM)
+const PRODUCTS = [
+  // cladding (m²)
+  { id:'axon',   cat:'cladding', name:'Axon Cladding 133',     sellUnit:'sheet', discrete:true,  coverage:2.88, cost:85,  waste:0.10, labour:18 },
+  { id:'fc',     cat:'cladding', name:'Fibre Cement Sheet',    sellUnit:'sheet', discrete:true,  coverage:2.70, cost:72,  waste:0.10, labour:16 },
+  { id:'brick',  cat:'cladding', name:'Brick Veneer',          sellUnit:'m²',    discrete:false, coverage:1,    cost:95,  waste:0.05, labour:0  },
+  { id:'cedar',  cat:'cladding', name:'Cedar Shiplap',         sellUnit:'m²',    discrete:false, coverage:1,    cost:140, waste:0.12, labour:35 },
+  // flooring (m²)
+  { id:'oak',    cat:'flooring', name:'Engineered Oak',        sellUnit:'m²',    discrete:false, coverage:1,    cost:120, waste:0.08, labour:45 },
+  { id:'tile',   cat:'flooring', name:'Porcelain Tile (box 1.44m²)', sellUnit:'box', discrete:true, coverage:1.44, cost:52, waste:0.10, labour:70 },
+  { id:'carpet', cat:'flooring', name:'Wool Carpet',           sellUnit:'m²',    discrete:false, coverage:1,    cost:55,  waste:0.10, labour:20 },
+  // roofing (m²)
+  { id:'steel',  cat:'roofing',  name:'Colorsteel Longrun',    sellUnit:'m²',    discrete:false, coverage:1,    cost:40,  waste:0.10, labour:25 },
+  { id:'ctile',  cat:'roofing',  name:'Concrete Roof Tile',    sellUnit:'m²',    discrete:false, coverage:1,    cost:55,  waste:0.08, labour:30 },
+  // lining (m²)
+  { id:'gib',    cat:'lining',   name:'Standard Plasterboard', sellUnit:'sheet', discrete:true,  coverage:2.88, cost:22,  waste:0.10, labour:14 },
+  { id:'aqua',   cat:'lining',   name:'Aqua Plasterboard',     sellUnit:'sheet', discrete:true,  coverage:2.88, cost:34,  waste:0.10, labour:14 },
+  // framing (LM)
+  { id:'pine',   cat:'framing',  name:'90×45 MGP10 Pine',      sellUnit:'LM',    discrete:false, coverage:1,    cost:4.5, waste:0.08, labour:6  },
+  { id:'steelstud', cat:'framing', name:'Steel Stud',          sellUnit:'LM',    discrete:false, coverage:1,    cost:7,   waste:0.05, labour:7  },
+  // skirting (LM)
+  { id:'pineskirt', cat:'skirting', name:'Pine Skirting',      sellUnit:'LM',    discrete:false, coverage:1,    cost:6,   waste:0.10, labour:4  },
+  { id:'mdfskirt',  cat:'skirting', name:'MDF Skirting',       sellUnit:'LM',    discrete:false, coverage:1,    cost:4,   waste:0.10, labour:4  },
+];
+
+/* ----------------------------------------------------------------------
+   THE PRICING ENGINE — this is the bit that matters.
+   ---------------------------------------------------------------------- */
+function priceLine(m, p) {
+  const rawUnits  = m.qty / p.coverage;            // measured qty -> sell units
+  const withWaste = rawUnits * (1 + p.waste);      // add waste
+  const orderQty  = p.discrete ? Math.ceil(withWaste) : withWaste;  // round up if discrete
+  const material  = orderQty * p.cost;
+  const labour    = (p.labour || 0) * m.qty;       // labour priced on measured qty
+  const total     = material + labour;
+
+  let breakdown;
+  if (p.discrete) {
+    breakdown = `${m.qty} ${m.unit} ÷ ${p.coverage} = ${rawUnits.toFixed(1)} ${p.sellUnit}s `
+              + `→ +${p.waste*100}% = ${withWaste.toFixed(1)} → ⌈ ⌉ = ${orderQty} ${p.sellUnit}s `
+              + `× $${p.cost} = $${money(material)}`;
+  } else {
+    breakdown = `${m.qty} ${m.unit} +${p.waste*100}% waste = ${withWaste.toFixed(1)} ${m.unit} `
+              + `× $${p.cost} = $${money(material)}`;
+  }
+  if (labour > 0) breakdown += `  ·  labour ${m.qty}×$${p.labour} = $${money(labour)}`;
+
+  return { rawUnits, orderQty, material, labour, total, breakdown };
+}
+
+/* ----------------------------------------------------------------------
+   UI
+   ---------------------------------------------------------------------- */
+const state = {};
+MEASUREMENTS.forEach(m => {
+  state[m.id] = PRODUCTS.find(p => p.cat === m.category).id; // default = first compatible
+});
+
+function money(n) {
+  return n.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function render() {
+  // rows
+  const rows = MEASUREMENTS.map(m => {
+    const opts = PRODUCTS.filter(p => p.cat === m.category);
+    const p = PRODUCTS.find(x => x.id === state[m.id]);
+    const r = priceLine(m, p);
+    const optionsHtml = opts.map(o =>
+      `<option value="${o.id}" ${o.id === p.id ? 'selected' : ''}>${o.name}</option>`
+    ).join('');
+    const orderLabel = p.discrete
+      ? `<b>${r.orderQty}</b> ${p.sellUnit}s`
+      : `<b>${r.orderQty.toFixed(1)}</b> ${m.unit}`;
+    return `
+      <tr class="line">
+        <td class="measure">
+          <strong>${m.label}</strong>
+          <span>${m.qty} ${m.unit} · ${m.note}</span>
+        </td>
+        <td><select data-m="${m.id}">${optionsHtml}</select></td>
+        <td class="qtycol">${orderLabel}
+          <div class="breakdown">${r.breakdown}</div>
+        </td>
+        <td class="cost">$${money(r.total)}</td>
+      </tr>`;
+  });
+  document.getElementById('rows').innerHTML = rows.join('');
+
+  // totals
+  let subtotal = 0;
+  MEASUREMENTS.forEach(m => {
+    const p = PRODUCTS.find(x => x.id === state[m.id]);
+    subtotal += priceLine(m, p).total;
+  });
+  const overheadPct = num('overhead') / 100;
+  const marginPct   = num('margin') / 100;
+  const gstPct      = num('gst') / 100;
+
+  const overhead = subtotal * overheadPct;
+  const base     = subtotal + overhead;
+  const margin   = base * marginPct;
+  const exGst    = base + margin;
+  const gst      = exGst * gstPct;
+  const grand    = exGst + gst;
+
+  document.getElementById('totals').innerHTML = `
+    <div class="row"><span class="muted">Materials + labour</span><span>$${money(subtotal)}</span></div>
+    <div class="row"><span class="muted">Overheads (${num('overhead')}%)</span><span>$${money(overhead)}</span></div>
+    <div class="row"><span class="muted">Margin (${num('margin')}%)</span><span>$${money(margin)}</span></div>
+    <div class="row"><span class="muted">Subtotal (ex GST)</span><span>$${money(exGst)}</span></div>
+    <div class="row"><span class="muted">GST (${num('gst')}%)</span><span>$${money(gst)}</span></div>
+    <div class="row grand"><span>Quote total</span><b>$${money(grand)}</b></div>
+  `;
+}
+
+function num(id){ const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
+
+document.addEventListener('change', e => {
+  if (e.target.matches('select[data-m]')) { state[e.target.dataset.m] = e.target.value; render(); }
+});
+document.addEventListener('input', e => {
+  if (e.target.matches('#margin, #overhead, #gst')) render();
+});
+
+render();
+</script>
+</body>
+</html>
