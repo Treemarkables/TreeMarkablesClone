@@ -231,7 +231,10 @@ export function JobCardMobile({
   // Desktop header displays the ex-GST total, so we do too.
   //
   // Fallback chain: line items → job.subtotal (already ex-GST) →
-  // job.totalAmount / 1.15 (totalAmount is stored inc-GST).
+  // job.totalIncludingGst / 1.15 → job.totalAmount / 1.15 (both stored inc-GST).
+  // The totalIncludingGst step matters: jobs whose value lives only in
+  // total_including_gst otherwise render as $0.00 here while the roster
+  // (StaffSchedule.getJobPrice) shows the real figure.
   const jobValue = useMemo(() => {
     const toNum = (v: unknown): number => {
       if (v == null) return 0;
@@ -249,6 +252,8 @@ export function JobCardMobile({
     if (lineItemsTotal > 0) return lineItemsTotal;
     const jobSubtotal = toNum(job?.subtotal);
     if (jobSubtotal > 0) return jobSubtotal;
+    const incGst = toNum(job?.totalIncludingGst);
+    if (incGst > 0) return incGst / 1.15;
     const totalAmount = toNum(job?.totalAmount);
     return totalAmount > 0 ? totalAmount / 1.15 : undefined;
   }, [job]);

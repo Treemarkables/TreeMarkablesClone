@@ -2150,8 +2150,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       startDateTime.getTime() + totalMinutes * 60_000,
     );
 
+    // Dropping onto a single dispatch cell is a single-day placement. Clear any
+    // stale scheduledEndDate (and pin the new time-of-day) so the job doesn't
+    // keep an old end date — a leftover scheduledDate..scheduledEndDate span
+    // makes the job show on every day in the range and splits its price per day.
     const updates: any = {
       scheduledDate: startDateTime.toISOString(),
+      scheduledEndDate: null,
+      scheduledStartTime: startTimeStr,
+      scheduledEndTime: utcToNZTime(endDateTime).time,
       estimatedDuration: fractionalDurationHours,
     };
     const next = statusAfterBooking(job.status);
