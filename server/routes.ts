@@ -1281,7 +1281,9 @@ async function generateInvoicePDFBuffer(
     const gstAmount = subtotal * 0.15;
     const totalAmount = subtotal + gstAmount;
 
-    const billingName = job?.billingNameOverride || invoiceData?.contactName || customer?.name || 'Customer';
+    // Per-invoice billing-name override (saved on the invoice) takes priority over the
+    // job-level billingNameOverride so "edit for this invoice only" actually sticks on render.
+    const billingName = invoiceData?.contactName || job?.billingNameOverride || customer?.name || 'Customer';
     const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
     const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
 
@@ -10390,7 +10392,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
                   </td>
                   <td width="45%" valign="top" align="right">
                     <div style="font-weight: bold; margin-bottom: 6px;">Bill To:</div>
-                    <div>${job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'Customer'}</div>
+                    <div>${invoiceDetails?.contactName || job?.billingNameOverride || customer?.name || 'Customer'}</div>
                     ${customer?.phone ? `<div>${customer.phone}</div>` : ''}
                     ${customer?.email ? `<div style="word-break: break-all;">${customer.email}</div>` : ''}
                   </td>
