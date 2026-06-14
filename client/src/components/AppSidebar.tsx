@@ -140,6 +140,16 @@ function SidebarNavContent({
                 </SidebarMenuItem>
               )}
 
+              {/* Today — daily command centre */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/today"} className={ITEM}>
+                  <Link href="/today" onClick={handleLinkClick} data-testid="link-today">
+                    <Glyph>📌</Glyph>
+                    <span>Today</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {/* Dispatch Board */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/dispatch"} className={ITEM}>
