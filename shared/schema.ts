@@ -2052,7 +2052,21 @@ export const equipment = pgTable("equipment", {
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-export const insertEquipmentSchema = createInsertSchema(equipment);
+// Compliance/maintenance dates arrive from forms as "YYYY-MM-DD" strings, but
+// drizzle-zod maps these timestamp columns to z.date() and rejects strings.
+// Coerce string|date -> Date (empty string -> null) so the equipment form can
+// set rego / CoF / next-service dates. Mirrors the insertTaskSchema dueDate pattern.
+const equipmentDateCoercion = z
+  .union([z.string(), z.date()])
+  .nullish()
+  .transform((v) => (!v ? null : v instanceof Date ? v : new Date(v)));
+
+export const insertEquipmentSchema = createInsertSchema(equipment).extend({
+  registrationExpiryDate: equipmentDateCoercion,
+  cofExpiryDate: equipmentDateCoercion,
+  nextMaintenanceDate: equipmentDateCoercion,
+  lastMaintenanceDate: equipmentDateCoercion,
+});
 
 export const updateEquipmentSchema = insertEquipmentSchema.partial();
 

@@ -61,6 +61,9 @@ const equipmentFormSchema = z.object({
   dailyRentalCost: z.string().optional(),
   serialNumber: z.string().optional(),
   registrationNumber: z.string().optional(),
+  registrationExpiryDate: z.string().optional(),
+  cofExpiryDate: z.string().optional(),
+  nextMaintenanceDate: z.string().optional(),
   defaultInspectionTemplateId: z.string().optional(),
   requiresPreStart: z.boolean().default(false),
   notes: z.string().optional(),
@@ -316,6 +319,10 @@ export default function Equipment() {
     defaultValues: {
       status: "available",
       condition: "good",
+      registrationNumber: "",
+      registrationExpiryDate: "",
+      cofExpiryDate: "",
+      nextMaintenanceDate: "",
     },
   });
 
@@ -387,6 +394,9 @@ export default function Equipment() {
       dailyRentalCost: equipment.dailyRentalCost || '',
       serialNumber: equipment.serialNumber || '',
       registrationNumber: equipment.registrationNumber || '',
+      registrationExpiryDate: equipment.registrationExpiryDate ? String(equipment.registrationExpiryDate).slice(0, 10) : '',
+      cofExpiryDate: equipment.cofExpiryDate ? String(equipment.cofExpiryDate).slice(0, 10) : '',
+      nextMaintenanceDate: equipment.nextMaintenanceDate ? String(equipment.nextMaintenanceDate).slice(0, 10) : '',
       defaultInspectionTemplateId: equipment.defaultInspectionTemplateId || '',
       requiresPreStart: equipment.requiresPreStart ?? false,
       notes: equipment.notes || '',
@@ -702,6 +712,67 @@ export default function Equipment() {
                   />
                 </div>
 
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Vehicle compliance (optional)</p>
+                    <p className="text-xs text-muted-foreground">Set these on vehicles to track them on the Today page — rego, Certificate of Fitness and next service surface there before they fall due.</p>
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="registrationNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Registration / plate</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. GHT483" {...field} value={field.value || ''} data-testid="input-equipment-rego" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="registrationExpiryDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rego expiry</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} data-testid="input-equipment-rego-expiry" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="cofExpiryDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>CoF expiry</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} data-testid="input-equipment-cof-expiry" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="nextMaintenanceDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Next service due</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} data-testid="input-equipment-next-service" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
                 <FormField
                   control={form.control}
                   name="defaultInspectionTemplateId"
@@ -959,6 +1030,67 @@ export default function Equipment() {
                       </FormItem>
                     )}
                   />
+                </div>
+
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Vehicle compliance (optional)</p>
+                    <p className="text-xs text-muted-foreground">Set these on vehicles to track them on the Today page — rego, Certificate of Fitness and next service surface there before they fall due.</p>
+                  </div>
+                  <FormField
+                    control={editForm.control}
+                    name="registrationNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Registration / plate</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. GHT483" {...field} value={field.value || ''} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="registrationExpiryDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rego expiry</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={editForm.control}
+                      name="cofExpiryDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>CoF expiry</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={editForm.control}
+                      name="nextMaintenanceDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Next service due</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
 
                 <FormField
