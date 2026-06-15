@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import ExpiryReminderSettings from "@/components/ExpiryReminderSettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -395,6 +396,9 @@ export default function VehicleInspectionSettings() {
           New Template
         </Button>
       </div>
+
+      {/* Expiry reminders — rego / CoF / service lead-time alerts */}
+      <ExpiryReminderSettings />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Templates List */}

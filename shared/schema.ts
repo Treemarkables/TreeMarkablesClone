@@ -1353,6 +1353,12 @@ export const businessSettings = pgTable("business_settings", {
   bookingReminderSmsTemplateId: varchar("booking_reminder_sms_template_id"),
   bookingReminderDefaultOn: boolean("booking_reminder_default_on").default(false), // Pre-tick the per-job toggle when scheduling
 
+  // Vehicle/equipment compliance expiry reminders (rego, CoF, scheduled service).
+  // A daily scan notifies admins when an active vehicle's expiry date crosses one
+  // of these lead times. Offsets is an array of whole days before expiry, e.g. [30, 7].
+  complianceRemindersEnabled: boolean("compliance_reminders_enabled").default(true),
+  complianceReminderOffsets: jsonb("compliance_reminder_offsets").$type<number[]>().default(sql`'[30, 7]'::jsonb`),
+
   // Inquiry auto-reply (sent to the customer immediately on website form submission)
   // The default copy follows what Jules asked for: "Hey, we have received your
   // inquiry. Jules will be in touch within 24 hours to schedule in your quote."
@@ -1402,6 +1408,8 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
     label: z.string().optional(),
     channel: z.enum(['email', 'sms', 'both']).optional(),
   })).optional(),
+  // Lead times (whole days before expiry) for vehicle compliance reminders, e.g. [30, 7].
+  complianceReminderOffsets: z.array(z.number().int().min(1).max(365)).max(6).optional(),
   inquiryAutoReplyChannel: z.enum(['email', 'sms', 'both']).optional(),
   inquiryAutoReplyEmailSubject: z.string().max(200).optional(),
   inquiryAutoReplyEmailMessage: z.string().max(5000).optional(),
@@ -1410,6 +1418,23 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
 
 // Business Settings Update Schema - partial with same constraints
 export const updateBusinessSettingsSchema = insertBusinessSettingsSchema.partial();
+
+// Log of compliance-expiry reminders already sent, so the daily scan fires each
+// (vehicle, kind, expiry-date, lead-time) combination exactly once. When a vehicle
+// is renewed the expiry date changes, producing fresh keys, so reminders re-arm.
+// The unique (equipment_id, kind, expiry_date, offset_days) constraint is created
+// in the boot DDL block in server/index.ts.
+export const equipmentComplianceReminders = pgTable("equipment_compliance_reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id"),
+  equipmentId: varchar("equipment_id").notNull(),
+  kind: text("kind").notNull(), // 'rego' | 'cof' | 'service'
+  expiryDate: text("expiry_date").notNull(), // YYYY-MM-DD (NZ) of the tracked expiry
+  offsetDays: integer("offset_days").notNull(), // lead time fired at; 0 = on/after expiry
+  sentAt: timestamp("sent_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+export type EquipmentComplianceReminder = typeof equipmentComplianceReminders.$inferSelect;
+export type InsertEquipmentComplianceReminder = typeof equipmentComplianceReminders.$inferInsert;
 
 // Settings Types
 export type BusinessSettings = typeof businessSettings.$inferSelect;
