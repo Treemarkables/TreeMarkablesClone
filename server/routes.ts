@@ -129,7 +129,7 @@ if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic as unknown as string);
 }
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
-import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZNow, getNZDateString } from "@shared/dateUtils";
+import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { workflowAutomationService } from "./services/workflowAutomation";
@@ -17974,8 +17974,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // ========================================
   app.get('/api/today-overview', async (req: Request, res: Response) => {
     try {
-      const now = getNZNow();
-      const todayStr = getNZDateString(now);
+      // Use the real current instant; getNZDateString converts it to the NZ
+      // calendar day exactly once. (Do NOT use getNZNow() here — it returns a
+      // tz-shifted Date, and converting that to NZ again double-shifts and rolls
+      // "today" to tomorrow during NZ afternoon/evening on a UTC server.)
+      const todayStr = getNZDateString(new Date());
       const MS_PER_DAY = 1000 * 60 * 60 * 24;
       const HORIZON_DAYS = 30; // how far ahead a compliance date surfaces
 
@@ -18026,7 +18029,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // Jobs running today on the NZ calendar — honours multi-day date sets.
       const { jobs } = await storage.getAllJobs({ limit: 100000, excludeArchived: true });
       const jobsToday = jobs
-        .filter((j: any) => jobRunsOnNZDate(j, now))
+        .filter((j: any) => jobRunsOnNZDate(j, todayStr))
         .map((j: any) => ({
           id: j.id,
           title: j.title || j.jobNumber || 'Job',
