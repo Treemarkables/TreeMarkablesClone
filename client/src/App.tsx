@@ -31,6 +31,7 @@ const SummerOffer = lazy(() => import("@/pages/SummerOffer"));
 const Contact = lazy(() => import("@/pages/Contact"));
 const PrivacyPolicy = lazy(() => import("@/pages/PrivacyPolicy"));
 const JobDashboard = lazy(() => import("@/pages/JobDashboard"));
+const TodayDashboard = lazy(() => import("@/pages/TodayDashboard"));
 const JobCardPreview = lazy(() => import("@/pages/JobCardPreview"));
 const MetricsDashboard = lazy(() => import("@/pages/MetricsDashboard"));
 const Tasks = lazy(() => import("@/pages/Tasks"));
@@ -973,6 +974,15 @@ function Router() {
       <Route path="/job-card-preview">
         <ProtectedRoute>
           <JobCardPreview />
+        </ProtectedRoute>
+      </Route>
+
+      {/* Today — daily command centre (fleet compliance + today's jobs) */}
+      <Route path="/today">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <TodayDashboard />
+          </SidebarLayout>
         </ProtectedRoute>
       </Route>
 

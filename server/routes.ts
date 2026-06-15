@@ -129,7 +129,7 @@ if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic as unknown as string);
 }
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
-import { formatNZTime, getJobScheduledNZDates } from "@shared/dateUtils";
+import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZNow, getNZDateString } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { workflowAutomationService } from "./services/workflowAutomation";
@@ -17961,6 +17961,100 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         success: false,
         message: 'Error fetching expiring equipment'
       });
+    }
+  });
+
+  // ========================================
+  // TODAY OVERVIEW — daily command-centre aggregator
+  // One read that surfaces everything date-driven so nothing relies on catching
+  // a notification in the moment: fleet compliance (rego / CoF / scheduled
+  // service, INCLUDING overdue items the /expiring endpoint skips) plus the
+  // jobs scheduled for the NZ calendar day. Read-only; computed from existing
+  // storage, business-scoped via the same RLS connection as every other route.
+  // ========================================
+  app.get('/api/today-overview', async (req: Request, res: Response) => {
+    try {
+      const now = getNZNow();
+      const todayStr = getNZDateString(now);
+      const MS_PER_DAY = 1000 * 60 * 60 * 24;
+      const HORIZON_DAYS = 30; // how far ahead a compliance date surfaces
+
+      // Whole-day difference in the NZ calendar. Negative = overdue.
+      const daysUntil = (d: Date) => {
+        const a = new Date(`${todayStr}T00:00:00Z`).getTime();
+        const b = new Date(`${getNZDateString(d)}T00:00:00Z`).getTime();
+        return Math.round((b - a) / MS_PER_DAY);
+      };
+      const severityFor = (days: number) =>
+        days < 0 ? 'overdue' : days <= 7 ? 'critical' : days <= 14 ? 'warning' : 'info';
+
+      const allEquipment = await storage.getAllEquipment();
+      const fleet: Array<{
+        equipmentId: string; name: string; type: string | null;
+        registrationNumber: string | null; kind: string; label: string;
+        dueDate: string; daysUntil: number; severity: string;
+      }> = [];
+
+      for (const e of allEquipment) {
+        if (e.isActive === false || e.status === 'retired') continue;
+        const checks = [
+          { kind: 'rego', label: 'Registration (rego)', date: e.registrationExpiryDate },
+          { kind: 'cof', label: 'Certificate of Fitness', date: e.cofExpiryDate },
+          { kind: 'service', label: 'Scheduled service', date: e.nextMaintenanceDate },
+        ];
+        for (const c of checks) {
+          if (!c.date) continue;
+          const d = new Date(c.date);
+          if (isNaN(d.getTime())) continue;
+          const days = daysUntil(d);
+          if (days > HORIZON_DAYS) continue; // not due yet
+          fleet.push({
+            equipmentId: e.id,
+            name: e.name,
+            type: e.type ?? null,
+            registrationNumber: e.registrationNumber ?? null,
+            kind: c.kind,
+            label: c.label,
+            dueDate: d.toISOString(),
+            daysUntil: days,
+            severity: severityFor(days),
+          });
+        }
+      }
+      fleet.sort((a, b) => a.daysUntil - b.daysUntil);
+
+      // Jobs running today on the NZ calendar — honours multi-day date sets.
+      const { jobs } = await storage.getAllJobs({ limit: 100000, excludeArchived: true });
+      const jobsToday = jobs
+        .filter((j: any) => jobRunsOnNZDate(j, now))
+        .map((j: any) => ({
+          id: j.id,
+          title: j.title || j.jobNumber || 'Job',
+          status: j.status,
+          scheduledStartTime: j.scheduledStartTime ?? null,
+          customerName: j.customerName ?? null,
+          address: j.address ?? null,
+        }))
+        .sort((a, b) =>
+          (a.scheduledStartTime || '99:99').localeCompare(b.scheduledStartTime || '99:99')
+        );
+
+      res.json({
+        success: true,
+        data: {
+          date: todayStr,
+          fleet,
+          jobsToday,
+          counts: {
+            needsAttention: fleet.filter(f => f.severity === 'overdue' || f.severity === 'critical').length,
+            dueSoon: fleet.filter(f => f.severity === 'warning' || f.severity === 'info').length,
+            jobsToday: jobsToday.length,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Error building today overview:', error);
+      res.status(500).json({ success: false, message: 'Error building today overview' });
     }
   });
 
