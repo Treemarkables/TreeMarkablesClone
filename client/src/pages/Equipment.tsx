@@ -1458,10 +1458,11 @@ export default function Equipment() {
                       Check Out
                     </Button>
                   ) : (
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size={isMobile ? "default" : "sm"}
                       className={isMobile ? "h-11" : ""}
+                      onClick={() => handleEdit(item)}
                       data-testid={`button-view-${item.id}`}
                     >
                       <Eye className="h-4 w-4 mr-2" />
