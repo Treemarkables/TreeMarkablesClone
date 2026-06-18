@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertEquipmentCheckoutSchema, insertEquipmentMaintenanceSchema } from "@shared/schema";
@@ -360,22 +360,42 @@ export default function Equipment() {
     },
   });
 
+  // Surface validation errors instead of failing silently — without this, a
+  // blocked submit (e.g. an invalid field scrolled off-screen on mobile) looks
+  // like "nothing happens" when you press Save. Shared across the equipment forms.
+  const onInvalid = (errors: FieldErrors) => {
+    const message = Object.values(errors)
+      .map((e) => (e && typeof e === "object" && "message" in e ? e.message : undefined))
+      .find(Boolean);
+    toast({
+      variant: "destructive",
+      title: "Couldn't save — please check the form",
+      description: String(message ?? "Some fields need attention."),
+    });
+  };
+
   const onSubmit = (data: EquipmentFormData) => {
     addEquipmentMutation.mutate(data);
   };
 
   const onEdit = (data: EquipmentFormData) => {
-    if (selectedEquipment) {
-      // Drizzle's auto-generated schema rejects "" on decimal columns
-      const payload = {
-        ...data,
-        purchasePrice: data.purchasePrice || undefined,
-        currentValue: data.currentValue || undefined,
-        dailyRentalCost: data.dailyRentalCost || undefined,
-        id: selectedEquipment.id,
-      };
-      editEquipmentMutation.mutate(payload);
+    if (!selectedEquipment) {
+      toast({
+        variant: "destructive",
+        title: "Couldn't save",
+        description: "No vehicle selected — please close and reopen the editor.",
+      });
+      return;
     }
+    // Drizzle's auto-generated schema rejects "" on decimal columns
+    const payload = {
+      ...data,
+      purchasePrice: data.purchasePrice || undefined,
+      currentValue: data.currentValue || undefined,
+      dailyRentalCost: data.dailyRentalCost || undefined,
+      id: selectedEquipment.id,
+    };
+    editEquipmentMutation.mutate(payload);
   };
 
   const handleEdit = (equipment: any) => {
@@ -540,7 +560,7 @@ export default function Equipment() {
             </DialogHeader>
             
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-4">
+              <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -861,7 +881,7 @@ export default function Equipment() {
             </DialogHeader>
             
             <Form {...editForm}>
-              <form onSubmit={editForm.handleSubmit(onEdit)} className="space-y-4 pb-4">
+              <form onSubmit={editForm.handleSubmit(onEdit, onInvalid)} className="space-y-4 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={editForm.control}
@@ -1972,7 +1992,7 @@ export default function Equipment() {
               </div>
 
               <Form {...checkoutForm}>
-                <form onSubmit={checkoutForm.handleSubmit(onCheckout)} className="space-y-4">
+                <form onSubmit={checkoutForm.handleSubmit(onCheckout, onInvalid)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={checkoutForm.control}
@@ -2096,7 +2116,7 @@ export default function Equipment() {
               </div>
 
               <Form {...checkinForm}>
-                <form onSubmit={checkinForm.handleSubmit(onCheckin)} className="space-y-4">
+                <form onSubmit={checkinForm.handleSubmit(onCheckin, onInvalid)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={checkinForm.control}
@@ -2207,7 +2227,7 @@ export default function Equipment() {
               </div>
 
               <Form {...maintenanceForm}>
-                <form onSubmit={maintenanceForm.handleSubmit(onMaintenance)} className="space-y-4">
+                <form onSubmit={maintenanceForm.handleSubmit(onMaintenance, onInvalid)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={maintenanceForm.control}
