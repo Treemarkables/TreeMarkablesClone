@@ -409,6 +409,17 @@ function startNotificationQueueWorker() {
       const err = error as Error;
       log(`[Booking Reminders] Worker error: ${err.message}`, "error");
     }
+
+    // Vehicle compliance expiry reminders (rego / CoF / scheduled service).
+    // Self-throttles to hourly internally and is idempotent via the
+    // equipment_compliance_reminders dedupe table, so the 60s tick is safe.
+    try {
+      const { runComplianceReminderScan } = await import("./services/complianceReminderService");
+      await runComplianceReminderScan();
+    } catch (error) {
+      const err = error as Error;
+      log(`[Compliance Reminders] Worker error: ${err.message}`, "error");
+    }
   }, 60000);
 
   log("🔔 Notification queue worker started (checking every 60 seconds)", "startup");
@@ -658,6 +669,18 @@ The Treemarkables Team';
         );
         CREATE INDEX IF NOT EXISTS booking_reminders_job_id_idx ON booking_reminders (job_id);
         CREATE INDEX IF NOT EXISTS booking_reminders_pending_idx ON booking_reminders (status, scheduled_for);
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminders_enabled BOOLEAN DEFAULT true;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminder_offsets JSONB DEFAULT '[30, 7]'::jsonb;
+        CREATE TABLE IF NOT EXISTS equipment_compliance_reminders (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          business_id VARCHAR,
+          equipment_id VARCHAR NOT NULL,
+          kind TEXT NOT NULL,
+          expiry_date TEXT NOT NULL,
+          offset_days INTEGER NOT NULL,
+          sent_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS equipment_compliance_reminders_uniq ON equipment_compliance_reminders (equipment_id, kind, expiry_date, offset_days);
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           role_key VARCHAR NOT NULL,

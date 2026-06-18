@@ -77,7 +77,7 @@ function SidebarNavContent({
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const safetyActive = location === "/safety" || location.startsWith("/safety/") || ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
   const financeActive = ["/metrics", "/profitability-calculator"].includes(location);
-  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/equipment"].includes(location);
+  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
   const [safetyOpen, setSafetyOpen] = useState(safetyActive);
@@ -478,11 +478,6 @@ function SidebarNavContent({
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/inbox"}>
                             <Link href="/inbox" onClick={handleLinkClick} data-testid="link-inbox"><span>Inbox</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/equipment"}>
-                            <Link href="/equipment" onClick={handleLinkClick} data-testid="link-equipment"><span>Equipment</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       </SidebarMenuSub>
