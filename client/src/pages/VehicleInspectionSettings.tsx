@@ -74,19 +74,19 @@ function SortableChecklistItem({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 p-3 bg-white border rounded-md"
+      className="flex items-center gap-3 p-3 bg-card border border-card-border rounded-lg hover-elevate"
     >
       <div
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing"
+        className="cursor-grab active:cursor-grabbing text-muted-foreground"
       >
-        <GripVertical className="w-4 h-4 text-gray-400" />
+        <GripVertical className="w-4 h-4" />
       </div>
 
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium">{item.question}</span>
+          <span className="text-sm font-medium text-foreground">{item.question}</span>
           {item.category && (
             <Badge variant="outline" className="text-xs">
               {item.category}
@@ -379,10 +379,10 @@ export default function VehicleInspectionSettings() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Vehicle Inspection Templates
           </h1>
-          <p className="text-muted-foreground">
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage pre-start inspection checklists
           </p>
         </div>
@@ -422,18 +422,18 @@ export default function VehicleInspectionSettings() {
               templates.map((template) => (
                 <div
                   key={template.id}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${
                     selectedTemplate?.id === template.id
-                      ? "bg-primary/10 border border-primary"
-                      : "bg-muted hover-elevate"
+                      ? "bg-primary/5 border-primary"
+                      : "bg-card border-transparent hover-elevate"
                   }`}
                   onClick={() => setSelectedTemplate(template)}
                   data-testid={`card-template-${template.id}`}
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{template.name}</span>
+                        <span className="text-sm font-medium text-foreground">{template.name}</span>
                         {template.isDefault && (
                           <Badge variant="default" className="text-xs">
                             Default
