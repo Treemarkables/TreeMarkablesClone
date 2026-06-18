@@ -22,7 +22,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, ChevronDown, Mic, MicOff, Lock, UserPlus, Pencil, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
+import { SpeechToQuote } from "@/components/SpeechToQuote";
 import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAutocomplete";
+
+// The Web Speech API (webkitSpeechRecognition) is present on `window` inside the
+// iOS Capacitor WKWebView but is a silent no-op there — recognition never starts,
+// so the inline Voice button did nothing on the native app. Detect the native
+// shell so we can route it to the Whisper-backed recorder instead.
+const isNativeApp = () =>
+  typeof window !== "undefined" &&
+  typeof (window as any).Capacitor !== "undefined" &&
+  !!(window as any).Capacitor.isNativePlatform?.();
 
 interface JobDetailsPanelProps {
   jobId: string;
@@ -678,6 +688,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
         <div className="flex items-center justify-between mb-2">
           <div className="text-[14px] font-bold text-blue-600">Job Description</div>
           <VoiceButton
+            context="job-description"
             onTranscript={(text) => {
               const next = description ? `${description} ${text}` : text;
               setDescription(next);
@@ -714,6 +725,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             Internal Notes
           </div>
           <VoiceButton
+            context="internal-notes"
             onTranscript={(text) => {
               const next = internalNotes ? `${internalNotes} ${text}` : text;
               setInternalNotes(next);
@@ -992,7 +1004,64 @@ function ContactsCard({
 
 // ─── Voice transcription button ─────────────────────────────────────────────
 
-function VoiceButton({ onTranscript }: { onTranscript: (text: string) => void }) {
+type VoiceContext = "job-description" | "internal-notes";
+
+function VoiceButton({
+  onTranscript,
+  context,
+}: {
+  onTranscript: (text: string) => void;
+  context: VoiceContext;
+}) {
+  // Web Speech recognition doesn't function inside the iOS Capacitor WKWebView,
+  // so the native app uses the Whisper-backed SpeechToQuote recorder (MediaRecorder
+  // → /api/speech-to-quote), which is iOS-hardened and uses the mic permission
+  // declared in Info.plist. Real browsers keep the lighter inline live path.
+  // isNativeApp() is stable for the lifetime of the app, so branching on it here
+  // doesn't violate the rules of hooks (each child calls its own hooks).
+  if (isNativeApp()) {
+    return <NativeVoiceButton onTranscript={onTranscript} context={context} />;
+  }
+  return <WebVoiceButton onTranscript={onTranscript} />;
+}
+
+// Native app: open the Whisper recorder and append the returned transcription.
+function NativeVoiceButton({
+  onTranscript,
+  context,
+}: {
+  onTranscript: (text: string) => void;
+  context: VoiceContext;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 text-[14px] font-bold text-purple-600"
+        data-testid="voice-button"
+      >
+        <Mic className="w-3.5 h-3.5" />
+        Voice
+      </button>
+      <SpeechToQuote
+        open={open}
+        onOpenChange={setOpen}
+        context={context}
+        onQuoteGenerated={(data: any) => {
+          const text =
+            typeof data?.transcription === "string" ? data.transcription.trim() : "";
+          if (text) onTranscript(text);
+        }}
+      />
+    </>
+  );
+}
+
+// Browsers: inline live transcription via the Web Speech API.
+function WebVoiceButton({ onTranscript }: { onTranscript: (text: string) => void }) {
   const { isListening, isSupported, toggleListening } = useSpeechToText({
     onResult: (text) => {
       const trimmed = text.trim();
