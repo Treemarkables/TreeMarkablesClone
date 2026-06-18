@@ -35,7 +35,7 @@ export async function notifyEmployee(employeeId: string, options: NotificationOp
     // Send to all active devices
     let successCount = 0;
     for (const tokenRecord of tokens) {
-      const sent = await firebaseMessagingService.sendToDevice(tokenRecord.token, options);
+      const sent = await firebaseMessagingService.sendToDevice(tokenRecord.token, options, tokenRecord.deviceInfo || undefined);
       if (sent) {
         successCount++;
         // Mark token as recently used

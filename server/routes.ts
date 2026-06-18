@@ -17038,18 +17038,23 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           }
 
           const staffList = employeeNames.join(', ');
-          const scheduleDate = startTime.toLocaleDateString('en-NZ', {
+          // The multi-day scheduling refactor removed the old top-level
+          // startTime/endTime locals; this block was left referencing them and
+          // threw `startTime is not defined` on every staff scheduling. Use the
+          // template assignment's start/end (same source the client email above
+          // uses) — it's the canonical booking time-of-day.
+          const scheduleDate = templateStartUTC.toLocaleDateString('en-NZ', {
             timeZone: 'Pacific/Auckland',
             year: 'numeric',
             month: 'long',
             day: 'numeric'
           });
-          const startTimeStr = startTime.toLocaleTimeString('en-NZ', {
+          const startTimeStr = templateStartUTC.toLocaleTimeString('en-NZ', {
             timeZone: 'Pacific/Auckland',
             hour: '2-digit',
             minute: '2-digit'
           });
-          const endTimeStr = endTime.toLocaleTimeString('en-NZ', {
+          const endTimeStr = templateEndUTC.toLocaleTimeString('en-NZ', {
             timeZone: 'Pacific/Auckland',
             hour: '2-digit',
             minute: '2-digit'
@@ -17068,8 +17073,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
               staffIds: employeeIds,
               staffNames: employeeNames,
               date: scheduleDate,
-              startTime: startTime.toISOString(),
-              endTime: endTime.toISOString()
+              startTime: templateStartUTC.toISOString(),
+              endTime: templateEndUTC.toISOString()
             }),
             isPrivate: false
           });
