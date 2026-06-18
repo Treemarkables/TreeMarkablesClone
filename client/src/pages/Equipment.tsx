@@ -1959,7 +1959,7 @@ export default function Equipment() {
 
       {/* Checkout Equipment Dialog */}
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Check Out Equipment</DialogTitle>
           </DialogHeader>
@@ -2082,7 +2082,7 @@ export default function Equipment() {
 
       {/* Checkin Equipment Dialog */}
       <Dialog open={isCheckinOpen} onOpenChange={setIsCheckinOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Check In Equipment</DialogTitle>
           </DialogHeader>
@@ -2194,7 +2194,7 @@ export default function Equipment() {
 
       {/* Maintenance Record Dialog */}
       <Dialog open={isMaintenanceOpen} onOpenChange={setIsMaintenanceOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Add Maintenance Record</DialogTitle>
           </DialogHeader>
