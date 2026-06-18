@@ -562,7 +562,24 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             />
             <ul className="mt-2 max-h-60 overflow-y-auto bg-white rounded-lg border border-blue-100 divide-y divide-blue-50">
               {filteredPickCustomers.length === 0 ? (
-                <li className="px-3 py-2 text-[13px] text-slate-500">No matches</li>
+                <li className="px-3 py-2">
+                  {pickCustomerSearch.trim() ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewCustomerName(pickCustomerSearch.trim());
+                        setShowNewCustomerForm(true);
+                      }}
+                      className="text-[13px] font-semibold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1"
+                      data-testid="customer-picker-create-from-search"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      Create "{pickCustomerSearch.trim()}" as a new customer
+                    </button>
+                  ) : (
+                    <span className="text-[13px] text-slate-500">No matches</span>
+                  )}
+                </li>
               ) : (
                 filteredPickCustomers.map((c) => (
                   <li key={c.id}>
@@ -662,7 +679,12 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           ) : (
             <button
               type="button"
-              onClick={() => setShowNewCustomerForm(true)}
+              onClick={() => {
+                if (pickCustomerSearch.trim() && !newCustomerName.trim()) {
+                  setNewCustomerName(pickCustomerSearch.trim());
+                }
+                setShowNewCustomerForm(true);
+              }}
               className="mt-3 text-[13px] font-semibold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1"
               data-testid="show-new-customer-form"
             >
