@@ -80,7 +80,12 @@ class FirebaseMessagingService {
       };
 
       const result = await admin.messaging().send(message);
-      console.log('✅ FCM notification sent:', result);
+      // Log the deep-link target alongside the message id so the DO logs reveal
+      // whether a tap that "lands on the dispatch board" was sent the right
+      // /dispatch?job=<id> target or a bare /dispatch fallback (missing jobId).
+      console.log(
+        `✅ FCM notification sent: id=${result} type=${dataPayload.type || '?'} clickAction=${dataPayload.clickAction || '(none)'} jobId=${dataPayload.jobId || '(none)'} token=…${token.slice(-8)}`,
+      );
       return true;
     } catch (error: unknown) {
       const err = error as { code?: string; message?: string };
