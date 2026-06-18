@@ -26,6 +26,7 @@ import {
   GripVertical,
   Check,
   X,
+  Truck,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -385,16 +386,24 @@ export default function VehicleInspectionSettings() {
             Manage pre-start inspection checklists
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditingTemplate({});
-            setTemplateDialogOpen(true);
-          }}
-          data-testid="button-add-template"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" asChild data-testid="button-manage-equipment">
+            <Link href="/equipment" className="flex items-center gap-2">
+              <Truck className="w-4 h-4" />
+              Vehicles &amp; equipment
+            </Link>
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingTemplate({});
+              setTemplateDialogOpen(true);
+            }}
+            data-testid="button-add-template"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New Template
+          </Button>
+        </div>
       </div>
 
       {/* Expiry reminders — rego / CoF / service lead-time alerts */}
