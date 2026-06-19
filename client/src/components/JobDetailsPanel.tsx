@@ -866,6 +866,47 @@ function ContactsCard({
     },
   });
 
+  // ── Add saved contact (inline form) ──────────────────────────────────────
+  // Saves a person under this customer so they can be reused across jobs, then
+  // auto-loads them into the active contact tab. Mirrors the desktop job card's
+  // createContactMutation (GlobalJobCard) but uses the mobile inline-form style.
+  const emptyContactDraft = { firstName: "", lastName: "", role: "", email: "", mobile: "", phone: "" };
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [contactDraft, setContactDraft] = useState(emptyContactDraft);
+  const createContact = useMutation<SavedContact, Error, typeof emptyContactDraft>({
+    mutationFn: async (input) => {
+      if (!customerId) throw new Error("no customer id");
+      const res = await apiRequest("POST", `/api/customers/${customerId}/contacts`, input);
+      const json = await res.json();
+      if (!json?.success || !json?.data) {
+        throw new Error(json?.message || "Couldn't save the contact. Please try again.");
+      }
+      return json.data as SavedContact;
+    },
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers", customerId, "contacts"] });
+      // Auto-load the freshly-created contact into whichever tab is active.
+      const patch: Partial<JobShape> = tab === "job"
+        ? {
+            jobContactFirstName: created.firstName ?? null,
+            jobContactLastName: created.lastName ?? null,
+            jobContactEmail: created.email ?? null,
+            jobContactMobile: created.mobile ?? null,
+            jobContactPhone: created.phone ?? null,
+          }
+        : {
+            tenantContactFirstName: created.firstName ?? null,
+            tenantContactLastName: created.lastName ?? null,
+            tenantContactEmail: created.email ?? null,
+            tenantContactMobile: created.mobile ?? null,
+            tenantContactPhone: created.phone ?? null,
+          };
+      saveField.mutate(patch);
+      setShowAddContact(false);
+      setContactDraft(emptyContactDraft);
+    },
+  });
+
   // Pick the right set of fields based on which tab is active.
   // For "job" tab, fall back to the customer record when job-level overrides are
   // empty — leads created from the website only ever stamp jobContactMobile/Phone
@@ -933,15 +974,116 @@ function ContactsCard({
         <button
           type="button"
           onClick={() => {
-            // eslint-disable-next-line no-console
-            console.warn("[JobDetailsPanel] + Add saved contact not wired up yet — Phase B.6");
+            if (!customerId) return;
+            setContactDraft(emptyContactDraft);
+            setShowAddContact((v) => !v);
           }}
-          className="text-[14px] font-bold text-blue-600 flex-shrink-0 self-start"
+          disabled={!customerId}
+          className="text-[14px] font-bold text-blue-600 flex-shrink-0 self-start disabled:opacity-50"
           data-testid="add-saved-contact"
         >
-          + Add
+          {showAddContact ? "Close" : "+ Add"}
         </button>
       </div>
+
+      {/* Add-contact inline form — opens under the banner via the + Add toggle. */}
+      {showAddContact && (
+        <div className="mt-2 border border-blue-200 rounded-xl p-3 space-y-2 bg-blue-50/40">
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text"
+              value={contactDraft.firstName}
+              onChange={(e) => setContactDraft({ ...contactDraft, firstName: e.target.value })}
+              placeholder="First name"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-first-name"
+              autoFocus
+            />
+            <input
+              type="text"
+              value={contactDraft.lastName}
+              onChange={(e) => setContactDraft({ ...contactDraft, lastName: e.target.value })}
+              placeholder="Last name"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-last-name"
+            />
+          </div>
+          <input
+            type="text"
+            value={contactDraft.role}
+            onChange={(e) => setContactDraft({ ...contactDraft, role: e.target.value })}
+            placeholder="Role (e.g. Manager)"
+            className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+            data-testid="add-contact-role"
+          />
+          <input
+            type="email"
+            value={contactDraft.email}
+            onChange={(e) => setContactDraft({ ...contactDraft, email: e.target.value })}
+            placeholder="Email"
+            className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+            data-testid="add-contact-email"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="tel"
+              value={contactDraft.mobile}
+              onChange={(e) => setContactDraft({ ...contactDraft, mobile: e.target.value })}
+              placeholder="Mobile"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-mobile"
+            />
+            <input
+              type="tel"
+              value={contactDraft.phone}
+              onChange={(e) => setContactDraft({ ...contactDraft, phone: e.target.value })}
+              placeholder="Phone (landline)"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-phone"
+            />
+          </div>
+          {createContact.error && (
+            <p className="text-[12px] text-red-700">{createContact.error.message}</p>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddContact(false);
+                setContactDraft(emptyContactDraft);
+              }}
+              disabled={createContact.isPending}
+              className="flex-1 bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+              data-testid="add-contact-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const draft = {
+                  firstName: contactDraft.firstName.trim(),
+                  lastName: contactDraft.lastName.trim(),
+                  role: contactDraft.role.trim(),
+                  email: contactDraft.email.trim(),
+                  mobile: contactDraft.mobile.trim(),
+                  phone: contactDraft.phone.trim(),
+                };
+                if (!draft.firstName && !draft.lastName) return;
+                createContact.mutate(draft);
+              }}
+              disabled={
+                (!contactDraft.firstName.trim() && !contactDraft.lastName.trim()) ||
+                createContact.isPending
+              }
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-[14px] font-semibold disabled:opacity-60"
+              data-testid="add-contact-save"
+            >
+              {createContact.isPending ? "Saving…" : "Save contact"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Saved contacts list — when present */}
       {savedContacts.length > 0 && (
