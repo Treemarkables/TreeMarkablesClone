@@ -1000,7 +1000,16 @@ function ContactsCard({
     const next = draft[k];
     const current = fields[k];
     if ((next ?? "") === (current ?? "")) return;
-    saveField.mutate({ [fieldKey(k)]: next || null } as Partial<JobShape>);
+    const key = fieldKey(k);
+    const trimmed = (next ?? "").trim();
+    if (trimmed === "") {
+      // Intentional clear. The server's anti-wipe safeguard restores empty
+      // values UNLESS the field is named in _clearFields, so without this a
+      // user can never remove a contact number/email — it just reappears.
+      saveField.mutate({ [key]: null, _clearFields: [key] } as unknown as Partial<JobShape>);
+    } else {
+      saveField.mutate({ [key]: trimmed } as Partial<JobShape>);
+    }
   };
 
   return (
