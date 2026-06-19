@@ -9,6 +9,20 @@ export function LogoSidebarTrigger({ className = "", size = 44 }: LogoSidebarTri
   const { openMobile, setOpenMobile, open, setOpen, isMobile } = useSidebar();
 
   const handleClick = () => {
+    // Escape hatch: if the page is stuck behind a leaked Radix
+    // `body { pointer-events: none }` lock (no dialog actually open), the menu
+    // button is the first thing staff reach for when everything looks "jammed".
+    // Clear the stale lock here so the very tap that reaches us also unjams the
+    // rest of the page, without waiting on the global watchdog in App.tsx.
+    if (typeof document !== "undefined" && document.body.style.pointerEvents === "none") {
+      const hasOpenDialog = document.querySelector(
+        '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]',
+      );
+      if (!hasOpenDialog) {
+        document.body.style.pointerEvents = "";
+      }
+    }
+
     if (isMobile) {
       setOpenMobile(!openMobile);
     } else {
@@ -30,6 +44,9 @@ export function LogoSidebarTrigger({ className = "", size = 44 }: LogoSidebarTri
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
         overflow: "hidden",
+        // Stay clickable even if a leaked body pointer-events:none lock is
+        // deadening the rest of the page, so this button can self-heal it.
+        pointerEvents: "auto",
       }}
     />
   );
