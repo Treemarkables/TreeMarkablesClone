@@ -11,6 +11,7 @@ import { ProposalReviewsWidget } from "@/components/ProposalReviewsWidget";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { RecipientPicker } from "@/components/RecipientPicker";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -1790,8 +1791,15 @@ export function ProposalBuilderV2({
 
   const sendSmsMutation = useMutation({
     mutationFn: async (d: { to: string; message: string; jobId?: string; customerId?: string; proposalId?: string }) => {
-      const res = await apiRequest("POST", "/api/communications/sms", d);
-      return await res.json();
+      // One copy of the message per number when sending to multiple contacts.
+      const numbers = d.to.split(/[,;]+/).map((s) => s.trim()).filter(Boolean);
+      const targets = numbers.length > 0 ? numbers : [d.to];
+      let last: any;
+      for (const to of targets) {
+        const res = await apiRequest("POST", "/api/communications/sms", { ...d, to });
+        last = await res.json();
+      }
+      return last;
     },
     onSuccess: () => { setShowSmsDialog(false); setSmsForm({ to: "", message: "" }); },
     onError: (err: Error) => toast({ title: "SMS Failed", description: err.message || "Failed to send SMS", variant: "destructive" }),
@@ -2528,7 +2536,17 @@ export function ProposalBuilderV2({
               <h2 className="text-base font-semibold mb-4">Send Proposal via Email</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-gray-500 font-medium">To</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-gray-500 font-medium">To</label>
+                    <RecipientPicker
+                      channel="email"
+                      customerId={(customer as { id?: string } | null)?.id || customerId}
+                      job={job}
+                      customer={customer}
+                      value={emailForm.to}
+                      onChange={(to) => setEmailForm((f) => ({ ...f, to }))}
+                    />
+                  </div>
                   <Input value={emailForm.to} onChange={(e) => setEmailForm((f) => ({ ...f, to: e.target.value }))} className="mt-1" placeholder="recipient@email.com" />
                 </div>
                 <div>
@@ -2563,7 +2581,17 @@ export function ProposalBuilderV2({
               <h2 className="text-base font-semibold mb-4">Send Proposal via SMS</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-gray-500 font-medium">Phone Number</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-gray-500 font-medium">Phone Number</label>
+                    <RecipientPicker
+                      channel="sms"
+                      customerId={(customer as { id?: string } | null)?.id || customerId}
+                      job={job}
+                      customer={customer}
+                      value={smsForm.to}
+                      onChange={(to) => setSmsForm((f) => ({ ...f, to }))}
+                    />
+                  </div>
                   <Input value={smsForm.to} onChange={(e) => setSmsForm((f) => ({ ...f, to: e.target.value }))} className="mt-1" placeholder="+64 21 xxx xxxx" />
                 </div>
                 <div>
