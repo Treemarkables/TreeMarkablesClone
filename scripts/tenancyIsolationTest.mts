@@ -114,10 +114,27 @@ async function login(t: Tenant): Promise<void> {
     body: JSON.stringify({ email: t.email, password: t.password }),
   });
   if (!res.ok) throw new Error(`login ${t.label} failed: HTTP ${res.status} ${await res.text()}`);
+
+  // The login response carries TWO `treemarkables.sid` Set-Cookie headers: the real
+  // session cookie AND a clearCookie for the legacy domain (empty value). Pick the
+  // non-empty one — grabbing the blank clear-cookie sends an unauthenticated session.
   const setCookie = (res.headers as any).getSetCookie?.() ?? [res.headers.get("set-cookie")].filter(Boolean);
-  const sid = (setCookie as string[]).map((s) => s.split(";")[0]).find((s) => s.startsWith("treemarkables.sid="));
-  if (!sid) throw new Error(`login ${t.label}: no session cookie returned`);
+  const sid = (setCookie as string[])
+    .map((s) => s.split(";")[0])
+    .filter((s) => s.startsWith("treemarkables.sid="))
+    .find((s) => s.length > "treemarkables.sid=".length); // non-empty value only
+  if (!sid) throw new Error(`login ${t.label}: no non-empty session cookie returned`);
   t.cookie = sid;
+
+  // Verify the cookie actually authenticates before we trust the matrix. If this
+  // fails, every "isolated" result below is just fail-closed noise, not real proof.
+  const me = await getAs(t, "/api/auth/me");
+  if (me.status !== 200 || !me.body.includes(t.employeeId)) {
+    throw new Error(
+      `login ${t.label}: session did not authenticate (/api/auth/me → HTTP ${me.status}). ` +
+      `Body: ${me.body.slice(0, 300)}`,
+    );
+  }
 }
 
 async function getAs(t: Tenant | null, path: string): Promise<{ status: number; body: string }> {
@@ -131,24 +148,63 @@ function containsAny(body: string, ids: string[]): string[] {
   return ids.filter((id) => body.includes(id));
 }
 
+/**
+ * DB-level RLS probe — bypasses the server entirely. Becomes the non-bypass `app_tenant`
+ * role, sets the tenant GUC by hand, and counts a tenant's OWN seeded rows per table.
+ * This separates two failure modes the HTTP matrix can't tell apart:
+ *   - own rows VISIBLE here but NOT over HTTP  → session.businessId isn't reaching the GUC
+ *     (app plumbing bug)
+ *   - own rows NOT visible here either          → the table's RLS policy is too strict
+ *     (policy/migration bug — would also break the real tenant)
+ *   - a huge count (all rows)                   → app_tenant bypasses RLS (enforcement off)
+ * Run with an empty GUC too, to confirm fail-closed = 0.
+ */
+async function dbProbe(gucBusinessId: string, tables: string[]): Promise<Record<string, number | string>> {
+  const p = await pool.connect();
+  const out: Record<string, number | string> = {};
+  try {
+    await p.query("SET ROLE app_tenant");
+    await p.query("SELECT set_config('app.current_business', $1, false)", [gucBusinessId]);
+    for (const t of tables) {
+      try {
+        out[t] = (await p.query(`SELECT count(*)::int AS n FROM ${t}`)).rows[0].n;
+      } catch (e) {
+        out[t] = `ERR:${(e as Error).message.split("\n")[0]}`;
+      }
+    }
+    await p.query("RESET ROLE").catch(() => {});
+    await p.query("SELECT set_config('app.current_business', '', false)").catch(() => {});
+  } catch (e) {
+    out.__role = `ERR:${(e as Error).message.split("\n")[0]}`;
+  } finally {
+    p.release();
+  }
+  return out;
+}
+
 type Row = { name: string; verdict: "PASS" | "SECURITY FAIL" | "WARN" | "N/A"; detail: string };
 const results: Row[] = [];
 function record(name: string, verdict: Row["verdict"], detail = "") {
   results.push({ name, verdict, detail });
 }
 
-// Authenticated list endpoints: viewer must see OWN ids, never the OTHER tenant's ids.
-const LIST_ENDPOINTS = [
-  "/api/customers",
-  "/api/jobs",
-  "/api/leads",
-  "/api/invoices",
-  "/api/equipment",
-  "/api/calls",
-  "/api/today-overview",
+// Authenticated list endpoints: viewer must never see the OTHER tenant's ids.
+// `ownCheck` = also assert the viewer DOES see its own seeded row. Only enabled for
+// endpoints we seed AND that echo the row id in their list response — customers + jobs.
+// The rest are isolation-only: either not seeded (invoices/equipment/calls) or shaped so
+// a bare seed won't appear (today-overview = today's jobs only; leads = minimal/filtered).
+const LIST_ENDPOINTS: { path: string; ownCheck: boolean }[] = [
+  { path: "/api/customers", ownCheck: true },
+  { path: "/api/jobs", ownCheck: true },
+  { path: "/api/leads", ownCheck: false },
+  { path: "/api/invoices", ownCheck: false },
+  { path: "/api/equipment", ownCheck: false },
+  { path: "/api/calls", ownCheck: false },
+  { path: "/api/today-overview", ownCheck: false },
 ];
 
-async function testListEndpoint(path: string, viewer: Tenant, other: Tenant) {
+async function testListEndpoint(ep: { path: string; ownCheck: boolean }, viewer: Tenant, other: Tenant) {
+  const { path, ownCheck } = ep;
   const { status, body } = await getAs(viewer, path);
   const name = `${path}  (as ${viewer.label})`;
   if (status >= 500) { record(name, "WARN", `HTTP ${status} (endpoint error)`); return; }
@@ -158,8 +214,9 @@ async function testListEndpoint(path: string, viewer: Tenant, other: Tenant) {
     record(name, "SECURITY FAIL", `leaked ${other.label}'s ids: ${leaked.join(", ")}`);
     return;
   }
+  if (!ownCheck) { record(name, "PASS", "isolated (no own-data assertion for this endpoint)"); return; }
   const ownVisible = containsAny(body, viewer.ids()).length > 0;
-  record(name, "PASS", ownVisible ? "isolated; own data visible" : "isolated; but own data NOT visible (fail-closed?)");
+  record(name, "PASS", ownVisible ? "isolated; own data visible" : "isolated; own data NOT visible");
   if (!ownVisible) record(`${path}  (as ${viewer.label}) — own-visibility`, "WARN", "viewer could not see its own seeded rows");
 }
 
@@ -232,6 +289,30 @@ async function testListEndpoint(path: string, viewer: Tenant, other: Tenant) {
     if (warns.some((w) => /own/.test(w.detail))) {
       console.log("Note: 'own data NOT visible' warnings usually mean that path fails closed under RLS");
       console.log("      (safe from leaks, but broken for real tenants — e.g. the customer portal).");
+    }
+
+    // ── DB-level RLS diagnostic ────────────────────────────────────────────────
+    // Always run — it's the strongest positive proof that RLS enforces per-tenant
+    // (GUC=A reveals exactly A's own rows, empty GUC reveals nothing), independent of
+    // the HTTP path. If the HTTP matrix ever regresses, this tells you instantly
+    // whether the fault is RLS policy vs session→GUC plumbing.
+    {
+      const TABLES = ["customers", "jobs", "leads", "employees"];
+      const withGuc = await dbProbe(A.businessId, TABLES);
+      const emptyGuc = await dbProbe("", TABLES);
+      console.log("\nDB-LEVEL RLS PROBE (bypasses the server)");
+      console.log(`  as app_tenant, GUC = A (${A.businessId}):`);
+      console.log(`     ${JSON.stringify(withGuc)}`);
+      console.log(`     ↑ expect each = 1 (A's own seeded row). If 1 → RLS is correct, so the`);
+      console.log(`       HTTP "not visible" is a session.businessId→GUC plumbing bug in the app.`);
+      console.log(`       If 0 → that table's RLS policy is too strict (would break real tenants).`);
+      console.log(`  as app_tenant, GUC = "" (empty):`);
+      console.log(`     ${JSON.stringify(emptyGuc)}   ← expect all 0 (fail-closed)`);
+      // Sanity: confirm the seed actually stamped business_id = A (owner read).
+      const owned = await pool.query(
+        `SELECT business_id FROM customers WHERE id = $1`, [A.customerId],
+      ).then((r) => r.rows[0]?.business_id).catch(() => "ERR");
+      console.log(`  seed check (owner): customers.business_id for A's customer = ${owned}  (A = ${A.businessId})`);
     }
 
     process.exitCode = fails.length;
