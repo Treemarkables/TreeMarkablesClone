@@ -2465,12 +2465,8 @@ export function JobDiarySection({
                             const accent = isOutgoing
                               ? "border-blue-400 dark:border-blue-500"
                               : "border-purple-400 dark:border-purple-500";
-                            const bubbleBg = isOutgoing
-                              ? "bg-blue-50 dark:bg-blue-900/30"
-                              : "bg-purple-50 dark:bg-purple-900/30";
-                            const bubbleText = isOutgoing
-                              ? "text-blue-900 dark:text-blue-100"
-                              : "text-purple-900 dark:text-purple-100";
+                            const bubbleBg = "bg-gray-50 dark:bg-gray-800/60";
+                            const bubbleText = "text-gray-800 dark:text-gray-200";
                             const labelText = isOutgoing
                               ? "text-blue-700 dark:text-blue-300"
                               : "text-purple-700 dark:text-purple-300";
@@ -2646,12 +2642,8 @@ export function JobDiarySection({
                             const accent = isOutgoing
                               ? "border-blue-400 dark:border-blue-500"
                               : "border-purple-400 dark:border-purple-500";
-                            const bubbleBg = isOutgoing
-                              ? "bg-blue-50 dark:bg-blue-900/30"
-                              : "bg-purple-50 dark:bg-purple-900/30";
-                            const bubbleText = isOutgoing
-                              ? "text-blue-900 dark:text-blue-100"
-                              : "text-purple-900 dark:text-purple-100";
+                            const bubbleBg = "bg-gray-50 dark:bg-gray-800/60";
+                            const bubbleText = "text-gray-800 dark:text-gray-200";
                             const labelText = isOutgoing
                               ? "text-blue-700 dark:text-blue-300"
                               : "text-purple-700 dark:text-purple-300";
@@ -2953,21 +2945,9 @@ export function JobDiarySection({
                       data-diary-entry-id={entry.id}
                       className="group rounded-xl transition-shadow"
                     >
-                      <div
-                        className={`rounded-xl overflow-hidden shadow-sm ${
-                          isSent
-                            ? "bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
-                            : "bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800"
-                        }`}
-                      >
+                      <div className="rounded-xl overflow-hidden shadow-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
                         {/* Header */}
-                        <div
-                          className={`flex items-center justify-between px-3 py-1.5 ${
-                            isSent
-                              ? "border-b border-gray-200 dark:border-gray-700"
-                              : "border-b border-purple-200 dark:border-purple-800"
-                          }`}
-                        >
+                        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 dark:border-gray-700">
                           <div className="flex items-center gap-1.5">
                             {entry.type === "email" ? (
                               <MdEmail
@@ -2995,7 +2975,7 @@ export function JobDiarySection({
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span
-                              className={`text-[10px] whitespace-nowrap ${isSent ? "text-gray-400 dark:text-gray-500" : "text-purple-500 dark:text-purple-400"}`}
+                              className="text-[10px] whitespace-nowrap text-gray-400 dark:text-gray-500"
                             >
                               {formatInTimeZone(
                                 new Date(entry.timestamp),
@@ -3029,24 +3009,14 @@ export function JobDiarySection({
                           onClick={isClickable ? handleEntryClick : undefined}
                         >
                           <p
-                            className={`text-xs leading-relaxed whitespace-pre-wrap break-words w-full ${
-                              isSent
-                                ? "text-gray-700 dark:text-gray-300"
-                                : "text-purple-900 dark:text-purple-100"
-                            } ${isClickable ? "underline underline-offset-2 decoration-dashed" : ""}`}
+                            className={`text-xs leading-relaxed whitespace-pre-wrap break-words w-full text-gray-700 dark:text-gray-300 ${isClickable ? "underline underline-offset-2 decoration-dashed" : ""}`}
                             style={{ wordBreak: "break-word" }}
                           >
                             {messageText}
                           </p>
                         </div>
                         {/* Footer with tracking and reply */}
-                        <div
-                          className={`px-3 py-1.5 flex items-center justify-between gap-2 ${
-                            isSent
-                              ? "border-t border-gray-200 dark:border-gray-700"
-                              : "border-t border-purple-200 dark:border-purple-800"
-                          }`}
-                        >
+                        <div className="px-3 py-1.5 flex items-center justify-between gap-2 border-t border-gray-200 dark:border-gray-700">
                           {/* Email tracking for sent emails */}
                           {isSent && entry.type === "email" ? (
                             entry.metadata?.sendgridMessageId ? (
@@ -3226,45 +3196,29 @@ export function JobDiarySection({
                   );
                 }
 
-                // Get entry-specific styling
+                // Get entry-specific styling.
+                // Option A: every entry sits on a white card with a hairline
+                // neutral border — colour survives only in the small per-type
+                // icon chip below, so the diary scans by type without the
+                // full-card colour washes.
                 const getEntryStyle = (type: string) => {
+                  const surface = {
+                    bg: "bg-white dark:bg-gray-900",
+                    border: "border-gray-200 dark:border-gray-700",
+                  };
                   switch (type) {
                     case "note":
-                      return {
-                        bg: "bg-yellow-50 dark:bg-yellow-900/20",
-                        border: "border-yellow-200 dark:border-yellow-800",
-                        icon: "bg-yellow-100 dark:bg-yellow-900/50",
-                      };
+                      return { ...surface, icon: "bg-yellow-100 dark:bg-yellow-900/50" };
                     case "proposal":
-                      return {
-                        bg: "bg-indigo-50 dark:bg-indigo-900/20",
-                        border: "border-indigo-200 dark:border-indigo-800",
-                        icon: "bg-indigo-100 dark:bg-indigo-900/50",
-                      };
+                      return { ...surface, icon: "bg-indigo-100 dark:bg-indigo-900/50" };
                     case "quote":
-                      return {
-                        bg: "bg-teal-50 dark:bg-teal-900/20",
-                        border: "border-teal-200 dark:border-teal-800",
-                        icon: "bg-teal-100 dark:bg-teal-900/50",
-                      };
+                      return { ...surface, icon: "bg-teal-100 dark:bg-teal-900/50" };
                     case "job_event":
-                      return {
-                        bg: "bg-green-50 dark:bg-green-900/20",
-                        border: "border-green-200 dark:border-green-800",
-                        icon: "bg-green-100 dark:bg-green-900/50",
-                      };
+                      return { ...surface, icon: "bg-green-100 dark:bg-green-900/50" };
                     case "call":
-                      return {
-                        bg: "bg-orange-50 dark:bg-orange-900/20",
-                        border: "border-orange-200 dark:border-orange-800",
-                        icon: "bg-orange-100 dark:bg-orange-900/50",
-                      };
+                      return { ...surface, icon: "bg-orange-100 dark:bg-orange-900/50" };
                     default:
-                      return {
-                        bg: "bg-gray-50 dark:bg-gray-800",
-                        border: "border-gray-200 dark:border-gray-700",
-                        icon: "bg-gray-100 dark:bg-gray-900/50",
-                      };
+                      return { ...surface, icon: "bg-gray-100 dark:bg-gray-900/50" };
                   }
                 };
                 const entryStyle = getEntryStyle(entry.type);
