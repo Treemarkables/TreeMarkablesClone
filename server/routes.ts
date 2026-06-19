@@ -1957,6 +1957,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // DELETE /api/auth/account - Permanently delete the signed-in user's own account.
+  // Required by App Store Guideline 5.1.1(v): an app that supports account creation
+  // must let the user initiate deletion from within the app. We scrub all personal
+  // data + sever the login (see storage.anonymizeEmployeeForDeletion — a hard delete
+  // is impossible given the FK graph), then destroy the session like logout does.
+  app.delete('/api/auth/account', async (req: Request, res: Response) => {
+    const employeeId = req.session.employeeId;
+    if (!employeeId) {
+      return res.status(401).json({ success: false, message: 'Not authenticated' });
+    }
+
+    try {
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee) {
+        // Nothing to delete — clear the dangling session and report success.
+        req.session.destroy(() => {});
+        return res.json({ success: true, message: 'Account deleted' });
+      }
+
+      await storage.anonymizeEmployeeForDeletion(employeeId);
+      console.log('[ACCOUNT-DELETE] Scrubbed + deactivated employee:', employeeId, 'business:', employee.businessId);
+
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('[ACCOUNT-DELETE] Session destroy error:', err);
+          // The account is already gone; report success regardless.
+        }
+        // Mirror logout's cookie clearing (attributes must match server/index.ts).
+        res.clearCookie('treemarkables.sid', {
+          path: '/', httpOnly: true, secure: true, sameSite: 'none',
+        });
+        res.clearCookie('treemarkables.sid', {
+          path: '/', httpOnly: true, secure: true, sameSite: 'none',
+          domain: '.treemarkables.co.nz',
+        });
+        res.json({ success: true, message: 'Account deleted' });
+      });
+    } catch (error) {
+      console.error('[ACCOUNT-DELETE] Failed:', error);
+      res.status(500).json({ success: false, message: 'Failed to delete account' });
+    }
+  });
+
   // ── Server-Sent Events ────────────────────────────────────────────────────
   // Clients connect here and receive real-time invalidation signals.
   app.get('/api/sse', (req: Request, res: Response) => {

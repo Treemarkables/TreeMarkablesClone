@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { ChevronLeft, Check, CreditCard, Loader2 } from "lucide-react";
+import { isNativeApp } from "@/lib/platform";
 
 interface Plan {
   id: string;
@@ -60,6 +61,11 @@ export default function SettingsBilling() {
   const isLive = sub && (sub.status === "active" || sub.status === "trialing");
   const currentPlanId = isLive ? sub!.planId : null;
 
+  // App Store Guideline 3.1.1: the iOS shell must not surface any subscription
+  // purchase / billing-management CTA (we bill via Stripe on the web). On native
+  // we show plans read-only and point the owner to inflowapp.co.nz.
+  const native = isNativeApp();
+
   const checkout = useMutation({
     mutationFn: async (planKey: string) => {
       const r = await apiRequest("POST", "/api/billing/checkout", { planKey });
@@ -98,7 +104,9 @@ export default function SettingsBilling() {
 
       <h1 className="text-2xl font-semibold mb-1">Billing &amp; plan</h1>
       <p className="text-muted-foreground mb-6">
-        Choose the plan that fits your business. Prices in NZD, excluding GST. Cancel anytime.
+        {native
+          ? "Your current plan and what each plan includes. Prices in NZD, excluding GST."
+          : "Choose the plan that fits your business. Prices in NZD, excluding GST. Cancel anytime."}
       </p>
 
       {sub && (isLive || sub.status === "past_due") && (
@@ -117,9 +125,22 @@ export default function SettingsBilling() {
                 </p>
               )}
             </div>
-            <Button variant="outline" onClick={() => portal.mutate()} disabled={portal.isPending}>
-              <CreditCard className="h-4 w-4 mr-2" /> Manage billing
-            </Button>
+            {!native && (
+              <Button variant="outline" onClick={() => portal.mutate()} disabled={portal.isPending}>
+                <CreditCard className="h-4 w-4 mr-2" /> Manage billing
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {native && (
+        <Card className="mb-6 border-border">
+          <CardContent className="py-4">
+            <p className="text-sm text-muted-foreground">
+              To change your plan or manage payment details, sign in to your account at
+              inflowapp.co.nz from a web browser.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -155,6 +176,11 @@ export default function SettingsBilling() {
                   </ul>
                   {isCurrent ? (
                     <Button disabled className="w-full">Current plan</Button>
+                  ) : native ? (
+                    // No purchase CTA inside the iOS app (App Store 3.1.1).
+                    <Button variant="outline" disabled className="w-full">
+                      {paid ? "Available on the web" : "Free"}
+                    </Button>
                   ) : paid ? (
                     <Button className="w-full" onClick={() => checkout.mutate(plan.key)} disabled={pending !== null}>
                       {pending === plan.key ? (

@@ -107,6 +107,7 @@ const QuotingProcessSettings = lazy(() => import("@/pages/QuotingProcessSettings
 const DocumentBuilderPage = lazy(() => import("@/pages/DocumentBuilderPage"));
 const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
 const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
+const SettingsAccount = lazy(() => import("@/pages/SettingsAccount"));
 const SettingsQuoteFollowup = lazy(() => import("@/pages/SettingsQuoteFollowup"));
 const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoReply"));
 const TimeTracking = lazy(() => import("@/pages/TimeTracking"));
@@ -1376,6 +1377,11 @@ function Router() {
       <Route path="/settings/billing">
         <SidebarLayout>
           <SettingsBilling />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/account">
+        <SidebarLayout>
+          <SettingsAccount />
         </SidebarLayout>
       </Route>
       <Route path="/settings/security">
