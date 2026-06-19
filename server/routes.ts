@@ -4674,8 +4674,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Set lastActivityAt for proper dispatch board sorting (new jobs appear at top)
       processedBody.lastActivityAt = new Date();
       
-      // Auto-populate address and lead source from existing customer if not provided
-      if (processedBody.customerId && !processedBody.isNewCustomer) {
+      // Auto-populate address and lead source from the linked customer.
+      // Repeat-business detection keys off whether the customer already has
+      // PRIOR jobs on file — NOT the client-supplied isNewCustomer flag. The
+      // email/conversation create path always sends isNewCustomer:true even for
+      // a returning customer, so the old flag-based check left those jobs with a
+      // blank lead source. Counting prior jobs is the reliable signal.
+      if (processedBody.customerId) {
         const existingCustomer = await storage.getCustomer(processedBody.customerId);
         if (existingCustomer) {
           // Auto-fill address from customer if missing
@@ -4683,21 +4688,25 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             processedBody.address = existingCustomer.address;
             console.log('✅ Auto-filled job address from customer:', existingCustomer.address);
           }
-          // Default lead source to "repeat" when not specified. This includes
-          // Gisborne District Council, which is repeat business by default but
-          // stays editable — staff can change it on the job card.
+          // Default lead source to "repeat" when the customer already has a job
+          // on file. This new job isn't persisted yet, so any existing job means
+          // returning business. A brand-new customer (created moments earlier in
+          // this same flow) has zero jobs and is correctly left blank. Stays
+          // editable — staff can change it on the job card.
           if (!processedBody.leadSource) {
-            processedBody.leadSource = 'repeat';
-            console.log('✅ Auto-set lead source to "repeat" for existing customer');
+            const priorJobs = await storage.getJobsByCustomer(processedBody.customerId);
+            if (priorJobs.length > 0) {
+              processedBody.leadSource = 'repeat';
+              console.log(`✅ Auto-set lead source to "repeat" — customer has ${priorJobs.length} prior job(s)`);
+            }
           }
         }
       }
 
-      // New-customer case: Gisborne District Council defaults to "repeat" when not
-      // specified (repeat business by default, but staff can change it).
-      if (processedBody.isNewCustomer && processedBody.newCustomerName &&
-          processedBody.newCustomerName.toLowerCase().includes('gisborne district council') &&
-          !processedBody.leadSource) {
+      // New-customer case: Gisborne District Council defaults to "repeat" even on
+      // their first job (council work is repeat business by default). Editable.
+      if (!processedBody.leadSource && processedBody.isNewCustomer && processedBody.newCustomerName &&
+          processedBody.newCustomerName.toLowerCase().includes('gisborne district council')) {
         processedBody.leadSource = 'repeat';
         console.log('✅ Auto-set lead source to "repeat" for new Gisborne District Council customer');
       }
@@ -5612,7 +5621,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           console.error('Error resolving customer for job payload:', custErr);
         }
       }
-      res.json({ success: true, data: { ...job, customerName, customer } });
+      // Display default for historical jobs: if a job has no lead source but its
+      // customer has OTHER jobs on file, surface it as "repeat" so the job card
+      // reflects returning business. Display-only — we don't write here. New jobs
+      // persist "repeat" at creation; this covers rows created before that fix
+      // (and the email/conversation path that used to skip it).
+      let leadSource = job.leadSource;
+      if (!leadSource && job.customerId) {
+        try {
+          const customerJobs = await storage.getJobsByCustomer(job.customerId);
+          if (customerJobs.some(j => j.id !== job.id)) {
+            leadSource = 'repeat';
+          }
+        } catch (ljErr) {
+          console.error('Error deriving repeat lead source for job:', ljErr);
+        }
+      }
+      res.json({ success: true, data: { ...job, leadSource, customerName, customer } });
     } catch (error) {
       console.error('Error fetching job:', error);
       res.status(500).json({ success: false, message: 'Error fetching job' });
