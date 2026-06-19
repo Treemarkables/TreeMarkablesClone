@@ -1,8 +1,16 @@
 import { getUncachableResendClient } from '../resendClient';
 import { formatNZTime } from '@shared/dateUtils';
 
+// Split a recipient field into individual addresses. Accepts a single address,
+// a comma/semicolon-separated string ("a@x.com, b@y.com"), or an array. Returns
+// a clean array so Resend puts every address on the To line of ONE email.
+export function parseRecipients(to: string | string[]): string[] {
+  const raw = Array.isArray(to) ? to : String(to ?? "").split(/[,;]+/);
+  return raw.map((a) => a.trim()).filter(Boolean);
+}
+
 interface EmailParams {
-  to: string;
+  to: string | string[];
   from?: string;
   subject: string;
   text?: string;
@@ -117,9 +125,12 @@ class EmailService {
         replyToAddress = this.defaultReplyTo; // Fallback to info@treemarkables.nz
       }
       
+      // Normalise to an array so a comma-separated `to` becomes multiple
+      // recipients on a single email's To line ("send to multiple contacts").
+      const toList = parseRecipients(params.to);
       const emailPayload: any = {
         from: fromEmail,
-        to: params.to,
+        to: toList.length > 1 ? toList : (toList[0] ?? ""),
         subject: params.subject,
         ...(params.html && { html: params.html }),
         ...(params.text && { text: params.text }),

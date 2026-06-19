@@ -51,6 +51,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
+import { RecipientPicker } from "./RecipientPicker";
 import { format as formatDate } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { InvoiceTemplate } from "./InvoiceTemplate";
@@ -1496,6 +1497,17 @@ export function EmailComposerModal({
                   Tenant
                 </button>
               </div>
+              {/* Multi-select picker — tick any saved contacts to add them to the
+                  To line (one email, all recipients). */}
+              <RecipientPicker
+                channel="email"
+                customerId={customer?.id}
+                job={job}
+                customer={customer}
+                value={emailData.to}
+                onChange={(to) => setEmailData((prev) => ({ ...prev, to }))}
+                className="sm:col-span-11 sm:col-start-2"
+              />
             </div>
             <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
               <Label
