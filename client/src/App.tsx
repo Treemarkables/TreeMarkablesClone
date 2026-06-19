@@ -1564,8 +1564,17 @@ function App() {
   // Watchdog for Radix Dialog/Sheet leaving `body { pointer-events: none }`
   // stuck after rapid nested open/close cycles (notably in the job card).
   // When that happens every click on the page is dead — including the
-  // sidebar menu button. If body is locked but no dialog is actually open,
-  // clear the lock so the UI self-heals.
+  // sidebar menu button, which looks "jammed on" to staff. If body is locked
+  // but no dialog is actually open, clear the lock so the UI self-heals.
+  //
+  // The lock is set/restored by Radix on the *dialog* element's lifecycle, but
+  // it leaks onto `document.body`. So we must re-check on three triggers:
+  //   1. body's own style attribute changing (Radix toggling the lock),
+  //   2. any dialog opening/closing anywhere in the tree (subtree mutations) —
+  //      this is the case the old version missed: a dialog that unmounts
+  //      without touching body.style again left the stale lock forever,
+  //   3. a low-frequency interval as a guaranteed backstop for any missed
+  //      mutation.
   useEffect(() => {
     const clearIfStale = () => {
       if (document.body.style.pointerEvents !== 'none') return;
@@ -1574,11 +1583,31 @@ function App() {
       );
       if (!hasOpenDialog) {
         document.body.style.pointerEvents = '';
+        console.warn('[pointer-events watchdog] cleared stale body lock (no open dialog)');
       }
     };
-    const observer = new MutationObserver(clearIfStale);
-    observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
-    return () => observer.disconnect();
+    // Coalesce bursts of mutations into a single check on the next frame.
+    let scheduled = false;
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        clearIfStale();
+      });
+    };
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['style', 'data-state'],
+      subtree: true,
+      childList: true,
+    });
+    const interval = window.setInterval(clearIfStale, 1000);
+    return () => {
+      observer.disconnect();
+      window.clearInterval(interval);
+    };
   }, []);
 
   return (
