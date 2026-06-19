@@ -17,7 +17,7 @@ declare module 'express-session' {
 }
 import { storage, invoiceRevenueExGst } from "./storage";
 import { getBusinessIdentity } from "./businessIdentity";
-import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
+import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
@@ -4500,8 +4500,12 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         return res.status(400).json({ success: false, message: 'Quote has expired' });
       }
 
+      // Owner-pathed public accept link (no session) → bind the quote's tenant so every
+      // insert below (work order, notifications, holding message, diary entry) is stamped
+      // to the quote owner, not the DEFAULT (Treemarkables) tenant.
+      const { updatedQuote, job, jobNumber } = await runWithBusiness(quote.businessId ?? undefined, async () => {
       // Update quote status to accepted
-      const updatedQuote = await storage.updateQuote(id, { 
+      const updatedQuote = await storage.updateQuote(id, {
         status: 'accepted',
         responseDate: new Date()
       });
@@ -4602,6 +4606,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       console.log(`✅ Quote ${quote.quoteNumber} accepted and converted to work order ${jobNumber}`);
+      return { updatedQuote, job, jobNumber };
+      });
 
       res.json({
         success: true,
@@ -24384,11 +24390,19 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         subtotal: updatedSubtotal,
       } as any);
 
-      const { job, jobNumber } = await finalizeProposalAcceptance({
-        proposal: { ...proposal, totalAmount: updatedTotalAmount as any } as any,
-        updatedTotalAmount,
-        updatedSubtotal,
-      });
+      // Owner-pathed public accept link (no session) → bind the proposal's tenant so
+      // every insert inside finalizeProposalAcceptance (job, payment, notifications,
+      // diary) is stamped with the proposal owner, not the DEFAULT (Treemarkables)
+      // tenant. Without this, a second tenant's accepted proposal would create the
+      // work order under Treemarkables.
+      const { job, jobNumber } = await runWithBusiness(
+        proposal.businessId ?? undefined,
+        () => finalizeProposalAcceptance({
+          proposal: { ...proposal, totalAmount: updatedTotalAmount as any } as any,
+          updatedTotalAmount,
+          updatedSubtotal,
+        }),
+      );
 
       console.log(`✅ Proposal ${proposal.proposalNumber} accepted and converted to work order ${jobNumber}`);
 
@@ -24723,7 +24737,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           // finalize side effects (job already exists).
           try {
             const targetJobId = proposal.jobId || null;
-            await storage.createPayment({
+            // Stripe webhook runs as owner (no session) → stamp the payment with the
+            // proposal's tenant, not the DEFAULT, so the ledger row is tenant-correct.
+            await runWithBusiness(proposal.businessId ?? undefined, () => storage.createPayment({
               jobId: targetJobId as any,
               proposalId: proposal.id,
               customerId: proposal.customerId,
@@ -24735,7 +24751,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
               kind: 'deposit',
               status: 'succeeded',
               paidAt: new Date(),
-            } as any);
+            } as any));
           } catch (e) {
             console.warn('Stripe webhook: payment insert skipped (likely duplicate)', e);
           }
@@ -24752,7 +24768,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const totalAmount = parseFloat(updatedProposal.totalAmount?.toString() || proposal.totalAmount?.toString() || '0');
         const subtotal = parseFloat(updatedProposal.subtotal?.toString() || proposal.subtotal?.toString() || '0');
 
-        await finalizeProposalAcceptance({
+        // Owner-context webhook → bind the proposal's tenant so the work order and all
+        // acceptance side-effect inserts are stamped to the proposal owner, not DEFAULT.
+        await runWithBusiness(updatedProposal.businessId ?? undefined, () => finalizeProposalAcceptance({
           proposal: updatedProposal,
           updatedTotalAmount: totalAmount,
           updatedSubtotal: subtotal,
@@ -24762,7 +24780,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             providerSessionId: session.id,
             providerPaymentId: session.payment_intent || undefined,
           },
-        });
+        }));
 
         console.log(`✅ Stripe webhook: deposit of $${amountPaid} captured for proposal ${updatedProposal.proposalNumber}; work order created`);
         return res.json({ received: true });
@@ -27046,6 +27064,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         return res.status(404).json({ success: false, message: "Review request not found" });
       }
 
+      // Owner-pathed public review link (no session) → bind the review request's tenant
+      // so the submission row is stamped to that tenant, not the DEFAULT (Treemarkables).
+      const submission = await runWithBusiness(reviewRequest.businessId ?? undefined, async () => {
       // Create review submission
       const submission = await storage.createReviewSubmission({
         requestId: reviewRequest.id,
@@ -27076,6 +27097,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           facebookPostStatus: 'held'
         });
       }
+
+      return submission;
+      });
 
       res.json({ success: true, data: submission });
     } catch (error) {
