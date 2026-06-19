@@ -143,7 +143,7 @@ import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
-import { googleCalendarService } from "./services/googleCalendarService";
+import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
 
@@ -2257,6 +2257,91 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         return res.status(200).json({ success: false, error: 'not_connected' });
       }
       console.error('Google Calendar events fetch error:', error);
+      return res.status(502).json({ success: false, error: 'upstream', message });
+    }
+  });
+
+  // One-off cleanup: remove already-synced job events that should NOT be on the
+  // owner's personal calendar (crew/work-order, completed, unsuccessful, mulch).
+  // Job events are the ones syncJobToCalendar created — summary starts with the
+  // tree icon and ends with " - #<jobNumber>". We keep quote-stage events
+  // (lead/quote) and only delete events whose job is a *known* non-quote status;
+  // anything we can't positively identify is reported, never deleted.
+  // Defaults to a dry run — pass { apply: true } to actually delete.
+  app.post('/api/google-calendar/cleanup-job-events', requireAdmin, async (req: Request, res: Response) => {
+    const { start, end, apply } = req.body ?? {};
+    const startDate = typeof start === 'string' ? new Date(start) : null;
+    const endDate = typeof end === 'string' ? new Date(end) : null;
+    if (!startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'start and end must be ISO timestamps' });
+    }
+    if (endDate.getTime() <= startDate.getTime()) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'end must be after start' });
+    }
+    const MAX_RANGE_MS = 730 * 24 * 60 * 60 * 1000; // 2 years
+    if (endDate.getTime() - startDate.getTime() > MAX_RANGE_MS) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'range must be 2 years or less' });
+    }
+
+    try {
+      const events = await googleCalendarService.listAllEvents(startDate.toISOString(), endDate.toISOString());
+      const jobEvents = events.filter(e => e.summary.startsWith('🌳'));
+
+      const toDelete: any[] = [];   // positively a non-quote job → safe to delete
+      const skippedQuote: any[] = []; // lead/quote → keep
+      const unresolved: any[] = [];   // no job number / job not found → never auto-delete
+
+      for (const ev of jobEvents) {
+        const match = ev.summary.match(/#(\S+)\s*$/);
+        const jobNumber = match?.[1];
+        if (!jobNumber) {
+          unresolved.push({ id: ev.id, summary: ev.summary, start: ev.start, reason: 'no_job_number' });
+          continue;
+        }
+        const job = await storage.getJobByJobNumber(jobNumber);
+        if (!job) {
+          unresolved.push({ id: ev.id, summary: ev.summary, start: ev.start, jobNumber, reason: 'job_not_found' });
+          continue;
+        }
+        if (CALENDAR_SYNCABLE_JOB_STATUSES.has(job.status)) {
+          skippedQuote.push({ id: ev.id, summary: ev.summary, start: ev.start, jobNumber, status: job.status });
+        } else {
+          toDelete.push({ id: ev.id, summary: ev.summary, start: ev.start, jobNumber, status: job.status });
+        }
+      }
+
+      let deleted = 0;
+      const deleteFailures: any[] = [];
+      if (apply === true) {
+        for (const c of toDelete) {
+          const ok = await googleCalendarService.deleteEvent(c.id);
+          if (ok) deleted++;
+          else deleteFailures.push(c);
+        }
+      }
+
+      return res.json({
+        success: true,
+        dryRun: apply !== true,
+        range: { start: startDate.toISOString(), end: endDate.toISOString() },
+        totals: {
+          jobEventsScanned: jobEvents.length,
+          toDelete: toDelete.length,
+          keptQuoteStage: skippedQuote.length,
+          unresolved: unresolved.length,
+          deleted,
+        },
+        toDelete,
+        keptQuoteStage: skippedQuote,
+        unresolved,
+        deleteFailures,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('not connected')) {
+        return res.status(200).json({ success: false, error: 'not_connected' });
+      }
+      console.error('Google Calendar cleanup error:', error);
       return res.status(502).json({ success: false, error: 'upstream', message });
     }
   });
