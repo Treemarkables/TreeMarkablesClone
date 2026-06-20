@@ -11938,9 +11938,16 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                   console.log(`✅ New customer created: ${customer.name}`);
                 }
 
-                // Link the call record to the customer now that we know who it is
+                // Link the call record to the customer now that we know who it is.
                 if (customer) {
-                  await storage.updateCall(call.id, { customerId: customer.id });
+                  // Re-stamp the call to the matched customer's tenant. The call row was
+                  // created before we knew the caller (this webhook is owner-pathed, and
+                  // there's no inbound-number→business map yet), so it defaulted to the
+                  // Treemarkables tenant; correct it now that the owning business is known.
+                  await storage.updateCall(call.id, {
+                    customerId: customer.id,
+                    businessId: customer.businessId ?? undefined,
+                  });
                   console.log(`🔗 Call record linked to customer: ${customer.id}`);
                 }
 
@@ -11964,7 +11971,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                         return currentTime > latestTime ? current : latest;
                       });
                       await storage.updateCall(call.id, { jobId: mostRecentActive.id });
-                      await storage.createJobDiaryEntry({
+                      // Stamp the diary entry with the matched job's tenant (owner-pathed
+                      // webhook → no session) so it lands on the job owner, not the default.
+                      await runWithBusiness(mostRecentActive.businessId ?? undefined, () => storage.createJobDiaryEntry({
                         jobId: mostRecentActive.id,
                         entryType: 'call',
                         title: `📞 Inbound call from ${customer.name}`,
@@ -11977,7 +11986,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                           transcription: transcript,
                           callSid: CallSid,
                         },
-                      });
+                      }));
                       await storage.updateJob(mostRecentActive.id, { lastActivityAt: new Date() });
                       console.log(`📎 Call auto-linked to existing active job #${mostRecentActive.jobNumber}`);
                     } else {
@@ -19242,6 +19251,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
         const actionUrl = matchedJob ? `/jobs/${matchedJob.id}` : '/invoices';
 
+        // Stamp the bounce/complaint notification + diary entry to the matched job's
+        // tenant (owner-pathed webhook, no session). Unmatched events carry no tenant
+        // signal, so they fall back to the default — acceptable.
+        await runWithBusiness(matchedJob?.businessId ?? undefined, async () => {
         await storage.createNotification({
           title: notifTitle,
           message: notifMessage,
@@ -19268,6 +19281,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             metadata: { recipientEmail, subject, resendMessageId: messageId },
           }).catch(() => { /* non-critical */ });
         }
+        }); // runWithBusiness(matchedJob.businessId)
 
         console.log(`🚨 ${isBounce ? 'Bounce' : 'Complaint'} alert created for ${recipientEmail} (${jobLabel})`);
         broadcast(['/api/notifications/summary']);
@@ -20729,6 +20743,9 @@ Transcription: ${transcriptText}`;
       if (jobFromUuid) {
         const job = jobFromUuid;
         console.log(`✅ Found job ${job.jobNumber} by UUID - creating diary entry`);
+        // Owner-pathed inbound-email webhook (no session) → bind the matched job's tenant
+        // so the diary entry + reply notifications stamp the job owner, not the default.
+        await runWithBusiness(job.businessId ?? undefined, async () => {
         const diaryEntry = await storage.createJobDiaryEntry({
           jobId: job.id,
           entryType: 'email',
@@ -20828,8 +20845,9 @@ Transcription: ${transcriptText}`;
         } catch (notifError) {
           console.error('Failed to create email reply notification:', notifError);
         }
+        }); // runWithBusiness(job.businessId)
       }
-      
+
       // Try to find job by job number
       if (!jobFound && jobNumberMatch) {
         const jobNumber = jobNumberMatch[1];
@@ -20838,6 +20856,9 @@ Transcription: ${transcriptText}`;
         
         if (job) {
           console.log(`✅ Found job ${job.jobNumber} - creating diary entry`);
+          // Owner-pathed inbound-email webhook (no session) → bind the matched job's tenant
+          // so the diary entry + reply notifications stamp the job owner, not the default.
+          await runWithBusiness(job.businessId ?? undefined, async () => {
           // Create diary entry in the job
           const diaryEntry = await storage.createJobDiaryEntry({
             jobId: job.id,
@@ -20941,9 +20962,10 @@ Transcription: ${transcriptText}`;
             console.error('Error creating email reply notification:', notifError);
             // Don't fail the request if notification creation fails
           }
+          }); // runWithBusiness(job.businessId)
         }
       }
-      
+
       // Try to find job by quote number if not found by job number
       if (!jobFound && quoteNumberMatch) {
         const quoteNumber = quoteNumberMatch[1];
@@ -20953,6 +20975,9 @@ Transcription: ${transcriptText}`;
         if (jobs && jobs.length > 0) {
           const job = jobs[0];
           console.log(`✅ Found job ${job.jobNumber} via quote - creating diary entry`);
+          // Owner-pathed inbound-email webhook (no session) → bind the matched job's tenant
+          // so the diary entry + reply notifications stamp the job owner, not the default.
+          await runWithBusiness(job.businessId ?? undefined, async () => {
           // Create diary entry in the job
           const diaryEntry = await storage.createJobDiaryEntry({
             jobId: job.id,
@@ -21043,9 +21068,10 @@ Transcription: ${transcriptText}`;
             console.error('Error creating email reply notification:', notifError);
             // Don't fail the request if notification creation fails
           }
+          }); // runWithBusiness(job.businessId)
         }
       }
-      
+
       // Quote acceptance via email reply — triggered by the "Accept Quote"
       // mailto button. Subject is "ACCEPT QUOTE Q-XXX"; body fallback is
       // "I accept quote Q-XXX". Only runs when a job was matched above.
@@ -21070,6 +21096,9 @@ Transcription: ${transcriptText}`;
               (p) => p.proposalNumber === acceptedNumber && p.templateUsed === 'quote',
             );
             if (quoteProposal && quoteProposal.status !== 'accepted') {
+              // Email-accept path runs owner-pathed (no session) → bind the job's tenant so
+              // the diary / notification / holding-message inserts stamp the owner, not default.
+              await runWithBusiness(targetJob.businessId ?? undefined, async () => {
               await storage.updateProposal(quoteProposal.id, {
                 status: 'accepted',
                 responseDate: new Date(),
@@ -21142,6 +21171,7 @@ Transcription: ${transcriptText}`;
                 console.error('Failed to create holding-message draft after quote acceptance:', holdErr);
               }
               console.log(`✅ Marked quote ${acceptedNumber} as accepted for job ${targetJob.jobNumber}`);
+              }); // runWithBusiness(targetJob.businessId)
             }
           }
         } catch (acceptErr) {
@@ -21164,6 +21194,8 @@ Transcription: ${transcriptText}`;
           }
           if (targetJob && !targetJob.customerConfirmed &&
               targetJob.status === 'work_order') {
+            // Owner-pathed email-confirm path → bind the job's tenant for the inserts below.
+            await runWithBusiness(targetJob.businessId ?? undefined, async () => {
             await storage.updateJob(targetJob.id, {
               customerConfirmed: true,
               customerConfirmedAt: new Date(),
@@ -21196,6 +21228,7 @@ Transcription: ${transcriptText}`;
               console.error('Failed to create customer_confirmation notification:', notifErr);
             });
             console.log(`✅ Auto-confirmed Job #${targetJob.jobNumber} from email reply`);
+            }); // runWithBusiness(targetJob.businessId)
           }
         } catch (confirmErr) {
           console.error('Failed to process email booking confirmation:', confirmErr);
