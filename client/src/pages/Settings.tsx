@@ -115,6 +115,14 @@ const settingsOptions = [
     path: "/settings/billing"
   },
   {
+    id: "account",
+    title: "Account",
+    description: "Your sign-in details and account deletion",
+    icon: Users,
+    color: "bg-slate-100 text-slate-600",
+    path: "/settings/account"
+  },
+  {
     id: "security",
     title: "Security & API",
     description: "Password settings, API keys and access control",

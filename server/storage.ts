@@ -532,6 +532,7 @@ export interface IStorage {
   getEmployeesByPosition(position: string): Promise<Employee[]>;
   getEmployeesBySkill(skill: string): Promise<Employee[]>;
   deleteEmployee(id: string): Promise<void>;
+  anonymizeEmployeeForDeletion(id: string): Promise<void>;
 
   // Role Tier Management
   createRoleTier(tier: schema.InsertRoleTier): Promise<schema.RoleTier>;
@@ -4473,6 +4474,37 @@ class DatabaseStorage implements IStorage {
 
   async deleteEmployee(id: string): Promise<void> {
     await db.delete(schema.employees).where(eq(schema.employees.id, id));
+  }
+
+  // Account deletion (App Store Guideline 5.1.1(v)). A hard row-delete would
+  // violate the 20+ FK references to employees.id that have no ON DELETE rule,
+  // so instead we irreversibly scrub the personal data and sever the login: the
+  // account can no longer be authenticated and carries no PII. Operational
+  // records the staff member touched (jobs, timesheets) keep referential
+  // integrity but are de-identified. Also drops their push tokens.
+  async anonymizeEmployeeForDeletion(id: string): Promise<void> {
+    await db.update(schema.employees)
+      .set({
+        firstName: 'Deleted',
+        lastName: 'User',
+        email: null,
+        phone: null,
+        password: null,
+        emergencyContact: null,
+        emergencyContactPhone: null,
+        notes: null,
+        permissionOverrides: { grant: [], deny: [] },
+        status: 'inactive',
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.employees.id, id));
+
+    // Remove device push tokens so notifications stop reaching the old account.
+    const tokens = await this.getFcmTokensByEmployee(id);
+    for (const t of tokens) {
+      await this.deleteFcmToken(t.id);
+    }
   }
 
   // Role Tier Management
