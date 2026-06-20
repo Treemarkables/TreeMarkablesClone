@@ -866,6 +866,95 @@ function ContactsCard({
     },
   });
 
+  // ── Add saved contact (inline form) ──────────────────────────────────────
+  // Saves a person under this customer so they can be reused across jobs, then
+  // auto-loads them into the active contact tab. Mirrors the desktop job card's
+  // createContactMutation (GlobalJobCard) but uses the mobile inline-form style.
+  const emptyContactDraft = { firstName: "", lastName: "", role: "", email: "", mobile: "", phone: "" };
+  const [showAddContact, setShowAddContact] = useState(false);
+  // When non-null, the inline form is editing the saved contact with this id
+  // (PATCH) instead of adding a new one (POST). The form UI is shared.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [contactDraft, setContactDraft] = useState(emptyContactDraft);
+  const createContact = useMutation<SavedContact, Error, typeof emptyContactDraft>({
+    mutationFn: async (input) => {
+      if (!customerId) throw new Error("no customer id");
+      const res = await apiRequest("POST", `/api/customers/${customerId}/contacts`, input);
+      const json = await res.json();
+      if (!json?.success || !json?.data) {
+        throw new Error(json?.message || "Couldn't save the contact. Please try again.");
+      }
+      return json.data as SavedContact;
+    },
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers", customerId, "contacts"] });
+      // Auto-load the freshly-created contact into whichever tab is active.
+      const patch: Partial<JobShape> = tab === "job"
+        ? {
+            jobContactFirstName: created.firstName ?? null,
+            jobContactLastName: created.lastName ?? null,
+            jobContactEmail: created.email ?? null,
+            jobContactMobile: created.mobile ?? null,
+            jobContactPhone: created.phone ?? null,
+          }
+        : {
+            tenantContactFirstName: created.firstName ?? null,
+            tenantContactLastName: created.lastName ?? null,
+            tenantContactEmail: created.email ?? null,
+            tenantContactMobile: created.mobile ?? null,
+            tenantContactPhone: created.phone ?? null,
+          };
+      saveField.mutate(patch);
+      setShowAddContact(false);
+      setContactDraft(emptyContactDraft);
+    },
+  });
+
+  // Edit an existing saved contact (PATCH /api/customer-contacts/:id). Lets the
+  // user fix a contact's email/mobile/etc. so the change persists to the contact
+  // record itself — not just a per-job override.
+  const updateContact = useMutation<SavedContact, Error, { id: string; patch: typeof emptyContactDraft }>({
+    mutationFn: async ({ id, patch }) => {
+      const res = await apiRequest("PATCH", `/api/customer-contacts/${id}`, patch);
+      const json = await res.json();
+      if (!json?.success || !json?.data) {
+        throw new Error(json?.message || "Couldn't update the contact. Please try again.");
+      }
+      return json.data as SavedContact;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers", customerId, "contacts"] });
+      setEditingId(null);
+      setShowAddContact(false);
+      setContactDraft(emptyContactDraft);
+    },
+  });
+
+  // Open the inline form in edit mode, pre-filled from the chosen contact.
+  const openEditContact = (sc: SavedContact) => {
+    setShowAddContact(false);
+    setEditingId(sc.id);
+    setContactDraft({
+      firstName: sc.firstName ?? "",
+      lastName: sc.lastName ?? "",
+      role: sc.role ?? "",
+      email: sc.email ?? "",
+      mobile: sc.mobile ?? "",
+      phone: sc.phone ?? "",
+    });
+  };
+
+  const closeContactForm = () => {
+    setShowAddContact(false);
+    setEditingId(null);
+    setContactDraft(emptyContactDraft);
+  };
+
+  // The inline form is shown for either add or edit.
+  const contactFormOpen = showAddContact || editingId !== null;
+  const contactFormPending = createContact.isPending || updateContact.isPending;
+  const contactFormError = editingId !== null ? updateContact.error : createContact.error;
+
   // Pick the right set of fields based on which tab is active.
   // For "job" tab, fall back to the customer record when job-level overrides are
   // empty — leads created from the website only ever stamp jobContactMobile/Phone
@@ -911,7 +1000,16 @@ function ContactsCard({
     const next = draft[k];
     const current = fields[k];
     if ((next ?? "") === (current ?? "")) return;
-    saveField.mutate({ [fieldKey(k)]: next || null } as Partial<JobShape>);
+    const key = fieldKey(k);
+    const trimmed = (next ?? "").trim();
+    if (trimmed === "") {
+      // Intentional clear. The server's anti-wipe safeguard restores empty
+      // values UNLESS the field is named in _clearFields, so without this a
+      // user can never remove a contact number/email — it just reappears.
+      saveField.mutate({ [key]: null, _clearFields: [key] } as unknown as Partial<JobShape>);
+    } else {
+      saveField.mutate({ [key]: trimmed } as Partial<JobShape>);
+    }
   };
 
   return (
@@ -933,15 +1031,126 @@ function ContactsCard({
         <button
           type="button"
           onClick={() => {
-            // eslint-disable-next-line no-console
-            console.warn("[JobDetailsPanel] + Add saved contact not wired up yet — Phase B.6");
+            if (!customerId) return;
+            if (contactFormOpen) {
+              closeContactForm();
+            } else {
+              setEditingId(null);
+              setContactDraft(emptyContactDraft);
+              setShowAddContact(true);
+            }
           }}
-          className="text-[14px] font-bold text-blue-600 flex-shrink-0 self-start"
+          disabled={!customerId}
+          className="text-[14px] font-bold text-blue-600 flex-shrink-0 self-start disabled:opacity-50"
           data-testid="add-saved-contact"
         >
-          + Add
+          {contactFormOpen ? "Close" : "+ Add"}
         </button>
       </div>
+
+      {/* Add/edit-contact inline form — opens under the banner via + Add, or via
+          the Edit button on a saved contact. */}
+      {contactFormOpen && (
+        <div className="mt-2 border border-blue-200 rounded-xl p-3 space-y-2 bg-blue-50/40">
+          <div className="text-[12px] font-bold uppercase tracking-wider text-blue-700">
+            {editingId !== null ? "Edit contact" : "New contact"}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text"
+              value={contactDraft.firstName}
+              onChange={(e) => setContactDraft({ ...contactDraft, firstName: e.target.value })}
+              placeholder="First name"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-first-name"
+              autoFocus
+            />
+            <input
+              type="text"
+              value={contactDraft.lastName}
+              onChange={(e) => setContactDraft({ ...contactDraft, lastName: e.target.value })}
+              placeholder="Last name"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-last-name"
+            />
+          </div>
+          <input
+            type="text"
+            value={contactDraft.role}
+            onChange={(e) => setContactDraft({ ...contactDraft, role: e.target.value })}
+            placeholder="Role (e.g. Manager)"
+            className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+            data-testid="add-contact-role"
+          />
+          <input
+            type="email"
+            value={contactDraft.email}
+            onChange={(e) => setContactDraft({ ...contactDraft, email: e.target.value })}
+            placeholder="Email"
+            className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+            data-testid="add-contact-email"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="tel"
+              value={contactDraft.mobile}
+              onChange={(e) => setContactDraft({ ...contactDraft, mobile: e.target.value })}
+              placeholder="Mobile"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-mobile"
+            />
+            <input
+              type="tel"
+              value={contactDraft.phone}
+              onChange={(e) => setContactDraft({ ...contactDraft, phone: e.target.value })}
+              placeholder="Phone (landline)"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-phone"
+            />
+          </div>
+          {contactFormError && (
+            <p className="text-[12px] text-red-700">{contactFormError.message}</p>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={closeContactForm}
+              disabled={contactFormPending}
+              className="flex-1 bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+              data-testid="add-contact-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const draft = {
+                  firstName: contactDraft.firstName.trim(),
+                  lastName: contactDraft.lastName.trim(),
+                  role: contactDraft.role.trim(),
+                  email: contactDraft.email.trim(),
+                  mobile: contactDraft.mobile.trim(),
+                  phone: contactDraft.phone.trim(),
+                };
+                if (!draft.firstName && !draft.lastName) return;
+                if (editingId !== null) {
+                  updateContact.mutate({ id: editingId, patch: draft });
+                } else {
+                  createContact.mutate(draft);
+                }
+              }}
+              disabled={
+                (!contactDraft.firstName.trim() && !contactDraft.lastName.trim()) ||
+                contactFormPending
+              }
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-[14px] font-semibold disabled:opacity-60"
+              data-testid="add-contact-save"
+            >
+              {contactFormPending ? "Saving…" : "Save contact"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Saved contacts list — when present */}
       {savedContacts.length > 0 && (
@@ -949,38 +1158,52 @@ function ContactsCard({
           {savedContacts.map((sc) => {
             const name = [sc.firstName, sc.lastName].filter(Boolean).join(" ") || "(unnamed)";
             return (
-              <button
+              <div
                 key={sc.id}
-                type="button"
-                onClick={() => {
-                  // Tap-to-load: populate the active contact tab with this saved contact.
-                  const patch: Partial<JobShape> = tab === "job"
-                    ? {
-                        jobContactFirstName: sc.firstName ?? null,
-                        jobContactLastName: sc.lastName ?? null,
-                        jobContactEmail: sc.email ?? null,
-                        jobContactMobile: sc.mobile ?? null,
-                        jobContactPhone: sc.phone ?? null,
-                      }
-                    : {
-                        tenantContactFirstName: sc.firstName ?? null,
-                        tenantContactLastName: sc.lastName ?? null,
-                        tenantContactEmail: sc.email ?? null,
-                        tenantContactMobile: sc.mobile ?? null,
-                        tenantContactPhone: sc.phone ?? null,
-                      };
-                  saveField.mutate(patch);
-                }}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-left"
+                className="w-full flex items-center gap-1 px-1 rounded-lg border border-slate-200 hover:bg-slate-50"
               >
-                <div className="min-w-0">
-                  <div className="text-[14px] font-semibold text-slate-900 truncate">{name}</div>
-                  {sc.role && <div className="text-[12px] text-slate-500 truncate">{sc.role}</div>}
-                </div>
-                {sc.isPrimary && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">Primary</span>
-                )}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Tap-to-load: populate the active contact tab with this saved contact.
+                    const patch: Partial<JobShape> = tab === "job"
+                      ? {
+                          jobContactFirstName: sc.firstName ?? null,
+                          jobContactLastName: sc.lastName ?? null,
+                          jobContactEmail: sc.email ?? null,
+                          jobContactMobile: sc.mobile ?? null,
+                          jobContactPhone: sc.phone ?? null,
+                        }
+                      : {
+                          tenantContactFirstName: sc.firstName ?? null,
+                          tenantContactLastName: sc.lastName ?? null,
+                          tenantContactEmail: sc.email ?? null,
+                          tenantContactMobile: sc.mobile ?? null,
+                          tenantContactPhone: sc.phone ?? null,
+                        };
+                    saveField.mutate(patch);
+                  }}
+                  className="flex-1 min-w-0 flex items-center justify-between px-2 py-2 text-left"
+                  data-testid={`load-saved-contact-${sc.id}`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-semibold text-slate-900 truncate">{name}</div>
+                    {sc.role && <div className="text-[12px] text-slate-500 truncate">{sc.role}</div>}
+                  </div>
+                  {sc.isPrimary && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">Primary</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openEditContact(sc)}
+                  className="flex-shrink-0 p-2 text-slate-400 hover:text-blue-600"
+                  data-testid={`edit-saved-contact-${sc.id}`}
+                  aria-label={`Edit ${name}`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </div>
             );
           })}
         </div>

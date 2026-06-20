@@ -17,7 +17,7 @@ declare module 'express-session' {
 }
 import { storage, invoiceRevenueExGst } from "./storage";
 import { getBusinessIdentity } from "./businessIdentity";
-import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
+import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
@@ -143,7 +143,7 @@ import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
-import { googleCalendarService } from "./services/googleCalendarService";
+import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
 
@@ -2304,6 +2304,91 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // One-off cleanup: remove already-synced job events that should NOT be on the
+  // owner's personal calendar (crew/work-order, completed, unsuccessful, mulch).
+  // Job events are the ones syncJobToCalendar created — summary starts with the
+  // tree icon and ends with " - #<jobNumber>". We keep quote-stage events
+  // (lead/quote) and only delete events whose job is a *known* non-quote status;
+  // anything we can't positively identify is reported, never deleted.
+  // Defaults to a dry run — pass { apply: true } to actually delete.
+  app.post('/api/google-calendar/cleanup-job-events', requireAdmin, async (req: Request, res: Response) => {
+    const { start, end, apply } = req.body ?? {};
+    const startDate = typeof start === 'string' ? new Date(start) : null;
+    const endDate = typeof end === 'string' ? new Date(end) : null;
+    if (!startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'start and end must be ISO timestamps' });
+    }
+    if (endDate.getTime() <= startDate.getTime()) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'end must be after start' });
+    }
+    const MAX_RANGE_MS = 730 * 24 * 60 * 60 * 1000; // 2 years
+    if (endDate.getTime() - startDate.getTime() > MAX_RANGE_MS) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'range must be 2 years or less' });
+    }
+
+    try {
+      const events = await googleCalendarService.listAllEvents(startDate.toISOString(), endDate.toISOString());
+      const jobEvents = events.filter(e => e.summary.startsWith('🌳'));
+
+      const toDelete: any[] = [];   // positively a non-quote job → safe to delete
+      const skippedQuote: any[] = []; // lead/quote → keep
+      const unresolved: any[] = [];   // no job number / job not found → never auto-delete
+
+      for (const ev of jobEvents) {
+        const match = ev.summary.match(/#(\S+)\s*$/);
+        const jobNumber = match?.[1];
+        if (!jobNumber) {
+          unresolved.push({ id: ev.id, summary: ev.summary, start: ev.start, reason: 'no_job_number' });
+          continue;
+        }
+        const job = await storage.getJobByJobNumber(jobNumber);
+        if (!job) {
+          unresolved.push({ id: ev.id, summary: ev.summary, start: ev.start, jobNumber, reason: 'job_not_found' });
+          continue;
+        }
+        if (CALENDAR_SYNCABLE_JOB_STATUSES.has(job.status)) {
+          skippedQuote.push({ id: ev.id, summary: ev.summary, start: ev.start, jobNumber, status: job.status });
+        } else {
+          toDelete.push({ id: ev.id, summary: ev.summary, start: ev.start, jobNumber, status: job.status });
+        }
+      }
+
+      let deleted = 0;
+      const deleteFailures: any[] = [];
+      if (apply === true) {
+        for (const c of toDelete) {
+          const ok = await googleCalendarService.deleteEvent(c.id);
+          if (ok) deleted++;
+          else deleteFailures.push(c);
+        }
+      }
+
+      return res.json({
+        success: true,
+        dryRun: apply !== true,
+        range: { start: startDate.toISOString(), end: endDate.toISOString() },
+        totals: {
+          jobEventsScanned: jobEvents.length,
+          toDelete: toDelete.length,
+          keptQuoteStage: skippedQuote.length,
+          unresolved: unresolved.length,
+          deleted,
+        },
+        toDelete,
+        keptQuoteStage: skippedQuote,
+        unresolved,
+        deleteFailures,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('not connected')) {
+        return res.status(200).json({ success: false, error: 'not_connected' });
+      }
+      console.error('Google Calendar cleanup error:', error);
+      return res.status(502).json({ success: false, error: 'upstream', message });
+    }
+  });
+
   // Google Places reviews endpoint (replaces Google Business Profile)
   // Cached for 6h — Places Details (Enterprise+Atmosphere) is ~$25/1000 calls,
   // and reviews change slowly. One bad April we paid $144 uncached.
@@ -4458,8 +4543,12 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         return res.status(400).json({ success: false, message: 'Quote has expired' });
       }
 
+      // Owner-pathed public accept link (no session) → bind the quote's tenant so every
+      // insert below (work order, notifications, holding message, diary entry) is stamped
+      // to the quote owner, not the DEFAULT (Treemarkables) tenant.
+      const { updatedQuote, job, jobNumber } = await runWithBusiness(quote.businessId ?? undefined, async () => {
       // Update quote status to accepted
-      const updatedQuote = await storage.updateQuote(id, { 
+      const updatedQuote = await storage.updateQuote(id, {
         status: 'accepted',
         responseDate: new Date()
       });
@@ -4560,6 +4649,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       console.log(`✅ Quote ${quote.quoteNumber} accepted and converted to work order ${jobNumber}`);
+      return { updatedQuote, job, jobNumber };
+      });
 
       res.json({
         success: true,
@@ -24342,11 +24433,19 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         subtotal: updatedSubtotal,
       } as any);
 
-      const { job, jobNumber } = await finalizeProposalAcceptance({
-        proposal: { ...proposal, totalAmount: updatedTotalAmount as any } as any,
-        updatedTotalAmount,
-        updatedSubtotal,
-      });
+      // Owner-pathed public accept link (no session) → bind the proposal's tenant so
+      // every insert inside finalizeProposalAcceptance (job, payment, notifications,
+      // diary) is stamped with the proposal owner, not the DEFAULT (Treemarkables)
+      // tenant. Without this, a second tenant's accepted proposal would create the
+      // work order under Treemarkables.
+      const { job, jobNumber } = await runWithBusiness(
+        proposal.businessId ?? undefined,
+        () => finalizeProposalAcceptance({
+          proposal: { ...proposal, totalAmount: updatedTotalAmount as any } as any,
+          updatedTotalAmount,
+          updatedSubtotal,
+        }),
+      );
 
       console.log(`✅ Proposal ${proposal.proposalNumber} accepted and converted to work order ${jobNumber}`);
 
@@ -24681,7 +24780,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           // finalize side effects (job already exists).
           try {
             const targetJobId = proposal.jobId || null;
-            await storage.createPayment({
+            // Stripe webhook runs as owner (no session) → stamp the payment with the
+            // proposal's tenant, not the DEFAULT, so the ledger row is tenant-correct.
+            await runWithBusiness(proposal.businessId ?? undefined, () => storage.createPayment({
               jobId: targetJobId as any,
               proposalId: proposal.id,
               customerId: proposal.customerId,
@@ -24693,7 +24794,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
               kind: 'deposit',
               status: 'succeeded',
               paidAt: new Date(),
-            } as any);
+            } as any));
           } catch (e) {
             console.warn('Stripe webhook: payment insert skipped (likely duplicate)', e);
           }
@@ -24710,7 +24811,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const totalAmount = parseFloat(updatedProposal.totalAmount?.toString() || proposal.totalAmount?.toString() || '0');
         const subtotal = parseFloat(updatedProposal.subtotal?.toString() || proposal.subtotal?.toString() || '0');
 
-        await finalizeProposalAcceptance({
+        // Owner-context webhook → bind the proposal's tenant so the work order and all
+        // acceptance side-effect inserts are stamped to the proposal owner, not DEFAULT.
+        await runWithBusiness(updatedProposal.businessId ?? undefined, () => finalizeProposalAcceptance({
           proposal: updatedProposal,
           updatedTotalAmount: totalAmount,
           updatedSubtotal: subtotal,
@@ -24720,7 +24823,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             providerSessionId: session.id,
             providerPaymentId: session.payment_intent || undefined,
           },
-        });
+        }));
 
         console.log(`✅ Stripe webhook: deposit of $${amountPaid} captured for proposal ${updatedProposal.proposalNumber}; work order created`);
         return res.json({ received: true });
@@ -27004,6 +27107,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         return res.status(404).json({ success: false, message: "Review request not found" });
       }
 
+      // Owner-pathed public review link (no session) → bind the review request's tenant
+      // so the submission row is stamped to that tenant, not the DEFAULT (Treemarkables).
+      const submission = await runWithBusiness(reviewRequest.businessId ?? undefined, async () => {
       // Create review submission
       const submission = await storage.createReviewSubmission({
         requestId: reviewRequest.id,
@@ -27034,6 +27140,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           facebookPostStatus: 'held'
         });
       }
+
+      return submission;
+      });
 
       res.json({ success: true, data: submission });
     } catch (error) {

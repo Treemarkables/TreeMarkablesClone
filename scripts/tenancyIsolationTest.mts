@@ -60,6 +60,7 @@ type Tenant = {
   customerId: string;
   leadId: string;
   jobId: string;
+  quoteId: string;
   cookie?: string;
   ids(): string[]; // every seeded id for this tenant (for leak scanning)
 };
@@ -99,11 +100,17 @@ async function seedTenant(c: pg.PoolClient, label: "A" | "B"): Promise<Tenant> {
      VALUES ($1,$2,$3,'work_order',$4) RETURNING id`,
     [biz.id, cust.id, `${TAG}-${label}-${rnd}`, `${TAG} Job ${label} ${rnd}`],
   );
+  // A pending quote — used by the owner-path write-stamping test (public accept link).
+  const { rows: [quote] } = await c.query(
+    `INSERT INTO quotes (business_id, customer_id, quote_number, description, amount, status)
+     VALUES ($1,$2,$3,$4,'100.00','sent') RETURNING id`,
+    [biz.id, cust.id, `${TAG}-Q-${label}-${rnd}`, `${TAG} quote ${label} ${rnd}`],
+  );
 
   return {
     label, businessId: biz.id, email, password,
-    employeeId: emp.id, customerId: cust.id, leadId: lead.id, jobId: job.id,
-    ids() { return [this.businessId, this.employeeId, this.customerId, this.leadId, this.jobId]; },
+    employeeId: emp.id, customerId: cust.id, leadId: lead.id, jobId: job.id, quoteId: quote.id,
+    ids() { return [this.businessId, this.employeeId, this.customerId, this.leadId, this.jobId, this.quoteId]; },
   };
 }
 
@@ -268,6 +275,30 @@ async function testListEndpoint(ep: { path: string; ownCheck: boolean }, viewer:
       else record(name, "PASS", `no tenant data without a scoped session (HTTP ${status})`);
     }
 
+    // 4) Owner-path WRITE stamping: accept B's quote via the public (session-less) link,
+    //    then assert the work order it creates is stamped to B — NOT the DEFAULT tenant.
+    //    This is the Group-A fix under test: without it the job lands under Treemarkables.
+    {
+      const name = `/api/quotes/:id/accept  (public — stamps work order to owner)`;
+      const res = await fetch(`${BASE_URL}/api/quotes/${B.quoteId}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) {
+        record(name, "WARN", `accept returned HTTP ${res.status} (could not exercise the write path)`);
+      } else {
+        const row = await pool.query(
+          `SELECT business_id FROM jobs WHERE quote_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          [B.quoteId],
+        );
+        const stamped = row.rows[0]?.business_id as string | undefined;
+        if (!stamped) record(name, "WARN", "accept succeeded but no work order found for the quote");
+        else if (stamped === B.businessId) record(name, "PASS", "work order stamped to owner (B)");
+        else record(name, "SECURITY FAIL", `work order stamped to ${stamped}, expected B (${B.businessId})`);
+      }
+    }
+
     // ── Report ────────────────────────────────────────────────────────────────
     const pad = Math.max(...results.map((r) => r.name.length));
     console.log("RESULT MATRIX");
@@ -324,8 +355,15 @@ async function testListEndpoint(ep: { path: string; ownCheck: boolean }, viewer:
     // ── Teardown (best-effort, owner connection, FK-safe order) ───────────────
     if (!KEEP && (A || B)) {
       const bizIds = [A?.businessId, B?.businessId].filter(Boolean) as string[];
+      // FK-safe order: side-effect children (created by the accept test) before their
+      // parents, then jobs → quotes → customers → tenant root.
+      const TEARDOWN_TABLES = [
+        "payments", "job_diary_entries", "pending_outbound_messages", "notifications",
+        "review_submissions", "review_requests",
+        "jobs", "quotes", "leads", "customers", "employees", "business_settings", "businesses",
+      ];
       for (const bid of bizIds) {
-        for (const tbl of ["jobs", "leads", "customers", "employees", "business_settings", "businesses"]) {
+        for (const tbl of TEARDOWN_TABLES) {
           const col = tbl === "businesses" ? "id" : "business_id";
           await c.query(`DELETE FROM ${tbl} WHERE ${col} = $1`, [bid]).catch((err) =>
             console.error(`  teardown ${tbl} (${bid}) failed: ${err.message}`),
