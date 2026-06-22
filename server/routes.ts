@@ -9257,7 +9257,18 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
 
       const primaryInvoice = (invoices as any[])[0];
       const invoiceTotal = primaryInvoice ? num(primaryInvoice.totalAmount) : null;
-      const quoteTotal = num(job.totalAmount);
+      // Back-costing revenue must be GST-exclusive to match the costs (which carry
+      // no GST) and the job header value. Mirror the header's hierarchy:
+      // explicit subtotal, else strip GST off the inc-GST totals (NZ GST = 15%).
+      const subtotalExGst = num(job.subtotal);
+      const totalIncGst = num(job.totalIncludingGst);
+      const totalAmountIncGst = num(job.totalAmount);
+      const quoteTotal =
+        subtotalExGst > 0
+          ? subtotalExGst
+          : totalIncGst > 0
+            ? totalIncGst / 1.15
+            : totalAmountIncGst / 1.15;
       const revenueSource: 'invoice' | 'quote' | 'none' =
         invoiceTotal !== null && invoiceTotal > 0
           ? 'invoice'
