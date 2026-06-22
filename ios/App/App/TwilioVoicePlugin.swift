@@ -5,6 +5,7 @@ import Capacitor
 import TwilioVoice
 import PushKit
 import CallKit
+import WebKit
 import os
 
 /// Public logger so the speaker-routing diagnostics are readable in Console
@@ -265,22 +266,28 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
                 applyRoute()
             }
             if restartUnit {
-                // The one thing proven to fix this on-device is BACKGROUNDING the
-                // app — which cycles the AVAudioSession (deactivate→reactivate)
-                // and drops the foreground WKWebView's hold, so the speaker route
-                // finally takes (and then survives returning to the foreground).
-                // Reproduce that same session cycle here without leaving the app:
-                // tear Twilio's audio unit down, deactivate + reactivate the
-                // session, then bring the unit back up — re-running the config
-                // block applies the speaker route onto the freshly-cycled session.
-                // Gated to user toggles so the route-change watchdog never cycles
-                // the live session (which would drop call audio repeatedly).
+                // Backgrounding the app is the ONLY thing proven to engage the
+                // in-app speaker — not because it cycles the session (build 26
+                // tried that alone and failed) but because it SUSPENDS the
+                // foreground WKWebView, which is what makes WebKit relinquish the
+                // audio session. Reproduce that: suspend the webview's media so
+                // WebKit releases the session, THEN (in the completion, once it's
+                // actually let go) cycle the session and rebuild Twilio's audio
+                // unit onto the speaker route. Media is resumed when the call ends
+                // (resumeWebViewMedia) so web audio features still work afterward.
                 let session = AVAudioSession.sharedInstance()
-                audioDevice.isEnabled = false
-                try? session.setActive(false, options: .notifyOthersOnDeactivation)
-                try? session.setActive(true)
-                audioDevice.isEnabled = true
-                audioDevice.block()
+                let cycle = {
+                    audioDevice.isEnabled = false
+                    try? session.setActive(false, options: .notifyOthersOnDeactivation)
+                    try? session.setActive(true)
+                    audioDevice.isEnabled = true
+                    audioDevice.block()
+                }
+                if let webView = self.bridge?.webView {
+                    webView.setAllMediaPlaybackSuspended(true) { cycle() }
+                } else {
+                    cycle()
+                }
             } else {
                 audioDevice.block()
             }
@@ -309,6 +316,16 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
             "category": session.category.rawValue,
             "mode": session.mode.rawValue,
         ])
+    }
+
+    /// Un-suspends WebKit media after a call. applySpeakerRoute suspends the
+    /// webview's media to make WebKit release the audio session for the speaker;
+    /// this restores it so in-app web audio (voice notes, recordings playback)
+    /// works again once the call is over. Safe to call when nothing was suspended.
+    private func resumeWebViewMedia() {
+        DispatchQueue.main.async {
+            TwilioVoicePlugin.shared.bridge?.webView?.setAllMediaPlaybackSuspended(false)
+        }
     }
 
     // MARK: - CallKit Setup
@@ -515,6 +532,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         activeCall = nil
         callUUID = nil
         speakerOn = false
+        resumeWebViewMedia()
         action.fulfill()
         notifyListeners("callEnded", data: [:], retainUntilConsumed: true)
     }
@@ -600,6 +618,7 @@ extension TwilioVoicePlugin: CallDelegate {
         activeCall = nil
         callUUID = nil
         speakerOn = false
+        resumeWebViewMedia()
         notifyListeners("callDisconnected", data: [
             "error": error?.localizedDescription ?? "",
         ], retainUntilConsumed: true)
@@ -612,6 +631,7 @@ extension TwilioVoicePlugin: CallDelegate {
         activeCall = nil
         callUUID = nil
         speakerOn = false
+        resumeWebViewMedia()
         notifyListeners("callFailed", data: ["error": error.localizedDescription], retainUntilConsumed: true)
     }
 }
