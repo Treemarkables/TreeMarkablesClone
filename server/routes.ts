@@ -18553,6 +18553,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (typeof rawBody.dailyRevenueTarget === 'number') {
         rawBody.dailyRevenueTarget = String(rawBody.dailyRevenueTarget);
       }
+      if (typeof rawBody.defaultDepositValue === 'number') {
+        rawBody.defaultDepositValue = String(rawBody.defaultDepositValue);
+      }
 
       const validationResult = updateBusinessSettingsSchema.safeParse(rawBody);
       if (!validationResult.success) {
