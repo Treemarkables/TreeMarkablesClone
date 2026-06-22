@@ -193,7 +193,10 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         // CallKit/audio methods here already hop to main; setSpeaker was the
         // outlier.
         DispatchQueue.main.async {
-            shared.applySpeakerRoute(on)
+            // restartUnit: a mid-call speaker tap must rebuild the audio unit, or
+            // the route changes on paper but the audio keeps playing on the old
+            // output (currentRoute=Speaker, sound still on the receiver).
+            shared.applySpeakerRoute(on, restartUnit: true)
             call.resolve()
             // The routeChange watchdog only fires on AVAudioSession route-change
             // notifications. Some reverts — Twilio restarting its own audio unit,
@@ -215,8 +218,10 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     /// Forces the live call's audio route to the speaker (or back to the
-    /// receiver). Must be called on the main thread.
-    private func applySpeakerRoute(_ on: Bool) {
+    /// receiver). Must be called on the main thread. `restartUnit` tears down and
+    /// rebuilds Twilio's audio I/O unit so a mid-call route change actually
+    /// engages (see the audioDevice block below) — set it only for user toggles.
+    private func applySpeakerRoute(_ on: Bool, restartUnit: Bool = false) {
         let applyRoute = {
             let session = AVAudioSession.sharedInstance()
             do {
@@ -260,6 +265,17 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
                 applyRoute()
             }
             audioDevice.block()
+            // Re-running the block updates the AVAudioSession route, but a LIVE
+            // audio I/O unit keeps rendering to the route it was built on — so
+            // currentRoute reads "Speaker" while the audio stays on the receiver
+            // (the exact in-app symptom; locked calls work because CallKit builds
+            // the unit fresh on the speaker). Toggling isEnabled tears the unit
+            // down and rebuilds it on the now-current route. Gated to user toggles
+            // so the route-change watchdog can't cause repeated audio dropouts.
+            if restartUnit {
+                audioDevice.isEnabled = false
+                audioDevice.isEnabled = true
+            }
         } else {
             applyRoute()
         }
