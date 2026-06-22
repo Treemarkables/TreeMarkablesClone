@@ -28,7 +28,6 @@ import {
   ShieldCheck,
   Wrench,
   LayoutTemplate,
-  Clock,
   Plug,
   Banknote,
   PhoneOff,
@@ -249,14 +248,6 @@ const settingsOptions = [
     icon: LayoutTemplate,
     color: "bg-orange-100 text-orange-600",
     path: "/settings/proposal-builder"
-  },
-  {
-    id: "time-tracking",
-    title: "Time Tracking",
-    description: "Track hours, timesheets and crew time on jobs",
-    icon: Clock,
-    color: "bg-sky-100 text-sky-600",
-    path: "/time-tracking"
   },
   {
     id: "integrations",
