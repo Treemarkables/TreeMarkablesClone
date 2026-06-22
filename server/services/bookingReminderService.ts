@@ -160,7 +160,7 @@ export async function sendBookingReminderRow(reminderId: string): Promise<{ ok: 
 
   if ((channel === 'sms' || channel === 'both') && recipientPhone) {
     try {
-      const ok = await smsService.sendSMS({ to: recipientPhone, message: smsBody });
+      const ok = await smsService.sendSMS({ to: recipientPhone, message: smsBody, businessId: job.businessId, feature: 'booking_reminder' });
       smsSent = !!ok;
       if (!ok) errors.push('sms: failed');
     } catch (err) {

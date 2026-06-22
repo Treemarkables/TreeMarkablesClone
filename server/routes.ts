@@ -85,6 +85,7 @@ import {
   createBillingPortalSession,
 } from "./stripe";
 import * as billing from "./billing";
+import * as usageMeter from "./services/usageMeter";
 import { createTenant } from "./onboarding";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import {
@@ -3220,6 +3221,12 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         });
       }
 
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'lead_extract_message');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       const extractionResponse = await openai.chat.completions.create({
         model: "gpt-5",
@@ -3271,6 +3278,8 @@ Use empty string if a field cannot be determined.`
         extracted.phone = phone;
       }
 
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'lead_extract_message' });
+
       res.json({
         success: true,
         data: {
@@ -3301,6 +3310,12 @@ Use empty string if a field cannot be determined.`
           success: false,
           message: 'Screenshot image is required'
         });
+      }
+
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'lead_extract_screenshot');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
       }
 
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
@@ -3358,6 +3373,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         description: extracted.description || ''
       };
       console.log('📸 Sending response:', JSON.stringify(responseData));
+
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'lead_extract_screenshot' });
 
       res.json({
         success: true,
@@ -8215,6 +8232,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         });
       }
 
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'video_transcribe');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
       await storage.updateVideo(videoId, {
         transcriptStatus: 'processing',
         transcriptError: null,
@@ -8319,6 +8342,8 @@ Return only the cleaned job description.`;
       });
 
       console.log(`📝 Transcribed video ${videoId} — ${rawTranscript.length} chars → ${generatedDescription.length} chars`);
+
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'video_transcribe' });
 
       res.json({
         success: true,
@@ -8916,6 +8941,12 @@ Return ONLY JSON with these keys:
 
 Rules: use numbers (not strings) for amounts, null when a value is genuinely absent, amounts in NZD. unitCost is the per-unit ex-GST price when determinable, otherwise the line total. totalCost is the line total. Do NOT invent values you cannot see.`;
 
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'supplier_invoice_extract');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       const visionResponse = await openai.chat.completions.create({
         model: 'gpt-5',
@@ -8963,6 +8994,8 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         storageError = storageErr instanceof Error ? storageErr.message : 'Document storage failed';
         console.error('Supplier invoice document storage failed (continuing with extraction):', storageError);
       }
+
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'supplier_invoice_extract' });
 
       res.json({
         success: true,
@@ -19930,6 +19963,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
       const callerPhone = call.phoneNumber || 'unknown';
 
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'call_to_job');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
       // Re-extract structured data from the transcript (same prompt as the
       // recording handler used to use). Cheap GPT call, gives us a fresh
       // extraction each time the staff member clicks the button.
@@ -20054,6 +20093,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
       });
 
       console.log(`✅ Job #${job.jobNumber} manually created from call ${call.id}`);
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'call_to_job' });
       res.json({ success: true, data: { job, customer, extracted: jobData } });
     } catch (error) {
       console.error('Error creating job from call:', error);
@@ -20235,6 +20275,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
       audioFilePath = req.file.path;
       console.log('📱 Mobile Speech to Quote - Processing audio file:', req.file.filename);
 
+      const businessId = (req as any).apiKey?.businessId || req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'speech_to_quote');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
       // Step 1: Transcribe audio using Whisper
       const audioReadStream = fs.createReadStream(audioFilePath);
 
@@ -20310,6 +20356,8 @@ Transcription: ${transcriptText}`;
 
       const quoteData = JSON.parse(extractionResponse.choices[0].message.content || '{}');
       console.log('💼 Mobile Extracted quote data:', quoteData);
+
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'speech_to_quote' });
 
       res.json({
         success: true,
@@ -24615,6 +24663,17 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
+  // Current business's SMS + AI usage vs the plan's bundled caps (for the billing UI meters).
+  app.get('/api/billing/usage', async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      res.json({ success: true, data: await usageMeter.getUsageSummary(businessId) });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message });
+    }
+  });
+
   // Start (or change) a subscription — returns a Stripe Checkout URL to redirect to.
   app.post('/api/billing/checkout', requireAdmin, async (req: Request, res: Response) => {
     const businessId = req.session.businessId;
@@ -27465,6 +27524,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const context = req.body.context || 'full';
       console.log('📢 Speech to Quote - Processing audio file:', req.file.filename, '| Context:', context);
 
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'speech_to_quote');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
       // Step 1: Transcribe audio using Whisper
       const audioReadStream = fs.createReadStream(audioFilePath);
 
@@ -27553,7 +27618,9 @@ Formatted task list:`;
 
         const formattedText = formattingResponse.choices[0].message.content?.trim() || transcriptText;
         console.log('📝 Formatted text:', formattedText);
-        
+
+        if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'speech_to_quote' });
+
         return res.json({
           success: true,
           data: {
@@ -27598,6 +27665,8 @@ Transcription: ${transcriptText}`;
 
       const quoteData = JSON.parse(extractionResponse.choices[0].message.content || '{}');
       console.log('💼 Extracted quote data:', quoteData);
+
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'speech_to_quote' });
 
       res.json({
         success: true,
@@ -29677,6 +29746,12 @@ Transcription: ${transcriptText}`;
         return res.status(400).json({ success: false, message: 'messageText is required' });
       }
 
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'fb_message_extract');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
       const aiResponse = await openai.chat.completions.create({
         model: 'gpt-5',
         messages: [
@@ -29703,6 +29778,7 @@ ${messageText}`
       });
 
       const extracted = JSON.parse(aiResponse.choices[0].message.content || '{}');
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'fb_message_extract' });
       return res.json({ success: true, data: extracted });
     } catch (error) {
       console.error('Error extracting Facebook message details:', error);
@@ -29718,6 +29794,12 @@ ${messageText}`
       }
       const base64Image = req.file.buffer.toString('base64');
       const mimeType = req.file.mimetype || 'image/jpeg';
+
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'screenshot_extract');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
 
       const aiResponse = await openai.chat.completions.create({
         model: 'gpt-4o',
@@ -29749,6 +29831,7 @@ If you cannot find a value, use null. Do not guess.`
       });
 
       const extracted = JSON.parse(aiResponse.choices[0].message.content || '{}');
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'screenshot_extract' });
       return res.json({ success: true, data: extracted });
     } catch (error) {
       console.error('Error extracting screenshot details:', error);
@@ -30420,7 +30503,13 @@ If you cannot find a value, use null. Do not guess.`
       if (!sessionId || typeof sessionId !== 'string') {
         return res.status(400).json({ success: false, message: 'sessionId is required' });
       }
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'assistant_chat');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
       const reply = await runAssistantChat(message, history, sessionId, req.session.employeeId);
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'assistant_chat' });
       return res.json({ success: true, data: { reply } });
     } catch (error) {
       console.error('[AI Assistant] Chat error:', error);
