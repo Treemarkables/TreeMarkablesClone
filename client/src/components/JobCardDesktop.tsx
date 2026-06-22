@@ -52,7 +52,6 @@ import {
   MoreHorizontal,
   Mic,
   Calendar as CalendarIcon,
-  Clock,
   TrendingUp,
   Send,
   CheckCircle,
@@ -595,12 +594,7 @@ export function JobCardDesktop({
             <div className="flex-1 overflow-y-auto min-h-0">
               {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
               {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
-              {activeTab === "backcosting" && (
-                <BackCostingPanel
-                  jobId={jobId}
-                  onOpenTimeEntries={actions?.timeTracking}
-                />
-              )}
+              {activeTab === "backcosting" && <BackCostingPanel jobId={jobId} />}
               {activeTab === "checklist" && roleChecklistEnabled && <JobChecklistPanel jobId={jobId} />}
               {activeTab === "quoting" && <JobQuotingPanel jobId={jobId} />}
             </div>
@@ -693,12 +687,6 @@ export function JobCardDesktop({
                     Schedule
                   </DropdownMenuItem>
                 )}
-                {actions?.timeTracking && (
-                  <DropdownMenuItem onClick={actions.timeTracking} data-testid="more-time-tracking">
-                    <Clock className="w-4 h-4 mr-2 text-emerald-600" />
-                    Time Tracking
-                  </DropdownMenuItem>
-                )}
                 {actions?.profitTracker && (
                   <DropdownMenuItem onClick={actions.profitTracker} data-testid="more-profit-tracker">
                     <TrendingUp className="w-4 h-4 mr-2 text-emerald-600" />
@@ -711,7 +699,7 @@ export function JobCardDesktop({
                     Send to Xero
                   </DropdownMenuItem>
                 )}
-                {(actions?.speechToQuote || actions?.schedule || actions?.timeTracking || actions?.profitTracker || actions?.sendToXero) && (
+                {(actions?.speechToQuote || actions?.schedule || actions?.profitTracker || actions?.sendToXero) && (
                   <DropdownMenuSeparator />
                 )}
                 <DropdownMenuItem

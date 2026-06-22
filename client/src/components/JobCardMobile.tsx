@@ -30,7 +30,6 @@ import {
   FileText,
   CreditCard,
   FilePen,
-  Clock,
   TrendingUp,
   ListOrdered,
   Send,
@@ -411,10 +410,7 @@ export function JobCardMobile({
           {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
           {activeTab === "backcosting" && (
             <div className="bg-white">
-              <BackCostingPanel
-                jobId={jobId}
-                onOpenTimeEntries={actions?.timeTracking}
-              />
+              <BackCostingPanel jobId={jobId} />
             </div>
           )}
           {activeTab === "checklist" && roleChecklistEnabled && (
@@ -497,7 +493,6 @@ export function JobCardMobile({
                 <ActionTile label="Quote" icon={FileText} colour="amber" onClick={actions?.quote ?? actionStub("Quote")} />
                 <ActionTile label="Invoice" icon={CreditCard} colour="green" onClick={actions?.invoice ?? actionStub("Invoice")} />
                 <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actions?.proposal ?? actionStub("Proposal")} />
-                <ActionTile label="Time Tracking" icon={Clock} colour="orange" onClick={actions?.timeTracking ?? actionStub("Time Tracking")} />
                 <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
                 <ActionTile
                   label={jobInQueue ? "In Queue" : "Queue Job"}
