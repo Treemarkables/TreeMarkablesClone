@@ -39,6 +39,10 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     private var callUUID: UUID?
     private var accessToken: String?
     private var deviceToken: Data?
+    /// Last speaker selection the user made for the live call. Reapplied when
+    /// CallKit (re)activates the audio session, since the output route resets to
+    /// the receiver on activation. Cleared when the call ends.
+    private var speakerOn = false
 
     // MARK: - Plugin Lifecycle
 
@@ -149,6 +153,24 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func setSpeaker(_ call: CAPPluginCall) {
         let on = call.getBool("on") ?? false
+        self.speakerOn = on
+        // AVAudioSession route changes must run on the main thread. Capacitor
+        // dispatches plugin calls on a background queue, and an off-main
+        // setCategory/overrideOutputAudioPort silently fails to move audio —
+        // which is why the IN-APP speaker toggle (foreground calls) could still
+        // do nothing even with .defaultToSpeaker set, while the native CallKit
+        // speaker button (lock screen, handled by iOS itself) worked. The other
+        // CallKit/audio methods here already hop to main; setSpeaker was the
+        // outlier.
+        DispatchQueue.main.async {
+            self.applySpeakerRoute(on)
+            call.resolve()
+        }
+    }
+
+    /// Forces the live call's audio route to the speaker (or back to the
+    /// receiver). Must be called on the main thread.
+    private func applySpeakerRoute(_ on: Bool) {
         let applyRoute = {
             let session = AVAudioSession.sharedInstance()
             do {
@@ -190,7 +212,6 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         } else {
             applyRoute()
         }
-        call.resolve()
     }
 
     // MARK: - CallKit Setup
@@ -396,6 +417,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         activeCall?.disconnect()
         activeCall = nil
         callUUID = nil
+        speakerOn = false
         action.fulfill()
         notifyListeners("callEnded", data: [:], retainUntilConsumed: true)
     }
@@ -414,6 +436,12 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         // CXAnswerCallAction, so it should fire for both.
         NSLog("[TwilioVoice] CallKit didActivate audio session — speaker routing live")
         (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = true
+        // The output route resets to the receiver when the session activates, so
+        // reapply any speaker selection the user already made (e.g. tapped
+        // speaker before the session finished activating).
+        if self.speakerOn {
+            self.applySpeakerRoute(true)
+        }
     }
 
     public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
@@ -434,6 +462,7 @@ extension TwilioVoicePlugin: CallDelegate {
         }
         activeCall = nil
         callUUID = nil
+        speakerOn = false
         notifyListeners("callDisconnected", data: [
             "error": error?.localizedDescription ?? "",
         ], retainUntilConsumed: true)
@@ -445,6 +474,7 @@ extension TwilioVoicePlugin: CallDelegate {
         }
         activeCall = nil
         callUUID = nil
+        speakerOn = false
         notifyListeners("callFailed", data: ["error": error.localizedDescription], retainUntilConsumed: true)
     }
 }
