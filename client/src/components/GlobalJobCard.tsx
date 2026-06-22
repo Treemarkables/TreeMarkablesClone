@@ -3865,11 +3865,10 @@ The Treemarkables Team`;
         scheduledEndDateISO = lastDayEndUTC.toISOString();
       }
 
-      // Only flip status when the booking represents the actual work crew —
-      // i.e. a work_order being scheduled. A 'quote' job booked in is a
-      // quoting site visit and must stay 'quote'; a 'lead' becomes 'quote'.
-      // statusAfterBooking() returns null for everything else (already
-      // scheduled, completed, etc.) so we leave status untouched.
+      // Scheduling a 'quote' advances it to 'work_order' (booking = committing
+      // to the work). statusAfterBooking() returns null for every other status
+      // so we leave those untouched. The server applies the same rule as a
+      // safety net for paths that don't compute this client-side.
       const nextStatus = statusAfterBooking(editingJob.status);
 
       // Close the modal immediately. The user has filled everything in; the
@@ -4063,8 +4062,8 @@ The Treemarkables Team`;
         }
 
         // Update form's status to match the transition we actually applied
-        // (or leave it alone when statusAfterBooking returned null — e.g. a
-        // 'quote' job being booked for a site visit).
+        // (or leave it alone when statusAfterBooking returned null — i.e. any
+        // status other than 'quote').
         if (nextStatus) {
           form.setValue("status", nextStatus);
 
