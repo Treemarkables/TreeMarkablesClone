@@ -35,6 +35,21 @@ export interface CallEvent {
   foreground?: string;
 }
 
+// Live audio-route snapshot pushed from the native plugin. On-device os_log is
+// unreadable here (Console / `log collect` can't reach this app's logs on the
+// current iOS), so the call screen surfaces this instead — `outputs` is what iOS
+// is actually playing through, `speakerSelected` is what the user asked for, and
+// a mismatch is the speaker-routing bug.
+export interface AudioRouteEvent {
+  context?: string;
+  outputs?: string;
+  onSpeaker?: string;
+  speakerSelected?: string;
+  attempts?: string;
+  category?: string;
+  mode?: string;
+}
+
 export interface TwilioVoiceOptions {
   onIncomingCall?: (data: CallEvent) => void;
   onCallAnswered?: (data: CallEvent) => void;
@@ -45,6 +60,7 @@ export interface TwilioVoiceOptions {
   onCallFailed?: (data: CallEvent) => void;
   onRegistered?: (data: CallEvent) => void;
   onRegistrationError?: (data: CallEvent) => void;
+  onAudioRoute?: (data: AudioRouteEvent) => void;
 }
 
 export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
@@ -116,6 +132,7 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
       ["callFailed", "onCallFailed"],
       ["registered", "onRegistered"],
       ["registrationError", "onRegistrationError"],
+      ["audioRoute", "onAudioRoute"],
     ];
 
     const setup = async () => {
