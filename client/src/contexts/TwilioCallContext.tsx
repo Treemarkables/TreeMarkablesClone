@@ -44,7 +44,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   // native Dynamic Island / CallKit UI (whose speaker works) — to confirm
   // dropping the overlay frees the speaker before changing it for everyone.
   const suppressOverlay =
-    (currentUser?.email ?? "").toLowerCase() === "accounts@treemarkables.nz";
+    (currentUser?.email ?? "").toLowerCase() === "jullianhalley@hotmail.com";
   const [callState, setCallState] = useState<CallState>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
