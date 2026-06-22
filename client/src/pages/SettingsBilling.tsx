@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { ChevronLeft, Check, CreditCard, Loader2 } from "lucide-react";
+import { ChevronLeft, Check, CreditCard, Loader2, MessageSquare, Sparkles } from "lucide-react";
 import { isNativeApp } from "@/lib/platform";
 
 interface Plan {
@@ -23,6 +23,12 @@ interface Subscription {
   cancelAtPeriodEnd: boolean;
   stripeCustomerId: string | null;
 }
+interface Usage {
+  periodStart: string;
+  enforced: boolean;
+  sms: { used: number; cap: number | null; remaining: number };
+  ai: { used: number; cap: number | null; remaining: number };
+}
 
 const FEATURES: Record<string, string[]> = {
   freemium: ["15 active jobs / month", "1 user", "Core jobs, quotes & invoicing", "Up to 3 photos per job"],
@@ -31,19 +37,43 @@ const FEATURES: Record<string, string[]> = {
     "Unlimited users",
     "Unlimited photos + voice captions",
     "Full safety suite (SWMS, toolbox talks)",
-    "SMS & booking reminders",
+    "200 SMS / month",
+    "75 AI actions / month (Speech-to-Quote, extraction)",
+    "Advanced analytics & job costing",
+    "Integrations: Xero, Google Calendar, Gmail, Mailchimp",
     "Custom roles & permissions",
   ],
   business: [
     "Unlimited active jobs",
     "Everything in Crew, plus:",
-    "Marketing & reputation suite",
-    "Advanced analytics & job costing",
-    "AI Smart Dispatch & Speech-to-Quote",
+    "600 SMS / month",
+    "250 AI actions / month",
     "Workflow automation",
     "Priority support",
   ],
 };
+
+function UsageBar({ label, icon, used, cap }: { label: string; icon: ReactNode; used: number; cap: number | null }) {
+  const unlimited = cap === null;
+  const pct = unlimited || cap === 0 ? 0 : Math.min(100, Math.round((used / cap) * 100));
+  const over = !unlimited && cap > 0 && used >= cap;
+  const near = !over && pct >= 80;
+  const barColor = over ? "bg-destructive" : near ? "bg-amber-500" : "bg-primary";
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm mb-1">
+        <span className="flex items-center gap-2">{icon}{label}</span>
+        <span className="text-muted-foreground">{unlimited ? `${used} · Unlimited` : `${used} / ${cap}`}</span>
+      </div>
+      {!unlimited && (
+        <div className="h-2 rounded-full bg-muted overflow-hidden">
+          <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
+        </div>
+      )}
+      {over && <p className="text-xs text-destructive mt-1">Included allowance used up for this month.</p>}
+    </div>
+  );
+}
 
 export default function SettingsBilling() {
   const { toast } = useToast();
@@ -55,9 +85,13 @@ export default function SettingsBilling() {
   const { data: subRes } = useQuery<{ success: boolean; data: Subscription | null }>({
     queryKey: ["/api/billing/subscription"],
   });
+  const { data: usageRes } = useQuery<{ success: boolean; data: Usage }>({
+    queryKey: ["/api/billing/usage"],
+  });
 
   const plans = plansRes?.data ?? [];
   const sub = subRes?.data ?? null;
+  const usage = usageRes?.data ?? null;
   const isLive = sub && (sub.status === "active" || sub.status === "trialing");
   const currentPlanId = isLive ? sub!.planId : null;
 
@@ -130,6 +164,29 @@ export default function SettingsBilling() {
                 <CreditCard className="h-4 w-4 mr-2" /> Manage billing
               </Button>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {usage && !(usage.sms.cap === 0 && usage.ai.cap === 0) && (
+        <Card className="mb-6 border-border">
+          <CardHeader>
+            <CardTitle className="text-base">This month&apos;s usage</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <UsageBar
+              label="SMS"
+              icon={<MessageSquare className="h-4 w-4 text-muted-foreground" />}
+              used={usage.sms.used}
+              cap={usage.sms.cap}
+            />
+            <UsageBar
+              label="AI actions"
+              icon={<Sparkles className="h-4 w-4 text-muted-foreground" />}
+              used={usage.ai.used}
+              cap={usage.ai.cap}
+            />
+            <p className="text-xs text-muted-foreground">Resets on the 1st of the month (NZ time).</p>
           </CardContent>
         </Card>
       )}

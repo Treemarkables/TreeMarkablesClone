@@ -4965,6 +4965,8 @@ export const subscriptionPlans = pgTable("subscription_plans", {
   priceNzd: decimal("price_nzd", { precision: 10, scale: 2 }).notNull().default("0"),
   interval: text("interval").notNull().default("month"),
   activeJobCap: integer("active_job_cap"),             // null = unlimited
+  smsCap: integer("sms_cap"),                          // bundled SMS/mo, null = unlimited
+  aiActionCap: integer("ai_action_cap"),              // bundled AI actions/mo, null = unlimited
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
@@ -4980,6 +4982,7 @@ export const subscriptions = pgTable("subscriptions", {
   currentPeriodEnd: timestamp("current_period_end"),
   cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
   trialEnd: timestamp("trial_end"),
+  overagePolicy: text("overage_policy").notNull().default("soft_stop"), // 'soft_stop' | 'metered'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -5002,6 +5005,22 @@ export const businessAddOns = pgTable("business_add_ons", {
   stripeSubscriptionItemId: text("stripe_subscription_item_id"),
   activatedAt: timestamp("activated_at").defaultNow(),
 });
+
+// Append-only per-business usage log — one row per metered SMS send / AI action.
+// Tenant-scoped (RLS + app_tenant grant). Counted per NZ calendar month to enforce
+// the plan's bundled allowances (see INFLOW_USAGE_CAPS_PLAN.md).
+export const usageEvents = pgTable("usage_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull(),        // FK -> businesses(id), enforced at DB level
+  metric: text("metric").notNull(),                    // 'sms' | 'ai'
+  quantity: integer("quantity").notNull().default(1),
+  feature: text("feature"),                            // e.g. 'booking_reminder' | 'speech_to_quote'
+  ref: text("ref"),                                    // optional jobId / quoteId / messageId
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertUsageEventSchema = createInsertSchema(usageEvents).omit({ id: true, createdAt: true });
+export type UsageEvent = typeof usageEvents.$inferSelect;
+export type InsertUsageEvent = z.infer<typeof insertUsageEventSchema>;
 
 export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({ id: true, createdAt: true });
 export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
