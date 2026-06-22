@@ -116,7 +116,15 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func answer(_ call: CAPPluginCall) {
-        guard self.callInvite != nil, let uuid = self.callUUID else {
+        // Operate on the SHARED instance throughout. VoIP push + CallKit are
+        // stood up on `shared` at launch (AppDelegate), so the live call/invite
+        // live there — but Capacitor can route JS bridge calls to a SECOND
+        // plugin instance (the `.m` CAP_PLUGIN macro auto-creates one) whose
+        // call state is nil. answer/reject happened to still work because they
+        // go through CallKit actions handled by shared's provider delegate;
+        // mute/hangup/setSpeaker touched `self` directly and silently no-op'd.
+        let shared = TwilioVoicePlugin.shared
+        guard shared.callInvite != nil, let uuid = shared.callUUID else {
             call.reject("No active call invite")
             return
         }
@@ -132,7 +140,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         // accept) keeps speaker routing consistent. callUUID is set in
         // reportIncomingCall before JS is ever notified, so it's available here.
         let answerAction = CXAnswerCallAction(call: uuid)
-        callKitCallController.request(CXTransaction(action: answerAction)) { error in
+        shared.callKitCallController.request(CXTransaction(action: answerAction)) { error in
             if let error = error {
                 call.reject("Answer failed: \(error.localizedDescription)")
             } else {
@@ -142,31 +150,40 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func reject(_ call: CAPPluginCall) {
-        self.callInvite?.reject()
-        self.callInvite = nil
-        if let uuid = self.callUUID {
+        // See answer() — operate on shared, where the live invite/call lives.
+        let shared = TwilioVoicePlugin.shared
+        shared.callInvite?.reject()
+        shared.callInvite = nil
+        if let uuid = shared.callUUID {
             let action = CXEndCallAction(call: uuid)
-            self.callKitCallController.request(CXTransaction(action: action)) { _ in }
-            self.callUUID = nil
+            shared.callKitCallController.request(CXTransaction(action: action)) { _ in }
+            shared.callUUID = nil
         }
         call.resolve()
     }
 
     @objc func hangup(_ call: CAPPluginCall) {
-        self.activeCall?.disconnect()
+        // self.activeCall is nil on a JS-routed second instance, so the in-app
+        // End/Mute/Speaker buttons silently did nothing. Use shared's live call.
+        TwilioVoicePlugin.shared.activeCall?.disconnect()
         call.resolve()
     }
 
     @objc func mute(_ call: CAPPluginCall) {
         let isMuted = call.getBool("muted") ?? true
-        self.activeCall?.isMuted = isMuted
+        TwilioVoicePlugin.shared.activeCall?.isMuted = isMuted
         call.resolve()
     }
 
     @objc func setSpeaker(_ call: CAPPluginCall) {
         let on = call.getBool("on") ?? false
-        self.speakerOn = on
-        self.speakerReassertAttempts = 0
+        // Drive speaker state on shared so the route-change watchdog and the
+        // didActivate reapply (both registered on shared's CallKit provider)
+        // see the user's selection. On a JS-routed second instance, self.speakerOn
+        // would be stranded and the override would never hold.
+        let shared = TwilioVoicePlugin.shared
+        shared.speakerOn = on
+        shared.speakerReassertAttempts = 0
         // AVAudioSession route changes must run on the main thread. Capacitor
         // dispatches plugin calls on a background queue, and an off-main
         // setCategory/overrideOutputAudioPort silently fails to move audio —
@@ -176,7 +193,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         // CallKit/audio methods here already hop to main; setSpeaker was the
         // outlier.
         DispatchQueue.main.async {
-            self.applySpeakerRoute(on)
+            shared.applySpeakerRoute(on)
             call.resolve()
         }
     }
