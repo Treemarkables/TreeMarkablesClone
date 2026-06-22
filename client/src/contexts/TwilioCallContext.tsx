@@ -5,7 +5,8 @@ import {
   useState,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTwilioVoice, CallEvent } from "@/hooks/useTwilioVoice";
+import { useTwilioVoice, CallEvent, AudioRouteEvent } from "@/hooks/useTwilioVoice";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Mic, MicOff, Volume2, Phone } from "lucide-react";
 
@@ -35,10 +36,20 @@ interface CallInfo {
 export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { currentUser } = useAuth();
+  // The audio-route readout is a temporary diagnostic for the iOS speaker bug.
+  // The iOS webview loads this production site, so gate it to the owner's
+  // account — no customer ever sees it.
+  const showAudioDiag =
+    (currentUser?.email ?? "").toLowerCase() === "accounts@treemarkables.nz";
   const [callState, setCallState] = useState<CallState>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
+  // Live audio route pushed from native — the on-device diagnostic that stands
+  // in for unreadable os_log. Shown on the call screen so the actual output
+  // route can be read off the phone during a call.
+  const [audioRoute, setAudioRoute] = useState<AudioRouteEvent | null>(null);
 
   const refreshCallHistory = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
@@ -49,6 +60,12 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setCallInfo(null);
     setIsMuted(false);
     setIsSpeaker(false);
+    setAudioRoute(null);
+  }, []);
+
+  const handleAudioRoute = useCallback((data: AudioRouteEvent) => {
+    console.log("[TwilioCall] audioRoute", data);
+    setAudioRoute(data);
   }, []);
 
   const handleIncomingCall = useCallback((data: CallEvent) => {
@@ -111,6 +128,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     onCallFailed: reset,
     onRegistered: handleRegistered,
     onRegistrationError: handleRegistrationError,
+    onAudioRoute: handleAudioRoute,
   });
 
   const onHangup = useCallback(() => {
@@ -163,6 +181,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
           callInfo={callInfo ?? { foreground: false }}
           isMuted={isMuted}
           isSpeaker={isSpeaker}
+          audioRoute={showAudioDiag ? audioRoute : null}
           onHangup={onHangup}
           onToggleMute={onToggleMute}
           onToggleSpeaker={onToggleSpeaker}
@@ -177,6 +196,7 @@ function CallScreen({
   callInfo,
   isMuted,
   isSpeaker,
+  audioRoute,
   onHangup,
   onToggleMute,
   onToggleSpeaker,
@@ -185,6 +205,7 @@ function CallScreen({
   callInfo: CallInfo;
   isMuted: boolean;
   isSpeaker: boolean;
+  audioRoute: AudioRouteEvent | null;
   onHangup: () => void;
   onToggleMute: () => void;
   onToggleSpeaker: () => void;
@@ -218,6 +239,22 @@ function CallScreen({
           <p className="text-white/60 text-base mt-1">{callInfo.from}</p>
         )}
         <p className="text-white/60 text-lg mt-3 tabular-nums">{status}</p>
+        {/* Audio-route diagnostic: the only readable channel on this device for
+            the speaker-routing bug. "actual" is what iOS is playing through;
+            "selected" is what the user asked for. actual≠selected is the bug. */}
+        {audioRoute && (
+          <div className="mt-3 text-center text-xs text-white/45 tabular-nums leading-relaxed">
+            <p>
+              selected: {audioRoute.speakerSelected === "true" ? "speaker" : "receiver"}
+              {"  ·  "}
+              actual: {audioRoute.onSpeaker === "true" ? "speaker" : "receiver"}
+            </p>
+            <p>route [{audioRoute.outputs || "?"}]</p>
+            {audioRoute.attempts && audioRoute.attempts !== "0" && (
+              <p>reasserts: {audioRoute.attempts}</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Controls */}
