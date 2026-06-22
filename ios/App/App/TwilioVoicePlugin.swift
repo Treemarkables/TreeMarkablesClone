@@ -264,17 +264,25 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
                 DefaultAudioDevice.DefaultAVAudioSessionConfigurationBlock()
                 applyRoute()
             }
-            audioDevice.block()
-            // Re-running the block updates the AVAudioSession route, but a LIVE
-            // audio I/O unit keeps rendering to the route it was built on — so
-            // currentRoute reads "Speaker" while the audio stays on the receiver
-            // (the exact in-app symptom; locked calls work because CallKit builds
-            // the unit fresh on the speaker). Toggling isEnabled tears the unit
-            // down and rebuilds it on the now-current route. Gated to user toggles
-            // so the route-change watchdog can't cause repeated audio dropouts.
             if restartUnit {
+                // The one thing proven to fix this on-device is BACKGROUNDING the
+                // app — which cycles the AVAudioSession (deactivate→reactivate)
+                // and drops the foreground WKWebView's hold, so the speaker route
+                // finally takes (and then survives returning to the foreground).
+                // Reproduce that same session cycle here without leaving the app:
+                // tear Twilio's audio unit down, deactivate + reactivate the
+                // session, then bring the unit back up — re-running the config
+                // block applies the speaker route onto the freshly-cycled session.
+                // Gated to user toggles so the route-change watchdog never cycles
+                // the live session (which would drop call audio repeatedly).
+                let session = AVAudioSession.sharedInstance()
                 audioDevice.isEnabled = false
+                try? session.setActive(false, options: .notifyOthersOnDeactivation)
+                try? session.setActive(true)
                 audioDevice.isEnabled = true
+                audioDevice.block()
+            } else {
+                audioDevice.block()
             }
         } else {
             applyRoute()
