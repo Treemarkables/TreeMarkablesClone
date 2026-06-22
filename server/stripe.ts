@@ -248,6 +248,21 @@ export interface SubscriptionCheckoutInput {
 // metadata so the webhook can map the resulting subscription back to the tenant.
 export async function createSubscriptionCheckoutSession(input: SubscriptionCheckoutInput): Promise<{ id: string; url: string }> {
   const stripe = await getStripe();
+  // GST: the plan prices are tax_behavior=exclusive, so Stripe Tax adds 15% NZ GST on top at
+  // checkout (the locked "display ex-GST, +GST at checkout" decision). Flag-gated because
+  // automatic_tax ERRORS the session unless Stripe Tax is configured in the dashboard (origin
+  // address + NZ GST registration). STRIPE_TAX_ENABLED unset (default) → no tax line, prior
+  // behaviour, safe. Set it only AFTER enabling Stripe Tax on the account.
+  const taxEnabled = process.env.STRIPE_TAX_ENABLED === 'true';
+  const taxOpts: Record<string, unknown> = taxEnabled
+    ? {
+        automatic_tax: { enabled: true },
+        billing_address_collection: 'required', // Stripe Tax needs the buyer's address to compute GST
+        tax_id_collection: { enabled: true },    // let GST-registered businesses enter their number
+        // Persist the entered address onto a reused customer so renewals are taxed too.
+        ...(input.customerId ? { customer_update: { address: 'auto', name: 'auto' } } : {}),
+      }
+    : {};
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     line_items: [{ price: input.priceId, quantity: 1 }],
@@ -258,6 +273,7 @@ export async function createSubscriptionCheckoutSession(input: SubscriptionCheck
     cancel_url: input.cancelUrl,
     subscription_data: { metadata: { businessId: input.businessId, planKey: input.planKey } },
     metadata: { kind: 'subscription', businessId: input.businessId, planKey: input.planKey },
+    ...taxOpts,
   });
   if (!session.url) throw new Error('Stripe subscription checkout session did not return a redirect URL');
   return { id: session.id, url: session.url };
