@@ -5,6 +5,13 @@ import Capacitor
 import TwilioVoice
 import PushKit
 import CallKit
+import os
+
+/// Public logger so the speaker-routing diagnostics are readable in Console
+/// (filter subsystem "co.nz.inflowapp"). Plain NSLog with an interpolated Swift
+/// string is marked <private> on-device and gets redacted, which hid build-17's
+/// route logs entirely — os_log with `privacy: .public` shows the real values.
+private let tvLog = Logger(subsystem: "co.nz.inflowapp", category: "TwilioVoice")
 
 // MARK: - Capacitor Plugin Declaration
 
@@ -43,6 +50,11 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     /// CallKit (re)activates the audio session, since the output route resets to
     /// the receiver on activation. Cleared when the call ends.
     private var speakerOn = false
+    /// Bounds the route-change re-assert loop so a never-holding override can't
+    /// spin forever. Resets to 0 whenever the route actually reaches the speaker
+    /// (so a later revert gets a fresh budget) and on each user toggle / call end.
+    private var speakerReassertAttempts = 0
+    private let maxSpeakerReasserts = 4
 
     // MARK: - Plugin Lifecycle
 
@@ -154,6 +166,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func setSpeaker(_ call: CAPPluginCall) {
         let on = call.getBool("on") ?? false
         self.speakerOn = on
+        self.speakerReassertAttempts = 0
         // AVAudioSession route changes must run on the main thread. Capacitor
         // dispatches plugin calls on a background queue, and an off-main
         // setCategory/overrideOutputAudioPort silently fails to move audio —
@@ -190,15 +203,15 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
                 try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
                 try session.overrideOutputAudioPort(on ? .speaker : .none)
             } catch {
-                NSLog("[TwilioVoice] Failed to set speaker route: \(error.localizedDescription)")
+                tvLog.error("setSpeaker(\(on, privacy: .public)) failed: \(error.localizedDescription, privacy: .public)")
             }
-            // What iOS ACTUALLY routed to (expect "Speaker" when on=true,
-            // "Receiver" when off) — the ground truth when debugging reports
-            // of the toggle not matching the audible output.
+            // What iOS ACTUALLY routed to (expect builtInSpeaker when on=true,
+            // receiver when off) plus the session state — the ground truth when
+            // the toggle doesn't match the audible output.
             let outputs = session.currentRoute.outputs
                 .map { $0.portType.rawValue }
                 .joined(separator: ",")
-            NSLog("[TwilioVoice] setSpeaker(\(on)) — current outputs: \(outputs)")
+            tvLog.log("setSpeaker(\(on, privacy: .public)) cat=\(session.category.rawValue, privacy: .public) mode=\(session.mode.rawValue, privacy: .public) outputs=[\(outputs, privacy: .public)]")
         }
         // Twilio's DefaultAudioDevice owns the AVAudioSession, so routing
         // changes must also live inside the device's configuration block —
@@ -434,8 +447,22 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         // through CallKit and setSpeaker(.speaker) will silently stay on the
         // earpiece. Both lock-screen and in-app answers route through
         // CXAnswerCallAction, so it should fire for both.
-        NSLog("[TwilioVoice] CallKit didActivate audio session — speaker routing live")
+        tvLog.log("CallKit didActivate — speakerOn=\(self.speakerOn, privacy: .public)")
         (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = true
+        // Watch for the route being yanked back to the earpiece. Earpiece audio
+        // works but the speaker override doesn't stick, which points at something
+        // (CallKit, Twilio's audio unit, or the WKWebView) reconfiguring the
+        // session right after we set it. Re-assert speaker whenever the route
+        // changes away from it while the user has speaker selected.
+        NotificationCenter.default.removeObserver(
+            self, name: AVAudioSession.routeChangeNotification, object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRouteChange(_:)),
+            name: AVAudioSession.routeChangeNotification,
+            object: nil
+        )
         // The output route resets to the receiver when the session activates, so
         // reapply any speaker selection the user already made (e.g. tapped
         // speaker before the session finished activating).
@@ -445,7 +472,31 @@ extension TwilioVoicePlugin: CXProviderDelegate {
     }
 
     public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        NotificationCenter.default.removeObserver(
+            self, name: AVAudioSession.routeChangeNotification, object: nil
+        )
         (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = false
+    }
+
+    /// Re-assert the speaker route if it gets reverted mid-call. Only acts when
+    /// the user has speaker selected and the current output is NOT the built-in
+    /// speaker, so it converges (a successful override flips the route to speaker
+    /// and the next notification is a no-op) rather than looping.
+    @objc private func handleRouteChange(_ notification: Notification) {
+        guard self.speakerOn else { return }
+        let session = AVAudioSession.sharedInstance()
+        let onSpeaker = session.currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
+        let reasonRaw = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) ?? 0
+        let outputs = session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
+        tvLog.log("routeChange reason=\(reasonRaw, privacy: .public) onSpeaker=\(onSpeaker, privacy: .public) attempts=\(self.speakerReassertAttempts, privacy: .public) outputs=[\(outputs, privacy: .public)]")
+        if onSpeaker {
+            speakerReassertAttempts = 0
+        } else if speakerReassertAttempts < maxSpeakerReasserts {
+            speakerReassertAttempts += 1
+            DispatchQueue.main.async { self.applySpeakerRoute(true) }
+        } else {
+            tvLog.error("speaker reassert gave up after \(self.maxSpeakerReasserts, privacy: .public) tries — override not holding")
+        }
     }
 }
 
