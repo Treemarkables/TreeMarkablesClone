@@ -37,11 +37,13 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  // The audio-route readout is a temporary diagnostic for the iOS speaker bug.
-  // The iOS webview loads this production site, so gate it to the owner's
-  // account — no customer ever sees it.
-  const showAudioDiag =
-    (currentUser?.email ?? "").toLowerCase() === "accounts@treemarkables.nz";
+  // TEMPORARY: ungated while we diagnose the iOS in-app speaker bug, so the
+  // readout is guaranteed to render regardless of which login is used. The
+  // block self-labels ("diag v2") and shows a "waiting" placeholder until the
+  // native audioRoute event arrives, so a silent screen can't hide whether the
+  // new JS is even loaded. Revert to an owner-only gate once the bug is fixed.
+  void currentUser;
+  const showAudioDiag = true;
   const [callState, setCallState] = useState<CallState>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -181,7 +183,8 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
           callInfo={callInfo ?? { foreground: false }}
           isMuted={isMuted}
           isSpeaker={isSpeaker}
-          audioRoute={showAudioDiag ? audioRoute : null}
+          audioRoute={audioRoute}
+          showAudioDiag={showAudioDiag}
           onHangup={onHangup}
           onToggleMute={onToggleMute}
           onToggleSpeaker={onToggleSpeaker}
@@ -197,6 +200,7 @@ function CallScreen({
   isMuted,
   isSpeaker,
   audioRoute,
+  showAudioDiag,
   onHangup,
   onToggleMute,
   onToggleSpeaker,
@@ -206,6 +210,7 @@ function CallScreen({
   isMuted: boolean;
   isSpeaker: boolean;
   audioRoute: AudioRouteEvent | null;
+  showAudioDiag: boolean;
   onHangup: () => void;
   onToggleMute: () => void;
   onToggleSpeaker: () => void;
@@ -239,19 +244,27 @@ function CallScreen({
           <p className="text-white/60 text-base mt-1">{callInfo.from}</p>
         )}
         <p className="text-white/60 text-lg mt-3 tabular-nums">{status}</p>
-        {/* Audio-route diagnostic: the only readable channel on this device for
-            the speaker-routing bug. "actual" is what iOS is playing through;
-            "selected" is what the user asked for. actual≠selected is the bug. */}
-        {audioRoute && (
+        {/* Audio-route diagnostic for the iOS speaker bug. Always renders (when
+            enabled) so a silent screen can't hide whether the new JS is loaded:
+            seeing "diag v2" confirms this build; "actual" vs "selected" is the
+            route truth (actual≠selected is the bug); a stuck "waiting" line means
+            the native audioRoute event isn't reaching the webview. */}
+        {showAudioDiag && (
           <div className="mt-3 text-center text-xs text-white/45 tabular-nums leading-relaxed">
-            <p>
-              selected: {audioRoute.speakerSelected === "true" ? "speaker" : "receiver"}
-              {"  ·  "}
-              actual: {audioRoute.onSpeaker === "true" ? "speaker" : "receiver"}
-            </p>
-            <p>route [{audioRoute.outputs || "?"}]</p>
-            {audioRoute.attempts && audioRoute.attempts !== "0" && (
-              <p>reasserts: {audioRoute.attempts}</p>
+            {audioRoute ? (
+              <>
+                <p>
+                  selected: {audioRoute.speakerSelected === "true" ? "speaker" : "receiver"}
+                  {"  ·  "}
+                  actual: {audioRoute.onSpeaker === "true" ? "speaker" : "receiver"}
+                </p>
+                <p>route [{audioRoute.outputs || "?"}]</p>
+                {audioRoute.attempts && audioRoute.attempts !== "0" && (
+                  <p>reasserts: {audioRoute.attempts}</p>
+                )}
+              </>
+            ) : (
+              <p>diag v2 · waiting for native audioRoute event…</p>
             )}
           </div>
         )}
