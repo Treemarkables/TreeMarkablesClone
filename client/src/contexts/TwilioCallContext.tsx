@@ -37,14 +37,16 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  const showAudioDiag = true;
-  // EXPERIMENT (owner-gated): the full-screen in-app call overlay keeps the
-  // WKWebView foreground/active, which holds the AVAudioSession and blocks the
-  // in-app speaker. Suppress the overlay for the owner so the call stays in the
-  // native Dynamic Island / CallKit UI (whose speaker works) — to confirm
-  // dropping the overlay frees the speaker before changing it for everyone.
-  const suppressOverlay =
+  const isOwner =
     (currentUser?.email ?? "").toLowerCase() === "jullianhalley@hotmail.com";
+  // Audio-route diagnostic readout — gated to the owner login so customers never
+  // see it during the iOS speaker investigation.
+  const showAudioDiag = isOwner;
+  // Overlay-suppression experiment REVERTED: removing the overlay did NOT free
+  // the speaker (the foreground WKWebView holds the audio session regardless of
+  // what we draw) and it left the call with no in-app controls. Keep the in-app
+  // call screen so Mute/End work; speaker still needs the background workaround.
+  const suppressOverlay = false;
   const [callState, setCallState] = useState<CallState>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
