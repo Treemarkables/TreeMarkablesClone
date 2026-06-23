@@ -55,6 +55,14 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     /// (so a later revert gets a fresh budget) and on each user toggle / call end.
     private var speakerReassertAttempts = 0
     private let maxSpeakerReasserts = 4
+    /// Native in-call screen. Presented full-screen for the duration of a call so
+    /// the Capacitor WKWebView goes off-screen — which is the only thing that
+    /// frees the AVAudioSession for the speaker (see NativeCallViewController).
+    private var nativeCallVC: NativeCallViewController?
+    /// Caller identity captured at reportIncomingCall, used to populate the
+    /// native call screen when the call connects.
+    private var callerDisplayName = "Inflow Customer"
+    private var callerNumberStr = ""
 
     // MARK: - Plugin Lifecycle
 
@@ -371,6 +379,9 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         // label for unknown numbers.
         let knownName = callInvite.customParameters?["callerName"]
         update.localizedCallerName = (knownName?.isEmpty == false) ? knownName! : "Inflow Customer"
+        // Stash identity for the native call screen presented on connect.
+        self.callerDisplayName = (knownName?.isEmpty == false) ? knownName! : callerNumber
+        self.callerNumberStr = (knownName?.isEmpty == false) ? callerNumber : ""
 
         callKitProvider?.reportNewIncomingCall(with: uuid, update: update) { error in
             if let error = error {
@@ -491,12 +502,14 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         activeCall = nil
         callUUID = nil
         speakerOn = false
+        dismissNativeCallScreen()
         action.fulfill()
         notifyListeners("callEnded", data: [:], retainUntilConsumed: true)
     }
 
     public func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
         activeCall?.isMuted = action.isMuted
+        nativeCallVC?.setMuted(action.isMuted)
         action.fulfill()
     }
 
@@ -566,6 +579,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
 
 extension TwilioVoicePlugin: CallDelegate {
     public func callDidConnect(call: Call) {
+        presentNativeCallScreen()
         notifyListeners("callConnected", data: ["sid": call.sid ?? ""], retainUntilConsumed: true)
     }
 
@@ -576,6 +590,7 @@ extension TwilioVoicePlugin: CallDelegate {
         activeCall = nil
         callUUID = nil
         speakerOn = false
+        dismissNativeCallScreen()
         notifyListeners("callDisconnected", data: [
             "error": error?.localizedDescription ?? "",
         ], retainUntilConsumed: true)
@@ -588,7 +603,61 @@ extension TwilioVoicePlugin: CallDelegate {
         activeCall = nil
         callUUID = nil
         speakerOn = false
+        dismissNativeCallScreen()
         notifyListeners("callFailed", data: ["error": error.localizedDescription], retainUntilConsumed: true)
+    }
+
+    // MARK: - Native Call Screen
+
+    /// Presents the native in-call screen full-screen, which pushes the Capacitor
+    /// WKWebView off-screen — the only reliable way to free the AVAudioSession so
+    /// the speaker route engages while the app is open. Controls call straight
+    /// into the plugin (no webview), so they work independent of the web layer.
+    private func presentNativeCallScreen() {
+        DispatchQueue.main.async {
+            let shared = TwilioVoicePlugin.shared
+            guard shared.nativeCallVC == nil else {
+                shared.nativeCallVC?.markConnected()
+                return
+            }
+            guard let presenter = shared.bridge?.viewController else { return }
+            let vc = NativeCallViewController(
+                displayName: shared.callerDisplayName,
+                subtitle: shared.callerNumberStr.isEmpty ? nil : shared.callerNumberStr
+            )
+            vc.onToggleMute = { muted in
+                TwilioVoicePlugin.shared.activeCall?.isMuted = muted
+            }
+            vc.onToggleSpeaker = { on in
+                let s = TwilioVoicePlugin.shared
+                s.speakerOn = on
+                s.speakerReassertAttempts = 0
+                s.applySpeakerRoute(on)
+            }
+            vc.onEnd = {
+                let s = TwilioVoicePlugin.shared
+                if let uuid = s.callUUID {
+                    let action = CXEndCallAction(call: uuid)
+                    s.callKitCallController.request(CXTransaction(action: action)) { _ in }
+                } else {
+                    s.activeCall?.disconnect()
+                }
+            }
+            shared.nativeCallVC = vc
+            // Present from the topmost VC so we don't collide with any modal
+            // CallKit may already be showing.
+            var top: UIViewController = presenter
+            while let presented = top.presentedViewController { top = presented }
+            top.present(vc, animated: true) { vc.markConnected() }
+        }
+    }
+
+    private func dismissNativeCallScreen() {
+        DispatchQueue.main.async {
+            let shared = TwilioVoicePlugin.shared
+            shared.nativeCallVC?.dismiss(animated: true)
+            shared.nativeCallVC = nil
+        }
     }
 }
 
