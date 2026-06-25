@@ -37,13 +37,9 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  const showAudioDiag = true;
-  // EXPERIMENT (owner-gated): the full-screen in-app call overlay keeps the
-  // WKWebView foreground/active, which holds the AVAudioSession and blocks the
-  // in-app speaker. Suppress the overlay for the owner so the call stays in the
-  // native Dynamic Island / CallKit UI (whose speaker works) — to confirm
-  // dropping the overlay frees the speaker before changing it for everyone.
-  const suppressOverlay =
+  // Audio-route diagnostic readout — gated to the owner login so customers never
+  // see it while we verify the custom-audio-device speaker fix.
+  const showAudioDiag =
     (currentUser?.email ?? "").toLowerCase() === "jullianhalley@hotmail.com";
   const [callState, setCallState] = useState<CallState>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
@@ -162,9 +158,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   // already consumed; show the screen anyway with a generic caller label so
   // the user always has mute/speaker/hang-up controls.
   const showOverlay =
-    isNative &&
-    (callState === "connecting" || callState === "active") &&
-    !suppressOverlay;
+    isNative && (callState === "connecting" || callState === "active");
 
   // Diagnostic: surfaces in Safari Web Inspector why the overlay did/didn't show
   // during a live call. Gated on callState so it doesn't spam on idle renders.

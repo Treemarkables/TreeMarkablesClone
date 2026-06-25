@@ -55,6 +55,10 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     /// (so a later revert gets a fresh budget) and on each user toggle / call end.
     private var speakerReassertAttempts = 0
     private let maxSpeakerReasserts = 4
+    /// Custom Twilio audio device that owns the AVAudioSession + CoreAudio audio
+    /// unit, so the speaker route survives the foreground WKWebView. Installed
+    /// once at startup (startVoIP) before any call is accepted.
+    private let callAudioDevice = CallAudioDevice()
 
     // MARK: - Plugin Lifecycle
 
@@ -71,6 +75,12 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     /// Handling an incoming push needs no access token, so this is safe to run
     /// before JS hands one over.
     func startVoIP() {
+        // Install our custom audio device before any call is accepted so the SDK
+        // routes call audio through it (it owns the session/route to beat the
+        // foreground webview). Idempotent across the AppDelegate + load() callers.
+        if !(TwilioVoiceSDK.audioDevice is CallAudioDevice) {
+            TwilioVoiceSDK.audioDevice = callAudioDevice
+        }
         if Thread.isMainThread {
             setupCallKit()
             registerForVoIPPush()
@@ -217,52 +227,21 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     /// Forces the live call's audio route to the speaker (or back to the
     /// receiver). Must be called on the main thread.
     private func applySpeakerRoute(_ on: Bool) {
-        let applyRoute = {
-            let session = AVAudioSession.sharedInstance()
-            do {
-                // A bare overrideOutputAudioPort(.speaker) is transient under
-                // CallKit: the next session reconfiguration (Twilio audio-unit
-                // restart, route recompute) silently reverts to the earpiece —
-                // the button stays "on" but the volume never changes. Adding
-                // .defaultToSpeaker to the category makes speaker the session's
-                // standing preference, which survives those cycles; the
-                // override still gives the immediate switch. Bluetooth options
-                // mirror Twilio's default config so paired headsets keep
-                // working and win over .defaultToSpeaker when connected.
-                var options: AVAudioSession.CategoryOptions = [
-                    .allowBluetoothHFP, .allowBluetoothA2DP,
-                ]
-                if on { options.insert(.defaultToSpeaker) }
-                try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
-                try session.overrideOutputAudioPort(on ? .speaker : .none)
-            } catch {
-                tvLog.error("setSpeaker(\(on, privacy: .public)) failed: \(error.localizedDescription, privacy: .public)")
-            }
-            // What iOS ACTUALLY routed to (expect builtInSpeaker when on=true,
-            // receiver when off) plus the session state — the ground truth when
-            // the toggle doesn't match the audible output.
-            let outputs = session.currentRoute.outputs
-                .map { $0.portType.rawValue }
-                .joined(separator: ",")
-            tvLog.log("setSpeaker(\(on, privacy: .public)) cat=\(session.category.rawValue, privacy: .public) mode=\(session.mode.rawValue, privacy: .public) outputs=[\(outputs, privacy: .public)]")
-            // Push the same ground-truth to the webview. On this device the os_log
-            // lines above are unreadable (Console/`log collect` can't reach this
-            // app's logs), so the in-app call screen is the only diagnostic
-            // channel — it shows what iOS ACTUALLY routed to.
-            self.emitAudioRoute("setSpeaker(\(on))")
-        }
-        // Twilio's DefaultAudioDevice owns the AVAudioSession, so routing
-        // changes must also live inside the device's configuration block —
-        // that's what re-runs on each internal audio-unit cycle.
-        if let audioDevice = TwilioVoiceSDK.audioDevice as? DefaultAudioDevice {
-            audioDevice.block = {
-                DefaultAudioDevice.DefaultAVAudioSessionConfigurationBlock()
-                applyRoute()
-            }
-            audioDevice.block()
-        } else {
-            applyRoute()
-        }
+        // Route ownership now lives in `callAudioDevice` (our custom Twilio
+        // AudioDevice). It re-applies the category (.defaultToSpeaker) + override
+        // as part of its own audio-unit (re)start, so the speaker route holds even
+        // against the foreground WKWebView — the thing that defeated every
+        // app-side override we tried before.
+        callAudioDevice.setSpeaker(on)
+        // Report what iOS actually routed to, for the in-app diagnostic readout
+        // (on-device os_log is unreadable on this setup, so the call screen is the
+        // only channel). Best-effort read right after the toggle.
+        let session = AVAudioSession.sharedInstance()
+        let outputs = session.currentRoute.outputs
+            .map { $0.portType.rawValue }
+            .joined(separator: ",")
+        tvLog.log("setSpeaker(\(on, privacy: .public)) cat=\(session.category.rawValue, privacy: .public) mode=\(session.mode.rawValue, privacy: .public) outputs=[\(outputs, privacy: .public)]")
+        self.emitAudioRoute("setSpeaker(\(on))")
     }
 
     /// Emits the live audio route to the webview ("audioRoute" event) so the
@@ -509,7 +488,9 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         // CXAnswerCallAction, so it should fire for both.
         tvLog.log("CallKit didActivate — speakerOn=\(self.speakerOn, privacy: .public)")
         emitAudioRoute("didActivate")
-        (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = true
+        // The custom CallAudioDevice is driven by the SDK's start/stop lifecycle,
+        // so there's no DefaultAudioDevice.isEnabled to toggle here. Just re-assert
+        // the user's speaker selection now that the session is active.
         // Watch for the route being yanked back to the earpiece. Earpiece audio
         // works but the speaker override doesn't stick, which points at something
         // (CallKit, Twilio's audio unit, or the WKWebView) reconfiguring the
@@ -536,7 +517,8 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         NotificationCenter.default.removeObserver(
             self, name: AVAudioSession.routeChangeNotification, object: nil
         )
-        (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = false
+        // CallAudioDevice stop/teardown is driven by the SDK lifecycle; nothing
+        // to toggle here (no DefaultAudioDevice.isEnabled with a custom device).
     }
 
     /// Re-assert the speaker route if it gets reverted mid-call. Only acts when
