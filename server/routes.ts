@@ -131,6 +131,7 @@ if (ffmpegStatic) {
 }
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString } from "@shared/dateUtils";
+import { composeCustomerAddress } from "@shared/customerAddress";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { workflowAutomationService } from "./services/workflowAutomation";
@@ -1368,9 +1369,13 @@ async function generateInvoicePDFBuffer(
           doc.moveDown(0.3);
           doc.fontSize(9).font('Helvetica-Bold').text(billingName, 40, doc.y);
           doc.moveDown(0.2);
-          if (cfg.showAddress !== false && (invoiceData.address || job?.address)) {
+          // Bill To address follows the live customer record (their billing
+          // address), falling back to the invoice snapshot / job site only when
+          // the customer has no address composed.
+          const billToAddress = composeCustomerAddress(customer) || invoiceData.address || job?.address;
+          if (cfg.showAddress !== false && billToAddress) {
             doc.fontSize(8).font('Helvetica').fillColor('#666666')
-              .text(invoiceData.address || job?.address || '', 40, doc.y);
+              .text(billToAddress, 40, doc.y);
             doc.moveDown(0.2);
           }
           if (cfg.showEmail !== false && customer?.email) {
@@ -10632,6 +10637,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
                   <td width="45%" valign="top" align="right">
                     <div style="font-weight: bold; margin-bottom: 6px;">Bill To:</div>
                     <div>${job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'Customer'}</div>
+                    ${composeCustomerAddress(customer) ? `<div>${composeCustomerAddress(customer)}</div>` : ''}
                     ${customer?.phone ? `<div>${customer.phone}</div>` : ''}
                     ${customer?.email ? `<div style="word-break: break-all;">${customer.email}</div>` : ''}
                   </td>

@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Receipt, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
+import { composeCustomerAddress } from "@shared/customerAddress";
 
 interface InvoiceViewerProps {}
 
@@ -248,7 +249,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                   </div>
                   <div>
                     <span className="text-gray-600">Address:</span>
-                    <span className="font-medium ml-2">{invoice.address || job?.address || customer?.address || 'N/A'}</span>
+                    <span className="font-medium ml-2">{composeCustomerAddress(customer) || invoice.address || job?.address || 'N/A'}</span>
                   </div>
                 </div>
               </div>
