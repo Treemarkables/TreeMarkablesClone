@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { composeCustomerAddress } from "@shared/customerAddress";
 import {
   AlertCircle,
   ChevronLeft,
@@ -44,6 +45,8 @@ interface PublicInvoiceData {
     email: string | null;
     phone: string | null;
     address: string | null;
+    city: string | null;
+    region: string | null;
   } | null;
   job: { description: string | null } | null;
   sections: InvoiceSection[];
@@ -359,12 +362,11 @@ export default function InvoiceView() {
                     <span className="font-medium">{customer.phone}</span>
                   </div>
                 )}
-                {(invoice.address ||
-                  customer?.address) && (
+                {(composeCustomerAddress(customer) || invoice.address) && (
                   <div>
                     <span className="text-gray-600">Address:</span>{" "}
                     <span className="font-medium">
-                      {invoice.address || customer?.address}
+                      {composeCustomerAddress(customer) || invoice.address}
                     </span>
                   </div>
                 )}
