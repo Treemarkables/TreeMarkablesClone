@@ -2835,14 +2835,35 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       // the created job once the confirmation email/SMS is sent.
       let createdJob: any = undefined;
 
+      // Reuse an existing customer to de-duplicate, but ONLY when the submitted name
+      // plausibly belongs to the matched record. The business's own advertised number
+      // (and other shared/duplicate numbers carried over from imports) can sit on an
+      // unrelated customer record; without this guard a brand-new enquiry gets silently
+      // filed under that other person's name (observed 2026-06-25: a quote submitted as
+      // "Jules" landed on customer "wendy johnson1820" because she held the advertised
+      // cell). Repeat customers (same/overlapping name) still merge. Policy: name
+      // mismatch → fresh lead.
+      const namesLikelyMatch = (a?: string | null, b?: string | null): boolean => {
+        const na = (a || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        const nb = (b || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        if (!na || !nb) return false;
+        return na === nb || na.includes(nb) || nb.includes(na);
+      };
+
       await runWithBusiness(contactBusinessId, async () => {
       let customer: any = undefined;
       try {
+        let matched: any = undefined;
         if (cleanPhone) {
-          customer = await storage.findCustomerByPhone(cleanPhone);
+          matched = await storage.findCustomerByPhone(cleanPhone);
         }
-        if (!customer && lowerEmail) {
-          customer = await storage.findCustomerByEmail(lowerEmail);
+        if (!matched && lowerEmail) {
+          matched = await storage.findCustomerByEmail(lowerEmail);
+        }
+        if (matched && namesLikelyMatch(trimmedName, matched.name)) {
+          customer = matched;
+        } else if (matched) {
+          console.log(`[contact] phone/email matched existing customer "${matched.name}" but submitted name "${trimmedName}" differs — creating a new lead instead of reusing it`);
         }
         if (!customer) {
           customer = await storage.createCustomer({
