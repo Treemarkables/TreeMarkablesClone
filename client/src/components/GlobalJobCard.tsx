@@ -2829,9 +2829,35 @@ export function GlobalJobCard({
     },
     onError: (error: any) => {
       console.error("Error sending to Xero:", error);
+      // apiRequest throws an ApiError whose structured backend payload lives on
+      // `error.body` (errorCode / missingField / details.suggestion), NOT spread
+      // onto the error itself. Read from there so Xero's actual reason (e.g. a
+      // duplicate invoice number, which Xero reserves permanently) is surfaced
+      // instead of a vague "Xero Error".
+      const body = error?.body ?? error;
+      let title = "Xero error";
+      let description =
+        error?.message ||
+        body?.message ||
+        "Failed to send invoice to Xero. Please try again.";
+
+      if (body?.errorCode === "DUPLICATE_INVOICE_NUMBER") {
+        title = `Invoice #${body?.jobNumber ?? ""} already exists in Xero`;
+        description =
+          body?.details?.suggestion ||
+          "That invoice number is already in use in Xero — even a voided or deleted invoice keeps the number reserved. Renumber the existing invoice in Xero, then send again.";
+      } else if (body?.missingField === "address") {
+        title = "Missing address";
+        description =
+          body?.message ||
+          "This job/invoice needs a valid address before it can go to Xero.";
+      } else if (body?.details?.suggestion) {
+        description = body.details.suggestion;
+      }
+
       toast({
-        title: "Xero Error",
-        description: error?.message || "Failed to send invoice to Xero. Please try again.",
+        title,
+        description,
         variant: "destructive",
       });
     },
@@ -4705,6 +4731,34 @@ The Treemarkables Team`;
   const currentStatus =
     mode === "edit" ? (watchedStatus || editingJob?.status) : watchedStatus;
 
+  // Single entry point for every "Send to Xero" control. The buttons used to be
+  // silently `disabled` when preconditions weren't met, so a tap/click did
+  // nothing and the user had no idea why (the dominant case: the job isn't
+  // marked Completed yet). Surface the reason instead of dead-ending.
+  const handleSendToXeroClick = () => {
+    if (!editingJob?.id || mode === "create") return;
+    if (sendToXeroMutation.isPending) return;
+    if (editingJob?.xeroStatus === "sent") {
+      toast({
+        title: "Already sent to Xero",
+        description:
+          'This invoice is already in Xero. Use "Reset Xero Sync" first if you need to re-send it.',
+        variant: "destructive",
+      });
+      return;
+    }
+    if (currentStatus !== "completed") {
+      toast({
+        title: "Can't send to Xero yet",
+        description:
+          "Mark this job as Completed before sending its invoice to Xero.",
+        variant: "destructive",
+      });
+      return;
+    }
+    sendToXeroMutation.mutate();
+  };
+
   if (jobLoading) {
     const loadingContent = (
       <div className="flex items-center justify-center h-full w-full bg-gray-50">
@@ -5143,11 +5197,10 @@ The Treemarkables Team`;
                   Archive
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => sendToXeroMutation.mutate()}
+                  onClick={handleSendToXeroClick}
                   disabled={
                     !editingJob?.id ||
                     mode === "create" ||
-                    currentStatus !== "completed" ||
                     editingJob?.xeroStatus === "sent" ||
                     sendToXeroMutation.isPending
                   }
@@ -10315,13 +10368,12 @@ The Treemarkables Team`;
                 disabled={
                   !editingJob?.id ||
                   mode === "create" ||
-                  currentStatus !== "completed" ||
                   editingJob?.xeroStatus === "sent" ||
                   sendToXeroMutation.isPending
                 }
                 onClick={() => {
                   setShowMoreActionsSheet(false);
-                  sendToXeroMutation.mutate();
+                  handleSendToXeroClick();
                 }}
                 data-testid="more-sheet-send-xero"
               >
@@ -10838,7 +10890,7 @@ The Treemarkables Team`;
     proposal: () => setIsProposalBuilderOpen(true),
     timeTracking: () => setIsTimeTrackingOpen(true),
     profitTracker: () => setIsProfitTrackerOpen(true),
-    sendToXero: () => sendToXeroMutation.mutate(),
+    sendToXero: handleSendToXeroClick,
   };
 
   // Diary doc-click handlers reused by both surfaces. Quote/invoice just
