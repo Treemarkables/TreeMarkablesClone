@@ -2816,6 +2816,26 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       // and notification can all be linked to the same record. Try phone first
       // (indexed), then fall back to email so an existing client emailing in
       // (or with a slightly different phone) doesn't get a duplicate record.
+      // Resolve the owning business for this public, session-less submission so every
+      // write below is tenant-stamped. Inbound contact forms run on the owner
+      // (BYPASSRLS) connection with no tenant context; without this stamp the
+      // customer/conversation/job/notification rows are written with a NULL
+      // business_id and never surface in the owner's RLS-filtered Inbox. Resolving to
+      // undefined (settings lookup failed) preserves the prior behaviour, so this is
+      // safe by construction. (Group B public-write tenant fix.)
+      let contactBusinessId: string | undefined;
+      try {
+        contactBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+        console.log(`[contact] tenant resolved for submission: businessId=${contactBusinessId ?? '(none)'}`);
+      } catch (bizErr) {
+        console.error('[contact] Failed to resolve business for tenant stamping:', bizErr);
+      }
+
+      // Hoisted above runWithBusiness so the auto-reply block can attach a receipt to
+      // the created job once the confirmation email/SMS is sent.
+      let createdJob: any = undefined;
+
+      await runWithBusiness(contactBusinessId, async () => {
       let customer: any = undefined;
       try {
         if (cleanPhone) {
@@ -2844,10 +2864,6 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       } catch (customerErr) {
         console.error('Error finding/creating customer for contact form:', customerErr);
       }
-
-      // Hoisted so the auto-reply block below can attach a receipt entry to
-      // the job diary once the confirmation email/SMS is sent.
-      let createdJob: any = undefined;
 
       try {
         // Step 2: find an existing open conversation or create a new one,
@@ -3089,6 +3105,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       } catch (autoReplyErr) {
         console.error('[contact] Error sending inquiry auto-reply:', autoReplyErr);
       }
+      }); // runWithBusiness(contactBusinessId) — tenant-stamp all contact-form writes
 
       res.json({
         success: true,
