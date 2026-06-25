@@ -1003,6 +1003,8 @@ The Treemarkables Team';
       startEmailReplyPolling();
       const { marketingScheduler } = await import('./services/marketingScheduler');
       marketingScheduler.start();
+      const { startHealthCheckWorker } = await import('./services/healthCheck');
+      startHealthCheckWorker();
     } catch (err) {
       log(`⚠️ Background worker startup warning: ${(err as Error).message}`, "startup");
     }
