@@ -520,7 +520,8 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         
         const lineItems = invoiceLineItems;
         
-        const xeroInvoicePayload = {
+        const baseInvoiceNumber = String(invoice?.invoiceNumber || job.jobNumber || job.id);
+        const buildXeroInvoicePayload = (invoiceNumber: string) => ({
           type: 'ACCREC' as any, // Accounts Receivable (sales invoice)
           contact: {
             contactID: xeroContactId,
@@ -528,20 +529,54 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           lineItems,
           date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD
           dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days from now
-          // Prefer the local invoice's number (so users can suffix it, e.g.
-          // "3963-V2", when the original number has been consumed in Xero
-          // by a voided invoice — voids are permanent and reserve the number).
-          invoiceNumber: String(invoice?.invoiceNumber || job.jobNumber || job.id),
+          invoiceNumber,
           reference: `Job #${job.jobNumber || job.id}`,
           status: 'AUTHORISED' as any,
+        });
+
+        // Xero reserves invoice numbers permanently — even a voided or deleted
+        // invoice keeps its number, and such invoices don't show in a normal
+        // search, so the number looks "free" but isn't. Rather than dead-end on
+        // a duplicate-number rejection, retry with a -2, -3… suffix so the send
+        // still goes through. The local/customer-facing number is left as the
+        // original (the customer already has it); the "Job #<n>" reference keeps
+        // reconciliation working.
+        const isDuplicateNumberError = (err: any): boolean => {
+          let e: any = err;
+          if (typeof e === 'string') { try { e = JSON.parse(e); } catch { e = { message: err }; } }
+          const rawBody = e?.body ?? e?.response?.body;
+          const body = typeof rawBody === 'string'
+            ? (() => { try { return JSON.parse(rawBody); } catch { return null; } })()
+            : rawBody;
+          const msgs: string[] = body?.Elements?.flatMap((el: any) =>
+            (el?.ValidationErrors ?? []).map((v: any) => v?.Message).filter(Boolean)) ?? [];
+          return msgs.some((m: string) => /unique/i.test(m));
         };
-        
-        const invoiceResponse = await client.accountingApi.createInvoices(
-          tenantId,
-          { invoices: [xeroInvoicePayload] }
-        );
-        
-        const xeroInvoice = invoiceResponse.body.invoices![0];
+
+        let xeroInvoice: any;
+        let usedInvoiceNumber = baseInvoiceNumber;
+        const maxNumberAttempts = 6;
+        for (let attempt = 1; attempt <= maxNumberAttempts; attempt++) {
+          const candidate = attempt === 1 ? baseInvoiceNumber : `${baseInvoiceNumber}-${attempt}`;
+          try {
+            const invoiceResponse = await client.accountingApi.createInvoices(
+              tenantId,
+              { invoices: [buildXeroInvoicePayload(candidate)] }
+            );
+            xeroInvoice = invoiceResponse.body.invoices![0];
+            usedInvoiceNumber = candidate;
+            if (attempt > 1) {
+              console.log(`✅ Invoice number "${baseInvoiceNumber}" was already used in Xero; sent as "${candidate}"`);
+            }
+            break;
+          } catch (err: any) {
+            if (isDuplicateNumberError(err) && attempt < maxNumberAttempts) {
+              console.log(`⚠️ Xero invoice number "${candidate}" already in use, retrying with a suffix...`);
+              continue;
+            }
+            throw err;
+          }
+        }
         console.log(`✅ Invoice created in Xero: ${xeroInvoice.invoiceID}`);
         
         // Capture confirmed totals from Xero response
@@ -585,7 +620,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           jobId,
           entryType: 'note',
           title: 'Invoice Sent to Xero',
-          description: `Invoice #${xeroInvoice.invoiceNumber || xeroInvoice.invoiceID} sent to Xero successfully. Total: $${invoiceTotal}`,
+          description: `Invoice #${xeroInvoice.invoiceNumber || xeroInvoice.invoiceID} sent to Xero successfully. Total: $${invoiceTotal}.${usedInvoiceNumber !== baseInvoiceNumber ? ` (Number ${baseInvoiceNumber} was already used in Xero — even voided/deleted invoices keep their number — so it was sent as ${usedInvoiceNumber}.)` : ''}`,
           authorName: 'System',
           authorRole: 'system',
           metadata: {
