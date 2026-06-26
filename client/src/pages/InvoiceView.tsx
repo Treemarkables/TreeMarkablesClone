@@ -48,7 +48,7 @@ interface PublicInvoiceData {
     city: string | null;
     region: string | null;
   } | null;
-  job: { description: string | null } | null;
+  job: { description: string | null; billingNameOverride: string | null } | null;
   sections: InvoiceSection[];
 }
 
@@ -176,6 +176,11 @@ export default function InvoiceView() {
 
   const customer = invoice.customer;
   const job = invoice.job;
+  // Mirror the PDF/email precedence (server/routes.ts): the per-invoice billing
+  // name override on the job wins over the invoice contact name and the linked
+  // customer's name.
+  const billingName =
+    job?.billingNameOverride || invoice.contactName || customer?.name || null;
 
   const lineItems: any[] = Array.isArray(invoice.items) ? invoice.items : [];
   const lineItemTotal = lineItems.reduce((sum, item) => {
@@ -238,7 +243,7 @@ export default function InvoiceView() {
                 Invoice #{invoice.invoiceNumber}
               </h1>
               <p className="text-xs sm:text-sm text-gray-600 truncate">
-                {customer?.name || "Customer"}
+                {billingName || "Customer"}
               </p>
             </div>
           </div>
@@ -347,7 +352,7 @@ export default function InvoiceView() {
                 <div>
                   <span className="text-gray-600">Name:</span>{" "}
                   <span className="font-medium">
-                    {customer?.name || "N/A"}
+                    {billingName || "N/A"}
                   </span>
                 </div>
                 {customer?.email && (
