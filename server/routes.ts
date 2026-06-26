@@ -8002,6 +8002,18 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
   // Standalone video upload (Videos library) — no job card required. The job
   // can be linked later via PATCH /api/videos/:id { jobId }.
+  // Knowledge (how-to) videos are GLOBAL platform content shown to every subscriber
+  // (stored business_id NULL, served via the owner client — see storage.getVideos).
+  // Only allowlisted businesses may publish/manage them, so a stray tenant admin
+  // can't inject into the shared help library. Empty allowlist = fail closed (nobody).
+  // Set INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS to TM + the content/demo tenant ids.
+  const CONTENT_PUBLISHER_BUSINESS_IDS = new Set(
+    (process.env.INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS ?? "")
+      .split(",").map((s) => s.trim()).filter(Boolean),
+  );
+  const isContentPublisher = (businessId: string | undefined): boolean =>
+    !!businessId && CONTENT_PUBLISHER_BUSINESS_IDS.has(businessId);
+
   app.post('/api/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -8023,6 +8035,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       }
 
       const kind = req.body.kind === 'knowledge' ? 'knowledge' : 'job';
+      // Publishing into the global how-to library is restricted to content publishers.
+      if (kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to publish knowledge videos.' });
+      }
       const showToCustomer = req.body.showToCustomer === undefined
         ? true
         : req.body.showToCustomer === 'true' || req.body.showToCustomer === true;
@@ -8123,6 +8139,13 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       // and sync the corresponding link in jobs.description after the update.
       const priorVideo = await storage.getVideo(req.params.id);
 
+      // Editing a global knowledge video — or re-tagging a job video INTO the
+      // knowledge library — touches shared platform content; gate to publishers.
+      if ((priorVideo?.kind === 'knowledge' || req.body.kind === 'knowledge')
+        && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
+      }
+
       const updates: schema.UpdateVideo = {};
       if (req.body.title !== undefined) updates.title = req.body.title;
       if (req.body.description !== undefined) updates.description = req.body.description;
@@ -8184,6 +8207,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       const video = await storage.getVideo(req.params.id);
       if (!video) {
         return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      // Deleting from the global how-to library is restricted to content publishers.
+      if (video.kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
       }
       await storage.deleteVideo(req.params.id);
       await videoStorage.deleteVideoObject(video.url);
