@@ -18,10 +18,10 @@ type Tier = {
 const tiers: Tier[] = [
   {
     name: "Freemium",
-    blurb: "Solo operators and small teams getting started — free, forever.",
+    blurb: "Solo operators and small teams getting started — free for 30 days.",
     jobsPerMonth: "Up to 15 jobs / month",
     price: "$0",
-    priceNote: "Free forever · up to 3 users",
+    priceNote: "Free for 30 days · up to 3 users",
     cta: "Start for free",
     href: "/contact",
     features: [
@@ -79,12 +79,12 @@ const addOns = [
 
 const faqs = [
   {
-    q: "Is there really a free plan?",
-    a: "Yes — Freemium is free forever. Up to 3 users, 15 jobs a month, and the core tools to run your day. No card required. Move up to Crew when you outgrow it.",
+    q: "Is there a free trial?",
+    a: "Yes — Freemium gives you 30 days free. Up to 3 users, 15 jobs a month, and the core tools to run your day. No card required to start. When your 30 days are up, move to Crew to keep going.",
   },
   {
     q: "Is it really unlimited users?",
-    a: "On every paid plan, yes. Bring your whole crew on — office, foremen, casuals — at no per-seat cost. You pay by jobs per month, not by people. (The free Freemium plan includes up to 3 users.)",
+    a: "On every paid plan, yes. Bring your whole crew on — office, foremen, casuals — at no per-seat cost. You pay by jobs per month, not by people. (The Freemium trial includes up to 3 users.)",
   },
   {
     q: "What if I go over my job limit?",
@@ -92,7 +92,7 @@ const faqs = [
   },
   {
     q: "Do you charge for SMS?",
-    a: "The Crew and Business plans include a monthly SMS allowance — 200 and 800 texts respectively. Need more? Extra SMS is a simple add-on. The free plan doesn't include SMS.",
+    a: "The Crew and Business plans include a monthly SMS allowance — 200 and 800 texts respectively. Need more? Extra SMS is a simple add-on. The Freemium trial doesn't include SMS.",
   },
   {
     q: "How does onboarding work?",

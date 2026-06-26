@@ -124,7 +124,7 @@ export default function Home() {
                 Start free. Scale when you grow.
               </h2>
               <p className="mt-5 text-ink-500 text-lg leading-relaxed mx-auto max-w-prose">
-                Begin on the free plan, then pay by jobs per month — never per seat. On paid plans, bring your whole crew on without watching the meter.
+                Begin with 30 days free, then pay by jobs per month — never per seat. On paid plans, bring your whole crew on without watching the meter.
               </p>
               <div className="mt-7">
                 <LinkButton href="/pricing" variant="primary" size="lg">
@@ -135,7 +135,7 @@ export default function Home() {
 
             <div className="mt-12 w-full max-w-4xl grid sm:grid-cols-3 gap-4 text-center">
               {[
-                { name: "Freemium", line: "Small teams — free forever", price: "$0", meta: "15 jobs / mo · 3 users" },
+                { name: "Freemium", line: "Small teams — 30 days free", price: "$0", meta: "15 jobs / mo · 3 users" },
                 { name: "Crew", line: "Growing teams", price: "$89", highlight: true, meta: "150 jobs / mo · unlimited users" },
                 { name: "Business", line: "Multi-crew ops", price: "$150", meta: "Unlimited jobs · unlimited users" },
               ].map((t) => (
@@ -157,7 +157,7 @@ export default function Home() {
                     {t.price}
                   </div>
                   <div className={`text-xs mt-1 ${t.highlight ? "text-ink-300" : "text-ink-500"}`}>
-                    {t.price === "$0" ? "free forever" : "/ mo + GST, NZD"}
+                    {t.price === "$0" ? "free for 30 days" : "/ mo + GST, NZD"}
                   </div>
                   <div className={`text-xs mt-3 pt-3 border-t ${t.highlight ? "border-ink-700 text-ink-300" : "border-ink-100 text-ink-500"}`}>
                     {t.meta}
