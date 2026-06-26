@@ -137,7 +137,7 @@ export default function Home() {
               {[
                 { name: "Freemium", line: "Small teams — free forever", price: "$0", meta: "15 jobs / mo · 3 users" },
                 { name: "Crew", line: "Growing teams", price: "$89", highlight: true, meta: "150 jobs / mo · unlimited users" },
-                { name: "Business", line: "Multi-crew ops", price: "$189", meta: "Unlimited jobs · unlimited users" },
+                { name: "Business", line: "Multi-crew ops", price: "$150", meta: "Unlimited jobs · unlimited users" },
               ].map((t) => (
                 <div
                   key={t.name}

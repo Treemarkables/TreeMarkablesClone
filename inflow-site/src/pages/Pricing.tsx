@@ -59,7 +59,7 @@ const tiers: Tier[] = [
     name: "Business",
     blurb: "Multi-crew operations running at scale.",
     jobsPerMonth: "Unlimited jobs",
-    price: "$189",
+    price: "$150",
     priceNote: "+ GST · billed monthly",
     cta: "Start with Business",
     href: "/contact",
