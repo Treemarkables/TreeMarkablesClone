@@ -46,7 +46,6 @@ const features: Feature[] = [
     bullets: [
       "Inbox + SMS + calls captured against the customer",
       "Pipeline view for opportunities and follow-ups",
-      "Automated review and reputation requests",
       "Property history — what we did and when",
     ],
     visual: "crm",
@@ -108,7 +107,7 @@ const detailFeatures: { title: string; body: string; tier: Feature["tier"] }[] =
   {
     title: "Job costing & back-costing",
     body: "Compare quoted vs actual labour, materials and supplier costs on every job — so you know exactly what made money.",
-    tier: "Business",
+    tier: "Crew & up",
   },
   {
     title: "Scheduling & dispatch",
@@ -129,11 +128,6 @@ const detailFeatures: { title: string; body: string; tier: Feature["tier"] }[] =
     title: "AI assist",
     body: "Smart dispatch, speech-to-quote, and lead capture from photos and messages — bundled on every paid plan.",
     tier: "Crew & up",
-  },
-  {
-    title: "Marketing & reputation",
-    body: "Campaign and social planning, plus automated Google and Facebook review requests to grow your name.",
-    tier: "Business",
   },
   {
     title: "Workflow automation",
@@ -166,18 +160,16 @@ const comparison: { group: string; rows: { label: string; values: [Cell, Cell, C
       { label: "Roles, permissions & time tracking", values: [false, true, true] },
       { label: "Communications, inbox & templates", values: [false, true, true] },
       { label: "AI assist — dispatch & speech-to-quote", values: [false, true, true] },
+      { label: "Advanced analytics & job costing", values: [false, true, true] },
       { label: "SMS / month included", values: ["—", "200", "800"] },
       { label: "Document builder", values: [false, true, true] },
-      { label: "Xero, Google Calendar & Gmail", values: [false, true, true] },
+      { label: "Xero, Google Calendar, Gmail & Mailchimp", values: [false, true, true] },
     ],
   },
   {
     group: "Business",
     rows: [
-      { label: "Marketing & reputation suite", values: [false, false, true] },
-      { label: "Advanced analytics & job costing", values: [false, false, true] },
       { label: "Workflow automation", values: [false, false, true] },
-      { label: "Mailchimp & Facebook integrations", values: [false, false, true] },
       { label: "Priority onboarding & support", values: [false, false, true] },
     ],
   },
