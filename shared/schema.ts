@@ -4951,6 +4951,35 @@ export type Business = typeof businesses.$inferSelect;
 export type InsertBusiness = z.infer<typeof insertBusinessSchema>;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Inbound channel → tenant map. A GLOBAL lookup table that resolves an inbound
+// identifier — the dialed phone number, an inbound SMS sender, an email
+// recipient, or a Facebook page id — to the owning business. Session-less inbound
+// handlers (Twilio voice/SMS, email, Messenger) run on the owner connection with
+// no logged-in user, so without this map their writes fall to the column-default
+// tenant (Treemarkables) and they match callers across ALL tenants. Resolution
+// runs as owner (see server/tenancy/channelMap.ts); RLS is enabled so an authed
+// tenant only ever sees its own rows. The (channel_type, identifier) pair is
+// UNIQUE (enforced in the migration) so an identifier maps to exactly one tenant.
+// ─────────────────────────────────────────────────────────────────────────────
+export const tenantChannels = pgTable("tenant_channels", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull(),
+  // 'phone' (voice + SMS — both key off a number) | 'email' | 'fb_page'
+  channelType: text("channel_type").notNull(),
+  // Normalized for matching: phone = last 8 digits, email = trimmed+lowercased,
+  // fb_page = raw page id. Normalization lives in channelMap.ts.
+  identifier: text("identifier").notNull(),
+  label: text("label"), // optional human note, e.g. "main line"
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  businessIdx: index("tenant_channels_business_idx").on(table.businessId),
+}));
+export const insertTenantChannelSchema = createInsertSchema(tenantChannels).omit({ id: true, createdAt: true });
+export type TenantChannel = typeof tenantChannels.$inferSelect;
+export type InsertTenantChannel = z.infer<typeof insertTenantChannelSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SaaS subscription billing (Inflow — Phase 4). `subscriptionPlans` + `addOns` are the
 // GLOBAL catalog (no tenant). `subscriptions` + `businessAddOns` are per-business
 // (tenant-scoped — need businessId RLS + app_tenant grants when migrated). Stripe is the

@@ -18,6 +18,7 @@ declare module 'express-session' {
 import { storage, invoiceRevenueExGst } from "./storage";
 import { getBusinessIdentity } from "./businessIdentity";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
+import { resolveBusinessIdByChannel } from "./tenancy/channelMap";
 import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
@@ -11916,7 +11917,18 @@ ${phoneTarget}
         // "why isn't my phone ringing") can tell the two apart.
         const isVoicemail = String(req.query.source || '') === 'voicemail';
         console.log(`📞 Caller identified as: ${callerPhone} (raw: ${rawCallerPhone}, source: ${callerSource}, voicemail: ${isVoicemail})`);
-        
+
+        // Resolve which tenant owns the dialed line (the answer/no-answer routes
+        // pass it through as ?calledTo=...; recording-status callbacks omit To).
+        // Binds the call record + caller match to the right business instead of
+        // defaulting to Treemarkables and matching customers across all tenants.
+        // Unmapped number → undefined → unchanged prior (single-tenant) behaviour.
+        const calledToRaw = String(req.query.calledTo || To || '');
+        const inboundBizId = await resolveBusinessIdByChannel('phone', calledToRaw);
+        if (inboundBizId) {
+          console.log(`🏢 Inbound line ${calledToRaw} resolved to business ${inboundBizId}`);
+        }
+
         // Download recording from Twilio and store in Object Storage (persistent across restarts)
         const recordingFilename = `twilio-${CallSid}-${Date.now()}.mp3`;
         const recordingUrlWithAuth = `${RecordingUrl}.mp3?Download=true`;
@@ -11963,15 +11975,16 @@ ${phoneTarget}
         // Create call record in DB
         {
             
-            // Create call record
-            const call = await storage.createCall({
+            // Create call record — stamped to the resolved tenant when the dialed
+            // line is mapped (else falls to the column default, as before).
+            const call = await runWithBusiness(inboundBizId, () => storage.createCall({
               phoneNumber: callerPhone,
               direction: 'inbound',
               status: isVoicemail ? 'missed' : 'answered',
               duration: parseInt(RecordingDuration || '0'),
               recordingUrl: servingUrl,
               twilioCallSid: CallSid
-            });
+            }));
             
             console.log(`📝 Call record created: ${call.id}`);
             
@@ -12053,19 +12066,23 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                 // Create or find customer
                 let customer;
                 const customers = await storage.getAllCustomers();
-                // Check both phone and mobile fields to avoid creating duplicate customers
+                // Check both phone and mobile fields to avoid creating duplicate
+                // customers. When the dialed line resolved to a tenant, scope the
+                // match to it so a phone-number collision can't link the call to
+                // another tenant's customer (the getAllCustomers read is owner-path).
                 customer = customers.find(c =>
-                  (c.phone && normalizePhone(c.phone) === callerPhone) ||
-                  (c.mobile && normalizePhone(c.mobile) === callerPhone)
+                  (!inboundBizId || c.businessId === inboundBizId) &&
+                  ((c.phone && normalizePhone(c.phone) === callerPhone) ||
+                   (c.mobile && normalizePhone(c.mobile) === callerPhone))
                 );
-                
+
                 if (!customer && jobData.customerName) {
-                  customer = await storage.createCustomer({
+                  customer = await runWithBusiness(inboundBizId, () => storage.createCustomer({
                     name: jobData.customerName,
                     phone: callerPhone,
                     address: jobData.address || undefined,
                     source: 'phone_call'
-                  });
+                  }));
                   console.log(`✅ New customer created: ${customer.name}`);
                 }
 
