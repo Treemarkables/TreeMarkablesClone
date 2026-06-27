@@ -1327,7 +1327,7 @@ export const businessSettings = pgTable("business_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
   // Business Information
-  businessName: text("business_name").notNull().default("Treemarkables"),
+  businessName: text("business_name").notNull().default("My Business"),
   businessAddress: text("business_address").default(""),
   businessPhone: text("business_phone").default(""),
   businessEmail: text("business_email").default(""),
@@ -1341,15 +1341,15 @@ export const businessSettings = pgTable("business_settings", {
   // Trade Generalization Phase B — which trade's preset this business uses
   // (tree | plumbing | electrical | building | general). Default 'tree' keeps
   // Treemarkables on the arborist preset. See server/trades/presets.ts.
-  industry: text("industry").default("tree"),
+  industry: text("industry").default("general"),
   // Identity de-hardcoding (Trade Generalization Phase A). Defaults reproduce
   // Treemarkables' current literals so behaviour is unchanged until a business
   // sets its own. ownerName → AI persona / email sign-offs; businessDiscipline
   // → "a New Zealand {discipline} business" in AI prompts; businessTagline →
   // PDF/email footer line. See INFLOW_TRADE_GENERALIZATION_PLAN.md + businessIdentity.ts.
-  ownerName: text("owner_name").default("Jules"),
-  businessTagline: text("business_tagline").default("Qualified Arborists"),
-  businessDiscipline: text("business_discipline").default("arborist"),
+  ownerName: text("owner_name").default(""),
+  businessTagline: text("business_tagline").default(""),
+  businessDiscipline: text("business_discipline").default(""),
   // Per-business bank-transfer details shown on invoices so a customer pays the
   // RIGHT business. Default EMPTY on purpose: a tenant shows NO payment block
   // until they set their own — it must never fall back to Treemarkables' account.
