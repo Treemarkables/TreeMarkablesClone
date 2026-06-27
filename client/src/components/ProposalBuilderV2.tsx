@@ -864,6 +864,17 @@ function LineItemsBlock({
     setAddRowKey((k) => k + 1); // Remount add row so autoFocus re-fires on the description field
   };
 
+  // Quick-add: append a blank row (qty 1, $0), collapsed, ready to tap-edit later.
+  // Click N times → N blank rows. draftToItem uses a Date.now() id which collides
+  // under rapid clicks, so mint a guaranteed-unique id here.
+  const addBlankRow = () => {
+    const blank = {
+      ...draftToItem(defaultDraft()),
+      id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    };
+    onUpdate({ lineItems: [...block.lineItems, blank] });
+  };
+
   const removeItem = (id: string) => onUpdate({ lineItems: block.lineItems.filter((i) => i.id !== id) });
 
   const startEdit = (item: LineItem) => {
@@ -1158,13 +1169,25 @@ function LineItemsBlock({
           </div>
         </Fragment>
       ) : (
-        <button
-          type="button"
-          onClick={() => setShowAdd(true)}
-          className={`w-full text-left text-[15px] text-gray-400 hover:text-blue-600 transition-colors px-4 py-3 ${block.lineItems.length === 0 ? "" : "border-t border-gray-100"}`}
-        >
-          Search or add new...
-        </button>
+        <div className={`flex items-center ${block.lineItems.length === 0 ? "" : "border-t border-gray-100"}`}>
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            className="flex-1 text-left text-[15px] text-gray-400 hover:text-blue-600 transition-colors px-4 py-3"
+          >
+            Search or add new...
+          </button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={addBlankRow}
+            className="mr-2 text-gray-500 flex-shrink-0"
+            data-testid="button-quick-add-line-item"
+          >
+            <Plus className="w-4 h-4 mr-1" /> Add row
+          </Button>
+        </div>
       )}
 
       {/* Section subtotal — flat row at the bottom of the block */}
