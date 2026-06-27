@@ -835,17 +835,15 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             { value: "sent_later", label: "Sent later" },
           ]}
         />
-        {lanes.length > 0 && (
-          <SelectField
-            label="Lane"
-            value={job?.laneId ?? ""}
-            onChange={(v) => saveLane.mutate(v || null)}
-            options={[
-              { value: "", label: "— None —" },
-              ...lanes.map((l) => ({ value: l.id, label: l.name })),
-            ]}
-          />
-        )}
+        <SelectField
+          label="Lane"
+          value={job?.laneId ?? ""}
+          onChange={(v) => saveLane.mutate(v || null)}
+          options={[
+            { value: "", label: lanes.length ? "— None —" : "No lanes — add in Settings" },
+            ...lanes.map((l) => ({ value: l.id, label: l.name })),
+          ]}
+        />
       </div>
 
       {/* ── Confirmation checkbox ── */}
