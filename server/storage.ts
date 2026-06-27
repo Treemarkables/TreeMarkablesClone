@@ -19,8 +19,8 @@ import {
   type InventoryTransaction, type InsertInventoryTransaction,
   type Material, type InsertMaterial,
   type Service, type InsertService,
-  type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
-  videos, type Video, type InsertVideo, type UpdateVideo,
+  photos, type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
+  videos, type Video, type InsertVideo, type UpdateVideo, type VideoSearch,
   helpArticles, type HelpArticle, type InsertHelpArticle, type UpdateHelpArticle,
   type Invoice, type InsertInvoice, type InvoiceSection, type InsertInvoiceSection, type UpdateInvoiceSection,
   type ServiceRequest, type InsertServiceRequest,
@@ -816,6 +816,7 @@ export interface IStorage {
   getVideosByJob(jobId: string): Promise<Video[]>;
   getCustomerVisibleVideosByJob(jobId: string): Promise<Video[]>;
   getVideos(filter?: { kind?: string; unassigned?: boolean }): Promise<Video[]>;
+  searchVideos(filters: VideoSearch): Promise<Video[]>;
 
   // Help articles (subscriber-facing /help page)
   createHelpArticle(data: InsertHelpArticle): Promise<HelpArticle>;
@@ -5669,7 +5670,72 @@ class DatabaseStorage implements IStorage {
   async getFeaturedPhotos(limit?: number): Promise<Photo[]> { return []; }
   async getPhotosByType(type: string, jobId?: string): Promise<Photo[]> { return []; }
   async getBeforeAfterPairs(jobId: string): Promise<Photo[][]> { return []; }
-  async searchPhotos(filters: PhotoSearch): Promise<Photo[]> { return []; }
+  async searchPhotos(filters: PhotoSearch): Promise<Photo[]> {
+    const conditions = [];
+    if (filters.q) {
+      const like = `%${filters.q}%`;
+      conditions.push(or(
+        ilike(photos.notes, like),
+        ilike(photos.aiDescription, like),
+        ilike(photos.gpsAddress, like),
+        ilike(photos.location, like),
+        ilike(photos.filename, like),
+        ilike(photos.originalName, like),
+      ));
+    }
+    if (filters.jobId) conditions.push(eq(photos.jobId, filters.jobId));
+    if (filters.customerId) conditions.push(eq(photos.customerId, filters.customerId));
+    if (filters.type) conditions.push(eq(photos.type, filters.type));
+    if (filters.category) conditions.push(eq(photos.category, filters.category));
+    if (filters.capturedBy) conditions.push(eq(photos.capturedBy, filters.capturedBy));
+    if (filters.tags && filters.tags.length > 0) {
+      // Postgres array-overlap: row matches if any tag in the row is in the filter set.
+      conditions.push(sql`${photos.tags} && ${filters.tags}::text[]`);
+    }
+    if (filters.dateFrom) conditions.push(gte(photos.capturedAt, new Date(filters.dateFrom)));
+    if (filters.dateTo) conditions.push(lte(photos.capturedAt, new Date(filters.dateTo)));
+    if (filters.isPublic !== undefined) conditions.push(eq(photos.isPublic, filters.isPublic));
+    if (filters.isFeatured !== undefined) conditions.push(eq(photos.isFeatured, filters.isFeatured));
+    if (filters.hasGps) {
+      conditions.push(and(sql`${photos.gpsLatitude} IS NOT NULL`, sql`${photos.gpsLongitude} IS NOT NULL`));
+    }
+    if (filters.minQualityScore !== undefined) conditions.push(gte(photos.qualityScore, filters.minQualityScore));
+
+    const base = db.select().from(photos);
+    const query = conditions.length ? base.where(and(...conditions)) : base;
+    return await query
+      .orderBy(desc(photos.capturedAt))
+      .limit(filters.limit)
+      .offset(filters.offset);
+  }
+
+  async searchVideos(filters: VideoSearch): Promise<Video[]> {
+    const conditions = [];
+    if (filters.q) {
+      const like = `%${filters.q}%`;
+      conditions.push(or(
+        ilike(videos.title, like),
+        ilike(videos.description, like),
+        ilike(videos.filename, like),
+        ilike(videos.originalName, like),
+      ));
+    }
+    if (filters.kind) conditions.push(eq(videos.kind, filters.kind));
+    if (filters.jobId) conditions.push(eq(videos.jobId, filters.jobId));
+    if (filters.customerId) conditions.push(eq(videos.customerId, filters.customerId));
+    if (filters.category) conditions.push(eq(videos.category, filters.category));
+    if (filters.uploadedBy) conditions.push(eq(videos.uploadedBy, filters.uploadedBy));
+    if (filters.dateFrom) conditions.push(gte(videos.createdAt, new Date(filters.dateFrom)));
+    if (filters.dateTo) conditions.push(lte(videos.createdAt, new Date(filters.dateTo)));
+    if (filters.showToCustomer !== undefined) conditions.push(eq(videos.showToCustomer, filters.showToCustomer));
+
+    const base = db.select().from(videos);
+    const query = conditions.length ? base.where(and(...conditions)) : base;
+    return await query
+      .orderBy(desc(videos.createdAt))
+      .limit(filters.limit)
+      .offset(filters.offset);
+  }
 
   // Job Videos (Loom replacement) — real implementations against the videos table.
   async createVideo(data: InsertVideo): Promise<Video> {
