@@ -23,7 +23,16 @@ import { notifyEmployees, pushToAdminsWithCustomerMessages } from './notificatio
  */
 
 interface NudgeConfig { channel?: 'sms' | 'email'; template?: string; requireApproval?: boolean }
-interface StaffConfig { recipients?: 'owner' | 'assigned' | 'both'; message?: string; priority?: 'low' | 'medium' | 'high' }
+interface StaffConfig {
+  recipients?: 'owner' | 'assigned' | 'both'; // legacy single field — still honoured
+  notifyOwner?: boolean;       // owner / admins
+  notifyAssigned?: boolean;    // the crew assigned to the job
+  staffIds?: string[];         // specific team members (employee ids)
+  emails?: string[];           // typed email recipients (may be people with no app account)
+  phones?: string[];           // typed phone recipients (SMS)
+  message?: string;
+  priority?: 'low' | 'medium' | 'high';
+}
 interface AutoMoveConfig { targetLaneId?: string }
 interface TaskConfig { title?: string; category?: string; assigneeId?: string; dueInDays?: number }
 
@@ -106,12 +115,17 @@ async function runCustomerNudge(job: Job, cfg: NudgeConfig): Promise<void> {
 }
 
 async function runStaffReminder(job: Job, cfg: StaffConfig): Promise<void> {
-  const recipients = cfg.recipients || 'owner';
   const customerName = (await resolveJobContact(job)).name || 'Customer';
   const message = cfg.message || `Job #${job.jobNumber} (${job.title || customerName}) needs attention.`;
   const actionUrl = `/dispatch?job=${job.id}`;
+  const pushData = { type: 'lane_reminder', jobId: job.id, jobNumber: String(job.jobNumber || '') };
 
-  // Bell notification — owner-facing (no userId = visible to admins).
+  // Back-compat: the old single `recipients` field maps onto the new flags.
+  const wantOwner = cfg.notifyOwner ?? (cfg.recipients === 'owner' || cfg.recipients === 'both');
+  const wantAssigned = cfg.notifyAssigned ?? (cfg.recipients === 'assigned' || cfg.recipients === 'both');
+
+  // Bell notification — owner-facing (no userId = visible to admins). Always created so there's an
+  // in-app record regardless of which channels are targeted.
   await storage.createNotification({
     title: 'Lane reminder',
     message,
@@ -124,27 +138,41 @@ async function runStaffReminder(job: Job, cfg: StaffConfig): Promise<void> {
     metadata: { jobNumber: job.jobNumber, laneId: job.laneId },
   });
 
-  // Push.
-  if (recipients === 'owner' || recipients === 'both') {
-    await pushToAdminsWithCustomerMessages({
-      title: 'Lane reminder',
-      body: message,
-      clickAction: actionUrl,
-      data: { type: 'lane_reminder', jobId: job.id, jobNumber: String(job.jobNumber || '') },
-    });
+  // Owner / admins push.
+  if (wantOwner) {
+    await pushToAdminsWithCustomerMessages({ title: 'Lane reminder', body: message, clickAction: actionUrl, data: pushData });
   }
-  if (recipients === 'assigned' || recipients === 'both') {
+
+  // Assigned crew push.
+  if (wantAssigned) {
     const assigned = (job.assignedStaffIds && job.assignedStaffIds.length ? job.assignedStaffIds : job.assignedTo) || [];
     if (assigned.length) {
-      await notifyEmployees(assigned, {
-        title: 'Lane reminder',
-        body: message,
-        clickAction: actionUrl,
-        data: { type: 'lane_reminder', jobId: job.id, jobNumber: String(job.jobNumber || '') },
-      });
+      await notifyEmployees(assigned, { title: 'Lane reminder', body: message, clickAction: actionUrl, data: pushData });
     }
   }
-  console.log(`[Lanes] staff reminder fired (${recipients}) job #${job.jobNumber}`);
+
+  // Specific team members chosen by id — push to their devices.
+  if (cfg.staffIds?.length) {
+    await notifyEmployees(cfg.staffIds, { title: 'Lane reminder', body: message, clickAction: actionUrl, data: pushData });
+  }
+
+  // Typed email recipients — send a plain email (best-effort; may be someone with no app account).
+  for (const email of (cfg.emails || [])) {
+    const to = email.trim();
+    if (!to) continue;
+    await emailService.sendEmail({ to, subject: `Lane reminder — Job #${job.jobNumber}`, text: message })
+      .catch(err => console.error(`[Lanes] staff reminder email to ${to} failed:`, err));
+  }
+
+  // Typed phone recipients — send an SMS (best-effort).
+  for (const phone of (cfg.phones || [])) {
+    const to = phone.trim();
+    if (!to) continue;
+    await smsService.sendSMS({ to, message })
+      .catch(err => console.error(`[Lanes] staff reminder SMS to ${to} failed:`, err));
+  }
+
+  console.log(`[Lanes] staff reminder fired job #${job.jobNumber}`);
 }
 
 async function runAutoMove(job: Job, cfg: AutoMoveConfig): Promise<void> {
@@ -246,7 +274,15 @@ export async function runLaneAutomationChecks(): Promise<void> {
     const due: LaneAutomation[] = [];
     for (const a of laneAutomations) {
       if (a.triggerDays == null || daysIn < a.triggerDays) continue;
-      const alreadyFired = await storage.hasLaneAutomationFiredSince(job.id, a.id, enteredAt);
+      // Cadence: by default an automation fires once per lane stay (no run since the job entered).
+      // If config.repeat is on, it re-fires every config.repeatEveryDays — i.e. fire again only if
+      // nothing has fired in that window.
+      const cfg = (a.config || {}) as { repeat?: boolean; repeatEveryDays?: number };
+      const everyDays = Number(cfg.repeatEveryDays) || 0;
+      const since = (cfg.repeat && everyDays > 0)
+        ? new Date(now - everyDays * 24 * 60 * 60 * 1000)
+        : enteredAt;
+      const alreadyFired = await storage.hasLaneAutomationFiredSince(job.id, a.id, since);
       if (alreadyFired) continue;
       due.push(a);
     }

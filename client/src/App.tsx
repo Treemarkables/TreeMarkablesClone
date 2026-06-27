@@ -117,9 +117,9 @@ const UnlinkedCalls = lazy(() => import("@/pages/UnlinkedCalls"));
 const Reconciliation = lazy(() => import("@/pages/Reconciliation"));
 const ProfitabilityCalculator = lazy(() => import("@/pages/ProfitabilityCalculator"));
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft } from "lucide-react";
-import { useJobFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
+import { useJobFilter, useLaneFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -218,7 +218,18 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   // Check if we're on dispatch page
   const isDispatchPage = location === '/dispatch';
   const [dispatchFilter, setDispatchFilter] = useJobFilter();
+  const [dispatchLane, setDispatchLane] = useLaneFilter();
   const [dispatchSearchOpen, setDispatchSearchOpen] = useDispatchSearchOpen();
+
+  // Lanes for the dispatch filter (only on the dispatch page).
+  const { data: lanesResponse } = useQuery<{ data: { id: string; name: string; color: string }[] }>({
+    queryKey: ['/api/lanes'],
+    enabled: isDispatchPage,
+  });
+  const dispatchLanes = lanesResponse?.data || [];
+  // Status and lane are mutually-exclusive views. Selecting one clears the other.
+  const selectStatus = (v: string) => { setDispatchFilter(v); setDispatchLane("all"); };
+  const selectLane = (v: string) => { setDispatchLane(v); setDispatchFilter("all"); };
 
   // Close search strip when leaving dispatch page
   useEffect(() => {
@@ -382,23 +393,35 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-11 w-11 ${dispatchFilter !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                        className={`h-11 w-11 ${(dispatchFilter !== "all" || dispatchLane !== "all") ? "text-[#1877F2]" : "text-muted-foreground"}`}
                         data-testid="mobile-filter-dropdown-trigger"
                       >
                         <Filter className="h-7 w-7" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setDispatchFilter("all")} data-testid="mobile-filter-all">
+                      <DropdownMenuItem onClick={() => selectStatus("all")} data-testid="mobile-filter-all">
                         All
                       </DropdownMenuItem>
                       {DISPATCH_STATUS_FILTERS.map(tab => (
                         <DropdownMenuItem
                           key={tab.value}
-                          onClick={() => setDispatchFilter(tab.value)}
+                          onClick={() => selectStatus(tab.value)}
                           data-testid={`mobile-filter-tab-${tab.value}`}
                         >
                           {tab.label}
+                        </DropdownMenuItem>
+                      ))}
+                      {dispatchLanes.length > 0 && <DropdownMenuSeparator />}
+                      {dispatchLanes.length > 0 && <DropdownMenuLabel>Lanes</DropdownMenuLabel>}
+                      {dispatchLanes.map(lane => (
+                        <DropdownMenuItem
+                          key={lane.id}
+                          onClick={() => selectLane(lane.id)}
+                          data-testid={`mobile-lane-${lane.id}`}
+                        >
+                          <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: lane.color }} />
+                          {lane.name}
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuContent>
@@ -558,21 +581,35 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         data-testid="desktop-filter-dropdown-trigger"
                       >
                         <Filter className="h-4 w-4" />
-                        {DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All"}
+                        {dispatchLane !== "all"
+                          ? (dispatchLanes.find(l => l.id === dispatchLane)?.name ?? "Lane")
+                          : (DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All")}
                         <ChevronDown className="h-3 w-3" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setDispatchFilter("all")} data-testid="desktop-filter-all">
+                      <DropdownMenuItem onClick={() => selectStatus("all")} data-testid="desktop-filter-all">
                         All
                       </DropdownMenuItem>
                       {DISPATCH_STATUS_FILTERS.map(tab => (
                         <DropdownMenuItem
                           key={tab.value}
-                          onClick={() => setDispatchFilter(tab.value)}
+                          onClick={() => selectStatus(tab.value)}
                           data-testid={`desktop-filter-tab-${tab.value}`}
                         >
                           {tab.label}
+                        </DropdownMenuItem>
+                      ))}
+                      {dispatchLanes.length > 0 && <DropdownMenuSeparator />}
+                      {dispatchLanes.length > 0 && <DropdownMenuLabel>Lanes</DropdownMenuLabel>}
+                      {dispatchLanes.map(lane => (
+                        <DropdownMenuItem
+                          key={lane.id}
+                          onClick={() => selectLane(lane.id)}
+                          data-testid={`desktop-lane-${lane.id}`}
+                        >
+                          <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: lane.color }} />
+                          {lane.name}
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuContent>

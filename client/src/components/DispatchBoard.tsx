@@ -1,4 +1,4 @@
-import { useJobFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
+import { useJobFilter, useLaneFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -183,6 +183,7 @@ interface JobAssignment {
   scheduledDates?: string[] | null; // Explicit NZ day set for multi-day jobs that skip days (e.g. weekends)
   inQueue?: boolean; // Whether job is parked in the dispatch queue
   queueReason?: string | null; // Reason for being in queue
+  laneId?: string | null; // Custom lane the job sits in (orthogonal to status)
   customerConfirmed?: boolean; // Whether the customer has confirmed the booking
   confirmationReplySentAt?: string | null; // Timestamp of our acknowledgement reply to the customer's confirmation
   customerReplyReceivedAt?: string | null; // Timestamp of most-recent inbound customer reply (any email/SMS reply tagged customer-reply)
@@ -685,7 +686,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [assignmentMode, setAssignmentMode] =
     useState<AssignmentMode>("individual");
   const [jobFilter, setJobFilter] = useJobFilter();
+  const [laneFilter] = useLaneFilter();
   const [onlyUnconfirmed, setOnlyUnconfirmed] = useOnlyUnconfirmed();
+
+  // Lanes — custom buckets a job can sit in (orthogonal to status). Used for the optional lane
+  // filter and the coloured chip on each card. Keyed map for quick lookup by id.
+  const { data: lanesResp } = useQuery<{ data: { id: string; name: string; color: string }[] }>({
+    queryKey: ["/api/lanes"],
+  });
+  const laneMap = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; color: string }>();
+    (lanesResp?.data || []).forEach((l) => m.set(l.id, l));
+    return m;
+  }, [lanesResp]);
 
   const countUnconfirmed = (jobs: { status: string; customerConfirmed?: boolean }[]) =>
     jobs.filter(
@@ -1222,6 +1235,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           scheduledDates: apiJob.scheduledDates || null,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
+          laneId: apiJob.laneId || null,
           customerConfirmed: apiJob.customerConfirmed || false,
           confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
@@ -1318,6 +1332,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           scheduledDates: apiJob.scheduledDates || null,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
+          laneId: apiJob.laneId || null,
           customerConfirmed: apiJob.customerConfirmed || false,
           confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
@@ -1678,6 +1693,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           return job.status !== "completed" && job.status !== "invoiced";
         }
 
+        // Lane filter takes precedence: when a lane is selected, show every active job in that
+        // lane regardless of the status tab (completed/invoiced already excluded by the query).
+        if (laneFilter !== "all") {
+          return job.laneId === laneFilter;
+        }
+
         // Queued jobs belong exclusively to the Queue tab
         if (jobFilter === "queue") return job.inQueue === true;
         if (job.inQueue) return false;
@@ -1715,8 +1736,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return job.status === "work_order" && !job.customerConfirmed;
       })
       .filter((job) => {
-        // When searching or a specific status filter is active, skip the date window
-        if (isSearching || jobFilter !== "all") return true;
+        // When searching, a specific status filter, or a lane filter is active, skip the date window
+        if (isSearching || jobFilter !== "all" || laneFilter !== "all") return true;
 
         // Always include work_order jobs — these are active jobs that need
         // dispatching. ('scheduled' status retired 2026-05.)
@@ -2933,6 +2954,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                       <div className="mb-1">
                                         <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
                                           {job.queueReason || "Queued"}
+                                        </Badge>
+                                      </div>
+                                    )}
+
+                                    {/* Row 2d: Lane chip (when the job sits in a custom lane) */}
+                                    {job.laneId && laneMap.get(job.laneId) && (
+                                      <div className="mb-1">
+                                        <Badge className="bg-slate-50 text-slate-700 border-0 text-xs rounded-lg">
+                                          <span
+                                            className="w-2 h-2 rounded-full mr-1.5"
+                                            style={{ backgroundColor: laneMap.get(job.laneId)!.color }}
+                                          />
+                                          {laneMap.get(job.laneId)!.name}
                                         </Badge>
                                       </div>
                                     )}

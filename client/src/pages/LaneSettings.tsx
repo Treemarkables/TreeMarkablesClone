@@ -14,7 +14,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, ChevronUp, ChevronDown, Zap } from "lucide-react";
+import { Plus, Trash2, ChevronUp, ChevronDown, Zap, X } from "lucide-react";
 
 interface Lane {
   id: string;
@@ -321,6 +321,17 @@ function AutomationRow({
   const cfg = automation.config || {};
   const setConfig = (patch: Record<string, any>) => onChange({ config: { ...cfg, ...patch } });
 
+  // Staff list for the "specific people" picker — only fetched for staff reminders.
+  const { data: employees = [] } = useQuery<Array<{ id: string; firstName?: string; lastName?: string }>>({
+    queryKey: ["/api/employees"],
+    queryFn: async () => {
+      const res = await fetch("/api/employees");
+      if (!res.ok) throw new Error("Failed to load staff");
+      return (await res.json()).data;
+    },
+    enabled: automation.type === "staff_reminder",
+  });
+
   return (
     <div className="rounded-md border bg-muted/30 p-3 space-y-3" data-testid={`automation-${automation.id}`}>
       <div className="flex items-center gap-2 flex-wrap">
@@ -357,6 +368,25 @@ function AutomationRow({
         </Button>
       </div>
 
+      {/* Cadence: repeat the days_in_lane automation until the job leaves the lane */}
+      {automation.trigger === "days_in_lane" && (
+        <div className="flex items-center gap-2 flex-wrap pl-1">
+          <Switch checked={!!cfg.repeat} onCheckedChange={(repeat) => setConfig({ repeat })}
+            data-testid={`switch-repeat-${automation.id}`} />
+          <span className="text-xs text-muted-foreground">Keep reminding</span>
+          {cfg.repeat && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">every</span>
+              <Input type="number" min={1} className="w-16 h-8"
+                value={cfg.repeatEveryDays ?? 1}
+                onChange={(e) => setConfig({ repeatEveryDays: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                data-testid={`input-repeat-days-${automation.id}`} />
+              <span className="text-xs text-muted-foreground">days until it leaves the lane</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Type-specific config */}
       {automation.type === "customer_nudge" && (
         <div className="space-y-2">
@@ -385,20 +415,53 @@ function AutomationRow({
       )}
 
       {automation.type === "staff_reminder" && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <Label className="text-xs w-16">Notify</Label>
-            <Select value={cfg.recipients || "owner"} onValueChange={(recipients) => setConfig({ recipients })}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="owner">Owner / admins</SelectItem>
-                <SelectItem value="assigned">Assigned staff</SelectItem>
-                <SelectItem value="both">Both</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="space-y-3">
+          <div className="flex items-center gap-5 flex-wrap">
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <Switch
+                checked={cfg.notifyOwner ?? (cfg.recipients === "owner" || cfg.recipients === "both")}
+                onCheckedChange={(notifyOwner) => setConfig({ notifyOwner })} />
+              Owner / admins
+            </label>
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <Switch
+                checked={cfg.notifyAssigned ?? (cfg.recipients === "assigned" || cfg.recipients === "both")}
+                onCheckedChange={(notifyAssigned) => setConfig({ notifyAssigned })} />
+              Assigned staff
+            </label>
           </div>
+
+          {/* Specific team members — tap to toggle */}
+          {employees.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-xs">Specific people</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {employees.map((e) => {
+                  const name = [e.firstName, e.lastName].filter(Boolean).join(" ") || e.id;
+                  const selected = ((cfg.staffIds as string[]) || []).includes(e.id);
+                  return (
+                    <button key={e.id} type="button"
+                      onClick={() => {
+                        const cur: string[] = (cfg.staffIds as string[]) || [];
+                        setConfig({ staffIds: selected ? cur.filter((x) => x !== e.id) : [...cur, e.id] });
+                      }}
+                      className={`text-xs rounded-full border px-2.5 py-1 ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-background"}`}
+                      data-testid={`staff-chip-${automation.id}-${e.id}`}>
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <TokenList label="Email anyone (one address per add)" placeholder="name@email.com"
+            values={(cfg.emails as string[]) || []} onChange={(emails) => setConfig({ emails })} />
+          <TokenList label="Text anyone (mobile number)" placeholder="021 234 5678"
+            values={(cfg.phones as string[]) || []} onChange={(phones) => setConfig({ phones })} />
+
           <Textarea
-            placeholder="Reminder message for your team (optional)."
+            placeholder="Reminder message (optional)."
             value={cfg.message || ""}
             onChange={(e) => setConfig({ message: e.target.value })}
             rows={2}
@@ -436,6 +499,41 @@ function AutomationRow({
               onChange={(e) => setConfig({ dueInDays: Math.max(0, parseInt(e.target.value, 10) || 0) })} />
             <span className="text-xs text-muted-foreground">days (0 = no due date)</span>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Add/remove list of free-text tokens (emails or phone numbers). Enter or "Add" commits.
+function TokenList({ label, placeholder, values, onChange }: {
+  label: string; placeholder: string; values: string[]; onChange: (v: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    const v = draft.trim();
+    if (v && !values.includes(v)) onChange([...values, v]);
+    setDraft("");
+  };
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <div className="flex items-center gap-1.5">
+        <Input value={draft} placeholder={placeholder} className="h-8 text-xs"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
+        <Button type="button" variant="outline" size="sm" onClick={add}>Add</Button>
+      </div>
+      {values.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {values.map((v) => (
+            <span key={v} className="text-xs rounded-full border bg-background px-2 py-0.5 flex items-center gap-1">
+              {v}
+              <button type="button" onClick={() => onChange(values.filter((x) => x !== v))} aria-label={`Remove ${v}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
         </div>
       )}
     </div>
