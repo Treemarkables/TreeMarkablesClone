@@ -16,7 +16,7 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
-import { withTenant } from "./tenancy/tenantStore";
+import { withTenant, runWithBusiness } from "./tenancy/tenantStore";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
@@ -515,6 +515,98 @@ async function getCompanyLogoBytes(): Promise<{ buffer: Buffer; contentType: str
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+// Shared supplier-invoice extraction: runs GPT-5 over an invoice image/PDF and
+// (best-effort) stores the document in GCS. Used by both the manual upload route
+// (/api/jobs/:jobId/supplier-invoices/extract) and the forward-to-inbox webhook
+// (bills-<jobId>@…). A storage outage must never lose the AI read, so storage
+// failures are swallowed and surfaced as storageError.
+export async function extractSupplierInvoiceFile(
+  buffer: Buffer,
+  originalname: string,
+  mimetype: string,
+) {
+  const isPdf = mimetype === 'application/pdf' || originalname.toLowerCase().endsWith('.pdf');
+  const base64 = buffer.toString('base64');
+
+  const extractionInstruction = `You are extracting data from a supplier / purchase invoice for a New Zealand trades business (electrician, plumber, or builder). This is a bill the tradie received from a supplier or subcontractor.
+
+Return ONLY JSON with these keys:
+{
+  "supplierName": string,            // the company that issued the invoice
+  "invoiceNumber": string|null,
+  "invoiceDate": string|null,        // YYYY-MM-DD
+  "dueDate": string|null,            // YYYY-MM-DD
+  "subtotal": number|null,           // ex-GST total
+  "gst": number|null,                // GST amount (NZ GST is 15%)
+  "total": number|null,              // inc-GST grand total
+  "currency": string,                // default "NZD"
+  "costCategory": string,            // one of: materials, subcontractor, equipment, disposal, other — infer from supplier/items
+  "lineItems": [
+    { "description": string, "quantity": number|null, "unitCost": number|null, "totalCost": number }
+  ]
+}
+
+Rules: use numbers (not strings) for amounts, null when a value is genuinely absent, amounts in NZD. unitCost is the per-unit ex-GST price when determinable, otherwise the line total. totalCost is the line total. Do NOT invent values you cannot see.`;
+
+  // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+  const visionResponse = await openai.chat.completions.create({
+    model: 'gpt-5',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: extractionInstruction },
+          isPdf
+            ? ({ type: 'file', file: { filename: originalname || 'invoice.pdf', file_data: `data:application/pdf;base64,${base64}` } } as any)
+            : ({ type: 'image_url', image_url: { url: `data:${mimetype};base64,${base64}` } } as any),
+        ],
+      },
+    ],
+    response_format: { type: 'json_object' },
+    max_completion_tokens: 3000,
+  });
+
+  const raw = visionResponse.choices[0]?.message?.content || '{}';
+  let extracted: any = {};
+  try {
+    extracted = JSON.parse(raw);
+  } catch {
+    extracted = {};
+  }
+
+  let documentUrl: string | null = null;
+  let thumbnailUrl: string | null = null;
+  let storageError: string | null = null;
+  try {
+    const photoStorage = new PhotoStorageService();
+    if (isPdf) {
+      const { url } = await photoStorage.uploadDocument(buffer, originalname, mimetype || 'application/pdf');
+      documentUrl = url;
+    } else {
+      const { url, thumbnailUrl: thumb } = await photoStorage.uploadPhoto(buffer, originalname, mimetype);
+      documentUrl = url;
+      thumbnailUrl = thumb;
+    }
+  } catch (storageErr) {
+    storageError = storageErr instanceof Error ? storageErr.message : 'Document storage failed';
+    console.error('Supplier invoice document storage failed (continuing with extraction):', storageError);
+  }
+
+  return {
+    extracted,
+    raw,
+    document: {
+      url: documentUrl,
+      thumbnailUrl,
+      originalFilename: originalname,
+      mimeType: mimetype,
+      fileSize: buffer.length,
+      isPdf,
+    },
+    storageError,
+  };
+}
 
 // ========================================
 // TWILIO WEBHOOK VALIDATION
@@ -8426,91 +8518,15 @@ Draft the reply now.`;
         return res.status(400).json({ success: false, message: 'No file provided' });
       }
 
-      const isPdf = file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
-      const base64 = file.buffer.toString('base64');
-
-      const extractionInstruction = `You are extracting data from a supplier / purchase invoice for a New Zealand trades business (electrician, plumber, or builder). This is a bill the tradie received from a supplier or subcontractor.
-
-Return ONLY JSON with these keys:
-{
-  "supplierName": string,            // the company that issued the invoice
-  "invoiceNumber": string|null,
-  "invoiceDate": string|null,        // YYYY-MM-DD
-  "dueDate": string|null,            // YYYY-MM-DD
-  "subtotal": number|null,           // ex-GST total
-  "gst": number|null,                // GST amount (NZ GST is 15%)
-  "total": number|null,              // inc-GST grand total
-  "currency": string,                // default "NZD"
-  "costCategory": string,            // one of: materials, subcontractor, equipment, disposal, other — infer from supplier/items
-  "lineItems": [
-    { "description": string, "quantity": number|null, "unitCost": number|null, "totalCost": number }
-  ]
-}
-
-Rules: use numbers (not strings) for amounts, null when a value is genuinely absent, amounts in NZD. unitCost is the per-unit ex-GST price when determinable, otherwise the line total. totalCost is the line total. Do NOT invent values you cannot see.`;
-
-      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-      const visionResponse = await openai.chat.completions.create({
-        model: 'gpt-5',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: extractionInstruction },
-              isPdf
-                ? ({ type: 'file', file: { filename: file.originalname || 'invoice.pdf', file_data: `data:application/pdf;base64,${base64}` } } as any)
-                : ({ type: 'image_url', image_url: { url: `data:${file.mimetype};base64,${base64}` } } as any),
-            ],
-          },
-        ],
-        response_format: { type: 'json_object' },
-        max_completion_tokens: 3000,
-      });
-
-      const raw = visionResponse.choices[0]?.message?.content || '{}';
-      let extracted: any = {};
-      try {
-        extracted = JSON.parse(raw);
-      } catch {
-        extracted = {};
-      }
-
-      // Best-effort: store the document so confirm doesn't re-upload. A storage
-      // outage (or missing GCS env in local dev) must NOT lose the AI read, so
-      // failures here are swallowed and surfaced as storageError — the user can
-      // still confirm and save the extracted data (without an attached file).
-      let documentUrl: string | null = null;
-      let thumbnailUrl: string | null = null;
-      let storageError: string | null = null;
-      try {
-        const photoStorage = new PhotoStorageService();
-        if (isPdf) {
-          const { url } = await photoStorage.uploadDocument(file.buffer, file.originalname, file.mimetype || 'application/pdf');
-          documentUrl = url;
-        } else {
-          const { url, thumbnailUrl: thumb } = await photoStorage.uploadPhoto(file.buffer, file.originalname, file.mimetype);
-          documentUrl = url;
-          thumbnailUrl = thumb;
-        }
-      } catch (storageErr) {
-        storageError = storageErr instanceof Error ? storageErr.message : 'Document storage failed';
-        console.error('Supplier invoice document storage failed (continuing with extraction):', storageError);
-      }
+      const { extracted, document, storageError } = await extractSupplierInvoiceFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+      );
 
       res.json({
         success: true,
-        data: {
-          extracted,
-          document: {
-            url: documentUrl,
-            thumbnailUrl,
-            originalFilename: file.originalname,
-            mimeType: file.mimetype,
-            fileSize: file.size,
-            isPdf,
-          },
-          storageError,
-        },
+        data: { extracted, document, storageError },
       });
     } catch (error) {
       console.error('Error extracting supplier invoice:', error);
@@ -8740,9 +8756,10 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         return Number.isFinite(n) ? n : 0;
       };
 
-      const [staffEntries, invoices] = await Promise.all([
+      const [staffEntries, invoices, supplierInvoices] = await Promise.all([
         storage.getJobStaffTimeEntries(id).catch(() => [] as any[]),
         storage.getInvoicesByJob(id).catch(() => [] as any[]),
+        storage.getSupplierInvoicesByJob(id).catch(() => [] as any[]),
       ]);
 
       const laborTotalHours = (staffEntries as any[]).reduce(
@@ -8778,7 +8795,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         disposalCosts: num(job.disposalCosts),
         miscExpenses: num(job.miscExpenses),
       };
-      const costsTotal =
+      const manualCostsTotal =
         costs.actualLaborCosts +
         costs.actualMaterialsCosts +
         costs.equipmentCosts +
@@ -8787,6 +8804,42 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         costs.travelCosts +
         costs.disposalCosts +
         costs.miscExpenses;
+
+      // Supplier invoices are a cost ledger of their own: snapped/forwarded
+      // bills auto-count toward job costing without re-keying. Each one's
+      // ex-GST amount folds into the back-costing field its costCategory maps
+      // to, so the tradie sees one consolidated set of costs. (Rebilling a
+      // supplier invoice adds REVENUE on the job line items; the cost is still
+      // counted here either way — see POST /supplier-invoices/:id/rebill.)
+      const SUPPLIER_CATEGORY_TO_FIELD: Record<string, string> = {
+        materials: 'actualMaterialsCosts',
+        subcontractor: 'subcontractorCosts',
+        equipment: 'equipmentCosts',
+        disposal: 'disposalCosts',
+        other: 'miscExpenses',
+      };
+      const supplierByField: Record<string, number> = {};
+      const supplierCountByField: Record<string, number> = {};
+      let supplierInvoiceTotal = 0;
+      let supplierPendingCount = 0;
+      for (const inv of supplierInvoices as any[]) {
+        // Bills forwarded in by email arrive as pending_review — don't let an
+        // unconfirmed (possibly mis-read) bill move the margin until the owner
+        // confirms it. Surface the count so the UI can prompt a review.
+        if (inv.status === 'pending_review') {
+          supplierPendingCount += 1;
+          continue;
+        }
+        const sub = num(inv.subtotal);
+        const exGst = sub > 0 ? sub : num(inv.total) / 1.15;
+        if (exGst <= 0) continue;
+        const field = SUPPLIER_CATEGORY_TO_FIELD[inv.costCategory] || 'miscExpenses';
+        supplierByField[field] = (supplierByField[field] || 0) + exGst;
+        supplierCountByField[field] = (supplierCountByField[field] || 0) + 1;
+        supplierInvoiceTotal += exGst;
+      }
+
+      const costsTotal = manualCostsTotal + supplierInvoiceTotal;
 
       const primaryInvoice = (invoices as any[])[0];
       const invoiceTotal = primaryInvoice ? num(primaryInvoice.totalAmount) : null;
@@ -8830,7 +8883,15 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
           },
           costs: {
             ...costs,
+            manualTotal: manualCostsTotal,
             total: costsTotal,
+          },
+          supplierInvoices: {
+            total: supplierInvoiceTotal,
+            byField: supplierByField,
+            countByField: supplierCountByField,
+            count: (supplierInvoices as any[]).length,
+            pendingReview: supplierPendingCount,
           },
           completion: {
             labor: !!job.laborCostsComplete,
@@ -19978,6 +20039,108 @@ Transcription: ${transcriptText}`;
       }
 
       const { from, to, subject, text, html, headers } = req.body;
+
+      // Forward-to-inbox: a supplier bill emailed (or auto-CC'd) to
+      // bills-<jobId>@<domain>. The jobId encodes both the job AND — via the job
+      // row's businessId — the tenant, so no separate channel-mapping table is
+      // needed. Attachments (PDF or image) go through the same GPT extraction as
+      // the manual flow and are saved as pending_review supplier invoices for the
+      // owner to confirm. Handled here and short-circuited so the customer-reply
+      // diary logic below never runs for a bill. (Relies on SendGrid Inbound
+      // Parse, which posts attachment buffers in req.files.)
+      const billsMatch = typeof to === 'string' ? to.match(/bills-([\w-]+)@/i) : null;
+      if (billsMatch) {
+        const billJobId = billsMatch[1];
+        console.log(`🧾 Supplier-bill inbound for job ${billJobId}`);
+        const job = await storage.getJob(billJobId);
+        if (!job) {
+          console.warn(`🧾 No job ${billJobId} for inbound bill — ignoring`);
+          return res.status(200).json({ success: true, message: 'No matching job for supplier bill' });
+        }
+        const billBusinessId = (job as any).businessId as string | undefined;
+        const billFiles = ((req as any).files as Express.Multer.File[] | undefined) || [];
+        const invoiceFiles = billFiles.filter((f) =>
+          Buffer.isBuffer(f.buffer) && typeof f.mimetype === 'string' && (
+            f.mimetype.toLowerCase().startsWith('image/') ||
+            f.mimetype.toLowerCase() === 'application/pdf' ||
+            (f.originalname || '').toLowerCase().endsWith('.pdf')
+          ),
+        );
+        if (invoiceFiles.length === 0) {
+          console.warn(`🧾 Inbound bill for job ${billJobId} had no image/PDF attachment`);
+          return res.status(200).json({ success: true, message: 'No invoice attachment found' });
+        }
+
+        let createdCount = 0;
+        for (const f of invoiceFiles) {
+          try {
+            const { extracted, document, raw } = await extractSupplierInvoiceFile(
+              f.buffer,
+              f.originalname || `bill-${Date.now()}`,
+              f.mimetype,
+            );
+            const lineItems = Array.isArray(extracted?.lineItems)
+              ? extracted.lineItems.map((li: any) => ({
+                  description: String(li.description || ''),
+                  quantity: toNum(li.quantity),
+                  unitCost: toNum(li.unitCost),
+                  totalCost: toNum(li.totalCost) ?? 0,
+                  rebill: false,
+                }))
+              : [];
+            let parsedRaw: any = null;
+            try { parsedRaw = JSON.parse(raw); } catch { parsedRaw = null; }
+            await runWithBusiness(billBusinessId, async () => {
+              await storage.createSupplierInvoice({
+                jobId: job.id,
+                supplierName: (extracted?.supplierName && String(extracted.supplierName).trim()) || 'Unknown supplier',
+                invoiceNumber: extracted?.invoiceNumber ? String(extracted.invoiceNumber) : null,
+                invoiceDate: toDate(extracted?.invoiceDate) ?? null,
+                dueDate: toDate(extracted?.dueDate) ?? null,
+                subtotal: toNum(extracted?.subtotal)?.toString() ?? null,
+                gst: toNum(extracted?.gst)?.toString() ?? null,
+                total: (toNum(extracted?.total) ?? 0).toString(),
+                currency: extracted?.currency ? String(extracted.currency) : 'NZD',
+                costCategory: normaliseSupplierCategory(extracted?.costCategory),
+                documentUrl: document.url,
+                thumbnailUrl: document.thumbnailUrl,
+                originalFilename: document.originalFilename,
+                mimeType: document.mimeType,
+                fileSize: document.fileSize,
+                lineItems,
+                status: 'pending_review',
+                notes: `Received by email${from ? ` from ${from}` : ''}`,
+                rawExtraction: parsedRaw,
+              } as any);
+            });
+            createdCount++;
+          } catch (billErr) {
+            console.error(`🧾 Failed to process inbound bill attachment for job ${billJobId}:`, billErr);
+          }
+        }
+
+        if (createdCount > 0) {
+          try {
+            await runWithBusiness(billBusinessId, async () => {
+              await storage.createNotification({
+                title: `Supplier bill received — Job #${(job as any).jobNumber ?? job.id}`,
+                message: `${createdCount} supplier ${createdCount === 1 ? 'invoice' : 'invoices'} received by email for Job #${(job as any).jobNumber ?? job.id}. Review to add to back costing.`,
+                type: 'supplier_invoice',
+                priority: 'high',
+                isRead: false,
+                actionUrl: `/dispatch?job=${job.id}&tab=billing`,
+                entityType: 'job',
+                entityId: job.id,
+                jobId: job.id,
+              } as any);
+            });
+          } catch (notifErr) {
+            console.error('🧾 Failed to create supplier-bill notification:', notifErr);
+          }
+        }
+
+        return res.status(200).json({ success: true, message: `Processed ${createdCount} supplier invoice(s)` });
+      }
 
       // Upload any image attachments now so we can attach them to whichever diary
       // entry path matches below (UUID, job number, or quote number).
