@@ -78,6 +78,7 @@ export default function SettingsCompany() {
     ownerName: string;
     businessTagline: string;
     businessDiscipline: string;
+    tradeVocabulary: string;
     bankAccountName: string;
     bankAccountNumber: string;
     brandHeaderColor: string;
@@ -88,6 +89,7 @@ export default function SettingsCompany() {
   });
   const [biz, setBiz] = useState<BizFields>({
     businessName: "", ownerName: "", businessTagline: "", businessDiscipline: "",
+    tradeVocabulary: "",
     bankAccountName: "", bankAccountNumber: "",
     brandHeaderColor: "#0b0b0b", brandAccentColor: "#39FF14",
   });
@@ -98,6 +100,7 @@ export default function SettingsCompany() {
       ownerName: bizData.data.ownerName ?? "",
       businessTagline: bizData.data.businessTagline ?? "",
       businessDiscipline: bizData.data.businessDiscipline ?? "",
+      tradeVocabulary: bizData.data.tradeVocabulary ?? "",
       bankAccountName: bizData.data.bankAccountName ?? "",
       bankAccountNumber: bizData.data.bankAccountNumber ?? "",
       brandHeaderColor: bizData.data.brandHeaderColor || "#0b0b0b",
@@ -139,6 +142,7 @@ export default function SettingsCompany() {
         ownerName: biz.ownerName,
         businessTagline: biz.businessTagline,
         businessDiscipline: biz.businessDiscipline,
+        tradeVocabulary: biz.tradeVocabulary,
         bankAccountName: biz.bankAccountName,
         bankAccountNumber: biz.bankAccountNumber,
         brandHeaderColor: biz.brandHeaderColor,
@@ -561,6 +565,20 @@ export default function SettingsCompany() {
             />
             <p className="text-xs text-muted-foreground">Used in AI prompts — “a New Zealand … business”.</p>
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="flex items-center gap-2">
+            <Type className="w-4 h-4 text-muted-foreground" />
+            Speech-to-quote vocabulary
+          </Label>
+          <Textarea
+            value={biz.tradeVocabulary}
+            onChange={(e) => setB("tradeVocabulary", e.target.value)}
+            placeholder="e.g. PEX, copper, backflow, isolation valve, hot-water cylinder, rough-in"
+            rows={3}
+          />
+          <p className="text-xs text-muted-foreground">Your trade's terms — biases video-walkthrough transcription so it spells them right instead of inventing words. Leave blank for a generic field-service bias.</p>
         </div>
 
         <div className="space-y-1">
