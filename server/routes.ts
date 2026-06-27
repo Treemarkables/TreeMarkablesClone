@@ -619,7 +619,7 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
       <p>Hi ${employee.firstName},</p>
       <p>You've been assigned to the following job:</p>
       <ul>
-        <li><strong>Job:</strong> ${job?.title || 'Tree Service'}</li>
+        <li><strong>Job:</strong> ${job?.title || 'Job'}</li>
         <li><strong>Location:</strong> ${job?.address || 'Address TBD'}</li>
         <li><strong>Date & Time:</strong> ${startTimeFull} - ${endTime}</li>
         ${assignment.role ? `<li><strong>Role:</strong> ${assignment.role}</li>` : ''}
@@ -651,7 +651,7 @@ async function queueScheduleNotification(employee: any, job: any, assignment: an
       recipientEmail: employee.email,
       recipientPhone: employee.phone,
       notificationType: employee.email && employee.phone ? 'both' : employee.email ? 'email' : 'sms',
-      subject: `Job Scheduled: ${job?.title || 'Tree Service'}`,
+      subject: `Job Scheduled: ${job?.title || 'Job'}`,
       message: employee.email ? emailHtml : smsMessage,
       metadata: {
         jobId: job?.id,
@@ -718,13 +718,13 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
     if (employee.email) {
       await emailService.sendEmail({
         to: employee.email,
-        subject: `Job Scheduled: ${job?.title || 'Tree Service'}`,
+        subject: `Job Scheduled: ${job?.title || 'Job'}`,
         html: `
           <h2>You've been scheduled for a job</h2>
           <p>Hi ${employee.firstName},</p>
           <p>You've been assigned to the following job:</p>
           <ul>
-            <li><strong>Job:</strong> ${job?.title || 'Tree Service'}</li>
+            <li><strong>Job:</strong> ${job?.title || 'Job'}</li>
             <li><strong>Location:</strong> ${job?.address || 'Address TBD'}</li>
             <li><strong>Date & Time:</strong> ${startTimeFull} - ${endTime}</li>
             ${assignment.role ? `<li><strong>Role:</strong> ${assignment.role}</li>` : ''}
@@ -733,7 +733,7 @@ async function sendScheduleNotification(employee: any, job: any, assignment: any
           <p>Please confirm your availability as soon as possible.</p>
           <p>Thanks,<br>Treemarkables Team</p>
         `,
-        text: `Hi ${employee.firstName},\n\nYou've been assigned to: ${job?.title || 'Tree Service'}\nLocation: ${job?.address || 'Address TBD'}\nDate & Time: ${startTimeFull} - ${endTime}\n\nPlease confirm your availability.`
+        text: `Hi ${employee.firstName},\n\nYou've been assigned to: ${job?.title || 'Job'}\nLocation: ${job?.address || 'Address TBD'}\nDate & Time: ${startTimeFull} - ${endTime}\n\nPlease confirm your availability.`
       });
     }
 
@@ -9532,7 +9532,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         dueDate,
         amount: amount.toString(),
         status: 'draft' as const,
-        description: customData.description || job.description || `Invoice for ${job.title || 'tree service'}`,
+        description: customData.description || job.description || `Invoice for ${job.title || 'service'}`,
         items: transformedLineItems,
         notes: customData.notes || '',
         templateId: defaultTemplate?.id || null,
@@ -9699,7 +9699,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         customerId: job.customerId!,
         quoteNumber,
         status: 'draft' as const,
-        description: job.description || `Quote for ${job.title || 'tree service'}`, // Use job description
+        description: job.description || `Quote for ${job.title || 'service'}`, // Use job description
         amount: (amount * 1.15).toString(), // Total amount as string (required field)
         lineItems: transformedLineItems, // Include transformed line items
         terms: defaultTemplate?.paymentTerms || 'Quote valid for 30 days. GST included.',
@@ -17413,12 +17413,16 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
               minute: '2-digit' 
             });
 
-            const emailSubject = `Booking Confirmed - ${job.title || 'Tree Service'} on ${scheduleDate}`;
+            // Sign messages with the JOB's owning business (this can run from a
+            // session-less reminder, so resolve by job.businessId, not the session).
+            const __bizName = (await storage.getBusinessSettingsForBusiness(job.businessId))?.businessName || '';
+            const __signoff = __bizName ? `The ${__bizName} Team` : 'The team';
+            const emailSubject = `Booking Confirmed - ${job.title || 'Job'} on ${scheduleDate}`;
             const emailBody = `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <p>Hi ${clientName}, your job is scheduled for ${scheduleDate} at ${startTimeStr}.</p>
                 <p>We look forward to completing your job.</p>
-                <p style="margin-top: 30px;">Thanks,<br><strong>The Treemarkables Team</strong></p>
+                <p style="margin-top: 30px;">Thanks,<br><strong>${__signoff}</strong></p>
               </div>
             `;
 
@@ -17426,7 +17430,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
               to: clientEmail,
               subject: emailSubject,
               html: emailBody,
-              text: `Hi ${clientName}, your job is scheduled for ${scheduleDate} at ${startTimeStr}.\n\nWe look forward to completing your job.\n\nThanks,\nThe Treemarkables Team`
+              text: `Hi ${clientName}, your job is scheduled for ${scheduleDate} at ${startTimeStr}.\n\nWe look forward to completing your job.\n\nThanks,\n${__signoff}`
             });
 
             if (emailResult.success) {
@@ -17441,7 +17445,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             if (clientPhone) {
               const formattedDateTime = formatNZTime(templateStartUTC, 'full');
               const smsFirstName = job.jobContactFirstName || clientName;
-              const smsMessage = `Hi ${smsFirstName},\nYour job is scheduled for ${formattedDateTime}. - Treemarkables`;
+              const smsMessage = `Hi ${smsFirstName},\nYour job is scheduled for ${formattedDateTime}.${__bizName ? ` - ${__bizName}` : ''}`;
               await smsService.sendSMS({
                 to: clientPhone,
                 message: smsMessage
@@ -25359,9 +25363,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
         sent = true;
       } else if (msg.channel === 'email' && msg.recipientEmail) {
+        // Authed admin route → getBusinessSettings() is RLS-scoped to this tenant.
+        const __updBiz = (await storage.getBusinessSettings())?.businessName || '';
         await emailService.sendEmail({
           to: msg.recipientEmail,
-          subject: 'Update from Treemarkables',
+          subject: __updBiz ? `Update from ${__updBiz}` : 'Update',
           html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
           text: msg.message,
         });
@@ -31300,8 +31306,9 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
             weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Pacific/Auckland',
           });
           const nzTime = pj.proposedStartTime || '8:00';
-          const serviceType = job.serviceType || 'tree service';
+          const serviceType = job.serviceType || 'service';
           const address = job.address ? ` at ${job.address}` : '';
+          const __confirmBiz = (await storage.getBusinessSettingsForBusiness(job.businessId))?.businessName || '';
 
           const hasPhone = !!(customer.phone || customer.mobile);
           const channel: 'sms' | 'email' = hasPhone ? 'sms' : 'email';
@@ -31314,7 +31321,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
             .replace(/\{\{time\}\}/gi, nzTime)
             .replace(/\{\{jobNumber\}\}/gi, job.jobNumber?.toString() || '');
 
-          const fallbackMessage = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
+          const fallbackMessage = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative.${__confirmBiz ? ` Thanks, ${__confirmBiz}.` : ' Thanks.'}`;
 
           // Try to find a template from the template library (channel-aware)
           let message: string = fallbackMessage;
