@@ -20,25 +20,56 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil, ArrowRight, X, Mail, MessageSquare,
+  Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil, ArrowRight, X, Mail, MessageSquare, Sparkles,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
-type UserAutomationType = "customer_nudge" | "staff_reminder" | "auto_move" | "create_task";
+type UserAutomationType = "customer_nudge" | "staff_reminder" | "auto_move" | "create_task" | "change_status" | "add_note" | "assign_staff";
 type UserTrigger = "days_in_lane" | "on_enter" | "status_changed";
 
 interface Lane { id: string; name: string; color: string; sortOrder: number; archived: boolean }
 interface LaneAutomation {
   id: string;
   laneId: string;
-  type: UserAutomationType | "auto_enter";
-  trigger: UserTrigger | "quote_sent";
+  type: UserAutomationType | "auto_enter" | "auto_exit";
+  trigger: UserTrigger | "quote_sent" | "job_created" | "quote_accepted" | "customer_replied";
   triggerDays: number | null;
   enabled: boolean;
   config: Record<string, any>;
 }
+
+const ENTRY_EVENTS = [
+  { value: "manual", label: "Manually only" },
+  { value: "quote_sent", label: "A quote is sent" },
+  { value: "job_created", label: "A new lead is created" },
+  { value: "quote_accepted", label: "A quote is accepted" },
+  { value: "customer_replied", label: "The customer replies" },
+  { value: "status_changed", label: "The status changes to…" },
+];
+const EXIT_EVENTS = [
+  { value: "never", label: "Never (manual only)" },
+  { value: "customer_replied", label: "The customer replies" },
+  { value: "quote_accepted", label: "A quote is accepted" },
+  { value: "status_changed", label: "The status changes to…" },
+];
+const JOB_STATUSES = [
+  { value: "lead", label: "Lead" },
+  { value: "quote", label: "Quote" },
+  { value: "work_order", label: "Work order" },
+  { value: "completed", label: "Completed" },
+  { value: "unsuccessful", label: "Unsuccessful" },
+];
+const CONDITION_FIELDS = [
+  { value: "status", label: "Status" },
+  { value: "totalAmount", label: "Quote total" },
+  { value: "leadSource", label: "Lead source" },
+  { value: "priority", label: "Priority" },
+  { value: "title", label: "Title" },
+  { value: "description", label: "Description" },
+];
 interface Employee { id: string; firstName?: string; lastName?: string }
 interface Template { id: string; name: string }
+interface Condition { field: string; op: "eq" | "ne" | "gt" | "lt" | "contains"; value: string }
 
 const LANE_COLORS = [
   "#64748b", "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -50,6 +81,9 @@ const TYPE_LABELS: Record<UserAutomationType, string> = {
   staff_reminder: "Remind staff",
   auto_move: "Move to another lane",
   create_task: "Create a task",
+  change_status: "Change the job status",
+  add_note: "Add a note to the job",
+  assign_staff: "Assign staff",
 };
 const TRIGGER_LABELS: Record<UserTrigger, string> = {
   days_in_lane: "After a number of days",
@@ -86,8 +120,17 @@ function summarize(a: LaneAutomation, lanesById: Map<string, Lane>, tplName: (id
     act = `Move to ${l ? l.name : "another lane"}`;
   } else if (a.type === "create_task") {
     act = c.title ? `Create task: ${c.title}` : "Create a task";
+  } else if (a.type === "change_status") {
+    const s = JOB_STATUSES.find((x) => x.value === c.targetStatus);
+    act = `Change status to ${s ? s.label : "…"}`;
+  } else if (a.type === "add_note") {
+    act = "Add a note to the job";
+  } else if (a.type === "assign_staff") {
+    const n = (c.staffIds as string[] | undefined)?.length || 0;
+    act = `Assign ${n || ""} staff`.trim();
   } else act = a.type;
 
+  if ((c.conditions as unknown[] | undefined)?.length) act += " (conditional)";
   return { when, act };
 }
 
@@ -262,11 +305,13 @@ function LaneRow({
     ((ch === "email" ? emailTemplates : smsTemplates).find((t) => t.id === id)?.name ?? "") &&
     `${(ch === "email" ? emailTemplates : smsTemplates).find((t) => t.id === id)!.name} template`;
 
-  const visible = automations.filter((a) => a.type !== "auto_enter");
+  const visible = automations.filter((a) => a.type !== "auto_enter" && a.type !== "auto_exit");
   const entry = automations.find((a) => a.type === "auto_enter");
+  const exit = automations.find((a) => a.type === "auto_exit");
 
+  const entryLabel = entry ? (ENTRY_EVENTS.find((e) => e.value === entry.trigger)?.label ?? "Auto-added") : null;
   const summaryParts = [
-    entry?.trigger === "quote_sent" ? "Auto-adds when a quote is sent" : "Added manually",
+    entryLabel ? `Auto-adds: ${entryLabel.replace(/…$/, "").trim().toLowerCase()}` : "Added manually",
     visible.length ? `${visible.length} automation${visible.length === 1 ? "" : "s"}` : "no automations yet",
   ];
 
@@ -346,10 +391,16 @@ function LaneRow({
             </AlertDialog>
           </div>
 
-          {/* Entry rule */}
-          <div>
-            <div className="text-xs text-muted-foreground mb-2">How jobs arrive here</div>
-            <EntryRule laneId={lane.id} entry={entry} onError={onError} />
+          {/* Entry + exit rules */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs text-muted-foreground mb-2">How jobs arrive here</div>
+              <LaneEventRule laneId={lane.id} row={entry} kind="auto_enter" events={ENTRY_EVENTS} clearValue="manual" onError={onError} />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-2">Auto-remove when</div>
+              <LaneEventRule laneId={lane.id} row={exit} kind="auto_exit" events={EXIT_EVENTS} clearValue="never" onError={onError} />
+            </div>
           </div>
 
           {/* Automations */}
@@ -372,37 +423,52 @@ function LaneRow({
   );
 }
 
-// ── Entry rule (segmented) ───────────────────────────────────────────────────
-function EntryRule({ laneId, entry, onError }: { laneId: string; entry?: LaneAutomation; onError: (m: string) => void }) {
+// ── Entry / exit rule ────────────────────────────────────────────────────────
+// Stored as an internal auto_enter / auto_exit automation row on the lane. Picking an event
+// creates/updates it; the clear value ("manual"/"never") removes it. For "status changes to…"
+// a target status is stored in config.status.
+function LaneEventRule({
+  laneId, row, kind, events, clearValue, onError,
+}: {
+  laneId: string;
+  row?: LaneAutomation;
+  kind: "auto_enter" | "auto_exit";
+  events: { value: string; label: string }[];
+  clearValue: string;
+  onError: (m: string) => void;
+}) {
   const queryClient = useQueryClient();
   const key = ["/api/lanes", laneId, "automations"];
   const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
-  const fail = () => onError("Could not update how jobs arrive");
+  const fail = () => onError("Could not update the rule");
 
-  const setTo = useMutation({
-    mutationFn: async (trigger: string | null) => {
-      if (trigger === null) return entry ? apiRequest("DELETE", `/api/lane-automations/${entry.id}`) : null;
-      if (entry) return apiRequest("PATCH", `/api/lane-automations/${entry.id}`, { trigger });
-      return apiRequest("POST", `/api/lanes/${laneId}/automations`, { type: "auto_enter", trigger, enabled: true, config: {} });
+  const upsert = useMutation({
+    mutationFn: async ({ trigger, status }: { trigger: string | null; status?: string }) => {
+      if (trigger === null) return row ? apiRequest("DELETE", `/api/lane-automations/${row.id}`) : null;
+      const config = trigger === "status_changed" ? { status: status ?? JOB_STATUSES[0].value } : {};
+      if (row) return apiRequest("PATCH", `/api/lane-automations/${row.id}`, { trigger, config });
+      return apiRequest("POST", `/api/lanes/${laneId}/automations`, { type: kind, trigger, enabled: true, config });
     },
     onSuccess: invalidate, onError: fail,
   });
 
-  const current = entry?.trigger ?? "manual";
-  const opt = (value: string, label: string) => (
-    <button
-      onClick={() => setTo.mutate(value === "manual" ? null : value)}
-      className={`text-[13px] px-3 py-1.5 rounded-md transition-colors ${current === value ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
-      data-testid={`entry-${laneId}-${value}`}
-    >
-      {label}
-    </button>
-  );
-
+  const current = row?.trigger ?? clearValue;
   return (
-    <div className="inline-flex flex-wrap gap-1 p-1 rounded-lg border bg-muted/50">
-      {opt("manual", "Manually")}
-      {opt("quote_sent", "When a quote is sent")}
+    <div className="flex items-center gap-2 flex-wrap">
+      <Select value={current} onValueChange={(v) => upsert.mutate({ trigger: v === clearValue ? null : v, status: row?.config?.status })}>
+        <SelectTrigger className="w-full sm:w-60 h-9" data-testid={`rule-${kind}-${laneId}`}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {events.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {current === "status_changed" && (
+        <Select value={row?.config?.status ?? JOB_STATUSES[0].value} onValueChange={(status) => upsert.mutate({ trigger: "status_changed", status })}>
+          <SelectTrigger className="w-full sm:w-40 h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {JOB_STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }
@@ -587,22 +653,33 @@ function AutomationEditor({
                   <SelectItem value="email"><Mail className="h-3.5 w-3.5 mr-1.5 inline" />Email</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={cfg.templateId || "__custom__"} onValueChange={(v) => setConfig({ templateId: v === "__custom__" ? undefined : v })}>
-                <SelectTrigger className="w-full sm:w-56 h-9"><SelectValue placeholder="Custom message" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__custom__">Custom message</SelectItem>
-                  {nudgeTemplates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                <Switch checked={!!cfg.requireApproval} onCheckedChange={(requireApproval) => setConfig({ requireApproval })} />
-                Hold for my approval
-              </label>
+              {!cfg.useAi && (
+                <Select value={cfg.templateId || "__custom__"} onValueChange={(v) => setConfig({ templateId: v === "__custom__" ? undefined : v })}>
+                  <SelectTrigger className="w-full sm:w-56 h-9"><SelectValue placeholder="Custom message" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__custom__">Custom message</SelectItem>
+                    {nudgeTemplates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
-            {!cfg.templateId && (
+            {cfg.useAi ? (
+              <p className="text-[12px] text-muted-foreground flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> AI writes a tailored follow-up each time it fires.</p>
+            ) : !cfg.templateId && (
               <Textarea rows={2} placeholder="Message to the customer. Use {firstName}, {jobNumber}, {jobTitle}."
                 value={cfg.template || ""} onChange={(e) => setConfig({ template: e.target.value })} />
             )}
+            <div className="flex items-center gap-5 flex-wrap">
+              <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                <Switch checked={!!cfg.useAi} onCheckedChange={(useAi) => setConfig({ useAi })} /> Let AI write it
+              </label>
+              <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                <Switch checked={cfg.respectQuietHours !== false} onCheckedChange={(v) => setConfig({ respectQuietHours: v })} /> Respect quiet hours
+              </label>
+              <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                <Switch checked={!!cfg.requireApproval} onCheckedChange={(requireApproval) => setConfig({ requireApproval })} /> Hold for my approval
+              </label>
+            </div>
           </>
         )}
 
@@ -670,7 +747,56 @@ function AutomationEditor({
             </div>
           </div>
         )}
+
+        {automation.type === "change_status" && (
+          <div className="flex items-center gap-3">
+            <Label className="text-xs w-20">New status</Label>
+            <Select value={cfg.targetStatus || ""} onValueChange={(targetStatus) => setConfig({ targetStatus })}>
+              <SelectTrigger className="w-full sm:w-44 h-9"><SelectValue placeholder="Choose a status" /></SelectTrigger>
+              <SelectContent>
+                {JOB_STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {automation.type === "add_note" && (
+          <Textarea rows={2} placeholder="Note to add to the job diary."
+            value={cfg.note || ""} onChange={(e) => setConfig({ note: e.target.value })} />
+        )}
+
+        {automation.type === "assign_staff" && (
+          employees.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {employees.map((e) => {
+                const name = [e.firstName, e.lastName].filter(Boolean).join(" ") || e.id;
+                const sel = ((cfg.staffIds as string[]) || []).includes(e.id);
+                return (
+                  <button key={e.id}
+                    onClick={() => {
+                      const cur: string[] = (cfg.staffIds as string[]) || [];
+                      setConfig({ staffIds: sel ? cur.filter((x) => x !== e.id) : [...cur, e.id] });
+                    }}
+                    className={`text-xs rounded-full border px-2.5 py-1 ${sel ? "bg-primary text-primary-foreground border-primary" : "bg-background"}`}>
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          ) : <p className="text-xs text-muted-foreground">No staff to assign.</p>
+        )}
       </div>
+
+      {/* Conditions + guards */}
+      <ConditionsBuilder conditions={(cfg.conditions as Condition[]) || []} onChange={(conditions) => setConfig({ conditions })} />
+      {automation.trigger === "days_in_lane" && (
+        <div className="flex items-center gap-2 flex-wrap pl-11">
+          <span className="text-[12px] text-muted-foreground">Stop after</span>
+          <Input type="number" min={0} className="w-16 h-9" value={cfg.maxAttempts ?? 0}
+            onChange={(e) => setConfig({ maxAttempts: Math.max(0, parseInt(e.target.value, 10) || 0) })} />
+          <span className="text-[12px] text-muted-foreground">times (0 = no limit)</span>
+        </div>
+      )}
 
       <div className="flex items-center justify-between pt-1">
         <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
@@ -681,6 +807,47 @@ function AutomationEditor({
           <Button size="sm" onClick={onDone}>Done</Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// "Only if…" conditions: an automation fires only when every row matches the job.
+function ConditionsBuilder({ conditions, onChange }: { conditions: Condition[]; onChange: (c: Condition[]) => void }) {
+  const opsFor = (field: string): { v: Condition["op"]; l: string }[] =>
+    field === "totalAmount" ? [{ v: "gt", l: "is more than" }, { v: "lt", l: "is less than" }]
+      : (field === "title" || field === "description") ? [{ v: "contains", l: "contains" }]
+        : [{ v: "eq", l: "is" }, { v: "ne", l: "is not" }];
+  const update = (i: number, patch: Partial<Condition>) => onChange(conditions.map((c, idx) => idx === i ? { ...c, ...patch } : c));
+  const add = () => onChange([...conditions, { field: "status", op: "eq", value: "" }]);
+
+  return (
+    <div className="pl-11 space-y-2">
+      {conditions.length > 0 && <div className="text-[12px] text-muted-foreground">Only if</div>}
+      {conditions.map((c, i) => (
+        <div key={i} className="flex items-center gap-2 flex-wrap">
+          <Select value={c.field} onValueChange={(field) => update(i, { field, op: opsFor(field)[0].v })}>
+            <SelectTrigger className="w-full sm:w-36 h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>{CONDITION_FIELDS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={c.op} onValueChange={(op) => update(i, { op: op as Condition["op"] })}>
+            <SelectTrigger className="w-full sm:w-32 h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>{opsFor(c.field).map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
+          </Select>
+          {c.field === "status" ? (
+            <Select value={c.value} onValueChange={(value) => update(i, { value })}>
+              <SelectTrigger className="w-full sm:w-36 h-8"><SelectValue placeholder="…" /></SelectTrigger>
+              <SelectContent>{JOB_STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+            </Select>
+          ) : (
+            <Input className="w-full sm:w-36 h-8" value={c.value} onChange={(e) => update(i, { value: e.target.value })}
+              placeholder={c.field === "totalAmount" ? "amount" : "value"} />
+          )}
+          <button onClick={() => onChange(conditions.filter((_, idx) => idx !== i))} aria-label="Remove condition" className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+        </div>
+      ))}
+      <button onClick={add} className="text-[12px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+        <Plus className="h-3 w-3" /> Add condition
+      </button>
     </div>
   );
 }
