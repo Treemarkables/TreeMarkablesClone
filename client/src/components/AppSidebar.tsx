@@ -170,6 +170,16 @@ function SidebarNavContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              {/* Lanes — custom job buckets with automations */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/lanes"} className={ITEM}>
+                  <Link href="/lanes" onClick={handleLinkClick} data-testid="link-lanes">
+                    <Glyph>🗂️</Glyph>
+                    <span>Lanes</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {/* Videos — walkthrough + how-to video library */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/videos"} className={ITEM}>
