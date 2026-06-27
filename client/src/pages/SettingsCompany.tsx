@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, Upload, Building2, Phone, Mail, MapPin, Hash, CreditCard, Image, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { ChevronLeft, Upload, Building2, Phone, Mail, MapPin, Hash, CreditCard, Image, AlignLeft, AlignCenter, AlignRight, Type, User, Tag, Briefcase } from "lucide-react";
 import { Link } from "wouter";
 import { HelpLink } from "@/components/HelpLink";
 
@@ -39,6 +39,28 @@ export default function SettingsCompany() {
     select: (d) => d,
   });
 
+  // Email + AI identity lives in a separate store (business_settings) from the
+  // PDF/document branding above (document_templates). These fields drive the
+  // branded-email header + AI-drafted replies; GST is the one shared value and is
+  // synced to both stores on save (see saveMutation) so they never disagree.
+  type BizIdentity = { businessName: string; ownerName: string; businessTagline: string; businessDiscipline: string };
+  const { data: bizData } = useQuery<{ success: boolean; data: Partial<BizIdentity> }>({
+    queryKey: ["/api/business-settings"],
+  });
+  const [biz, setBiz] = useState<BizIdentity>({ businessName: "", ownerName: "", businessTagline: "", businessDiscipline: "" });
+  const [bizLoaded, setBizLoaded] = useState(false);
+  if (bizData?.data && !bizLoaded) {
+    setBiz({
+      businessName: bizData.data.businessName ?? "",
+      ownerName: bizData.data.ownerName ?? "",
+      businessTagline: bizData.data.businessTagline ?? "",
+      businessDiscipline: bizData.data.businessDiscipline ?? "",
+    });
+    setBizLoaded(true);
+  }
+  const setB = (field: keyof BizIdentity, value: string) =>
+    setBiz((b) => ({ ...b, [field]: value }));
+
   if (!isLoading && data?.data && !loaded) {
     const rawAlign = (data.data as Template).logoAlignment;
     const alignment: LogoAlignment =
@@ -61,10 +83,21 @@ export default function SettingsCompany() {
     mutationFn: async (values: Partial<Template>) => {
       const id = data?.data?.id;
       if (!id) throw new Error("No template found");
-      return apiRequest("PUT", `/api/templates/${id}`, values);
+      // 1) PDF/document branding store.
+      await apiRequest("PUT", `/api/templates/${id}`, values);
+      // 2) Email + AI identity store. GST is the one shared value — write the same
+      //    number to both so a tenant's emails and invoices never disagree.
+      await apiRequest("PUT", "/api/business-settings", {
+        businessName: biz.businessName,
+        ownerName: biz.ownerName,
+        businessTagline: biz.businessTagline,
+        businessDiscipline: biz.businessDiscipline,
+        businessGstNumber: values.gstNumber ?? "",
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates/default/invoice"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/business-settings"] });
       toast({ title: "Company info saved" });
     },
     onError: () => {
@@ -375,6 +408,7 @@ export default function SettingsCompany() {
             onChange={(e) => set("gstNumber", e.target.value)}
             placeholder="e.g. 131-047-592-GST004"
           />
+          <p className="text-xs text-muted-foreground">Shown on your invoices and in customer emails.</p>
         </div>
 
         <div className="space-y-1">
@@ -387,6 +421,76 @@ export default function SettingsCompany() {
             onChange={(e) => set("paymentTerms", e.target.value)}
             placeholder="e.g. Payment due within 7 days"
           />
+        </div>
+
+        <Separator />
+
+        {/* Email + AI identity (business_settings) — distinct from the legal/PDF
+            details above. The brand name and tagline render in the branded-email
+            header; the owner name signs AI-drafted replies; the trade shapes AI
+            prompts. GST is shared with the invoice details above. */}
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Mail className="w-4 h-4 text-muted-foreground" />
+            Emails &amp; AI
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            How your business appears in customer emails and AI-drafted replies. Your invoices use the legal details above.
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="flex items-center gap-2">
+            <Type className="w-4 h-4 text-muted-foreground" />
+            Brand name
+          </Label>
+          <Input
+            value={biz.businessName}
+            onChange={(e) => setB("businessName", e.target.value)}
+            placeholder="e.g. Treemarkables"
+          />
+          <p className="text-xs text-muted-foreground">Shown as the wordmark at the top of customer emails (can be shorter than your legal name).</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label className="flex items-center gap-2">
+              <User className="w-4 h-4 text-muted-foreground" />
+              Owner name
+            </Label>
+            <Input
+              value={biz.ownerName}
+              onChange={(e) => setB("ownerName", e.target.value)}
+              placeholder="e.g. Jules"
+            />
+            <p className="text-xs text-muted-foreground">Signs your AI-drafted email replies.</p>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-muted-foreground" />
+              Trade
+            </Label>
+            <Input
+              value={biz.businessDiscipline}
+              onChange={(e) => setB("businessDiscipline", e.target.value)}
+              placeholder="e.g. arborist, plumber"
+            />
+            <p className="text-xs text-muted-foreground">Used in AI prompts — “a New Zealand … business”.</p>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="flex items-center gap-2">
+            <Tag className="w-4 h-4 text-muted-foreground" />
+            Tagline
+          </Label>
+          <Input
+            value={biz.businessTagline}
+            onChange={(e) => setB("businessTagline", e.target.value)}
+            placeholder="e.g. Qualified Arborists"
+          />
+          <p className="text-xs text-muted-foreground">Appears under your brand name in the email header.</p>
         </div>
       </div>
 
