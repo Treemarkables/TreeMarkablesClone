@@ -25,6 +25,33 @@ export function useJobFilter(): [string, (v: string) => void] {
   return [filter, setJobFilter];
 }
 
+// ── Lane Filter ───────────────────────────────────────────────────────────────
+// Orthogonal to the status filter above. "all" = no lane filtering; otherwise a lane id.
+// When set, the Dispatch Board shows every active job in that lane regardless of status tab.
+let _laneFilter = "all";
+const _laneListeners = new Set<() => void>();
+
+function notifyLane() {
+  _laneListeners.forEach((fn) => fn());
+}
+
+export function setLaneFilter(v: string) {
+  _laneFilter = v;
+  notifyLane();
+}
+
+export function useLaneFilter(): [string, (v: string) => void] {
+  const [filter, setLocal] = useState(_laneFilter);
+
+  useEffect(() => {
+    const sync = () => setLocal(_laneFilter);
+    _laneListeners.add(sync);
+    return () => { _laneListeners.delete(sync); };
+  }, []);
+
+  return [filter, setLaneFilter];
+}
+
 // ── Mobile Search Open/Close ──────────────────────────────────────────────────
 let _searchOpen = false;
 const _searchListeners = new Set<() => void>();
