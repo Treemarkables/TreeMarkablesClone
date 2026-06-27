@@ -7675,13 +7675,16 @@ class DatabaseStorage implements IStorage {
   // Lanes configured to auto-receive a job on an external event (e.g. 'quote_sent'). Modelled as
   // an internal `auto_enter` automation row whose `trigger` holds the event name — no schema change.
   // Called in request context, so RLS scopes it to the current business.
-  async getAutoEntryLanes(event: string): Promise<schema.LaneAutomation[]> {
-    return await db.select().from(schema.laneAutomations)
-      .where(and(
-        eq(schema.laneAutomations.type, 'auto_enter'),
-        eq(schema.laneAutomations.trigger, event),
-        eq(schema.laneAutomations.enabled, true),
-      ));
+  // Lanes set to auto-receive a job on an event. Pass businessId when calling from a no-tenant
+  // context (pollers, webhooks) so the owner-role query doesn't leak other tenants' lanes.
+  async getAutoEntryLanes(event: string, businessId?: string): Promise<schema.LaneAutomation[]> {
+    const conds = [
+      eq(schema.laneAutomations.type, 'auto_enter'),
+      eq(schema.laneAutomations.trigger, event),
+      eq(schema.laneAutomations.enabled, true),
+    ];
+    if (businessId) conds.push(eq(schema.laneAutomations.businessId, businessId));
+    return await db.select().from(schema.laneAutomations).where(and(...conds));
   }
 
   // --- Cron-only global readers (no tenant filter; see note above) ---
@@ -7711,6 +7714,18 @@ class DatabaseStorage implements IStorage {
 
   async recordLaneAutomationRun(input: { jobId: string; laneId: string; automationId: string }): Promise<void> {
     await db.insert(schema.laneAutomationRuns).values(withTenant(input)).returning();
+  }
+
+  /** How many times an automation has fired for a job since `since` (used for max-attempts guards). */
+  async countLaneAutomationRunsSince(jobId: string, automationId: string, since: Date): Promise<number> {
+    const rows = await db.select({ id: schema.laneAutomationRuns.id })
+      .from(schema.laneAutomationRuns)
+      .where(and(
+        eq(schema.laneAutomationRuns.jobId, jobId),
+        eq(schema.laneAutomationRuns.automationId, automationId),
+        gte(schema.laneAutomationRuns.firedAt, since),
+      ));
+    return rows.length;
   }
 
   // ─── Payments ───────────────────────────────────────────────────────────

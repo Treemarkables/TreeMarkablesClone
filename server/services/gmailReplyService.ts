@@ -4,6 +4,7 @@ import { db } from '../db';
 import { jobs, jobDiaryEntries, customers, conversationMessages } from '../../shared/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { PhotoStorageService } from '../photoStorage';
+import { onLaneJobEvent } from './laneAutomationService';
 
 interface ParsedEmailAttachment {
   filename?: string;
@@ -537,7 +538,10 @@ class GmailReplyService {
         const diaryEntryId = insertedDiaryEntry?.id;
 
         console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
-        
+
+        // Lanes: a customer reply can auto-remove the job from a follow-up lane (or move it).
+        onLaneJobEvent(job.id, 'customer_replied').catch(err => console.error('[Lanes] email-reply trigger error:', err));
+
         // Create notification for email reply so it appears in notification bell.
         // Dedup by the email's Message-ID — NOT "any reply for this job in the
         // last 24h". The diary insert above already skips re-polled emails by

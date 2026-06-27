@@ -5,6 +5,7 @@ import { eq, and, or, sql, desc } from 'drizzle-orm';
 import { fromZonedTime } from 'date-fns-tz';
 import { broadcast } from '../sseManager';
 import { runWithBusiness, withTenant } from '../tenancy/tenantStore';
+import { onLaneJobEvent } from './laneAutomationService';
 
 const POLLING_INTERVAL_MS = 60 * 1000; // 1 minute (60 seconds)
 let pollingIntervalId: NodeJS.Timeout | null = null;
@@ -147,10 +148,13 @@ async function processSMSReplies() {
         // Update job's lastActivityAt to bring it to top of dispatch board
         await db
           .update(jobs)
-          .set({ 
+          .set({
             lastActivityAt: receivedTimestamp
           })
           .where(eq(jobs.id, matchedJob.id));
+
+        // Lanes: a customer reply can auto-remove the job from a follow-up lane (or move it).
+        onLaneJobEvent(matchedJob.id, 'customer_replied').catch(err => console.error('[Lanes] sms-reply trigger error:', err));
 
         // Extract email address from SMS body if present and update job/customer
         const emailMatch = reply.MessageText.match(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Z|a-z]{2,}\b/);

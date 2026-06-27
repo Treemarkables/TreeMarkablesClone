@@ -1,9 +1,10 @@
 import { storage } from '../storage.js';
-import type { Job, LaneAutomation } from '@shared/schema';
+import type { Job, LaneAutomation, InsertJob } from '@shared/schema';
 import { runWithBusiness } from '../tenancy/tenantStore.js';
 import { smsService } from './smsService.js';
 import { emailService } from './emailService.js';
 import { notifyEmployees, pushToAdminsWithCustomerMessages } from './notificationHelper.js';
+import { generateQuoteFollowupDraft } from './quoteFollowupAi.js';
 
 /**
  * Lane automation engine.
@@ -22,7 +23,14 @@ import { notifyEmployees, pushToAdminsWithCustomerMessages } from './notificatio
  * advances lane_entered_at and re-arms the automations.
  */
 
-interface NudgeConfig { channel?: 'sms' | 'email'; template?: string; templateId?: string; requireApproval?: boolean }
+interface NudgeConfig {
+  channel?: 'sms' | 'email';
+  template?: string;
+  templateId?: string;
+  useAi?: boolean;             // AI-draft the message instead of a template
+  requireApproval?: boolean;
+  respectQuietHours?: boolean; // hold customer sends until outside the quiet window (default on)
+}
 interface StaffConfig {
   recipients?: 'owner' | 'assigned' | 'both'; // legacy single field — still honoured
   notifyOwner?: boolean;       // owner / admins
@@ -35,6 +43,63 @@ interface StaffConfig {
 }
 interface AutoMoveConfig { targetLaneId?: string }
 interface TaskConfig { title?: string; category?: string; assigneeId?: string; dueInDays?: number }
+interface ChangeStatusConfig { targetStatus?: string }
+interface AddNoteConfig { note?: string }
+interface AssignStaffConfig { staffIds?: string[] }
+
+// Per-automation guards shared by every type (stored alongside type-specific config in jsonb).
+type Condition = { field: string; op: 'eq' | 'ne' | 'gt' | 'lt' | 'contains'; value: string };
+interface GuardConfig { conditions?: Condition[]; maxAttempts?: number }
+
+const QUIET_START = '21:00';
+const QUIET_END = '08:00';
+
+// Is `now` inside the customer-contact quiet window for the given timezone? Window may wrap midnight.
+function inQuietHours(now: Date, tz = 'Pacific/Auckland'): boolean {
+  const parts = new Intl.DateTimeFormat('en-NZ', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now);
+  const hh = Number(parts.find(p => p.type === 'hour')?.value ?? '0');
+  const mm = Number(parts.find(p => p.type === 'minute')?.value ?? '0');
+  const cur = hh * 60 + mm;
+  const [sh, sm] = QUIET_START.split(':').map(Number);
+  const [eh, em] = QUIET_END.split(':').map(Number);
+  const start = sh * 60 + sm, end = eh * 60 + em;
+  return start <= end ? (cur >= start && cur < end) : (cur >= start || cur < end);
+}
+
+function jobFieldValue(job: Job, field: string): string | number | null {
+  switch (field) {
+    case 'status': return job.status ?? null;
+    case 'leadSource': return job.leadSource ?? null;
+    case 'priority': return job.priority ?? null;
+    case 'totalAmount': {
+      const v = (job.totalAmount ?? job.totalIncludingGst ?? job.subtotal);
+      return v != null ? Number(v) : null;
+    }
+    case 'title': return job.title ?? '';
+    case 'description': return job.description ?? '';
+    default: return null;
+  }
+}
+
+// All conditions must hold (AND). Empty/absent = always true.
+function conditionsMet(job: Job, conditions?: Condition[]): boolean {
+  if (!conditions || !conditions.length) return true;
+  return conditions.every((c) => {
+    const v = jobFieldValue(job, c.field);
+    if (c.op === 'gt' || c.op === 'lt') {
+      const n = typeof v === 'number' ? v : Number(v);
+      const t = Number(c.value);
+      if (Number.isNaN(n) || Number.isNaN(t)) return false;
+      return c.op === 'gt' ? n > t : n < t;
+    }
+    const s = (v == null ? '' : String(v)).toLowerCase();
+    const t = String(c.value ?? '').toLowerCase();
+    if (c.op === 'eq') return s === t;
+    if (c.op === 'ne') return s !== t;
+    if (c.op === 'contains') return s.includes(t);
+    return true;
+  });
+}
 
 function firstNameFrom(name: string | null | undefined): string {
   if (!name) return '';
@@ -67,15 +132,23 @@ async function resolveJobContact(job: Job): Promise<{ name: string; phone: strin
   return { name, phone, email };
 }
 
-async function runCustomerNudge(job: Job, cfg: NudgeConfig): Promise<void> {
+// Returns false when the send was DEFERRED (quiet hours) so the caller doesn't record a run and the
+// nudge is retried on the next tick. Returns true when sent, queued for approval, or genuinely skipped.
+async function runCustomerNudge(job: Job, cfg: NudgeConfig): Promise<boolean> {
   const contact = await resolveJobContact(job);
 
   // Resolve channel; fall back if the requested channel has no recipient on file.
   let channel: 'sms' | 'email' = cfg.channel === 'email' ? 'email' : 'sms';
   if (channel === 'sms' && !contact.phone && contact.email) channel = 'email';
   if (channel === 'email' && !contact.email && contact.phone) channel = 'sms';
-  if (channel === 'sms' && !contact.phone) { console.log(`[Lanes] nudge skipped (no phone) job #${job.jobNumber}`); return; }
-  if (channel === 'email' && !contact.email) { console.log(`[Lanes] nudge skipped (no email) job #${job.jobNumber}`); return; }
+  if (channel === 'sms' && !contact.phone) { console.log(`[Lanes] nudge skipped (no phone) job #${job.jobNumber}`); return true; }
+  if (channel === 'email' && !contact.email) { console.log(`[Lanes] nudge skipped (no email) job #${job.jobNumber}`); return true; }
+
+  // Quiet hours: hold customer sends until outside the window (default on). Returning false defers.
+  if (cfg.respectQuietHours !== false && inQuietHours(new Date())) {
+    console.log(`[Lanes] nudge deferred (quiet hours) job #${job.jobNumber}`);
+    return false;
+  }
 
   const settings = await storage.getBusinessSettings().catch(() => null);
   const vars: Record<string, string> = {
@@ -110,6 +183,27 @@ async function runCustomerNudge(job: Job, cfg: NudgeConfig): Promise<void> {
     }
   }
 
+  // AI draft overrides the template/inline text when enabled.
+  if (cfg.useAi) {
+    try {
+      const enteredAt = job.laneEnteredAt ? new Date(job.laneEnteredAt) : (job.createdAt ? new Date(job.createdAt) : new Date());
+      const daysSince = Math.max(0, Math.floor((Date.now() - enteredAt.getTime()) / (24 * 60 * 60 * 1000)));
+      const draft = await generateQuoteFollowupDraft({
+        customerFirstName: firstNameFrom(contact.name) || 'there',
+        jobDescription: job.description || job.title || null,
+        quoteNumber: job.jobNumber ?? null,
+        quoteAmount: job.totalIncludingGst ?? job.totalAmount ?? null,
+        daysSince,
+        attemptNumber: 1,
+        channel,
+        businessName: settings?.businessName || undefined,
+      });
+      if (draft.body) { body = draft.body; html = undefined; }
+    } catch (err) {
+      console.error(`[Lanes] AI nudge draft failed job #${job.jobNumber}, using fallback message:`, err);
+    }
+  }
+
   const message = fillTemplate(body, vars);
   subject = fillTemplate(subject, vars);
   if (html) html = fillTemplate(html, vars);
@@ -128,7 +222,7 @@ async function runCustomerNudge(job: Job, cfg: NudgeConfig): Promise<void> {
       status: 'pending',
     });
     console.log(`[Lanes] nudge queued for approval (${channel}) job #${job.jobNumber}`);
-    return;
+    return true;
   }
 
   if (channel === 'sms') {
@@ -142,7 +236,8 @@ async function runCustomerNudge(job: Job, cfg: NudgeConfig): Promise<void> {
       jobNumber: job.jobNumber ? String(job.jobNumber) : undefined,
     });
   }
-  console.log(`[Lanes] nudge sent (${channel}${cfg.templateId ? ', template' : ''}) job #${job.jobNumber}`);
+  console.log(`[Lanes] nudge sent (${channel}${cfg.useAi ? ', ai' : cfg.templateId ? ', template' : ''}) job #${job.jobNumber}`);
+  return true;
 }
 
 async function runStaffReminder(job: Job, cfg: StaffConfig): Promise<void> {
@@ -231,28 +326,71 @@ async function runCreateTask(job: Job, cfg: TaskConfig): Promise<void> {
   console.log(`[Lanes] task created for job #${job.jobNumber}`);
 }
 
-/** Dispatch a single automation. Shared by the cron, on-enter, and status-change paths. */
-async function executeLaneAutomation(job: Job, automation: LaneAutomation): Promise<void> {
+async function runChangeStatus(job: Job, cfg: ChangeStatusConfig): Promise<void> {
+  if (!cfg.targetStatus || job.status === cfg.targetStatus) return;
+  await storage.updateJob(job.id, { status: cfg.targetStatus } as Partial<InsertJob>);
+  console.log(`[Lanes] status → ${cfg.targetStatus} job #${job.jobNumber}`);
+}
+
+async function runAddNote(job: Job, cfg: AddNoteConfig): Promise<void> {
+  await storage.createJobDiaryEntry({
+    jobId: job.id,
+    entryType: 'note',
+    title: 'Lane automation',
+    description: cfg.note || 'Automated note.',
+    authorName: 'Automation',
+    authorRole: 'system',
+    tags: ['lane-automation'],
+  });
+  console.log(`[Lanes] note added job #${job.jobNumber}`);
+}
+
+async function runAssignStaff(job: Job, cfg: AssignStaffConfig): Promise<void> {
+  if (!cfg.staffIds?.length) return;
+  await storage.updateJob(job.id, { assignedStaffIds: cfg.staffIds, assignedTo: cfg.staffIds } as Partial<InsertJob>);
+  console.log(`[Lanes] assigned ${cfg.staffIds.length} staff job #${job.jobNumber}`);
+}
+
+/**
+ * Dispatch a single automation. Returns false only when the action was DEFERRED (quiet hours) so the
+ * caller skips recording a run and retries next tick; true when it ran (or was a permanent skip).
+ */
+async function executeLaneAutomation(job: Job, automation: LaneAutomation): Promise<boolean> {
   const config = (automation.config || {}) as Record<string, unknown>;
   switch (automation.type) {
     case 'customer_nudge': return runCustomerNudge(job, config as NudgeConfig);
-    case 'staff_reminder': return runStaffReminder(job, config as StaffConfig);
-    case 'auto_move': return runAutoMove(job, config as AutoMoveConfig);
-    case 'create_task': return runCreateTask(job, config as TaskConfig);
+    case 'staff_reminder': await runStaffReminder(job, config as StaffConfig); return true;
+    case 'auto_move': await runAutoMove(job, config as AutoMoveConfig); return true;
+    case 'create_task': await runCreateTask(job, config as TaskConfig); return true;
+    case 'change_status': await runChangeStatus(job, config as ChangeStatusConfig); return true;
+    case 'add_note': await runAddNote(job, config as AddNoteConfig); return true;
+    case 'assign_staff': await runAssignStaff(job, config as AssignStaffConfig); return true;
     default:
       console.warn(`[Lanes] unknown automation type '${automation.type}' (id ${automation.id})`);
+      return true;
   }
 }
 
-/** Fire a lane's automations for a job under the right tenant, recording each run. */
+/**
+ * Fire a lane's automations for a job under the right tenant. Each automation is gated by its
+ * conditions (only fire if the job matches) and max-attempts guard before running, and a run is
+ * recorded unless the action deferred itself (e.g. quiet hours).
+ */
 async function fireAutomations(job: Job, automations: LaneAutomation[]): Promise<void> {
   if (!job.laneId || !automations.length) return;
   const laneId = job.laneId;
+  const since = job.laneEnteredAt ? new Date(job.laneEnteredAt) : new Date(0);
   await runWithBusiness(job.businessId ?? undefined, async () => {
     for (const a of automations) {
       try {
-        await executeLaneAutomation(job, a);
-        await storage.recordLaneAutomationRun({ jobId: job.id, laneId, automationId: a.id });
+        const guard = (a.config || {}) as GuardConfig;
+        if (!conditionsMet(job, guard.conditions)) continue;
+        if (guard.maxAttempts && guard.maxAttempts > 0) {
+          const fired = await storage.countLaneAutomationRunsSince(job.id, a.id, since);
+          if (fired >= guard.maxAttempts) continue;
+        }
+        const recorded = await executeLaneAutomation(job, a);
+        if (recorded) await storage.recordLaneAutomationRun({ jobId: job.id, laneId, automationId: a.id });
       } catch (err) {
         console.error(`[Lanes] automation ${a.id} (${a.type}) failed for job ${job.id}:`, err);
       }
@@ -276,30 +414,59 @@ export async function runLaneStatusChangeAutomations(job: Job): Promise<void> {
   await fireAutomations(job, automations);
 }
 
+function configStatus(config: unknown): string | undefined {
+  const v = (config as Record<string, unknown> | null)?.status;
+  return typeof v === 'string' && v ? v : undefined;
+}
+
 /**
- * Called when a quote/proposal is sent. If any lane is configured to auto-receive jobs on
- * 'quote_sent', move this job into the first such lane (unless it's already there) and fire that
- * lane's on_enter automations. The lane's "days in lane" clock starts from this moment, so a
- * follow-up nudge configured for N days later runs off it. Runs in request context (RLS-scoped).
+ * Move a job into any lane configured to auto-enter on `event`, then fire that lane's on_enter
+ * automations (the "days in lane" clock starts now). Tenant-safe in both request and poller contexts
+ * because getAutoEntryLanes is filtered by the job's businessId. For 'status_changed', a lane may
+ * pin a target status in its config.
  */
-export async function onQuoteSentToLane(jobId: string): Promise<void> {
+export async function runLaneEntryForEvent(job: Job, event: string): Promise<void> {
   try {
-    const entries = await storage.getAutoEntryLanes('quote_sent');
+    const entries = (await storage.getAutoEntryLanes(event, job.businessId ?? undefined))
+      .filter((e) => event !== 'status_changed' || (configStatus(e.config) ?? job.status ?? undefined) === job.status);
     if (!entries.length) return;
     const targetLaneId = entries[0].laneId;
-    if (entries.length > 1) {
-      console.log(`[Lanes] multiple lanes set to auto-enter on quote_sent; using ${targetLaneId}`);
-    }
-
-    const current = await storage.getJob(jobId);
-    if (!current || current.laneId === targetLaneId) return;
-
-    const moved = await storage.assignJobToLane(jobId, targetLaneId);
-    console.log(`[Lanes] job #${moved.jobNumber} auto-entered lane ${targetLaneId} on quote sent`);
+    if (job.laneId === targetLaneId) return;
+    const moved = await storage.assignJobToLane(job.id, targetLaneId);
+    console.log(`[Lanes] job #${moved.jobNumber} auto-entered lane ${targetLaneId} on ${event}`);
     await runLaneEntryAutomations(moved);
   } catch (err) {
-    console.error('[Lanes] onQuoteSentToLane failed:', err);
+    console.error(`[Lanes] entry-for-event ${event} failed:`, err);
   }
+}
+
+/** Remove a job from its lane if that lane is set to auto-exit on `event`. */
+export async function runLaneExitForEvent(job: Job, event: string): Promise<void> {
+  try {
+    if (!job.laneId) return;
+    const exits = (await storage.getLaneAutomations(job.laneId)).filter((a) =>
+      a.enabled && a.type === 'auto_exit' && a.trigger === event &&
+      (event !== 'status_changed' || (configStatus(a.config) ?? job.status ?? undefined) === job.status));
+    if (!exits.length) return;
+    await storage.assignJobToLane(job.id, null);
+    console.log(`[Lanes] job #${job.jobNumber} auto-left its lane on ${event}`);
+  } catch (err) {
+    console.error(`[Lanes] exit-for-event ${event} failed:`, err);
+  }
+}
+
+/** Backwards-compatible wrapper for the two proposal-send routes (quote_sent entry). */
+export async function onQuoteSentToLane(jobId: string): Promise<void> {
+  const job = await storage.getJob(jobId);
+  if (job) await runLaneEntryForEvent(job, 'quote_sent');
+}
+
+/** Convenience for an arbitrary job event (load job, run exit then entry). Tenant-safe. */
+export async function onLaneJobEvent(jobId: string, event: string): Promise<void> {
+  const job = await storage.getJob(jobId);
+  if (!job) return;
+  await runLaneExitForEvent(job, event);
+  await runLaneEntryForEvent(job, event);
 }
 
 /** Hourly cron entry point — evaluates all days_in_lane automations with fire-once de-dup. */

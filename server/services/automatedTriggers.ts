@@ -2,7 +2,7 @@ import { notificationService } from './notificationService';
 import { storage } from '../storage';
 import { workflowAutomationService } from './workflowAutomation';
 import { runAllReminderChecks } from './reminderChecker';
-import { runLaneAutomationChecks, runLaneStatusChangeAutomations } from './laneAutomationService';
+import { runLaneAutomationChecks, runLaneStatusChangeAutomations, runLaneEntryForEvent, runLaneExitForEvent, onLaneJobEvent } from './laneAutomationService';
 import type { Job, Customer, InsertJob } from '@shared/schema';
 
 // Hook into job status changes to trigger automated notifications
@@ -43,10 +43,22 @@ export class AutomatedTriggers {
         await this.onJobCompleted(job);
       }
 
-      // If the job sits in a lane, run that lane's status_changed automations (e.g. auto-move).
+      // Lanes: run status_changed automations for the job's current lane, then evaluate
+      // status-driven auto-exit and auto-entry (a lane can pin a target status).
       await runLaneStatusChangeAutomations(job);
+      await runLaneExitForEvent(job, 'status_changed');
+      await runLaneEntryForEvent(job, 'status_changed');
     } catch (error) {
       console.error('Error in job status change trigger:', error);
+    }
+  }
+
+  // Called when a customer replies (from the SMS / email reply pollers).
+  static async onCustomerReplyReceived(jobId: string): Promise<void> {
+    try {
+      await onLaneJobEvent(jobId, 'customer_replied');
+    } catch (error) {
+      console.error('Error in customer-reply lane trigger:', error);
     }
   }
 
@@ -177,6 +189,9 @@ export class AutomatedTriggers {
         jobId: job.id,
         job
       });
+
+      // Lanes: auto-enter a lane configured for new jobs.
+      await runLaneEntryForEvent(job, 'job_created');
       
       // If the job is created already on the calendar, trigger scheduling
       // notifications. ('scheduled' status retired 2026-05 — the signal is
