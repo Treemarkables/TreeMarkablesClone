@@ -301,7 +301,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
 
   // Lanes — custom buckets a job can sit in (orthogonal to status). Assigning goes through the
   // dedicated /lane endpoint (not the auto-save PUT) so on-enter automations fire consistently.
-  const { data: lanes = [] } = useQuery<Array<{ id: string; name: string; color: string }>>({
+  const { data: lanesData } = useQuery<Array<{ id: string; name: string; color: string }>>({
     queryKey: ["/api/lanes"],
     queryFn: async () => {
       const res = await fetch("/api/lanes");
@@ -309,6 +309,9 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       return (await res.json()).data;
     },
   });
+  // Coerce to an array no matter what the query/cache yields (undefined, null, or a stale
+  // non-array entry) — this feeds .map()/.length below and must never be non-array.
+  const lanes = Array.isArray(lanesData) ? lanesData : [];
 
   const saveLane = useMutation({
     mutationFn: async (laneId: string | null) => {
