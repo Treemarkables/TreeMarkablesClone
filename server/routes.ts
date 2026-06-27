@@ -74,6 +74,7 @@ import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
 import {
   isStripeConfigured,
+  businessOwnsStripeAccount,
   getPublishableKey,
   createDepositCheckoutSession,
   createInvoiceCheckoutSession,
@@ -5916,6 +5917,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const job = await storage.getJob(req.params.id);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      // Only Treemarkables may take card payments (single Stripe account, no Connect);
+      // every other tenant collects by bank transfer. See businessOwnsStripeAccount.
+      if (!businessOwnsStripeAccount((job as any).businessId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Online card payment is not available for this business. Please pay by bank transfer.',
+        });
       }
 
       const total = parseFloat((job as any).totalAmount?.toString() || '0') || 0;
@@ -13091,6 +13100,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           customer: customer || null,
           job: job || null,
           company,
+          // Whether this business can take card payments online (single Stripe
+          // account = Treemarkables only, until Connect). Drives the "Pay now" button;
+          // everyone else shows bank-transfer details instead.
+          onlinePaymentEnabled: businessOwnsStripeAccount(invoice.businessId),
           sections: sections.map(s => ({
             ...s,
             images: Array.isArray(s.images) ? s.images : [],
@@ -13125,6 +13138,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
       if (invoice.status === 'cancelled') {
         return res.status(400).json({ success: false, message: 'This invoice has been cancelled' });
+      }
+      // Card payments settle into the single (Treemarkables) Stripe account. Until
+      // Connect routes funds per-tenant, only TM may take them; everyone else is
+      // paid by bank transfer (their details are on the invoice). See businessOwnsStripeAccount.
+      if (!businessOwnsStripeAccount(invoice.businessId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Online card payment is not available for this business. Please pay using the bank-transfer details on your invoice.',
+        });
       }
 
       // Total = subtotal (line items, or invoice.amount fallback) + 15% GST.
@@ -24770,6 +24792,14 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const proposal = await storage.getProposal(id);
       if (!proposal) {
         return res.status(404).json({ success: false, message: 'Proposal not found' });
+      }
+      // Deposits settle into the single (Treemarkables) Stripe account; until Connect
+      // routes per-tenant, only TM may collect them online. See businessOwnsStripeAccount.
+      if (!businessOwnsStripeAccount(proposal.businessId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Online card payment is not available for this business. Please arrange the deposit by bank transfer.',
+        });
       }
 
       if (proposal.status !== 'accepted_pending_deposit') {
