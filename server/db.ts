@@ -158,3 +158,65 @@ export async function assertTenantDbMatchesOwner(): Promise<void> {
   }
   console.log(`[tenant-db] ✅ tenant pool matches owner DB (businesses:jobs=${ownerSig})`);
 }
+
+// ── Tenant-isolation policy backstop ────────────────────────────────────────
+// Every table carrying a `business_id` column is tenant data. Because the Phase-2
+// FALLBACK grants give app_tenant a blanket GRANT ON ALL TABLES, such a table is
+// cross-tenant readable/writable UNLESS it has RLS enabled AND a policy. A table
+// can ship without one (equipment_compliance_reminders did) and nothing else
+// catches it. These find the gap. Genuinely-global tables that happen to carry a
+// business_id column can be exempted via TENANT_RLS_POLICY_EXEMPT (comma-separated).
+
+export interface RlsGap { table: string; rlsOn: boolean; hasPolicy: boolean }
+
+export async function findTenantTablesMissingRlsPolicy(): Promise<RlsGap[]> {
+  const exempt = new Set(
+    (process.env.TENANT_RLS_POLICY_EXEMPT || "").split(",").map((s) => s.trim()).filter(Boolean),
+  );
+  const res = await pool.query(`
+    SELECT c.relname AS tbl,
+           c.relrowsecurity AS rls_on,
+           EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid) AS has_policy
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+     WHERE c.relkind = 'r'
+       AND EXISTS (SELECT 1 FROM information_schema.columns col
+                    WHERE col.table_schema = 'public' AND col.table_name = c.relname
+                      AND col.column_name = 'business_id')
+     ORDER BY 1`);
+  const rows = res.rows as Array<{ tbl: string; rls_on: boolean; has_policy: boolean }>;
+  return rows
+    .filter((r) => !exempt.has(r.tbl))
+    .filter((r) => !r.rls_on || !r.has_policy)
+    .map((r) => ({ table: r.tbl, rlsOn: r.rls_on, hasPolicy: r.has_policy }));
+}
+
+/**
+ * Boot guard. No-op unless RLS is on (the gap only bites under RLS). Logs any gap
+ * loudly; throws (fail-closed) ONLY when TENANT_RLS_STRICT=true, so an autodeploy
+ * from main can't be taken down by a single forgotten policy unless you opt in.
+ * Use the CLI (scripts/checkTenantRlsPolicies.ts) as a hard pre-deploy/CI gate.
+ */
+export async function assertTenantTablesHaveRlsPolicies(): Promise<void> {
+  if (!RLS_ENABLED) return;
+  let gaps: RlsGap[];
+  try {
+    gaps = await findTenantTablesMissingRlsPolicy();
+  } catch (e) {
+    console.error("[tenant-rls] policy backstop check could not run:", (e as Error).message);
+    return;
+  }
+  if (gaps.length === 0) {
+    console.log("[tenant-rls] ✅ every business_id table has RLS + a policy");
+    return;
+  }
+  const list = gaps.map((g) => `${g.table} (rls_on=${g.rlsOn}, has_policy=${g.hasPolicy})`).join(", ");
+  const msg =
+    `${gaps.length} business_id table(s) are missing RLS isolation and are cross-tenant ` +
+    `readable/writable under the app_tenant grant: ${list}. Add ENABLE ROW LEVEL SECURITY ` +
+    `+ a tenant_isolation policy, or exempt a genuinely-global table via TENANT_RLS_POLICY_EXEMPT.`;
+  console.error(`\n🔴 [tenant-rls] CRITICAL: ${msg}\n`);
+  if (process.env.TENANT_RLS_STRICT === "true") {
+    throw new Error(`FATAL (TENANT_RLS_STRICT): ${msg}`);
+  }
+}

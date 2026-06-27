@@ -16,7 +16,7 @@ import path from "path";
 import { fileURLToPath } from 'url';
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { pool, assertTenantDbMatchesOwner } from "./db";
+import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
@@ -440,6 +440,12 @@ function startNotificationQueueWorker() {
       process.exit(1);
     }
 
+    // Tenant-isolation backstop: any business_id table without an RLS policy is
+    // cross-tenant readable under the app_tenant grant. Logs loudly; hard-fails
+    // only under TENANT_RLS_STRICT (then the outer catch exits). Runs after the
+    // self-healing boot DDL on the previous deploy has had a chance to add policies.
+    await assertTenantTablesHaveRlsPolicies();
+
     // Self-healing schema: bring the database up to match the deployed code so a
     // schema change can't silently outrun the prod DB (caused the deposit-column /
     // billing-table scrambles). Non-fatal — log loudly but keep booting, so a
@@ -681,6 +687,20 @@ The Treemarkables Team';
           sent_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
         CREATE UNIQUE INDEX IF NOT EXISTS equipment_compliance_reminders_uniq ON equipment_compliance_reminders (equipment_id, kind, expiry_date, offset_days);
+        -- This table carries business_id but shipped without an RLS policy, so under
+        -- the blanket app_tenant GRANT it was cross-tenant readable/writable even with
+        -- RLS on. ENABLE (not FORCE) + tenant_isolation policy closes that. The boot
+        -- backstop (assertTenantTablesHaveRlsPolicies) guards against a repeat.
+        ALTER TABLE equipment_compliance_reminders ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON equipment_compliance_reminders;
+        CREATE POLICY tenant_isolation ON equipment_compliance_reminders
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON equipment_compliance_reminders TO app_tenant;
+          END IF;
+        END $$;
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           role_key VARCHAR NOT NULL,
