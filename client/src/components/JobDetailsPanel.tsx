@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, ChevronDown, Mic, MicOff, Lock, UserPlus, Pencil, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { SpeechToQuote } from "@/components/SpeechToQuote";
 import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAutocomplete";
@@ -45,6 +46,7 @@ interface JobShape {
   internalNotes?: string | null;
   status?: string | null;
   leadSource?: string | null;
+  laneId?: string | null;
   // The existing app saves the on-site / sent-later toggle to
   // quotePresentationMethod (jobs.quote_presentation_method). There's also an
   // older presentationMethod column kicking around, but the desktop UI binds
@@ -163,6 +165,7 @@ const STATUS_FG: Record<string, string> = {
 
 export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // ── Data ────────────────────────────────────────────────────────────────────
   const { data: jobResp } = useQuery<{ success?: boolean; data?: JobShape }>({
@@ -294,6 +297,26 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
     },
+  });
+
+  // Lanes — custom buckets a job can sit in (orthogonal to status). Assigning goes through the
+  // dedicated /lane endpoint (not the auto-save PUT) so on-enter automations fire consistently.
+  const { data: lanes = [] } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/lanes"],
+    queryFn: async () => {
+      const res = await fetch("/api/lanes");
+      if (!res.ok) throw new Error("Failed to load lanes");
+      return (await res.json()).data;
+    },
+  });
+
+  const saveLane = useMutation({
+    mutationFn: async (laneId: string | null) => {
+      const res = await apiRequest("PATCH", `/api/jobs/${jobId}/lane`, { laneId });
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] }),
+    onError: () => toast({ title: "Error", description: "Could not update the lane", variant: "destructive" }),
   });
 
   // ── Change-customer popover (linked-customer card) ─────────────────────
@@ -812,6 +835,17 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             { value: "sent_later", label: "Sent later" },
           ]}
         />
+        {lanes.length > 0 && (
+          <SelectField
+            label="Lane"
+            value={job?.laneId ?? ""}
+            onChange={(v) => saveLane.mutate(v || null)}
+            options={[
+              { value: "", label: "— None —" },
+              ...lanes.map((l) => ({ value: l.id, label: l.name })),
+            ]}
+          />
+        )}
       </div>
 
       {/* ── Confirmation checkbox ── */}

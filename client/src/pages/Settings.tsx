@@ -162,6 +162,14 @@ const settingsOptions = [
     path: "/settings/booking-reminders"
   },
   {
+    id: "lanes",
+    title: "Lanes",
+    description: "Custom job buckets with automations — e.g. nudge after N days",
+    icon: LayoutTemplate,
+    color: "bg-violet-100 text-violet-600",
+    path: "/settings/lanes"
+  },
+  {
     id: "forms",
     title: "Job Templates",
     description: "Create and manage job templates and forms",

@@ -539,6 +539,12 @@ export const jobs = pgTable("jobs", {
   inQueue: boolean("in_queue").default(false),
   queueReason: text("queue_reason"), // Weather Hold, Awaiting Permit, Customer Not Ready, Awaiting Quote Approval, Materials Needed, Crew Unavailable, Other
 
+  // Lanes — optional, user-defined bucket the job sits in (orthogonal to status). See `lanes`.
+  // lane_entered_at is stamped/cleared in storage.updateJob whenever lane_id changes; it is the
+  // clock the "N days in lane" automations and the UI badge read.
+  laneId: varchar("lane_id"),
+  laneEnteredAt: timestamp("lane_entered_at"),
+
   // Loom Video
   loomVideoUrl: text("loom_video_url"),
 
@@ -633,6 +639,76 @@ export const updateTaskSchema = insertTaskSchema.partial();
 export type Task = typeof tasks.$inferSelect;
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type UpdateTask = z.infer<typeof updateTaskSchema>;
+
+// Lanes — per-business, user-defined buckets a job can OPTIONALLY sit in, orthogonal to
+// jobs.status (a job keeps its status AND can sit in one lane). Mirrors the existing
+// inQueue/queueReason Dispatch Queue hold as an additive flag. The lane a job is in is the
+// jobs.lane_id pointer; lane_entered_at is the clock the "N days in lane" automations read.
+export const lanes = pgTable("lanes", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  color: text("color").notNull().default("#64748b"), // hex; rendered as a dot/badge
+  sortOrder: integer("sort_order").notNull().default(0),
+  archived: boolean("archived").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  businessIdx: index("lanes_business_idx").on(table.businessId),
+  sortIdx: index("lanes_sort_idx").on(table.businessId, table.sortOrder),
+}));
+
+// One row per automation attached to a lane. The cron queries these by type/trigger/enabled
+// across businesses, so discrete indexed rows (not a JSON blob on lanes) are the right shape.
+// type-specific params live in `config`:
+//   customer_nudge: { channel:'sms'|'email', template:string, requireApproval?:boolean }
+//   staff_reminder: { recipients:'owner'|'assigned'|'both', message:string, priority?:string }
+//   auto_move:      { targetLaneId:string }
+//   create_task:    { title:string, category?:string, assigneeId?:string, dueInDays?:number }
+export const laneAutomations = pgTable("lane_automations", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  laneId: varchar("lane_id").notNull().references(() => lanes.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // customer_nudge | staff_reminder | auto_move | create_task
+  trigger: text("trigger").notNull().default("days_in_lane"), // days_in_lane | on_enter | status_changed
+  triggerDays: integer("trigger_days"), // required when trigger = 'days_in_lane'
+  enabled: boolean("enabled").notNull().default(true),
+  config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  laneIdx: index("lane_automations_lane_idx").on(table.laneId),
+  dueIdx: index("lane_automations_due_idx").on(table.type, table.trigger, table.enabled),
+}));
+
+// De-dup ledger: "fire once per lane stay". An automation is considered already-fired for a job
+// if a run row exists with fired_at >= job.lane_entered_at. Re-entering a lane advances
+// lane_entered_at and re-arms the automations cleanly.
+export const laneAutomationRuns = pgTable("lane_automation_runs", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(),
+  laneId: varchar("lane_id").notNull(),
+  automationId: varchar("automation_id").notNull(),
+  firedAt: timestamp("fired_at").defaultNow().notNull(),
+}, (table) => ({
+  jobAutoIdx: index("lane_runs_job_auto_idx").on(table.jobId, table.automationId),
+}));
+
+export const insertLaneSchema = createInsertSchema(lanes)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export const updateLaneSchema = insertLaneSchema.partial();
+export const insertLaneAutomationSchema = createInsertSchema(laneAutomations)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export const updateLaneAutomationSchema = insertLaneAutomationSchema.partial();
+
+export type Lane = typeof lanes.$inferSelect;
+export type InsertLane = z.infer<typeof insertLaneSchema>;
+export type UpdateLane = z.infer<typeof updateLaneSchema>;
+export type LaneAutomation = typeof laneAutomations.$inferSelect;
+export type InsertLaneAutomation = z.infer<typeof insertLaneAutomationSchema>;
+export type UpdateLaneAutomation = z.infer<typeof updateLaneAutomationSchema>;
+export type LaneAutomationRun = typeof laneAutomationRuns.$inferSelect;
 
 // Safety Incident Management
 export const safetyIncidents = pgTable("safety_incidents", {

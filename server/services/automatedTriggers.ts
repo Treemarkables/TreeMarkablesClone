@@ -2,6 +2,7 @@ import { notificationService } from './notificationService';
 import { storage } from '../storage';
 import { workflowAutomationService } from './workflowAutomation';
 import { runAllReminderChecks } from './reminderChecker';
+import { runLaneAutomationChecks, runLaneStatusChangeAutomations } from './laneAutomationService';
 import type { Job, Customer, InsertJob } from '@shared/schema';
 
 // Hook into job status changes to trigger automated notifications
@@ -41,6 +42,9 @@ export class AutomatedTriggers {
       if (newStatus === 'completed' && oldStatus !== 'completed') {
         await this.onJobCompleted(job);
       }
+
+      // If the job sits in a lane, run that lane's status_changed automations (e.g. auto-move).
+      await runLaneStatusChangeAutomations(job);
     } catch (error) {
       console.error('Error in job status change trigger:', error);
     }
@@ -257,9 +261,15 @@ export class AutomatedTriggers {
       runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Reminder check error:', err));
     }, 60 * 60 * 1000); // 1 hour
 
+    // Run lane "days in lane" automation checks every hour
+    setInterval(() => {
+      runLaneAutomationChecks().catch(err => console.error('[AutomatedTriggers] Lane automation check error:', err));
+    }, 60 * 60 * 1000); // 1 hour
+
     // Run once shortly after startup (90 second delay to let DB connect)
     setTimeout(() => {
       runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Initial reminder check error:', err));
+      runLaneAutomationChecks().catch(err => console.error('[AutomatedTriggers] Initial lane automation check error:', err));
     }, 90 * 1000);
 
     console.log('✅ Automated communication system initialized');

@@ -67,6 +67,8 @@ const Calendar = lazy(() => import("@/pages/Calendar"));
 const StaffSchedule = lazy(() => import("@/pages/StaffSchedule"));
 const SettingsPreferences = lazy(() => import("@/pages/SettingsPreferences"));
 const BookingReminderSettings = lazy(() => import("@/pages/BookingReminderSettings"));
+const LaneSettings = lazy(() => import("@/pages/LaneSettings"));
+const LanesBoard = lazy(() => import("@/pages/LanesBoard"));
 const CommunicationTemplates = lazy(() => import("@/pages/CommunicationTemplates"));
 const VehicleInspectionSettings = lazy(() => import("@/pages/VehicleInspectionSettings"));
 const NotificationPreferences = lazy(() => import("@/pages/NotificationPreferences"));
@@ -1054,6 +1056,13 @@ function Router() {
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
+      <Route path="/lanes">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <LanesBoard />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
       <Route path="/opportunities">
         <ProtectedRoute>
           <SidebarLayout>
@@ -1446,6 +1455,11 @@ function Router() {
       <Route path="/settings/booking-reminders">
         <SidebarLayout>
           <BookingReminderSettings />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/lanes">
+        <SidebarLayout>
+          <LaneSettings />
         </SidebarLayout>
       </Route>
       <Route path="/settings/templates">

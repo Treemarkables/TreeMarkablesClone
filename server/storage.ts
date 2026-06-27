@@ -1847,6 +1847,18 @@ class DatabaseStorage implements IStorage {
         (finalUpdates as any).workOrderAt = new Date();
       }
     }
+    // Stamp lane_entered_at whenever the lane changes — this is the clock the "N days in lane"
+    // automations and the UI badge read. Clear it when the job leaves all lanes. Only touch it
+    // when the caller actually changed laneId, so unrelated edits don't reset the clock.
+    if ('laneId' in updates && !(updates as any).laneEnteredAt) {
+      const [existing] = await db.select({ laneId: schema.jobs.laneId })
+        .from(schema.jobs)
+        .where(eq(schema.jobs.id, id));
+      const newLaneId = (updates as any).laneId ?? null;
+      if (existing && existing.laneId !== newLaneId) {
+        (finalUpdates as any).laneEnteredAt = newLaneId ? new Date() : null;
+      }
+    }
     const [job] = await db.update(schema.jobs)
       .set({ ...finalUpdates, updatedAt: new Date() })
       .where(eq(schema.jobs.id, id))
@@ -7524,6 +7536,122 @@ class DatabaseStorage implements IStorage {
       .where(and(eq(schema.tasks.id, id), sql`${schema.tasks.deletedAt} IS NULL`))
       .returning();
     return !!updated;
+  }
+
+  // ─── Lanes ──────────────────────────────────────────────────────────────
+  // Per-business buckets a job can optionally sit in (orthogonal to status). Request-path
+  // methods rely on RLS / withTenant for tenant scoping. The *Global readers are used by the
+  // lane-automation cron, which runs with NO tenant context (db falls back to the owner role),
+  // so they intentionally return rows across all businesses; the cron groups them itself.
+
+  async getLanes(opts: { includeArchived?: boolean } = {}): Promise<schema.Lane[]> {
+    const conditions: any[] = [];
+    if (!opts.includeArchived) conditions.push(eq(schema.lanes.archived, false));
+    const q = db.select().from(schema.lanes);
+    const rows = conditions.length
+      ? await q.where(and(...conditions)).orderBy(asc(schema.lanes.sortOrder), asc(schema.lanes.createdAt))
+      : await q.orderBy(asc(schema.lanes.sortOrder), asc(schema.lanes.createdAt));
+    return rows;
+  }
+
+  async getLane(id: string): Promise<schema.Lane | undefined> {
+    const [l] = await db.select().from(schema.lanes).where(eq(schema.lanes.id, id)).limit(1);
+    return l || undefined;
+  }
+
+  async createLane(input: schema.InsertLane): Promise<schema.Lane> {
+    const [created] = await db.insert(schema.lanes).values(withTenant(input)).returning();
+    return created;
+  }
+
+  async updateLane(id: string, updates: schema.UpdateLane): Promise<schema.Lane | undefined> {
+    const [updated] = await db.update(schema.lanes)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.lanes.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteLane(id: string): Promise<boolean> {
+    // Hard delete: lane_automations cascade (FK ON DELETE CASCADE) and jobs.lane_id is nulled
+    // (FK ON DELETE SET NULL), so jobs survive and simply leave the lane.
+    const [deleted] = await db.delete(schema.lanes).where(eq(schema.lanes.id, id)).returning();
+    return !!deleted;
+  }
+
+  async reorderLanes(orderedIds: string[]): Promise<void> {
+    // Persist the new column order. Sequential awaits keep each update inside the caller's
+    // tenant scope; the list is short (a handful of lanes) so this is cheap.
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.update(schema.lanes)
+        .set({ sortOrder: i, updatedAt: new Date() })
+        .where(eq(schema.lanes.id, orderedIds[i]));
+    }
+  }
+
+  async getLaneAutomations(laneId: string): Promise<schema.LaneAutomation[]> {
+    return await db.select().from(schema.laneAutomations)
+      .where(eq(schema.laneAutomations.laneId, laneId))
+      .orderBy(asc(schema.laneAutomations.createdAt));
+  }
+
+  async getLaneAutomation(id: string): Promise<schema.LaneAutomation | undefined> {
+    const [a] = await db.select().from(schema.laneAutomations)
+      .where(eq(schema.laneAutomations.id, id)).limit(1);
+    return a || undefined;
+  }
+
+  async createLaneAutomation(input: schema.InsertLaneAutomation): Promise<schema.LaneAutomation> {
+    const [created] = await db.insert(schema.laneAutomations).values(withTenant(input)).returning();
+    return created;
+  }
+
+  async updateLaneAutomation(id: string, updates: schema.UpdateLaneAutomation): Promise<schema.LaneAutomation | undefined> {
+    const [updated] = await db.update(schema.laneAutomations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.laneAutomations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteLaneAutomation(id: string): Promise<boolean> {
+    const [deleted] = await db.delete(schema.laneAutomations)
+      .where(eq(schema.laneAutomations.id, id)).returning();
+    return !!deleted;
+  }
+
+  /** Thin assign/move helper. lane_entered_at is stamped centrally in updateJob. */
+  async assignJobToLane(jobId: string, laneId: string | null): Promise<Job> {
+    return await this.updateJob(jobId, { laneId } as Partial<InsertJob>);
+  }
+
+  // --- Cron-only global readers (no tenant filter; see note above) ---
+
+  async getJobsInLanesGlobal(): Promise<Job[]> {
+    return await db.select().from(schema.jobs)
+      .where(sql`${schema.jobs.laneId} IS NOT NULL`);
+  }
+
+  async getActiveLaneAutomationsGlobal(): Promise<schema.LaneAutomation[]> {
+    return await db.select().from(schema.laneAutomations)
+      .where(eq(schema.laneAutomations.enabled, true));
+  }
+
+  /** De-dup: has this automation already fired for this job during its current lane stay? */
+  async hasLaneAutomationFiredSince(jobId: string, automationId: string, since: Date): Promise<boolean> {
+    const [row] = await db.select({ id: schema.laneAutomationRuns.id })
+      .from(schema.laneAutomationRuns)
+      .where(and(
+        eq(schema.laneAutomationRuns.jobId, jobId),
+        eq(schema.laneAutomationRuns.automationId, automationId),
+        gte(schema.laneAutomationRuns.firedAt, since),
+      ))
+      .limit(1);
+    return !!row;
+  }
+
+  async recordLaneAutomationRun(input: { jobId: string; laneId: string; automationId: string }): Promise<void> {
+    await db.insert(schema.laneAutomationRuns).values(withTenant(input)).returning();
   }
 
   // ─── Payments ───────────────────────────────────────────────────────────

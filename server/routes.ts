@@ -135,6 +135,7 @@ import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString 
 import { composeCustomerAddress } from "@shared/customerAddress";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
+import { runLaneEntryAutomations } from "./services/laneAutomationService";
 import { workflowAutomationService } from "./services/workflowAutomation";
 import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
@@ -16370,6 +16371,153 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     } catch (error) {
       console.error('Error deleting task:', error);
       res.status(500).json({ success: false, message: 'Error deleting task' });
+    }
+  });
+
+  // ========================================
+  // LANES — per-business buckets a job can optionally sit in (orthogonal to status),
+  // each with attached automations. Tenant scoping is via RLS / withTenant on these
+  // authenticated routes. See server/services/laneAutomationService.ts for the engine.
+  // ========================================
+
+  app.get('/api/lanes', async (req: Request, res: Response) => {
+    try {
+      const includeArchived = req.query.includeArchived === 'true';
+      const lanes = await storage.getLanes({ includeArchived });
+      res.json({ success: true, data: lanes });
+    } catch (error) {
+      console.error('Error fetching lanes:', error);
+      res.status(500).json({ success: false, message: 'Error fetching lanes' });
+    }
+  });
+
+  app.post('/api/lanes', async (req: Request, res: Response) => {
+    try {
+      const parsed = schema.insertLaneSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: 'Invalid lane data', errors: parsed.error.errors });
+      }
+      const created = await storage.createLane(parsed.data);
+      res.json({ success: true, data: created });
+    } catch (error) {
+      console.error('Error creating lane:', error);
+      res.status(500).json({ success: false, message: 'Error creating lane' });
+    }
+  });
+
+  // Reorder must be declared before '/api/lanes/:id' so 'reorder' isn't captured as an id.
+  app.post('/api/lanes/reorder', async (req: Request, res: Response) => {
+    try {
+      const { orderedIds } = req.body;
+      if (!Array.isArray(orderedIds) || orderedIds.some((x: unknown) => typeof x !== 'string')) {
+        return res.status(400).json({ success: false, message: 'orderedIds (string[]) is required' });
+      }
+      await storage.reorderLanes(orderedIds);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error reordering lanes:', error);
+      res.status(500).json({ success: false, message: 'Error reordering lanes' });
+    }
+  });
+
+  app.patch('/api/lanes/:id', async (req: Request, res: Response) => {
+    try {
+      const parsed = schema.updateLaneSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: 'Invalid lane data', errors: parsed.error.errors });
+      }
+      const updated = await storage.updateLane(req.params.id, parsed.data);
+      if (!updated) return res.status(404).json({ success: false, message: 'Lane not found' });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating lane:', error);
+      res.status(500).json({ success: false, message: 'Error updating lane' });
+    }
+  });
+
+  app.delete('/api/lanes/:id', async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteLane(req.params.id);
+      if (!ok) return res.status(404).json({ success: false, message: 'Lane not found' });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting lane:', error);
+      res.status(500).json({ success: false, message: 'Error deleting lane' });
+    }
+  });
+
+  app.get('/api/lanes/:id/automations', async (req: Request, res: Response) => {
+    try {
+      const automations = await storage.getLaneAutomations(req.params.id);
+      res.json({ success: true, data: automations });
+    } catch (error) {
+      console.error('Error fetching lane automations:', error);
+      res.status(500).json({ success: false, message: 'Error fetching lane automations' });
+    }
+  });
+
+  app.post('/api/lanes/:id/automations', async (req: Request, res: Response) => {
+    try {
+      const parsed = schema.insertLaneAutomationSchema.safeParse({ ...req.body, laneId: req.params.id });
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: 'Invalid automation data', errors: parsed.error.errors });
+      }
+      if (parsed.data.trigger === 'days_in_lane' && (parsed.data.triggerDays == null || parsed.data.triggerDays < 0)) {
+        return res.status(400).json({ success: false, message: 'triggerDays (>= 0) is required for a days_in_lane trigger' });
+      }
+      const created = await storage.createLaneAutomation(parsed.data);
+      res.json({ success: true, data: created });
+    } catch (error) {
+      console.error('Error creating lane automation:', error);
+      res.status(500).json({ success: false, message: 'Error creating lane automation' });
+    }
+  });
+
+  app.patch('/api/lane-automations/:id', async (req: Request, res: Response) => {
+    try {
+      const parsed = schema.updateLaneAutomationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: 'Invalid automation data', errors: parsed.error.errors });
+      }
+      const updated = await storage.updateLaneAutomation(req.params.id, parsed.data);
+      if (!updated) return res.status(404).json({ success: false, message: 'Automation not found' });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating lane automation:', error);
+      res.status(500).json({ success: false, message: 'Error updating lane automation' });
+    }
+  });
+
+  app.delete('/api/lane-automations/:id', async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteLaneAutomation(req.params.id);
+      if (!ok) return res.status(404).json({ success: false, message: 'Automation not found' });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting lane automation:', error);
+      res.status(500).json({ success: false, message: 'Error deleting lane automation' });
+    }
+  });
+
+  // Assign/move a job to a lane (or clear with laneId: null). Thin endpoint for the board drag
+  // and job-card picker; lane_entered_at is stamped centrally in storage.updateJob. Fires the
+  // target lane's on_enter automations best-effort.
+  app.patch('/api/jobs/:id/lane', async (req: Request, res: Response) => {
+    try {
+      const { laneId } = req.body as { laneId?: string | null };
+      if (laneId !== null && typeof laneId !== 'string') {
+        return res.status(400).json({ success: false, message: 'laneId must be a string or null' });
+      }
+      const existing = await storage.getJob(req.params.id);
+      if (!existing) return res.status(404).json({ success: false, message: 'Job not found' });
+      const job = await storage.assignJobToLane(req.params.id, laneId ?? null);
+      if (laneId && existing.laneId !== laneId) {
+        runLaneEntryAutomations(job).catch(err => console.error('[Lanes] on-enter fire error:', err));
+      }
+      res.json({ success: true, data: job });
+    } catch (error) {
+      console.error('Error assigning job to lane:', error);
+      res.status(500).json({ success: false, message: 'Error assigning job to lane' });
     }
   });
 
