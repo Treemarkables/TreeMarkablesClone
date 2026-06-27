@@ -1333,6 +1333,11 @@ export const businessSettings = pgTable("business_settings", {
   businessEmail: text("business_email").default(""),
   businessWebsite: text("business_website").default(""),
   businessLogo: text("business_logo").default(""),
+  // Per-business GST number for quote/invoice/email footers. Default EMPTY on
+  // purpose: a new tenant shows NO GST line until they set their own — it must
+  // never fall back to Treemarkables' GST. TM's real number is seeded into its
+  // row by migration so TM's output is unchanged. See businessIdentity.ts.
+  businessGstNumber: text("business_gst_number").default(""),
   // Trade Generalization Phase B — which trade's preset this business uses
   // (tree | plumbing | electrical | building | general). Default 'tree' keeps
   // Treemarkables on the arborist preset. See server/trades/presets.ts.

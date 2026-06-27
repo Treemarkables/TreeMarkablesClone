@@ -21,6 +21,7 @@ export interface BusinessIdentity {
   phone: string;
   email: string;
   address: string;
+  gstNumber: string;   // per-business GST; "" when unset (NEVER Treemarkables')
 }
 
 // Current Treemarkables literals — the fallback so nothing changes until a
@@ -33,6 +34,9 @@ const DEFAULTS: BusinessIdentity = {
   phone: "",
   email: "",
   address: "",
+  // No GST fallback: an unset business shows no GST line rather than leaking
+  // Treemarkables' number. TM's own number lives on its settings row.
+  gstNumber: "",
 };
 
 type SettingsLike = Partial<
@@ -45,6 +49,7 @@ type SettingsLike = Partial<
     | "businessPhone"
     | "businessEmail"
     | "businessAddress"
+    | "businessGstNumber"
   >
 > | null | undefined;
 
@@ -57,5 +62,6 @@ export function getBusinessIdentity(settings: SettingsLike): BusinessIdentity {
     phone: settings?.businessPhone || DEFAULTS.phone,
     email: settings?.businessEmail || DEFAULTS.email,
     address: settings?.businessAddress || DEFAULTS.address,
+    gstNumber: settings?.businessGstNumber || DEFAULTS.gstNumber,
   };
 }

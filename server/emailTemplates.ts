@@ -23,6 +23,7 @@ const BRAND = {
 
 const COMPANY = {
   name: 'Treemarkables LTD',
+  tagline: 'Professional Arborists · Gisborne',
   address: '213 Stanley Road, Gisborne',
   phone: '027 216 6882',
   email: 'quotes@treemarkables.nz',
@@ -49,15 +50,19 @@ export interface BrandedEmailOptions {
   ctaHint?: string;
   /** Optional extra small note shown below the CTA hint. */
   fineprint?: string;
-  /** Business identity for the footer — defaults to Treemarkables (COMPANY) per
-   *  field. Pass from getBusinessIdentity() so other trades aren't branded as
-   *  Treemarkables. (GST number still falls back to COMPANY — needs its own
-   *  settings field; tracked as a follow-up.) */
+  /** Business identity for the header + footer. Each field defaults to
+   *  Treemarkables (COMPANY) when omitted, so callers must pass these from
+   *  getBusinessIdentity() to avoid branding other trades as Treemarkables.
+   *  `gstNumber` is the exception: it has NO Treemarkables fallback — when empty
+   *  the GST line is hidden entirely, so an unconfigured tenant never shows TM's
+   *  GST number. */
   company?: {
     name?: string;
+    tagline?: string;
     address?: string;
     phone?: string;
     email?: string;
+    gstNumber?: string;
   };
 }
 
@@ -94,10 +99,10 @@ export function renderBrandedEmail(opts: BrandedEmailOptions): string {
   <tr><td align="center" style="padding:24px 12px;">
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
 
-      <!-- Header -->
+      <!-- Header: business wordmark, uppercased via CSS to render like a logotype -->
       <tr><td style="background:${BRAND.black};padding:22px 28px;">
-        <div style="color:${BRAND.neon};font-size:22px;font-weight:800;letter-spacing:-0.01em;line-height:1;">TREEMARKABLES</div>
-        <div style="color:#9ca3af;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px;">Professional Arborists · Gisborne</div>
+        <div style="color:${BRAND.neon};font-size:22px;font-weight:800;letter-spacing:-0.01em;line-height:1;text-transform:uppercase;">${esc(opts.company?.name || COMPANY.name)}</div>
+        <div style="color:#9ca3af;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px;">${esc(opts.company?.tagline || COMPANY.tagline)}</div>
       </td></tr>
 
       <!-- Greeting + intro -->
@@ -125,9 +130,9 @@ export function renderBrandedEmail(opts: BrandedEmailOptions): string {
 
       <!-- Footer -->
       <tr><td style="padding:22px 28px;border-top:1px solid ${BRAND.line};color:${BRAND.muted};font-size:12px;line-height:1.6;text-align:center;background:#fafbfc;">
-        <div style="font-weight:600;color:${BRAND.ink};">${opts.company?.name || COMPANY.name}</div>
-        <div>${opts.company?.address || COMPANY.address} &middot; ${opts.company?.phone || COMPANY.phone}</div>
-        <div><a href="mailto:${opts.company?.email || COMPANY.email}" style="color:${BRAND.muted};text-decoration:none;">${opts.company?.email || COMPANY.email}</a> &middot; GST ${COMPANY.gstNumber}</div>
+        <div style="font-weight:600;color:${BRAND.ink};">${esc(opts.company?.name || COMPANY.name)}</div>
+        <div>${esc(opts.company?.address || COMPANY.address)} &middot; ${esc(opts.company?.phone || COMPANY.phone)}</div>
+        <div><a href="mailto:${opts.company?.email || COMPANY.email}" style="color:${BRAND.muted};text-decoration:none;">${esc(opts.company?.email || COMPANY.email)}</a>${opts.company?.gstNumber ? ` &middot; GST ${esc(opts.company.gstNumber)}` : ''}</div>
       </td></tr>
 
     </table>
