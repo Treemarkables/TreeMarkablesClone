@@ -44,10 +44,12 @@ const ENTRY_EVENTS = [
   { value: "job_created", label: "A new lead is created" },
   { value: "quote_accepted", label: "A quote is accepted" },
   { value: "customer_replied", label: "The customer replies" },
+  { value: "invoice_overdue", label: "An invoice is overdue" },
   { value: "status_changed", label: "The status changes to…" },
 ];
 const EXIT_EVENTS = [
   { value: "never", label: "Never (manual only)" },
+  { value: "invoice_paid", label: "The invoice is paid" },
   { value: "customer_replied", label: "The customer replies" },
   { value: "quote_accepted", label: "A quote is accepted" },
   { value: "status_changed", label: "The status changes to…" },
@@ -62,6 +64,7 @@ const JOB_STATUSES = [
 const CONDITION_FIELDS = [
   { value: "status", label: "Status" },
   { value: "totalAmount", label: "Quote total" },
+  { value: "amountOwing", label: "Amount owing" },
   { value: "leadSource", label: "Lead source" },
   { value: "priority", label: "Priority" },
   { value: "title", label: "Title" },
@@ -814,7 +817,7 @@ function AutomationEditor({
 // "Only if…" conditions: an automation fires only when every row matches the job.
 function ConditionsBuilder({ conditions, onChange }: { conditions: Condition[]; onChange: (c: Condition[]) => void }) {
   const opsFor = (field: string): { v: Condition["op"]; l: string }[] =>
-    field === "totalAmount" ? [{ v: "gt", l: "is more than" }, { v: "lt", l: "is less than" }]
+    (field === "totalAmount" || field === "amountOwing") ? [{ v: "gt", l: "is more than" }, { v: "lt", l: "is less than" }]
       : (field === "title" || field === "description") ? [{ v: "contains", l: "contains" }]
         : [{ v: "eq", l: "is" }, { v: "ne", l: "is not" }];
   const update = (i: number, patch: Partial<Condition>) => onChange(conditions.map((c, idx) => idx === i ? { ...c, ...patch } : c));
