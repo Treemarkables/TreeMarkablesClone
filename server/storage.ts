@@ -7625,6 +7625,18 @@ class DatabaseStorage implements IStorage {
     return await this.updateJob(jobId, { laneId } as Partial<InsertJob>);
   }
 
+  // Lanes configured to auto-receive a job on an external event (e.g. 'quote_sent'). Modelled as
+  // an internal `auto_enter` automation row whose `trigger` holds the event name — no schema change.
+  // Called in request context, so RLS scopes it to the current business.
+  async getAutoEntryLanes(event: string): Promise<schema.LaneAutomation[]> {
+    return await db.select().from(schema.laneAutomations)
+      .where(and(
+        eq(schema.laneAutomations.type, 'auto_enter'),
+        eq(schema.laneAutomations.trigger, event),
+        eq(schema.laneAutomations.enabled, true),
+      ));
+  }
+
   // --- Cron-only global readers (no tenant filter; see note above) ---
 
   async getJobsInLanesGlobal(): Promise<Job[]> {

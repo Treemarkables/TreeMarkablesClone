@@ -22,7 +22,7 @@ import { notifyEmployees, pushToAdminsWithCustomerMessages } from './notificatio
  * advances lane_entered_at and re-arms the automations.
  */
 
-interface NudgeConfig { channel?: 'sms' | 'email'; template?: string; requireApproval?: boolean }
+interface NudgeConfig { channel?: 'sms' | 'email'; template?: string; templateId?: string; requireApproval?: boolean }
 interface StaffConfig {
   recipients?: 'owner' | 'assigned' | 'both'; // legacy single field — still honoured
   notifyOwner?: boolean;       // owner / admins
@@ -69,13 +69,6 @@ async function resolveJobContact(job: Job): Promise<{ name: string; phone: strin
 
 async function runCustomerNudge(job: Job, cfg: NudgeConfig): Promise<void> {
   const contact = await resolveJobContact(job);
-  const vars = {
-    firstName: firstNameFrom(contact.name) || 'there',
-    name: contact.name || 'there',
-    jobNumber: String(job.jobNumber || ''),
-    jobTitle: job.title || '',
-  };
-  const message = fillTemplate(cfg.template || 'Hi {firstName}, just following up on your job with us — let us know if you have any questions.', vars);
 
   // Resolve channel; fall back if the requested channel has no recipient on file.
   let channel: 'sms' | 'email' = cfg.channel === 'email' ? 'email' : 'sms';
@@ -83,6 +76,43 @@ async function runCustomerNudge(job: Job, cfg: NudgeConfig): Promise<void> {
   if (channel === 'email' && !contact.email && contact.phone) channel = 'sms';
   if (channel === 'sms' && !contact.phone) { console.log(`[Lanes] nudge skipped (no phone) job #${job.jobNumber}`); return; }
   if (channel === 'email' && !contact.email) { console.log(`[Lanes] nudge skipped (no email) job #${job.jobNumber}`); return; }
+
+  const settings = await storage.getBusinessSettings().catch(() => null);
+  const vars: Record<string, string> = {
+    firstName: firstNameFrom(contact.name) || 'there',
+    name: contact.name || 'there',
+    customerName: contact.name || 'there',
+    jobNumber: String(job.jobNumber || ''),
+    jobTitle: job.title || '',
+    address: job.address || '',
+    businessName: settings?.businessName || '',
+    businessPhone: settings?.businessPhone || '',
+  };
+
+  // Message source: a saved Email/SMS template (config.templateId) takes precedence over inline
+  // text. Email templates also carry a subject + HTML body. Placeholders use the same single-brace
+  // {var} syntax as the rest of the app (see CommunicationTemplates / bookingReminderService).
+  let subject = `Following up on your job${job.jobNumber ? ` #${job.jobNumber}` : ''}`;
+  let body = cfg.template || 'Hi {firstName}, just following up on your job with us — let us know if you have any questions.';
+  let html: string | undefined;
+
+  if (cfg.templateId) {
+    if (channel === 'sms') {
+      const tpl = await storage.getSmsTemplate(cfg.templateId).catch(() => null);
+      if (tpl?.message) body = tpl.message;
+    } else {
+      const tpl = await storage.getEmailTemplate(cfg.templateId).catch(() => null);
+      if (tpl) {
+        if (tpl.subject) subject = tpl.subject;
+        if (tpl.htmlContent) html = tpl.htmlContent;
+        body = tpl.textContent || tpl.htmlContent?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || body;
+      }
+    }
+  }
+
+  const message = fillTemplate(body, vars);
+  subject = fillTemplate(subject, vars);
+  if (html) html = fillTemplate(html, vars);
 
   // Default behaviour is to send straight away (decided with the user). A lane can opt into the
   // owner-approval queue per-automation via config.requireApproval.
@@ -106,12 +136,13 @@ async function runCustomerNudge(job: Job, cfg: NudgeConfig): Promise<void> {
   } else {
     await emailService.sendEmail({
       to: contact.email,
-      subject: `Following up on your job${job.jobNumber ? ` #${job.jobNumber}` : ''}`,
+      subject,
       text: message,
+      html,
       jobNumber: job.jobNumber ? String(job.jobNumber) : undefined,
     });
   }
-  console.log(`[Lanes] nudge sent (${channel}) job #${job.jobNumber}`);
+  console.log(`[Lanes] nudge sent (${channel}${cfg.templateId ? ', template' : ''}) job #${job.jobNumber}`);
 }
 
 async function runStaffReminder(job: Job, cfg: StaffConfig): Promise<void> {
@@ -243,6 +274,32 @@ export async function runLaneStatusChangeAutomations(job: Job): Promise<void> {
   const automations = (await storage.getLaneAutomations(job.laneId))
     .filter(a => a.enabled && a.trigger === 'status_changed');
   await fireAutomations(job, automations);
+}
+
+/**
+ * Called when a quote/proposal is sent. If any lane is configured to auto-receive jobs on
+ * 'quote_sent', move this job into the first such lane (unless it's already there) and fire that
+ * lane's on_enter automations. The lane's "days in lane" clock starts from this moment, so a
+ * follow-up nudge configured for N days later runs off it. Runs in request context (RLS-scoped).
+ */
+export async function onQuoteSentToLane(jobId: string): Promise<void> {
+  try {
+    const entries = await storage.getAutoEntryLanes('quote_sent');
+    if (!entries.length) return;
+    const targetLaneId = entries[0].laneId;
+    if (entries.length > 1) {
+      console.log(`[Lanes] multiple lanes set to auto-enter on quote_sent; using ${targetLaneId}`);
+    }
+
+    const current = await storage.getJob(jobId);
+    if (!current || current.laneId === targetLaneId) return;
+
+    const moved = await storage.assignJobToLane(jobId, targetLaneId);
+    console.log(`[Lanes] job #${moved.jobNumber} auto-entered lane ${targetLaneId} on quote sent`);
+    await runLaneEntryAutomations(moved);
+  } catch (err) {
+    console.error('[Lanes] onQuoteSentToLane failed:', err);
+  }
 }
 
 /** Hourly cron entry point — evaluates all days_in_lane automations with fire-once de-dup. */

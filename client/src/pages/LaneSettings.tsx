@@ -24,11 +24,17 @@ interface Lane {
   archived: boolean;
 }
 
+// The four user-facing automation types/triggers shown in the editor dropdowns.
+type UserAutomationType = "customer_nudge" | "staff_reminder" | "auto_move" | "create_task";
+type UserTrigger = "days_in_lane" | "on_enter" | "status_changed";
+
 interface LaneAutomation {
   id: string;
   laneId: string;
-  type: "customer_nudge" | "staff_reminder" | "auto_move" | "create_task";
-  trigger: "days_in_lane" | "on_enter" | "status_changed";
+  // "auto_enter" / "quote_sent" are an internal kind used by the lane-level "Auto-add when…"
+  // control (not surfaced in the per-job automation dropdowns).
+  type: UserAutomationType | "auto_enter";
+  trigger: UserTrigger | "quote_sent";
   triggerDays: number | null;
   enabled: boolean;
   config: Record<string, any>;
@@ -40,14 +46,14 @@ const LANE_COLORS = [
   "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899", "#0ea5e9",
 ];
 
-const TYPE_LABELS: Record<LaneAutomation["type"], string> = {
+const TYPE_LABELS: Record<UserAutomationType, string> = {
   customer_nudge: "Nudge the customer",
   staff_reminder: "Remind staff",
   auto_move: "Move to another lane",
   create_task: "Create a task",
 };
 
-const TRIGGER_LABELS: Record<LaneAutomation["trigger"], string> = {
+const TRIGGER_LABELS: Record<UserTrigger, string> = {
   days_in_lane: "After N days in the lane",
   on_enter: "As soon as it enters the lane",
   status_changed: "When the job's status changes",
@@ -158,7 +164,7 @@ export default function LaneSettings() {
           {lanes.map((lane, index) => (
             <Card key={lane.id} className={lane.archived ? "opacity-60" : ""}>
               <CardContent className="p-4 space-y-3">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   <div className="flex flex-col">
                     <Button variant="ghost" size="icon" className="h-5 w-6" onClick={() => move(index, -1)}
                       disabled={index === 0} data-testid={`button-lane-up-${lane.id}`}>
@@ -169,14 +175,13 @@ export default function LaneSettings() {
                       <ChevronDown className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                  <ColorPicker value={lane.color} onChange={(color) => updateLane.mutate({ id: lane.id, updates: { color } })} />
                   <Input
                     defaultValue={lane.name}
                     onBlur={(e) => {
                       const name = e.target.value.trim();
                       if (name && name !== lane.name) updateLane.mutate({ id: lane.id, updates: { name } });
                     }}
-                    className="flex-1"
+                    className="flex-1 min-w-[150px]"
                     data-testid={`input-lane-name-${lane.id}`}
                   />
                   {lane.archived && <Badge variant="secondary">Archived</Badge>}
@@ -207,6 +212,13 @@ export default function LaneSettings() {
                   </AlertDialog>
                 </div>
 
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-muted-foreground">Colour</span>
+                  <ColorPicker value={lane.color} onChange={(color) => updateLane.mutate({ id: lane.id, updates: { color } })} />
+                </div>
+
+                <LaneAutoEntry laneId={lane.id} onError={fail} />
+
                 <div>
                   <Button variant="outline" size="sm"
                     onClick={() => setExpandedLaneId(expandedLaneId === lane.id ? null : lane.id)}
@@ -230,7 +242,7 @@ export default function LaneSettings() {
 
 function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5">
       {LANE_COLORS.map((c) => (
         <button
           key={c}
@@ -284,14 +296,17 @@ function LaneAutomationsEditor({
     onError: () => onError("Could not delete the automation"),
   });
 
+  // auto_enter rows are managed by the lane-level "Auto-add when…" control, not shown here.
+  const visibleAutomations = automations.filter((a) => a.type !== "auto_enter");
+
   return (
     <div className="border-t pt-3 space-y-3">
       {isLoading ? (
         <p className="text-muted-foreground text-sm">Loading automations…</p>
-      ) : automations.length === 0 ? (
+      ) : visibleAutomations.length === 0 ? (
         <p className="text-muted-foreground text-sm">No automations on this lane yet.</p>
       ) : (
-        automations.map((a) => (
+        visibleAutomations.map((a) => (
           <AutomationRow
             key={a.id}
             automation={a}
@@ -332,13 +347,35 @@ function AutomationRow({
     enabled: automation.type === "staff_reminder",
   });
 
+  // Email / SMS templates for the nudge template picker — fetched only for customer nudges.
+  const isNudge = automation.type === "customer_nudge";
+  const { data: emailTemplates = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/email-templates"],
+    queryFn: async () => {
+      const res = await fetch("/api/email-templates");
+      if (!res.ok) throw new Error("Failed to load email templates");
+      return (await res.json()).data;
+    },
+    enabled: isNudge,
+  });
+  const { data: smsTemplates = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/sms-templates"],
+    queryFn: async () => {
+      const res = await fetch("/api/sms-templates");
+      if (!res.ok) throw new Error("Failed to load SMS templates");
+      return (await res.json()).data;
+    },
+    enabled: isNudge,
+  });
+  const nudgeTemplates = (cfg.channel === "email" ? emailTemplates : smsTemplates);
+
   return (
     <div className="rounded-md border bg-muted/30 p-3 space-y-3" data-testid={`automation-${automation.id}`}>
       <div className="flex items-center gap-2 flex-wrap">
         <Switch checked={automation.enabled} onCheckedChange={(enabled) => onChange({ enabled })}
           data-testid={`switch-automation-${automation.id}`} />
         <Select value={automation.type} onValueChange={(type) => onChange({ type: type as LaneAutomation["type"] })}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
           <SelectContent>
             {Object.entries(TYPE_LABELS).map(([v, label]) => (
               <SelectItem key={v} value={v}>{label}</SelectItem>
@@ -346,7 +383,7 @@ function AutomationRow({
           </SelectContent>
         </Select>
         <Select value={automation.trigger} onValueChange={(trigger) => onChange({ trigger: trigger as LaneAutomation["trigger"] })}>
-          <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-56"><SelectValue /></SelectTrigger>
           <SelectContent>
             {Object.entries(TRIGGER_LABELS).map(([v, label]) => (
               <SelectItem key={v} value={v}>{label}</SelectItem>
@@ -390,27 +427,57 @@ function AutomationRow({
       {/* Type-specific config */}
       {automation.type === "customer_nudge" && (
         <div className="space-y-2">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Label className="text-xs w-16">Channel</Label>
-            <Select value={cfg.channel || "sms"} onValueChange={(channel) => setConfig({ channel })}>
+            <Select
+              value={cfg.channel || "sms"}
+              onValueChange={(channel) => setConfig({ channel, templateId: undefined })}
+            >
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="sms">SMS</SelectItem>
                 <SelectItem value="email">Email</SelectItem>
               </SelectContent>
             </Select>
-            <div className="flex items-center gap-2 ml-2">
+            <div className="flex items-center gap-2 sm:ml-2">
               <Switch checked={!!cfg.requireApproval} onCheckedChange={(requireApproval) => setConfig({ requireApproval })} />
               <span className="text-xs text-muted-foreground">Hold for my approval before sending</span>
             </div>
           </div>
-          <Textarea
-            placeholder="Message to the customer. Use {firstName}, {jobNumber} as placeholders."
-            value={cfg.template || ""}
-            onChange={(e) => setConfig({ template: e.target.value })}
-            rows={2}
-            data-testid={`textarea-nudge-${automation.id}`}
-          />
+
+          {/* Use a saved template, or write a one-off message */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Label className="text-xs w-16">Template</Label>
+            <Select
+              value={cfg.templateId || "__custom__"}
+              onValueChange={(v) => setConfig({ templateId: v === "__custom__" ? undefined : v })}
+            >
+              <SelectTrigger className="w-full sm:w-64" data-testid={`select-template-${automation.id}`}>
+                <SelectValue placeholder="Custom message" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__custom__">Custom message</SelectItem>
+                {nudgeTemplates.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {cfg.templateId ? (
+            <p className="text-xs text-muted-foreground pl-1">
+              Using your saved {cfg.channel === "email" ? "email" : "SMS"} template. Manage templates under
+              Settings → {cfg.channel === "email" ? "Email" : "SMS"} Templates.
+            </p>
+          ) : (
+            <Textarea
+              placeholder="Message to the customer. Use {firstName}, {jobNumber}, {jobTitle} as placeholders."
+              value={cfg.template || ""}
+              onChange={(e) => setConfig({ template: e.target.value })}
+              rows={2}
+              data-testid={`textarea-nudge-${automation.id}`}
+            />
+          )}
         </div>
       )}
 
@@ -501,6 +568,58 @@ function AutomationRow({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Lane-level "auto-add jobs here when…" control. Stored as an internal auto_enter automation row
+// on the lane (no schema change). Picking an event creates/updates it; "Manually only" removes it.
+function LaneAutoEntry({ laneId, onError }: { laneId: string; onError: (m: string) => void }) {
+  const queryClient = useQueryClient();
+  const key = ["/api/lanes", laneId, "automations"];
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
+
+  const { data: automations = [] } = useQuery<LaneAutomation[]>({
+    queryKey: key,
+    queryFn: async () => {
+      const res = await fetch(`/api/lanes/${laneId}/automations`);
+      if (!res.ok) throw new Error("Failed to load automations");
+      return (await res.json()).data as LaneAutomation[];
+    },
+  });
+  const entry = automations.find((a) => a.type === "auto_enter");
+  const current = entry?.trigger ?? "manual";
+
+  const fail = () => onError("Could not update auto-entry");
+  const create = useMutation({
+    mutationFn: async (trigger: string) =>
+      apiRequest("POST", `/api/lanes/${laneId}/automations`, { type: "auto_enter", trigger, enabled: true, config: {} }),
+    onSuccess: invalidate, onError: fail,
+  });
+  const update = useMutation({
+    mutationFn: async (trigger: string) => apiRequest("PATCH", `/api/lane-automations/${entry!.id}`, { trigger }),
+    onSuccess: invalidate, onError: fail,
+  });
+  const remove = useMutation({
+    mutationFn: async () => apiRequest("DELETE", `/api/lane-automations/${entry!.id}`),
+    onSuccess: invalidate, onError: fail,
+  });
+
+  const onChange = (v: string) => {
+    if (v === "manual") { if (entry) remove.mutate(); return; }
+    if (entry) update.mutate(v); else create.mutate(v);
+  };
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs text-muted-foreground">Auto-add jobs here when</span>
+      <Select value={current} onValueChange={onChange}>
+        <SelectTrigger className="w-full sm:w-56" data-testid={`select-auto-entry-${laneId}`}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="manual">Manually only</SelectItem>
+          <SelectItem value="quote_sent">A quote is sent</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 }
