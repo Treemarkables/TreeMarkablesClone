@@ -16,7 +16,7 @@ import path from "path";
 import { fileURLToPath } from 'url';
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { pool, assertTenantDbMatchesOwner } from "./db";
+import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
@@ -440,6 +440,12 @@ function startNotificationQueueWorker() {
       process.exit(1);
     }
 
+    // Tenant-isolation backstop: any business_id table without an RLS policy is
+    // cross-tenant readable under the app_tenant grant. Logs loudly; hard-fails
+    // only under TENANT_RLS_STRICT (then the outer catch exits). Runs after the
+    // self-healing boot DDL on the previous deploy has had a chance to add policies.
+    await assertTenantTablesHaveRlsPolicies();
+
     // Self-healing schema: bring the database up to match the deployed code so a
     // schema change can't silently outrun the prod DB (caused the deposit-column /
     // billing-table scrambles). Non-fatal — log loudly but keep booting, so a
@@ -681,6 +687,20 @@ The Treemarkables Team';
           sent_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
         CREATE UNIQUE INDEX IF NOT EXISTS equipment_compliance_reminders_uniq ON equipment_compliance_reminders (equipment_id, kind, expiry_date, offset_days);
+        -- This table carries business_id but shipped without an RLS policy, so under
+        -- the blanket app_tenant GRANT it was cross-tenant readable/writable even with
+        -- RLS on. ENABLE (not FORCE) + tenant_isolation policy closes that. The boot
+        -- backstop (assertTenantTablesHaveRlsPolicies) guards against a repeat.
+        ALTER TABLE equipment_compliance_reminders ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON equipment_compliance_reminders;
+        CREATE POLICY tenant_isolation ON equipment_compliance_reminders
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON equipment_compliance_reminders TO app_tenant;
+          END IF;
+        END $$;
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           role_key VARCHAR NOT NULL,
@@ -971,7 +991,59 @@ The Treemarkables Team';
             '[{"stepNumber":1,"taskStep":"Confirm voltage & permits","hazards":["Electrocution"],"controls":["Treat all lines as live","Confirm voltage & NZECP 34 distance","Obtain network operator permit if inside zone"],"riskRating":5},{"stepNumber":2,"taskStep":"Work to safe distances","hazards":["Contact with conductor","Conductive limbs/tools"],"controls":["Maintain minimum approach distance","No metal tools or wet ropes in the zone","Stop work if distances cannot be kept"],"riskRating":5}]', true, 5)
         ON CONFLICT (key) DO NOTHING;
       `);
-      log("✅ Background schema migrations complete", "startup");
+      // --- Inbound channel → tenant map (Group B tenant-resolution infra) ---
+      // Resolves a dialed number / inbound SMS sender / email recipient / FB page
+      // id to the owning business, so session-less webhooks stop defaulting writes
+      // to the column-default tenant and stop matching callers across all tenants.
+      // ENABLE (not FORCE) RLS so the owner connection resolves across tenants while
+      // app_tenant only sees its own rows. Grant guarded — app_tenant may not exist
+      // in dev. Mirrors migrations/manual/20260627_tenant_channels.sql.
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS tenant_channels (
+          id           VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          business_id  VARCHAR NOT NULL,
+          channel_type TEXT NOT NULL,
+          identifier   TEXT NOT NULL,
+          label        TEXT,
+          is_active    BOOLEAN NOT NULL DEFAULT true,
+          created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS tenant_channels_type_identifier_idx
+          ON tenant_channels (channel_type, identifier);
+        CREATE INDEX IF NOT EXISTS tenant_channels_business_idx
+          ON tenant_channels (business_id);
+        ALTER TABLE tenant_channels ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON tenant_channels;
+        CREATE POLICY tenant_isolation ON tenant_channels
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_channels TO app_tenant;
+          END IF;
+        END $$;
+      `);
+      // Seed the existing tenant's channels from the single-tenant ENV config so
+      // resolution works immediately. Idempotent; a 2nd tenant registers its own.
+      try {
+        const { rows } = await pool.query(
+          `SELECT bs.business_id, bs.business_email
+             FROM business_settings bs
+             ORDER BY (bs.id = 'default') DESC, bs.created_at ASC
+             LIMIT 1`,
+        );
+        let seedBusinessId: string | undefined = rows[0]?.business_id ?? undefined;
+        if (!seedBusinessId) {
+          const fallback = await pool.query(`SELECT id FROM businesses ORDER BY created_at ASC LIMIT 1`);
+          seedBusinessId = fallback.rows[0]?.id ?? undefined;
+        }
+        if (seedBusinessId) {
+          const { seedChannelsFromEnv } = await import('./tenancy/channelMap');
+          await seedChannelsFromEnv(seedBusinessId, rows[0]?.business_email ?? null);
+        }
+      } catch (channelSeedErr) {
+        log(`⚠️ Tenant-channel seed warning: ${(channelSeedErr as Error).message}`, "startup");
+      }
 
       try {
         const { seedDefaultBlockConfig } = await import('./seedTemplates');
