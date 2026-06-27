@@ -25073,22 +25073,27 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             // 200 so Stripe stops retrying — the invoice isn't coming back.
             return res.json({ received: true, missingInvoice: true });
           }
-          await storage.createPayment({
-            jobId: (invoice.jobId || null) as any,
-            invoiceId: invoice.id,
-            customerId: invoice.customerId,
-            amount: amountPaid as any,
-            currency: 'NZD',
-            provider: 'stripe',
-            providerSessionId: session.id,
-            providerPaymentId: session.payment_intent || null,
-            kind: 'payment',
-            status: 'succeeded',
-            paidAt: new Date(),
-          } as any);
-          if (invoice.status !== 'paid') {
-            await storage.updateInvoice(invoice.id, { status: 'paid', paidAt: new Date() } as any);
-          }
+          // Stripe webhook runs as owner (no session) → bind the matched invoice's
+          // tenant so the payment-ledger row + invoice update stamp the owning
+          // business, not the DEFAULT (Treemarkables).
+          await runWithBusiness(invoice.businessId ?? undefined, async () => {
+            await storage.createPayment({
+              jobId: (invoice.jobId || null) as any,
+              invoiceId: invoice.id,
+              customerId: invoice.customerId,
+              amount: amountPaid as any,
+              currency: 'NZD',
+              provider: 'stripe',
+              providerSessionId: session.id,
+              providerPaymentId: session.payment_intent || null,
+              kind: 'payment',
+              status: 'succeeded',
+              paidAt: new Date(),
+            } as any);
+            if (invoice.status !== 'paid') {
+              await storage.updateInvoice(invoice.id, { status: 'paid', paidAt: new Date() } as any);
+            }
+          });
           console.log(`✅ Stripe webhook: payment of $${amountPaid} captured for invoice ${invoice.invoiceNumber}; marked paid`);
           return res.json({ received: true });
         }
@@ -25107,27 +25112,31 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             console.error('Stripe webhook: job not found for session', { jobIdMeta, sessionId: session.id });
             return res.json({ received: true, missingJob: true });
           }
-          await storage.createPayment({
-            jobId: job.id,
-            customerId: (job as any).customerId || null,
-            amount: amountPaid as any,
-            currency: 'NZD',
-            provider: 'stripe',
-            providerSessionId: session.id,
-            providerPaymentId: session.payment_intent || null,
-            kind: 'payment',
-            status: 'succeeded',
-            paidAt: new Date(),
-          } as any);
-
           const jobTotal = parseFloat((job as any).totalAmount?.toString() || '0') || 0;
           const prevPaid = parseFloat((job as any).paidAmount?.toString() || '0') || 0;
           const newPaid = Math.round((prevPaid + amountPaid) * 100) / 100;
           const newBalance = Math.max(0, Math.round((jobTotal - newPaid) * 100) / 100);
-          await storage.updateJob(job.id, {
-            paidAmount: String(newPaid),
-            balanceDue: String(newBalance),
-          } as any);
+          // Stripe webhook runs as owner (no session) → bind the matched job's tenant
+          // so the payment-ledger row + job update stamp the owning business, not the
+          // DEFAULT (Treemarkables).
+          await runWithBusiness(job.businessId ?? undefined, async () => {
+            await storage.createPayment({
+              jobId: job.id,
+              customerId: (job as any).customerId || null,
+              amount: amountPaid as any,
+              currency: 'NZD',
+              provider: 'stripe',
+              providerSessionId: session.id,
+              providerPaymentId: session.payment_intent || null,
+              kind: 'payment',
+              status: 'succeeded',
+              paidAt: new Date(),
+            } as any);
+            await storage.updateJob(job.id, {
+              paidAmount: String(newPaid),
+              balanceDue: String(newBalance),
+            } as any);
+          });
 
           console.log(`✅ Stripe webhook: payment of $${amountPaid} captured for job ${(job as any).jobNumber}; paid ${newPaid}/${jobTotal}`);
           return res.json({ received: true });
