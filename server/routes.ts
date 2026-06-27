@@ -25146,8 +25146,22 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const sub = event.data.object as any;
         const businessId: string | undefined = sub?.metadata?.businessId;
         if (businessId) {
-          await billing.syncFromStripeSubscription(businessId, sub);
-          console.log(`Stripe webhook: synced subscription ${sub.id} for business ${businessId} -> ${sub.status}`);
+          // Don't trust the event's status snapshot. At signup Stripe fires
+          // subscription.created (status=incomplete) AND subscription.updated
+          // (status=active) within the same second; delivery/processing order is
+          // not guaranteed, so a late 'created' would otherwise clobber 'active'
+          // and lock a paying customer out. Re-fetch from the API so we always
+          // store the CURRENT status regardless of event order (the Stripe-
+          // recommended pattern). subscription.deleted → the fetch returns
+          // status=canceled. Fall back to the event snapshot if the fetch fails.
+          let fresh = sub;
+          try {
+            fresh = await retrieveStripeSubscription(sub.id);
+          } catch (e: any) {
+            console.error(`Stripe webhook: could not re-fetch subscription ${sub.id}, using event snapshot:`, e?.message);
+          }
+          await billing.syncFromStripeSubscription(businessId, fresh);
+          console.log(`Stripe webhook: synced subscription ${sub.id} for business ${businessId} -> ${fresh.status}`);
         }
         return res.json({ received: true });
       }
