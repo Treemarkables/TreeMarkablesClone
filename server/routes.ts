@@ -74,6 +74,7 @@ import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
 import {
   isStripeConfigured,
+  businessOwnsStripeAccount,
   getPublishableKey,
   createDepositCheckoutSession,
   createInvoiceCheckoutSession,
@@ -6009,6 +6010,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
+      // Only Treemarkables may take card payments (single Stripe account, no Connect);
+      // every other tenant collects by bank transfer. See businessOwnsStripeAccount.
+      if (!businessOwnsStripeAccount((job as any).businessId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Online card payment is not available for this business. Please pay by bank transfer.',
+        });
+      }
 
       const total = parseFloat((job as any).totalAmount?.toString() || '0') || 0;
       const paid = parseFloat((job as any).paidAmount?.toString() || '0') || 0;
@@ -7804,19 +7813,18 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // Same de-dupe guard for in-flight caption (Whisper) jobs per video id.
   const captionJobsInFlight = new Set<string>();
 
-  // Domain bias prompt for Whisper (≤224 tokens). Seeding NZ tree species +
-  // arborist operations stops it inventing words like "gladitziers" for
-  // "gleditsias". Shared by both the auto-caption pass and the opt-in
-  // quote-gen transcription below.
-  const WHISPER_BIAS_PROMPT = [
-    'New Zealand tree services walkthrough.',
-    'Species: pohutukawa, manuka, kanuka, kauri, totara, rimu, kahikatea,',
-    'miro, tawa, rewarewa, kowhai, ribbonwood, pittosporum, cabbage tree,',
-    'ti kouka, gleditsia, magnolia, oak, pine, eucalyptus, gum tree,',
-    'macrocarpa, leyland cypress, willow, poplar, silver birch, plum.',
-    'Operations: prune, lift, crown reduction, deadwood, remove, fell,',
-    'dismantle, stump grind, mulch, chip, firewood lengths, cleanup.',
-  ].join(' ');
+  // Domain bias prompt for Whisper (≤224 tokens) — biases transcription toward the
+  // trade's own terms so it doesn't invent words. The vocab is PER-BUSINESS
+  // (business_settings.tradeVocabulary): Treemarkables is seeded with its tree
+  // species + arborist operations (so its transcription is unchanged); every other
+  // tenant gets a neutral field-service bias until it sets its own. Used by both
+  // the auto-caption pass and the opt-in quote-gen transcription below.
+  const GENERIC_WHISPER_BIAS =
+    'New Zealand field-service job walkthrough. The speaker describes the work, equipment, materials, location and job details.';
+  const buildWhisperBias = (vocab?: string | null): string => {
+    const v = (vocab || '').trim();
+    return v || GENERIC_WHISPER_BIAS;
+  };
 
   // Extract a poster frame from a GCS-hosted video, encode as webp, upload back
   // to GCS, and persist the URL on the row. Best-effort: any failure is logged
@@ -7950,7 +7958,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         file: fs.createReadStream(audioTmpPath),
         model: 'whisper-1',
         language: 'en',
-        prompt: WHISPER_BIAS_PROMPT,
+        prompt: buildWhisperBias((await storage.getBusinessSettingsForBusiness(video.businessId))?.tradeVocabulary),
         response_format: 'verbose_json',
         timestamp_granularities: ['segment'],
       });
@@ -8452,7 +8460,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         file: fs.createReadStream(audioTmpPath),
         model: 'whisper-1',
         language: 'en',
-        prompt: WHISPER_BIAS_PROMPT,
+        prompt: buildWhisperBias((await storage.getBusinessSettingsForBusiness(video.businessId))?.tradeVocabulary),
         response_format: 'text',
       });
       const rawTranscript = typeof rawTranscription === 'string'
@@ -8472,12 +8480,14 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
       // Step 4: clean the transcript into a quote-ready job description.
       // GPT-5 doesn't accept temperature; rely on the model's defaults.
-      const __idQuote = getBusinessIdentity(await storage.getBusinessSettings());
+      const __qSettings = await storage.getBusinessSettings();
+      const __idQuote = getBusinessIdentity(__qSettings);
+      const __qVocab = (__qSettings?.tradeVocabulary || '').trim();
       const prompt = `You are a quote-writing assistant for a New Zealand ${__idQuote.discipline} company. Someone from the business recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
 
 STRUCTURE
-- For multiple work items: list them as bullets directly. NO lead-in, header, or intro line (no "We'll:", "Scope of work:", "The job involves:", etc.) — just the bullets. Each bullet is a concise imperative-style phrase: "Remove all four Gleditsias", "Mulch the branches", "Cut the wood into firewood lengths", "Grind the stumps".
-- For a single work item: write it as one short statement, no bullets. First person plural is fine here ("We'll prune the Oak and remove the deadwood.").
+- For multiple work items: list them as bullets directly. NO lead-in, header, or intro line (no "We'll:", "Scope of work:", "The job involves:", etc.) — just the bullets. Each bullet is a concise imperative-style phrase describing one task (e.g. "Remove the …", "Repair the …", "Clear the …").
+- For a single work item: write it as one short statement, no bullets. First person plural is fine here (e.g. "We'll … and …").
 - Group related work items together (all pruning, then all removals, then cleanup).
 - No preamble, no sign-off — just the description content.
 
@@ -8486,12 +8496,10 @@ LANGUAGE
 - Strip filler ("um", "ah", "you know"), asides, and speech directed at coworkers rather than the customer.
 
 FIDELITY
-- **Tree species names must be Capitalized as proper nouns** — Gleditsia/Gleditsias, Manuka, Kauri, Pohutukawa, Macrocarpa, Oak, Pine, Eucalyptus, Gum, Willow, Magnolia, etc. Apply this even when the raw transcript has them lowercase.
-- Keep the arborist's species terms in spirit — same species, standard spelling.
-- If a clearly-mistranscribed word is obviously a known NZ tree species (e.g. "gladitziers" → "Gleditsias", "macrocarper" → "Macrocarpa"), correct it to the standard spelling. Do NOT invent species the arborist didn't say.
-- Common arborist terminology fix-ups are fine: "firewood rings" → "firewood lengths".
+- Capitalize proper nouns and trade-specific terms as proper nouns (names of materials, parts, species, places, people), even when the raw transcript has them lowercase.
+${__qVocab ? `- This business's known terms — use these exact spellings and correct obvious mis-transcriptions toward them, but do NOT invent terms the speaker didn't say:\n${__qVocab}` : `- Keep the speaker's technical terms in spirit — same term, standard spelling — but do NOT invent terms the speaker didn't say.`}
 - Do not invent measurements, counts, or details not mentioned in the transcript.
-- Do not include pricing unless the arborist explicitly stated a number.
+- Do not include pricing unless the speaker explicitly stated a number.
 
 Transcript:
 """
@@ -13153,6 +13161,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           customer: customer || null,
           job: job || null,
           company,
+          // Whether this business can take card payments online (single Stripe
+          // account = Treemarkables only, until Connect). Drives the "Pay now" button;
+          // everyone else shows bank-transfer details instead.
+          onlinePaymentEnabled: businessOwnsStripeAccount(invoice.businessId),
           sections: sections.map(s => ({
             ...s,
             images: Array.isArray(s.images) ? s.images : [],
@@ -13187,6 +13199,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
       if (invoice.status === 'cancelled') {
         return res.status(400).json({ success: false, message: 'This invoice has been cancelled' });
+      }
+      // Card payments settle into the single (Treemarkables) Stripe account. Until
+      // Connect routes funds per-tenant, only TM may take them; everyone else is
+      // paid by bank transfer (their details are on the invoice). See businessOwnsStripeAccount.
+      if (!businessOwnsStripeAccount(invoice.businessId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Online card payment is not available for this business. Please pay using the bank-transfer details on your invoice.',
+        });
       }
 
       // Total = subtotal (line items, or invoice.amount fallback) + 15% GST.
@@ -24935,6 +24956,14 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       if (!proposal) {
         return res.status(404).json({ success: false, message: 'Proposal not found' });
       }
+      // Deposits settle into the single (Treemarkables) Stripe account; until Connect
+      // routes per-tenant, only TM may collect them online. See businessOwnsStripeAccount.
+      if (!businessOwnsStripeAccount(proposal.businessId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Online card payment is not available for this business. Please arrange the deposit by bank transfer.',
+        });
+      }
 
       if (proposal.status !== 'accepted_pending_deposit') {
         return res.status(400).json({
@@ -27966,7 +27995,7 @@ Take this voice transcription and format it as a clean, structured list of tasks
 Rules:
 1. Remove filler words like "okay", "um", "so", etc.
 2. Capitalize the first letter of each task
-3. Keep technical terms like tree species names capitalized (e.g., "Olive", "Eucalyptus", "Oak", "Pine", "Pittosporum", "Akeake", "Palm", "Macrocarpa", "Totara", "Kauri", "Pohutukawa", "Kowhai", "Poplar", "Willow", "Plum", "Cherry", "Apple", "Lemon")
+3. Keep technical and proper terms capitalized (product/material names, parts, species, place names, brands)
 4. Each task should be a clear, concise action item
 5. Return ONLY the formatted task list, with each task on a new line
 6. Do NOT add bullet points or dashes - just line breaks between tasks

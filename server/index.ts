@@ -1038,6 +1038,20 @@ The Treemarkables Team';
         log(`⚠️ identity-defaults migration warning: ${(identErr as Error).message}`, "startup");
       }
 
+      // --- Per-business speech-to-quote vocabulary (trade-gen) ---
+      // Adds the column + seeds Treemarkables with its exact tree vocab by name, so
+      // its Whisper bias is unchanged; new tenants stay blank (generic bias).
+      // Mirrors migrations/manual/20260628_trade_vocabulary.sql.
+      try {
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS trade_vocabulary TEXT DEFAULT ''`);
+        await pool.query(
+          `UPDATE business_settings SET trade_vocabulary = 'New Zealand tree services walkthrough. Species: pohutukawa, manuka, kanuka, kauri, totara, rimu, kahikatea, miro, tawa, rewarewa, kowhai, ribbonwood, pittosporum, cabbage tree, ti kouka, gleditsia, magnolia, oak, pine, eucalyptus, gum tree, macrocarpa, leyland cypress, willow, poplar, silver birch, plum. Operations: prune, lift, crown reduction, deadwood, remove, fell, dismantle, stump grind, mulch, chip, firewood lengths, cleanup.'
+            WHERE business_name = 'Treemarkables' AND (trade_vocabulary IS NULL OR trade_vocabulary = '')`,
+        );
+      } catch (vocabErr) {
+        log(`⚠️ trade-vocabulary migration warning: ${(vocabErr as Error).message}`, "startup");
+      }
+
       // --- Per-business email brand colours (trade-gen Phase A) ---
       // Header background + accent for branded customer emails. Defaults reproduce
       // Treemarkables' black + neon-green so every existing email is unchanged until

@@ -8,7 +8,30 @@
 //   STRIPE_PUBLISHABLE_KEY   pk_live_... or pk_test_... (only sent to client)
 //   STRIPE_WEBHOOK_SECRET    whsec_... — required for signature verification
 
+import { TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
+
 type StripeClient = any; // typed via runtime import to avoid hard dep
+
+// ── Who may take online CARD payments (invoice / deposit / job checkout) ─────
+// There is ONE Stripe account (STRIPE_SECRET_KEY) and — until Stripe Connect
+// exists — it belongs to Treemarkables. Every `mode: 'payment'` checkout settles
+// into it, so only Treemarkables may take card payments online; any other tenant's
+// customer would otherwise pay into TM's account (misdirected funds). Every other
+// tenant collects by bank transfer instead — their own bank details render on the
+// invoice (see business_settings.bankAccount*). Subscription billing is NOT gated
+// by this: a tenant subscribing to Inflow is *meant* to pay the platform account.
+//
+// STRIPE_PAYMENT_BUSINESS_IDS (comma-separated) opts extra businessIds in without a
+// code change — e.g. once Connect lands and routing becomes per-tenant.
+export function businessOwnsStripeAccount(businessId: string | null | undefined): boolean {
+  if (!businessId) return false;
+  if (TREEMARKABLES_BUSINESS_IDS.includes(businessId)) return true;
+  const extra = (process.env.STRIPE_PAYMENT_BUSINESS_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return extra.includes(businessId);
+}
 
 let cachedClient: StripeClient | null = null;
 let cachedClientPromise: Promise<StripeClient> | null = null;

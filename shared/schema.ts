@@ -1350,6 +1350,12 @@ export const businessSettings = pgTable("business_settings", {
   ownerName: text("owner_name").default(""),
   businessTagline: text("business_tagline").default(""),
   businessDiscipline: text("business_discipline").default(""),
+  // Per-business speech-to-quote vocabulary. Seeds the Whisper transcription bias +
+  // the transcript-cleanup prompt with the trade's own terms so it transcribes
+  // "macrocarpa"/"backflow"/"switchboard" correctly instead of inventing words.
+  // Blank → a generic field-service bias. Treemarkables is seeded with its tree
+  // species + arborist operations by migration, so its transcription is unchanged.
+  tradeVocabulary: text("trade_vocabulary").default(""),
   // Per-business bank-transfer details shown on invoices so a customer pays the
   // RIGHT business. Default EMPTY on purpose: a tenant shows NO payment block
   // until they set their own — it must never fall back to Treemarkables' account.
