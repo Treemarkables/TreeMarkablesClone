@@ -954,7 +954,8 @@ export interface IStorage {
   getAllDocumentTemplates(): Promise<DocumentTemplate[]>;
   getDocumentTemplatesByType(type: string): Promise<DocumentTemplate[]>;
   getDefaultDocumentTemplate(type: string): Promise<DocumentTemplate | undefined>;
-  
+  getDefaultDocumentTemplateForBusiness(businessId: string | null | undefined, type: string): Promise<DocumentTemplate | undefined>;
+
   // Template Sections Management
   createTemplateSection(section: InsertTemplateSection): Promise<TemplateSection>;
   getTemplateSection(id: string): Promise<TemplateSection | undefined>;
@@ -6116,6 +6117,28 @@ class DatabaseStorage implements IStorage {
         eq(schema.documentTemplates.isActive, true)
       ));
     return template;
+  }
+
+  // Resolve the default document template for a SPECIFIC tenant. Public document
+  // routes (proposal/invoice viewers) are session-less and run on the owner
+  // connection, so the unscoped getDefaultDocumentTemplate above returns an
+  // arbitrary (Treemarkables) tenant's template — a cross-tenant branding leak.
+  // This scopes by the document's businessId (queried on ownerDb so it works with
+  // no tenant context). Falls back to the unscoped default when the business has
+  // none — e.g. legacy Treemarkables rows whose business_id was never backfilled —
+  // so TM's output is unchanged.
+  async getDefaultDocumentTemplateForBusiness(businessId: string | null | undefined, type: string): Promise<DocumentTemplate | undefined> {
+    if (businessId) {
+      const [template] = await ownerDb.select().from(schema.documentTemplates)
+        .where(and(
+          eq(schema.documentTemplates.businessId, businessId),
+          eq(schema.documentTemplates.type, type),
+          eq(schema.documentTemplates.isDefault, true),
+          eq(schema.documentTemplates.isActive, true)
+        ));
+      if (template) return template;
+    }
+    return this.getDefaultDocumentTemplate(type);
   }
 
   // Template Sections Management

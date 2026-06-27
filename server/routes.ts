@@ -23909,9 +23909,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         storage.getProposalLineItemsByProposal(proposal.id),
         proposal.customerId ? storage.getCustomer(proposal.customerId) : Promise.resolve(null),
         proposal.jobId ? storage.getJob(proposal.jobId) : Promise.resolve(null),
-        storage.getDefaultDocumentTemplate('proposal')
+        // Scope the branding template to the proposal's OWNING tenant — this is a
+        // public, session-less route, so the unscoped lookup returns Treemarkables'
+        // template for every tenant's customer (cross-tenant branding leak).
+        storage.getDefaultDocumentTemplateForBusiness(proposal.businessId, 'proposal')
       ]);
-      
+
       // Fetch choices for all line items in parallel
       const lineItemsWithChoices = await Promise.all(
         allLineItems.map(async (item) => {
@@ -23947,17 +23950,19 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id)
       }));
 
-      // Use template or fallback
+      // Use template or fallback. Company fields are left BLANK (not Treemarkables)
+      // so a tenant with no configured template never shows another business's
+      // details — the tenant-scoped lookup above already supplies TM's own template.
       const finalTemplate = template || {
         id: 'default',
         name: 'Default Template',
         type: 'proposal',
-        companyName: 'Treemarkables',
-        companyPhone: '+64 6 867 1234',
-        companyEmail: 'info@treemarkables.co.nz',
-        companyAddress: 'Gisborne, New Zealand',
+        companyName: '',
+        companyPhone: '',
+        companyEmail: '',
+        companyAddress: '',
         paymentTerms: 'This proposal is valid for 30 days from the date above. Payment due within 7 days of acceptance.',
-        gstNumber: '123-456-789'
+        gstNumber: ''
       };
       
       // Return combined data in one response
