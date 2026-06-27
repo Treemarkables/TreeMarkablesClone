@@ -135,7 +135,7 @@ import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString 
 import { composeCustomerAddress } from "@shared/customerAddress";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
-import { runLaneEntryAutomations } from "./services/laneAutomationService";
+import { runLaneEntryAutomations, onQuoteSentToLane } from "./services/laneAutomationService";
 import { workflowAutomationService } from "./services/workflowAutomation";
 import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
@@ -10071,6 +10071,9 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
           
           await storage.updateJob(proposal.jobId, updateData);
 
+          // Lanes: if a lane is set to auto-receive jobs when a quote is sent, move it now.
+          onQuoteSentToLane(proposal.jobId).catch(err => console.error('[Lanes] quote-sent auto-entry error:', err));
+
           console.log(`📝 Created diary entry for proposal ${proposalNumber} email`);
         } catch (diaryError) {
           console.error('Error creating diary entry for proposal email:', diaryError);
@@ -10312,6 +10315,9 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
             updateData.status = 'quote';
           }
           await storage.updateJob(proposal.jobId, updateData);
+
+          // Lanes: if a lane is set to auto-receive jobs when a quote is sent, move it now.
+          onQuoteSentToLane(proposal.jobId).catch(err => console.error('[Lanes] quote-sent auto-entry error:', err));
         } catch (diaryError) {
           console.error('Error creating diary entry for quote email:', diaryError);
         }
