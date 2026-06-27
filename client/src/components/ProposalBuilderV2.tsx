@@ -21,6 +21,7 @@ import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { fetchPhotoAnnotationsBatch } from "@/lib/photoAnnotations";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
 import type { DocumentTemplate, Customer, Proposal, DocumentBlock } from "@shared/schema";
 import { DEFAULT_PROPOSAL_BLOCKS } from "@shared/schema";
@@ -427,11 +428,13 @@ function PhotoBlock({
   block,
   jobId,
   diaryPhotos,
+  resolveAnnotated,
   onUpdate,
 }: {
   block: WysiwygBlock;
   jobId?: string;
   diaryPhotos: string[];
+  resolveAnnotated: (url: string) => string;
   onUpdate: (updates: Partial<WysiwygBlock>) => void;
 }) {
   const { toast } = useToast();
@@ -488,6 +491,9 @@ function PhotoBlock({
   const addFromDiary = () => {
     const existing = new Set(block.photos.map((p) => p.url));
     const newPhotos: UploadedPhoto[] = selectedUrls
+      // Store the annotated PNG when one exists so the proposal carries the
+      // markup; the customer-facing renderer shows whatever URL we save here.
+      .map((url) => resolveAnnotated(url))
       .filter((url) => !existing.has(url))
       .map((url, i) => ({
         id: `diary-${Date.now()}-${i}`,
@@ -634,7 +640,7 @@ function PhotoBlock({
                     className={`relative rounded cursor-pointer overflow-hidden border-2 ${selectedUrls.includes(url) ? "border-blue-500" : "border-transparent"}`}
                     style={{ paddingBottom: "100%" }}
                   >
-                    <img src={url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={resolveAnnotated(url)} alt="" className="absolute inset-0 w-full h-full object-cover" />
                     {selectedUrls.includes(url) && (
                       <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
                         <Check className="w-4 h-4 text-blue-600" />
@@ -1255,6 +1261,37 @@ export function ProposalBuilderV2({
     if (jpd?.afterPhotos) all.push(...jpd.afterPhotos);
     return [...new Set(all.filter(Boolean))];
   })();
+
+  // Map each diary/job photo to its baked annotated PNG (when one exists) so
+  // photos pulled into the proposal carry their markup — the customer-facing
+  // proposal renders whatever URL we store on the block, so we resolve to the
+  // annotated version at pick time.
+  const [annotatedByUrl, setAnnotatedByUrl] = useState<Record<string, string>>({});
+  const diaryPhotosKey = diaryPhotos.join(",");
+  useEffect(() => {
+    if (diaryPhotos.length === 0) return;
+    let cancelled = false;
+    fetchPhotoAnnotationsBatch(diaryPhotos)
+      .then((map) => {
+        if (cancelled) return;
+        const next: Record<string, string> = {};
+        for (const [src, rec] of Object.entries(map)) {
+          if (rec?.annotatedUrl) next[src] = rec.annotatedUrl;
+        }
+        setAnnotatedByUrl(next);
+      })
+      .catch(() => {
+        // Annotation lookups are best-effort — fall back to originals.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diaryPhotosKey]);
+  const resolveAnnotated = useCallback(
+    (url: string) => annotatedByUrl[url] ?? url,
+    [annotatedByUrl],
+  );
 
   // ── Local state ────────────────────────────────────────────────────────────
 
@@ -2350,6 +2387,7 @@ export function ProposalBuilderV2({
                             block={block}
                             jobId={jobId}
                             diaryPhotos={diaryPhotos}
+                            resolveAnnotated={resolveAnnotated}
                             onUpdate={(u) => updateBlock(block.id, u)}
                           />
                         )}
