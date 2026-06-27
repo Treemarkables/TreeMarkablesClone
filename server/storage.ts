@@ -3462,7 +3462,12 @@ class DatabaseStorage implements IStorage {
       // (no date filter) so that the margin column is always populated regardless of
       // which date window the user is viewing. Counts/revenue still use the date window.
       const [bizSettingsRows, jobs, allCompletedJobs] = await Promise.all([
-        db.select().from(schema.businessSettings).limit(1),
+        // Deterministic ordering (canonical id='default' row, then oldest) so a stray
+        // duplicate settings row can't flip the margin benchmark — same guard as
+        // getBusinessSettings.
+        db.select().from(schema.businessSettings)
+          .orderBy(sql`(${schema.businessSettings.id} = 'default') DESC`, asc(schema.businessSettings.createdAt))
+          .limit(1),
         db.select().from(schema.jobs).where(and(...jobConditions)),
         db.select().from(schema.jobs).where(and(
           sql`${schema.jobs.status} IN ('completed', 'invoiced')`,
@@ -5906,8 +5911,11 @@ class DatabaseStorage implements IStorage {
   
   // Xero Settings Implementation
   async getXeroSettings(): Promise<XeroSettings | undefined> {
+    // Deterministic ordering so a stray duplicate row can't return the wrong
+    // tenant's Xero OAuth credentials (same guard as getBusinessSettings).
     const [result] = await db.select()
       .from(schema.xeroSettings)
+      .orderBy(sql`(${schema.xeroSettings.id} = 'default') DESC`, asc(schema.xeroSettings.createdAt))
       .limit(1);
     return result;
   }
