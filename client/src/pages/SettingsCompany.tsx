@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, Upload, Building2, Phone, Mail, MapPin, Hash, CreditCard, Image, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { ChevronLeft, Upload, Building2, Phone, Mail, MapPin, Hash, CreditCard, Image, AlignLeft, AlignCenter, AlignRight, Type, User, Tag, Briefcase, Landmark } from "lucide-react";
 import { Link } from "wouter";
 import { HelpLink } from "@/components/HelpLink";
 
@@ -39,6 +39,42 @@ export default function SettingsCompany() {
     select: (d) => d,
   });
 
+  // Email/AI identity + invoice bank details live in business_settings (separate
+  // store from the document-template branding above). These drive the branded-email
+  // header, AI-drafted replies, and the invoice payment block. GST is shared and is
+  // synced to both stores on save. The brand name is the email wordmark (can differ
+  // from the legal company name above). Bank details default blank — a tenant's
+  // invoice shows no payment block until set, never another business's account.
+  type BizFields = {
+    businessName: string;
+    ownerName: string;
+    businessTagline: string;
+    businessDiscipline: string;
+    bankAccountName: string;
+    bankAccountNumber: string;
+  };
+  const { data: bizData } = useQuery<{ success: boolean; data: Partial<BizFields> }>({
+    queryKey: ["/api/business-settings"],
+  });
+  const [biz, setBiz] = useState<BizFields>({
+    businessName: "", ownerName: "", businessTagline: "", businessDiscipline: "",
+    bankAccountName: "", bankAccountNumber: "",
+  });
+  const [bizLoaded, setBizLoaded] = useState(false);
+  if (bizData?.data && !bizLoaded) {
+    setBiz({
+      businessName: bizData.data.businessName ?? "",
+      ownerName: bizData.data.ownerName ?? "",
+      businessTagline: bizData.data.businessTagline ?? "",
+      businessDiscipline: bizData.data.businessDiscipline ?? "",
+      bankAccountName: bizData.data.bankAccountName ?? "",
+      bankAccountNumber: bizData.data.bankAccountNumber ?? "",
+    });
+    setBizLoaded(true);
+  }
+  const setB = (field: keyof BizFields, value: string) =>
+    setBiz((b) => ({ ...b, [field]: value }));
+
   if (!isLoading && data?.data && !loaded) {
     const rawAlign = (data.data as Template).logoAlignment;
     const alignment: LogoAlignment =
@@ -61,10 +97,23 @@ export default function SettingsCompany() {
     mutationFn: async (values: Partial<Template>) => {
       const id = data?.data?.id;
       if (!id) throw new Error("No template found");
-      return apiRequest("PUT", `/api/templates/${id}`, values);
+      // 1) PDF/document branding store.
+      await apiRequest("PUT", `/api/templates/${id}`, values);
+      // 2) Email/AI identity + invoice bank store. GST is the one shared value —
+      //    write the same number to both so emails and invoices never disagree.
+      await apiRequest("PUT", "/api/business-settings", {
+        businessName: biz.businessName,
+        ownerName: biz.ownerName,
+        businessTagline: biz.businessTagline,
+        businessDiscipline: biz.businessDiscipline,
+        bankAccountName: biz.bankAccountName,
+        bankAccountNumber: biz.bankAccountNumber,
+        businessGstNumber: values.gstNumber ?? "",
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates/default/invoice"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/business-settings"] });
       toast({ title: "Company info saved" });
     },
     onError: () => {
@@ -375,6 +424,7 @@ export default function SettingsCompany() {
             onChange={(e) => set("gstNumber", e.target.value)}
             placeholder="e.g. 131-047-592-GST004"
           />
+          <p className="text-xs text-muted-foreground">Shown on your invoices and in customer emails.</p>
         </div>
 
         <div className="space-y-1">
@@ -387,6 +437,108 @@ export default function SettingsCompany() {
             onChange={(e) => set("paymentTerms", e.target.value)}
             placeholder="e.g. Payment due within 7 days"
           />
+        </div>
+
+        <Separator />
+
+        {/* Bank details (business_settings) — shown on invoices so customers pay the
+            RIGHT business. Blank = no payment block on the invoice. */}
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Landmark className="w-4 h-4 text-muted-foreground" />
+            Bank details
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Shown on your invoices so customers know where to pay. Leave blank to hide the payment block.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label>Account name</Label>
+            <Input
+              value={biz.bankAccountName}
+              onChange={(e) => setB("bankAccountName", e.target.value)}
+              placeholder="e.g. Treemarkables Ltd"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Account number</Label>
+            <Input
+              value={biz.bankAccountNumber}
+              onChange={(e) => setB("bankAccountNumber", e.target.value)}
+              placeholder="e.g. 06-0637-0768850-00"
+            />
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Email + AI identity (business_settings) — distinct from the legal/PDF
+            details above. Brand name + tagline render in the branded-email header;
+            owner name signs AI-drafted replies; trade shapes AI prompts. */}
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Mail className="w-4 h-4 text-muted-foreground" />
+            Emails &amp; AI
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            How your business appears in customer emails and AI-drafted replies. Your invoices use the legal details above.
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="flex items-center gap-2">
+            <Type className="w-4 h-4 text-muted-foreground" />
+            Brand name
+          </Label>
+          <Input
+            value={biz.businessName}
+            onChange={(e) => setB("businessName", e.target.value)}
+            placeholder="e.g. Treemarkables"
+          />
+          <p className="text-xs text-muted-foreground">Shown as the wordmark at the top of customer emails (can be shorter than your legal name).</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label className="flex items-center gap-2">
+              <User className="w-4 h-4 text-muted-foreground" />
+              Owner name
+            </Label>
+            <Input
+              value={biz.ownerName}
+              onChange={(e) => setB("ownerName", e.target.value)}
+              placeholder="e.g. Jules"
+            />
+            <p className="text-xs text-muted-foreground">Signs your AI-drafted email replies.</p>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-muted-foreground" />
+              Trade
+            </Label>
+            <Input
+              value={biz.businessDiscipline}
+              onChange={(e) => setB("businessDiscipline", e.target.value)}
+              placeholder="e.g. arborist, plumber"
+            />
+            <p className="text-xs text-muted-foreground">Used in AI prompts — “a New Zealand … business”.</p>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="flex items-center gap-2">
+            <Tag className="w-4 h-4 text-muted-foreground" />
+            Tagline
+          </Label>
+          <Input
+            value={biz.businessTagline}
+            onChange={(e) => setB("businessTagline", e.target.value)}
+            placeholder="e.g. Qualified Arborists"
+          />
+          <p className="text-xs text-muted-foreground">Appears under your brand name in the email header.</p>
         </div>
       </div>
 
