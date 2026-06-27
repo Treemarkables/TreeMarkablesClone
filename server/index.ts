@@ -991,6 +991,22 @@ The Treemarkables Team';
             '[{"stepNumber":1,"taskStep":"Confirm voltage & permits","hazards":["Electrocution"],"controls":["Treat all lines as live","Confirm voltage & NZECP 34 distance","Obtain network operator permit if inside zone"],"riskRating":5},{"stepNumber":2,"taskStep":"Work to safe distances","hazards":["Contact with conductor","Conductive limbs/tools"],"controls":["Maintain minimum approach distance","No metal tools or wet ropes in the zone","Stop work if distances cannot be kept"],"riskRating":5}]', true, 5)
         ON CONFLICT (key) DO NOTHING;
       `);
+
+      // --- Per-business GST number (trade-gen Phase A) ---
+      // Isolated from the big block (its own try/catch) and split into two queries:
+      // the column add + the TM seed are kept out of one batched statement to dodge a
+      // first-run parse quirk, and so a hiccup here can't skip the other migrations.
+      // Mirrors migrations/manual/20260627_business_gst_number.sql.
+      try {
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS business_gst_number TEXT DEFAULT ''`);
+        await pool.query(
+          `UPDATE business_settings SET business_gst_number = '131-047-592-GST004'
+            WHERE business_name = 'Treemarkables' AND (business_gst_number IS NULL OR business_gst_number = '')`,
+        );
+      } catch (gstErr) {
+        log(`⚠️ business_gst_number migration warning: ${(gstErr as Error).message}`, "startup");
+      }
+
       // --- Inbound channel → tenant map (Group B tenant-resolution infra) ---
       // Resolves a dialed number / inbound SMS sender / email recipient / FB page
       // id to the owning business, so session-less webhooks stop defaulting writes
