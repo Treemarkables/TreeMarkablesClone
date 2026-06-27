@@ -2168,7 +2168,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         location: 'Facebook',
         rating: review.rating || 5,
         comment: review.review_text || '',
-        service: 'Tree Services',
+        service: 'Service',
         source: 'facebook',
         date: review.created_time
       })) || [];
@@ -29921,7 +29921,7 @@ Transcription: ${transcriptText}`;
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     recipient: { id: senderId },
-                    message:   { text: "Hi! Thanks for reaching out to Treemarkables. We've received your message and will be in touch shortly!" }
+                    message:   { text: "Hi! Thanks for reaching out. We've received your message and will be in touch shortly!" }
                   })
                 });
               } catch (err) {
