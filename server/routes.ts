@@ -3298,10 +3298,10 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         messages: [
           {
             role: "system",
-            content: `You are an expert at extracting customer contact information from messages and emails for a tree removal/arborist company in New Zealand called Treemarkables.
+            content: `You are an expert at extracting customer contact information from messages and emails for a field-service business in New Zealand.
 
 Extract the following information:
-- name: The REQUESTER's name — the person or company requesting the tree service (not Treemarkables staff). Check:
+- name: The REQUESTER's name — the person or company requesting the service (not your own staff). Check:
   • Email signature block (lines at the end with a person's name, company, and phone)
   • "For access contact" table field (may be a tenant, not the requester — prefer the sender's name)
   • "From" line or opening greeting
@@ -3309,13 +3309,13 @@ Extract the following information:
   • Fallback: if no explicit name is found anywhere, derive one from the email address local part (the bit before @): split on dots, underscores, hyphens or digits, drop digits, and Title Case the words. e.g. "debmasters18@gmail.com" → "Deb Masters", "john.smith@…" → "John Smith". Skip this fallback for generic local parts like "info", "admin", "contact", "hello", "sales", "office", "enquiries", "noreply".
 - phone: The REQUESTER's phone number (from signature block or "contact" field). Format NZ numbers as 02X XXX XXXX.
 - email: The REQUESTER's email address (from signature block or From/Reply-To)
-- address: The SERVICE ADDRESS (the property where tree work is needed). Look for:
+- address: The SERVICE ADDRESS (the property where the work is needed). Look for:
   • Table fields labelled "Address", "Property address", "Location", or "at <address>"
   • "67A Valley Rd", "2/2 Maclean Street" style NZ addresses
   • Do NOT use business addresses from email signatures
-- description: Summary of the tree work requested. Combine:
+- description: Summary of the work requested. Combine:
   • "Quote summary", "Quote details", "Service", or "Message" table fields
-  • Any description of the tree issue, size, or access notes
+  • Any description of the issue, size, or access notes
   • Keep it concise but include the key service requested
 
 Common email formats to handle:
@@ -3392,14 +3392,14 @@ Use empty string if a field cannot be determined.`
             content: [
               {
                 type: "text",
-                text: `Analyze this screenshot of an SMS/text message conversation from an iPhone or Android phone. This is for a tree removal/arborist company in New Zealand.
+                text: `Analyze this screenshot of an SMS/text message conversation from an iPhone or Android phone. This is for a field-service business in New Zealand.
 
 Extract the following information:
 1. Phone number - Look at the TOP of the screen where the contact info is shown (usually shows the phone number like "+64 21 231 8338")
 2. Customer name - Look for names in the messages, especially after "Thank you," or in greetings. If no explicit name is given anywhere, try to derive one from the email address local part (the bit before @): split it on dots, underscores, hyphens or digits, drop digits, and Title Case the remaining words. e.g. "debmasters18@gmail.com" → "Deb Masters", "john.smith@…" → "John Smith", "jane_doe2@…" → "Jane Doe". Only do this fallback when no real name is found, and never invent a name from a generic local part like "info", "admin", "contact", "hello", "sales", "office", "enquiries".
 3. Email address - Look for any email addresses mentioned anywhere in the messages (e.g. someone@example.com, someone@gmail.com)
 4. Address - Look for street addresses, often marked with a 📍 pin emoji or containing road/street names
-5. Job description - Any details about tree work, removal, pruning, stump grinding, etc.
+5. Job description - Any details about the work or service requested.
 
 Return your response as JSON in this exact format:
 {
@@ -7512,7 +7512,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
                 content: [
                   {
                     type: 'text',
-                    text: `These two photos show a tree-care job in New Zealand. One is the "before" (work not yet done — tree present, overgrown, hazardous, debris on site) and one is the "after" (work completed — tree trimmed/removed, site cleared).
+                    text: `These two photos show a field-service job in New Zealand. One is the "before" (work not yet done — site in its original state, debris/hazards present) and one is the "after" (work completed — job done, site cleared).
 
 Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image index (0 = first image, 1 = second image). The two values must be different.`,
                   },
@@ -10010,7 +10010,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
       });
 
       console.log('📧 EMAIL HTML CONTENT:', htmlContent);
-      console.log('📧 EMAIL TEXT CONTENT:', `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`);
+      console.log('📧 EMAIL TEXT CONTENT:', `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our services.'}`);
 
       // Send email using EmailService (photos are hosted URLs, no attachments needed)
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
@@ -10019,7 +10019,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         cc,
         subject,
         html: htmlContent,
-        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`,
+        text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our services.'}`,
         jobNumber: job?.jobNumber // Reply-to will be job-{number}@jobs.treemarkables.co.nz
       });
 
@@ -12065,7 +12065,7 @@ ${phoneTarget}
                   messages: [
                     {
                       role: 'system',
-                      content: `You are a data extraction assistant for a tree removal service company in New Zealand. 
+                      content: `You are a data extraction assistant for a field-service business in New Zealand. 
 Extract structured job information from customer call transcripts.
 
 Extract:
@@ -20243,7 +20243,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         messages: [
           {
             role: 'system',
-            content: `You are a data extraction assistant for a tree removal service company in New Zealand.
+            content: `You are a data extraction assistant for a field-service business in New Zealand.
 Extract structured job information from customer call transcripts.
 
 Extract:
@@ -20588,7 +20588,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
       console.log('📝 Mobile Transcription:', transcriptText);
 
       // Step 2: Extract quote details using GPT-5
-      const extractionPrompt = `You are a quote assistant for a tree removal service company in New Zealand. 
+      const extractionPrompt = `You are a quote assistant for a field-service business in New Zealand. 
 Extract the following information from this conversation transcription and return it as JSON:
 
 {
@@ -27442,7 +27442,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         if (data.customerPhone) {
           await smsService.sendSMS(
             data.customerPhone,
-            `Hi ${data.customerName}! Thanks for choosing our tree services. We'd love to hear about your experience. Please leave us a review: ${reviewLink}`
+            `Hi ${data.customerName}! Thanks for choosing our services. We'd love to hear about your experience. Please leave us a review: ${reviewLink}`
           );
         }
       }
@@ -27454,7 +27454,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             subject: 'How was our service?',
             html: `
               <p>Hi ${data.customerName},</p>
-              <p>Thank you for choosing our tree services for job #${data.jobNumber}.</p>
+              <p>Thank you for choosing our services for job #${data.jobNumber}.</p>
               <p>We'd love to hear about your experience! Please take a moment to leave us a review:</p>
               <p><a href="${reviewLink}" style="background-color: #4CAF50; color: white; padding: 14px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Leave a Review</a></p>
               <p>Your feedback helps us improve our services.</p>
@@ -27842,7 +27842,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         file: audioReadStream,
         model: "whisper-1",
         language: "en", // Specify English for better accuracy
-        prompt: "This is a job description for a tree removal service in New Zealand. The speaker is describing tree work, equipment, location, and job details in English.", // Help Whisper with context
+        prompt: "This is a job description for a field-service business in New Zealand. The speaker is describing the work, equipment, location, and job details in English.", // Help Whisper with context
       });
 
       // When using response_format: "text", transcription is a string, not an object
@@ -27892,7 +27892,7 @@ Voice transcription:
 Cleaned note:`;
         } else {
           systemPrompt = 'You are a professional job description formatter. Format voice transcriptions into clean, structured task lists.';
-          formattingPrompt = `You are a job description formatter for a tree removal service in New Zealand.
+          formattingPrompt = `You are a job description formatter for a field-service business in New Zealand.
 
 Take this voice transcription and format it as a clean, structured list of tasks. Each task should be on its own line.
 
@@ -27936,7 +27936,7 @@ Formatted task list:`;
 
       // Step 2: Extract quote details using GPT-5 (full quote mode only)
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-      const extractionPrompt = `You are a quote assistant for a tree removal service company in New Zealand. 
+      const extractionPrompt = `You are a quote assistant for a field-service business in New Zealand. 
 Extract the following information from this conversation transcription and return it as JSON:
 
 {
@@ -29982,11 +29982,11 @@ Transcription: ${transcriptText}`;
               messages: [
                 {
                   role: 'system',
-                  content: 'You are a lead extraction assistant for a New Zealand tree removal company. Extract structured information from Facebook messages. Respond ONLY with valid JSON — no markdown, no explanation.'
+                  content: 'You are a lead extraction assistant for a New Zealand field-service business. Extract structured information from Facebook messages. Respond ONLY with valid JSON — no markdown, no explanation.'
                 },
                 {
                   role: 'user',
-                  content: `Extract lead details from this Facebook message. Return JSON with keys: firstName, lastName, phone, email, address, description (nature of tree work), isJobInquiry (boolean).\n\nMessage:\n${messageText}\n\nSender name from profile: "${senderName}"`
+                  content: `Extract lead details from this Facebook message. Return JSON with keys: firstName, lastName, phone, email, address, description (nature of the work), isJobInquiry (boolean).\n\nMessage:\n${messageText}\n\nSender name from profile: "${senderName}"`
                 }
               ],
               response_format: { type: 'json_object' }
@@ -30062,7 +30062,7 @@ Transcription: ${transcriptText}`;
         messages: [
           {
             role: 'system',
-            content: 'You are a lead extraction assistant for a New Zealand tree removal company called Treemarkables. Extract structured information from copied Facebook message threads. Respond ONLY with valid JSON.'
+            content: 'You are a lead extraction assistant for a New Zealand field-service business. Extract structured information from copied Facebook message threads. Respond ONLY with valid JSON.'
           },
           {
             role: 'user',
@@ -30953,7 +30953,7 @@ If you cannot find a value, use null. Do not guess.`
         licenceRequired: e.licenceRequired || null,
       }));
 
-      const systemPrompt = `You are an expert tree service business scheduling assistant. Your job is to propose MULTIPLE RANKED schedule alternatives for the day, each prioritising a different optimisation goal:
+      const systemPrompt = `You are an expert field-service business scheduling assistant. Your job is to propose MULTIPLE RANKED schedule alternatives for the day, each prioritising a different optimisation goal:
 
 Alternative 1 (rank 1): "Maximum Revenue" — pick the combination of jobs that maximises total revenue, even if it means a heavier workload.
 Alternative 2 (rank 2): "Balanced Crew" — distribute work evenly across crew, favouring jobs matched well to available staff licences.
