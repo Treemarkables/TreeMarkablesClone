@@ -449,9 +449,14 @@ if (!fs.existsSync(recordingsDir)) {
 // of them would do — proposal is the canonical read.
 const FALLBACK_LOGO_PATH = '/treemarkables-logo.png';
 
-async function getCompanyLogoUrl(): Promise<string> {
+async function getCompanyLogoUrl(businessId?: string | null): Promise<string> {
   try {
-    const tpl = await storage.getDefaultDocumentTemplate('proposal');
+    // Scope to the document's tenant when known (public PDF/email paths are
+    // session-less, so the unscoped lookup returns Treemarkables' logo for every
+    // tenant). Falls back to the unscoped default when no businessId is supplied.
+    const tpl = businessId
+      ? await storage.getDefaultDocumentTemplateForBusiness(businessId, 'proposal')
+      : await storage.getDefaultDocumentTemplate('proposal');
     return tpl?.logoUrl || FALLBACK_LOGO_PATH;
   } catch {
     return FALLBACK_LOGO_PATH;
@@ -464,8 +469,8 @@ function resolveLogoFsPath(logoUrl: string): string {
   return path.join(__dirname, '..', 'client', 'public', relative);
 }
 
-async function getCompanyLogoFilePath(): Promise<string> {
-  const url = await getCompanyLogoUrl();
+async function getCompanyLogoFilePath(businessId?: string | null): Promise<string> {
+  const url = await getCompanyLogoUrl(businessId);
   const resolved = resolveLogoFsPath(url);
   if (fs.existsSync(resolved)) return resolved;
   return path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
@@ -477,8 +482,8 @@ async function getCompanyLogoFilePath(): Promise<string> {
 //   • /treemarkables-logo.png      — bundled fallback in client/public/
 // Used for the email's inline CID attachment and the PDF generator's image
 // embed, both of which need raw bytes (not a URL).
-async function getCompanyLogoBytes(): Promise<{ buffer: Buffer; contentType: string; ext: string } | null> {
-  const url = await getCompanyLogoUrl();
+async function getCompanyLogoBytes(businessId?: string | null): Promise<{ buffer: Buffer; contentType: string; ext: string } | null> {
+  const url = await getCompanyLogoUrl(businessId);
   try {
     if (url.startsWith('/objects/photos/')) {
       const svc = new PhotoStorageService();
@@ -1221,7 +1226,7 @@ async function generateInvoicePDFBuffer(
   // synchronous, so we can't await inside it). getCompanyLogoBytes handles
   // GCS-backed URLs, legacy /logos/ local-disk paths, and the bundled
   // /treemarkables-logo.png fallback in one place.
-  const logoBytes = await getCompanyLogoBytes();
+  const logoBytes = await getCompanyLogoBytes(invoiceData?.businessId);
 
   // Per-tenant bank details for the payment block — scoped to the invoice's owning
   // business so a tenant's PDF never tells the customer to pay into another
