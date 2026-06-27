@@ -1,4 +1,4 @@
-import { useJobFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
+import { useJobFilter, useLaneFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -90,7 +90,7 @@ import {
   isWithinInterval,
   addMinutes,
 } from "date-fns";
-import { nzTimeToUTC, utcToNZTime } from "@shared/dateUtils";
+import { nzTimeToUTC, utcToNZTime, getJobScheduledNZDates } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -98,6 +98,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { JobTemplate } from "@shared/schema";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { requestDiaryHighlight } from "@/components/JobDiarySection";
 import { JobCardErrorBoundary } from "@/components/JobCardErrorBoundary";
 import { CustomerAvatar } from "@/components/CustomerAvatar";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
@@ -178,9 +179,11 @@ interface JobAssignment {
   totalAmount?: string; // Job price for display on dispatch board (exc-GST normalised)
   subtotal?: string; // Exc-GST subtotal from job record (preferred price source)
   scheduledDate?: string; // The job's scheduled start date from the API. Used by the "Scheduled" filter post-2026-05 ('scheduled' status retired — date presence is the new signal).
-  scheduledEndDate?: string; // For multi-day jobs
+  scheduledEndDate?: string; // For multi-day jobs (last day)
+  scheduledDates?: string[] | null; // Explicit NZ day set for multi-day jobs that skip days (e.g. weekends)
   inQueue?: boolean; // Whether job is parked in the dispatch queue
   queueReason?: string | null; // Reason for being in queue
+  laneId?: string | null; // Custom lane the job sits in (orthogonal to status)
   customerConfirmed?: boolean; // Whether the customer has confirmed the booking
   confirmationReplySentAt?: string | null; // Timestamp of our acknowledgement reply to the customer's confirmation
   customerReplyReceivedAt?: string | null; // Timestamp of most-recent inbound customer reply (any email/SMS reply tagged customer-reply)
@@ -307,9 +310,9 @@ const calculateJobTotal = (job: any): number => {
 const calculateDailyTotal = (job: any): number => {
   const total = calculateJobTotal(job);
   if (!total || !job.scheduledDate || !job.scheduledEndDate) return total;
-  const startDay = startOfDay(new Date(job.scheduledDate)).getTime();
-  const endDay = startOfDay(new Date(job.scheduledEndDate)).getTime();
-  const numDays = Math.round((endDay - startDay) / 86_400_000) + 1;
+  // Divide by the actual day count — honours a non-contiguous scheduledDates set
+  // so a Wed–Mon-minus-weekend job splits across the days it really runs.
+  const numDays = Math.max(1, getJobScheduledNZDates(job).length);
   return numDays > 1 ? Math.round((total / numDays) * 100) / 100 : total;
 };
 
@@ -683,7 +686,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [assignmentMode, setAssignmentMode] =
     useState<AssignmentMode>("individual");
   const [jobFilter, setJobFilter] = useJobFilter();
+  const [laneFilter] = useLaneFilter();
   const [onlyUnconfirmed, setOnlyUnconfirmed] = useOnlyUnconfirmed();
+
+  // Lanes — custom buckets a job can sit in (orthogonal to status). Used for the optional lane
+  // filter and the coloured chip on each card. Keyed map for quick lookup by id.
+  const { data: lanesResp } = useQuery<{ data: { id: string; name: string; color: string }[] }>({
+    queryKey: ["/api/lanes"],
+  });
+  const laneMap = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; color: string }>();
+    (lanesResp?.data || []).forEach((l) => m.set(l.id, l));
+    return m;
+  }, [lanesResp]);
 
   const countUnconfirmed = (jobs: { status: string; customerConfirmed?: boolean }[]) =>
     jobs.filter(
@@ -890,6 +905,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       const jobId = params.get("job");
       const tab = params.get("tab");
       const newJob = params.get("newJob");
+      // Optional deep-link target: a specific diary entry to scroll to and
+      // highlight (e.g. the email reply a notification is about).
+      const entryId = params.get("entry");
 
       // Handle ?newJob=true — open the create job flow (same as the global
       // top-bar "+ New Job" button, which navigates here with this param).
@@ -952,6 +970,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 new CustomEvent("job-card-switch-tab", { detail: tabParam }),
               );
             }
+            // Card already open — the diary is mounted, so fire the highlight
+            // request now; JobDiarySection's event listener picks it up.
+            if (entryId) requestDiaryHighlight(entryId);
             return;
           }
           window.history.replaceState({}, "", "/dispatch");
@@ -959,6 +980,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           setShowGlobalJobCard(true);
           setGlobalJobCardMode("edit");
           setJobToEdit(jobData as JobAssignment);
+          // Card is mounting fresh — park the highlight target so the diary
+          // picks it up from the module bus the moment it mounts.
+          if (entryId) requestDiaryHighlight(entryId);
         };
 
         if (job) {
@@ -1017,10 +1041,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       if (isActivelyEditingRef.current) {
         return;
       }
-      setJobToEdit(null);
-      setInitialJobData({ status: "work_order" });
-      setGlobalJobCardMode("create");
-      setShowGlobalJobCard(true);
+      // Route through createDraftMutation — same path as ?newJob=true and the
+      // empty-state "Create Job" button — so the card mounts the redesigned
+      // JobCardDesktop/Mobile look. The old create-mode path opened against no
+      // jobId and fell through to the legacy jobCardContent, which is why
+      // "+ New Job" while already on /dispatch showed the old card and the raw
+      // "Work_order" status badge instead of the new design.
+      handleCreateJob();
     };
 
     // popstate fires with a PopStateEvent — pass no arg so handleUrlChange
@@ -1205,8 +1232,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           createdAt: apiJob.createdAt,
           scheduledDate: apiJob.scheduledDate || undefined,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
+          scheduledDates: apiJob.scheduledDates || null,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
+          laneId: apiJob.laneId || null,
           customerConfirmed: apiJob.customerConfirmed || false,
           confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
@@ -1300,8 +1329,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           createdAt: apiJob.createdAt,
           scheduledDate: apiJob.scheduledDate || undefined,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
+          scheduledDates: apiJob.scheduledDates || null,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
+          laneId: apiJob.laneId || null,
           customerConfirmed: apiJob.customerConfirmed || false,
           confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
@@ -1662,6 +1693,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           return job.status !== "completed" && job.status !== "invoiced";
         }
 
+        // Lane filter takes precedence: when a lane is selected, show every active job in that
+        // lane regardless of the status tab (completed/invoiced already excluded by the query).
+        if (laneFilter !== "all") {
+          return job.laneId === laneFilter;
+        }
+
         // Queued jobs belong exclusively to the Queue tab
         if (jobFilter === "queue") return job.inQueue === true;
         if (job.inQueue) return false;
@@ -1699,8 +1736,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return job.status === "work_order" && !job.customerConfirmed;
       })
       .filter((job) => {
-        // When searching or a specific status filter is active, skip the date window
-        if (isSearching || jobFilter !== "all") return true;
+        // When searching, a specific status filter, or a lane filter is active, skip the date window
+        if (isSearching || jobFilter !== "all" || laneFilter !== "all") return true;
 
         // Always include work_order jobs — these are active jobs that need
         // dispatching. ('scheduled' status retired 2026-05.)
@@ -2134,8 +2171,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       startDateTime.getTime() + totalMinutes * 60_000,
     );
 
+    // Dropping onto a single dispatch cell is a single-day placement. Clear any
+    // stale scheduledEndDate (and pin the new time-of-day) so the job doesn't
+    // keep an old end date — a leftover scheduledDate..scheduledEndDate span
+    // makes the job show on every day in the range and splits its price per day.
     const updates: any = {
       scheduledDate: startDateTime.toISOString(),
+      scheduledEndDate: null,
+      scheduledStartTime: startTimeStr,
+      scheduledEndTime: utcToNZTime(endDateTime).time,
       estimatedDuration: fractionalDurationHours,
     };
     const next = statusAfterBooking(job.status);
@@ -2663,6 +2707,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           <Input
                             placeholder="Search jobs..."
                             value={searchQuery}
+                            autoComplete="off"
                             onChange={(e) => {
                               setSearchQuery(e.target.value);
                               if (isDeepSearchActive) {
@@ -2913,6 +2958,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                       </div>
                                     )}
 
+                                    {/* Row 2d: Lane chip (when the job sits in a custom lane) */}
+                                    {job.laneId && laneMap.get(job.laneId) && (
+                                      <div className="mb-1">
+                                        <Badge className="bg-slate-50 text-slate-700 border-0 text-xs rounded-lg">
+                                          <span
+                                            className="w-2 h-2 rounded-full mr-1.5"
+                                            style={{ backgroundColor: laneMap.get(job.laneId)!.color }}
+                                          />
+                                          {laneMap.get(job.laneId)!.name}
+                                        </Badge>
+                                      </div>
+                                    )}
+
                                     {/* Row 2c: Customer confirmed badge */}
                                     {(job.customerConfirmed || job.confirmationReplySentAt) && (
                                       <div className="mb-1 flex items-center gap-1 flex-wrap">
@@ -3040,6 +3098,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                     <Input
                       autoFocus
+                      autoComplete="off"
                       placeholder="Search jobs..."
                       value={searchQuery}
                       onChange={(e) => {

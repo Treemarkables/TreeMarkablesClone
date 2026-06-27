@@ -33,8 +33,8 @@ export default function Home() {
       <section className="relative overflow-hidden pt-10 md:pt-16 pb-24 md:pb-32">
         <div className="absolute inset-x-0 top-0 h-[520px] bg-gradient-to-b from-ink-100/60 to-transparent -z-10" />
         <Container>
-          <div className="grid lg:grid-cols-[1.05fr_1fr] gap-12 lg:gap-16 items-center">
-            <div>
+          <div className="flex flex-col items-center text-center">
+            <div className="max-w-3xl">
               <span className="eyebrow">New Zealand built · for trades</span>
               <h1 className="heading-display text-5xl sm:text-6xl md:text-7xl mt-5">
                 Run your trade
@@ -44,10 +44,10 @@ export default function Home() {
                   <span className="absolute inset-x-0 bottom-1 h-3 bg-lime/70 -z-0" />
                 </span>
               </h1>
-              <p className="mt-6 text-lg text-ink-500 max-w-prose leading-relaxed">
+              <p className="mt-6 text-lg text-ink-500 max-w-prose mx-auto leading-relaxed">
                 Inflow is the operating system for trades and field-service businesses. Jobs, quotes, invoices, customers, staff, safety — all in one place, built for the field.
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className="mt-8 flex flex-wrap gap-3 justify-center">
                 <LinkButton href="/contact" variant="primary" size="lg">
                   Request access
                 </LinkButton>
@@ -60,7 +60,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="lg:pl-4">
+            <div className="mt-14 w-full max-w-3xl">
               <Mockup />
             </div>
           </div>
@@ -72,7 +72,7 @@ export default function Home() {
         <Container className="py-10 md:py-14">
           <div className="grid grid-cols-3 gap-6 md:gap-10">
             {metrics.map((m) => (
-              <div key={m.label} className="text-center md:text-left">
+              <div key={m.label} className="text-center">
                 <div className="heading-section text-3xl md:text-5xl">{m.value}</div>
                 <div className="mt-2 text-sm text-ink-500">{m.label}</div>
               </div>
@@ -83,7 +83,7 @@ export default function Home() {
 
       {/* Feature highlights */}
       <Section>
-        <div className="max-w-2xl">
+        <div className="max-w-2xl mx-auto text-center">
           <span className="eyebrow">What's inside</span>
           <h2 className="heading-section text-4xl md:text-5xl mt-4">
             Built for the way trades businesses actually work.
@@ -97,7 +97,7 @@ export default function Home() {
           {featureHighlights.map((f) => (
             <div
               key={f.title}
-              className="rounded-2xl border border-ink-100 bg-paper p-7 hover:shadow-soft transition-shadow"
+              className="rounded-2xl border border-ink-100 bg-paper p-7 hover:shadow-soft transition-shadow text-center"
             >
               <span className="eyebrow">{f.eyebrow}</span>
               <h3 className="heading-section text-xl mt-3">{f.title}</h3>
@@ -106,7 +106,7 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="mt-10">
+        <div className="mt-10 text-center">
           <LinkButton href="/features" variant="ghost" className="border border-ink-200">
             Explore all features
             <span aria-hidden>→</span>
@@ -117,14 +117,14 @@ export default function Home() {
       {/* Pricing teaser */}
       <section className="bg-ink-50">
         <Container className="py-20 md:py-28">
-          <div className="grid md:grid-cols-[1fr_1.2fr] gap-10 items-center">
-            <div>
+          <div className="flex flex-col items-center">
+            <div className="max-w-2xl text-center">
               <span className="eyebrow">Pricing</span>
               <h2 className="heading-section text-4xl md:text-5xl mt-4">
                 Start free. Scale when you grow.
               </h2>
-              <p className="mt-5 text-ink-500 text-lg leading-relaxed">
-                Begin on the free plan, then pay by jobs per month — never per seat. On paid plans, bring your whole crew on without watching the meter.
+              <p className="mt-5 text-ink-500 text-lg leading-relaxed mx-auto max-w-prose">
+                Begin with 30 days free, then pay by jobs per month — never per seat. On paid plans, bring your whole crew on without watching the meter.
               </p>
               <div className="mt-7">
                 <LinkButton href="/pricing" variant="primary" size="lg">
@@ -133,11 +133,11 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-3 gap-4">
+            <div className="mt-12 w-full max-w-4xl grid sm:grid-cols-3 gap-4 text-center">
               {[
-                { name: "Freemium", line: "Solo — free forever", price: "$0" },
-                { name: "Crew", line: "Growing teams", price: "$89", highlight: true },
-                { name: "Business", line: "Multi-crew ops", price: "$189" },
+                { name: "Freemium", line: "Small teams — 30 days free", price: "$0", meta: "15 jobs / mo · 3 users" },
+                { name: "Crew", line: "Growing teams", price: "$89", highlight: true, meta: "150 jobs / mo · unlimited users" },
+                { name: "Business", line: "Multi-crew ops", price: "$150", meta: "Unlimited jobs · unlimited users" },
               ].map((t) => (
                 <div
                   key={t.name}
@@ -157,7 +157,10 @@ export default function Home() {
                     {t.price}
                   </div>
                   <div className={`text-xs mt-1 ${t.highlight ? "text-ink-300" : "text-ink-500"}`}>
-                    {t.price === "$0" ? "free · 1 user" : "/ mo + GST, NZD"}
+                    {t.price === "$0" ? "free for 30 days" : "/ mo + GST, NZD"}
+                  </div>
+                  <div className={`text-xs mt-3 pt-3 border-t ${t.highlight ? "border-ink-700 text-ink-300" : "border-ink-100 text-ink-500"}`}>
+                    {t.meta}
                   </div>
                 </div>
               ))}

@@ -33,16 +33,56 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
+        let center = UNUserNotificationCenter.current()
+
+        // Capacitor's bridge silently installs its CAPNotificationRouter as the
+        // UNUserNotificationCenter delegate when the WebView loads — AFTER
+        // FirebaseSetup registered NotificationHandler.shared during launch.
+        // With no Capacitor notification plugins installed, that router swallows
+        // every notification tap, so our deep-link handler never fired and taps
+        // always landed on the default dispatch board.
+        //
+        // A SINGLE reclaim in didBecomeActive is a race: Capacitor installs its
+        // router when the WebView bridge finishes loading, which can land just
+        // AFTER this method runs on a cold boot — re-stealing the delegate right
+        // before iOS delivers the tap response, so the deep link is swallowed and
+        // the app falls through to the default dispatch board. Whether we win was
+        // luck of the boot timing, which is why a previously-working build can
+        // "suddenly" start dropping taps after a reinstall or a slower launch.
+        //
+        // Reclaim immediately AND re-assert over the next ~2s so a late bridge
+        // load can't hold the delegate through the window when iOS delivers the
+        // tap. reclaimNotificationDelegate() is idempotent (no-op when we already
+        // own it), so the repeats are cheap and safe.
+        reclaimNotificationDelegate()
+        for delay in [0.3, 0.8, 1.5, 3.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.reclaimNotificationDelegate()
+            }
+        }
+
         // Server pushes hardcode aps.badge=1 and nothing ever decrements it, so the
         // home-screen badge sticks after the user opens the app. Clear it (and any
         // lingering delivered notifications) every time we come to the foreground.
-        let center = UNUserNotificationCenter.current()
         if #available(iOS 16.0, *) {
             center.setBadgeCount(0)
         } else {
             application.applicationIconBadgeNumber = 0
         }
         center.removeAllDeliveredNotifications()
+    }
+
+    /// Make NotificationHandler.shared the UNUserNotificationCenter delegate
+    /// unless it already is. Idempotent so it can be called repeatedly to defend
+    /// against Capacitor's CAPNotificationRouter re-stealing the delegate after a
+    /// late WebView bridge load. Logs only when it actually had to reclaim, so a
+    /// swallowed-tap regression is visible in the device console.
+    private func reclaimNotificationDelegate() {
+        let center = UNUserNotificationCenter.current()
+        if !(center.delegate is NotificationHandler) {
+            print("📲 Reclaiming UNUserNotificationCenter delegate (was: \(String(describing: center.delegate)))")
+            center.delegate = NotificationHandler.shared
+        }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

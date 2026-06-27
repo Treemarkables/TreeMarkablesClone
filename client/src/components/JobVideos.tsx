@@ -34,6 +34,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X, ChevronDown, Sparkles, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
 
 interface JobVideosProps {
   jobId: string;
@@ -49,6 +50,8 @@ export function JobVideos({ jobId }: JobVideosProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [open, setOpen] = useState(false);
+  // Real upload progress (XHR-backed). null while idle.
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   // AI quote-from-video flow: post-upload we ask "generate description?", then
   // run Whisper + GPT-5, then show the result for review/edit before applying.
   const [pendingTranscribeId, setPendingTranscribeId] = useState<string | null>(null);
@@ -73,31 +76,28 @@ export function JobVideos({ jobId }: JobVideosProps) {
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const form = new FormData();
+      setUploadProgress({ loaded: 0, total: file.size, percent: 0, phase: "uploading" });
       // Text fields must precede the file part so the streaming upload parses them in time.
-      if (title.trim()) form.append("title", title.trim());
-      form.append("showToCustomer", String(showToCustomer));
-      form.append("video", file);
-      const r = await fetch(`/api/jobs/${jobId}/videos`, {
-        method: "POST",
-        body: form,
-        credentials: "include",
+      const fields: Record<string, string> = { showToCustomer: String(showToCustomer) };
+      if (title.trim()) fields.title = title.trim();
+      return uploadFileWithProgress<any>({
+        url: `/api/jobs/${jobId}/videos`,
+        file,
+        fields,
+        onProgress: setUploadProgress,
       });
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
-        throw new Error(body.message || "Upload failed");
-      }
-      return r.json();
     },
     onSuccess: (response: any) => {
       setTitle("");
       if (fileRef.current) fileRef.current.value = "";
+      setUploadProgress(null);
       queryClient.invalidateQueries({ queryKey: videosKey });
       // Open the "generate description?" prompt for the just-uploaded video.
       const newId = response?.data?.id;
       if (newId) setPendingTranscribeId(newId);
     },
     onError: (error: any) => {
+      setUploadProgress(null);
       toast({
         title: "Video upload failed",
         description: error?.message || "Please try again.",
@@ -236,6 +236,28 @@ export function JobVideos({ jobId }: JobVideosProps) {
       toast({ title: "Could not delete video", variant: "destructive" }),
   });
 
+  // Retry the automatic caption pass when it errored (or for videos uploaded
+  // before captions existed). The server kicks off Whisper async; we re-poll
+  // the list a few times so the status flips from processing → ready.
+  const captionsRetryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/videos/${id}/captions/regenerate`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("Caption retry failed");
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: videosKey });
+      // Captions land asynchronously — refresh the list shortly after so the
+      // "ready" status (and the CC track) appears without a manual reload.
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: videosKey }), 8000);
+    },
+    onError: () =>
+      toast({ title: "Could not regenerate captions", variant: "destructive" }),
+  });
+
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) uploadMutation.mutate(file);
@@ -323,9 +345,39 @@ export function JobVideos({ jobId }: JobVideosProps) {
             disabled={uploadMutation.isPending}
             data-testid="button-upload-video"
           >
-            <Upload className="w-4 h-4 mr-2" />
-            {uploadMutation.isPending ? "Uploading…" : "Upload video"}
+            {uploadMutation.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4 mr-2" />
+            )}
+            {!uploadMutation.isPending
+              ? "Upload video"
+              : uploadProgress?.phase === "processing"
+                ? "Processing…"
+                : uploadProgress && uploadProgress.percent >= 0
+                  ? `Uploading ${uploadProgress.percent}%`
+                  : "Uploading…"}
           </Button>
+          {uploadMutation.isPending && (
+            <div className="space-y-1" data-testid="video-upload-progress">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{
+                    width:
+                      uploadProgress?.phase === "processing"
+                        ? "100%"
+                        : `${uploadProgress?.percent && uploadProgress.percent > 0 ? uploadProgress.percent : 3}%`,
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {uploadProgress?.phase === "processing"
+                  ? "Finalizing on the server — almost done."
+                  : "Large videos can take a few minutes on mobile data. Keep this open."}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Search */}
@@ -415,7 +467,36 @@ export function JobVideos({ jobId }: JobVideosProps) {
                   preload="metadata"
                   playsInline
                   className="w-full max-h-80 rounded bg-black object-contain"
-                />
+                >
+                  {v.captionsStatus === "ready" && (
+                    <track
+                      kind="captions"
+                      srcLang="en"
+                      label="English"
+                      src={`/api/videos/${v.id}/captions.vtt`}
+                      default
+                    />
+                  )}
+                </video>
+                {/* Caption status — captions are generated automatically on
+                    upload; surface progress and a retry if the pass errored. */}
+                {v.captionsStatus === "processing" && (
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Generating captions…
+                  </p>
+                )}
+                {v.captionsStatus === "error" && (
+                  <button
+                    type="button"
+                    onClick={() => captionsRetryMutation.mutate(v.id)}
+                    disabled={captionsRetryMutation.isPending}
+                    className="text-xs text-muted-foreground underline underline-offset-2"
+                    data-testid={`button-retry-captions-${v.id}`}
+                  >
+                    Captions failed — retry
+                  </button>
+                )}
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Switch

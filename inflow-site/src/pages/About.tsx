@@ -6,7 +6,7 @@ export default function About() {
     <>
       {/* Hero */}
       <Section className="pb-10">
-        <div className="max-w-3xl">
+        <div className="max-w-3xl mx-auto text-center">
           <span className="eyebrow">About</span>
           <h1 className="heading-display text-5xl md:text-6xl mt-5">
             We didn't set out to build software. We set out to fix our own business.
@@ -17,14 +17,14 @@ export default function About() {
       {/* Story */}
       <section className="border-t border-ink-100">
         <Container className="py-20 md:py-24">
-          <div className="grid lg:grid-cols-[1fr_1.4fr] gap-12">
-            <div className="lg:sticky lg:top-28 self-start">
+          <div className="max-w-2xl mx-auto">
+            <div className="text-center">
               <span className="eyebrow">Origin</span>
               <h2 className="heading-section text-3xl md:text-4xl mt-3">
                 Built in a trades business, for trades businesses.
               </h2>
             </div>
-            <div className="space-y-6 text-[17px] leading-[1.75] text-ink-700">
+            <div className="mt-8 space-y-6 text-[17px] leading-[1.75] text-ink-700 text-left">
               <p>
                 Inflow started inside <a className="underline decoration-lime-deep" href="https://app.treemarkables.co.nz">Treemarkables</a>, a tree-services business based in Gisborne, New Zealand. Eighteen years of running real jobs, hiring real crews, chasing real invoices and trying to keep real customers happy.
               </p>
@@ -45,7 +45,7 @@ export default function About() {
       {/* Principles */}
       <section className="bg-ink-50 border-y border-ink-100">
         <Container className="py-20 md:py-24">
-          <div className="max-w-2xl">
+          <div className="max-w-2xl mx-auto text-center">
             <span className="eyebrow">How we build</span>
             <h2 className="heading-section text-3xl md:text-4xl mt-3">
               The principles we hold the line on.
@@ -66,7 +66,7 @@ export default function About() {
                 b: "Your data is yours, exportable any time. We earn the renewal by being useful, not by trapping you.",
               },
             ].map((p) => (
-              <div key={p.t} className="rounded-2xl bg-paper border border-ink-100 p-7">
+              <div key={p.t} className="rounded-2xl bg-paper border border-ink-100 p-7 text-center">
                 <h3 className="text-xl font-semibold tracking-snug">{p.t}</h3>
                 <p className="mt-3 text-ink-500 leading-relaxed text-[15px]">{p.b}</p>
               </div>
@@ -77,13 +77,13 @@ export default function About() {
 
       {/* Location + CTA */}
       <Section>
-        <div className="grid md:grid-cols-2 gap-10 items-center">
-          <div>
+        <div className="flex flex-col items-center text-center">
+          <div className="max-w-2xl">
             <span className="eyebrow">Where we are</span>
             <h2 className="heading-section text-3xl md:text-4xl mt-3">
               Gisborne, New Zealand.
             </h2>
-            <p className="mt-5 text-ink-500 leading-relaxed max-w-prose">
+            <p className="mt-5 text-ink-500 leading-relaxed max-w-prose mx-auto">
               Built on the East Coast. Designed for NZ trades — GST, NZD, Pacific/Auckland time, real local context — but the platform works wherever you work.
             </p>
             <div className="mt-8">
@@ -92,7 +92,7 @@ export default function About() {
               </LinkButton>
             </div>
           </div>
-          <div className="aspect-[5/4] rounded-2xl bg-ink-900 text-paper p-10 flex flex-col justify-end">
+          <div className="mt-12 w-full max-w-xl aspect-[5/4] rounded-2xl bg-ink-900 text-paper p-10 flex flex-col justify-end text-left">
             <div className="text-lime text-xs uppercase tracking-[0.18em]">
               From the workshop
             </div>

@@ -54,23 +54,57 @@ class GcsVideoStorageEngine implements StorageEngine {
       const gcsFile = objectStorageClient.bucket(bucketName).file(objectName);
 
       let bytes = 0;
+      let settled = false;
+      const startedAt = Date.now();
+      console.log(`[VIDEO_UPLOAD] start ${uniqueFilename} (${file.mimetype || "unknown"})`);
+
       const writeStream = gcsFile.createWriteStream({
         resumable: false,
         metadata: { contentType: file.mimetype || "video/mp4" },
       });
 
+      // Stall guard: if no bytes arrive for STALL_MS, the upload is wedged
+      // (dropped mobile connection, proxy idle-timeout). Without this the
+      // request hangs forever and the client spinner never resolves. We abort
+      // with a clear error instead so the user can retry.
+      const STALL_MS = 90_000;
+      let stallTimer: NodeJS.Timeout;
+      const finish = (err: unknown, info?: Partial<Express.Multer.File>) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(stallTimer);
+        cb(err, info);
+      };
+      const armStall = () => {
+        clearTimeout(stallTimer);
+        stallTimer = setTimeout(() => {
+          console.error(
+            `[VIDEO_UPLOAD] stalled ${uniqueFilename} after ${bytes} bytes / ${Math.round((Date.now() - startedAt) / 1000)}s — aborting`,
+          );
+          writeStream.destroy(new Error("Upload stalled — no data received for 90s. Check your connection and try again."));
+        }, STALL_MS);
+      };
+      armStall();
+
       file.stream.on("data", (chunk: Buffer) => {
         bytes += chunk.length;
+        armStall();
       });
       file.stream.on("error", (err: Error) => writeStream.destroy(err));
-      writeStream.on("error", (err: Error) => cb(err));
-      writeStream.on("finish", () =>
-        cb(null, {
+      writeStream.on("error", (err: Error) => {
+        console.error(`[VIDEO_UPLOAD] error ${uniqueFilename} after ${bytes} bytes:`, err);
+        finish(err);
+      });
+      writeStream.on("finish", () => {
+        console.log(
+          `[VIDEO_UPLOAD] finish ${uniqueFilename} — ${bytes} bytes in ${Math.round((Date.now() - startedAt) / 1000)}s`,
+        );
+        finish(null, {
           path: `/objects/videos/${uniqueFilename}`,
           filename: uniqueFilename,
           size: bytes,
-        }),
-      );
+        });
+      });
 
       file.stream.pipe(writeStream);
     } catch (err) {

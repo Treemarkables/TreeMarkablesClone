@@ -8,81 +8,83 @@ type Tier = {
   price: string;
   priceNote?: string;
   cta: string;
+  href: string;
   highlight?: boolean;
   features: string[];
 };
 
+// CTAs route to the request-access flow while onboarding is concierge (self-serve
+// signup + the Inflow app domain come later). One internal page, no brand leak.
 const tiers: Tier[] = [
   {
     name: "Freemium",
-    blurb: "Solo operators getting started — free, forever.",
+    blurb: "Solo operators and small teams getting started — free for 30 days.",
     jobsPerMonth: "Up to 15 jobs / month",
     price: "$0",
-    priceNote: "Free forever · 1 user",
+    priceNote: "Free for 30 days · up to 3 users",
     cta: "Start for free",
+    href: "/contact",
     features: [
-      "1 user",
+      "Up to 3 users",
       "Jobs, scheduling & dispatch",
-      "Quotes, proposals & invoicing",
-      "Photos (3 per job)",
-      "Customer portal",
-      "Mobile app for the field",
-      "Help & SOPs hub",
+      "Quoting, proposals & invoicing",
+      "Customers & customer portal",
+      "Photos — 10 per job",
+      "Mobile app & help hub",
     ],
   },
   {
     name: "Crew",
     blurb: "Growing crews running a real book of work.",
-    jobsPerMonth: "Up to 75 jobs / month",
+    jobsPerMonth: "Up to 150 jobs / month",
     price: "$89",
     priceNote: "+ GST · billed monthly",
-    cta: "Request access",
+    cta: "Start with Crew",
+    href: "/contact",
     highlight: true,
     features: [
-      "Everything in Freemium",
-      "Unlimited users",
-      "Multi-crew scheduling",
-      "Staff roles & permissions",
-      "Time tracking & timesheets",
-      "Safety: JHA, SWMS, prestarts, toolbox talks",
-      "Equipment register & vehicle inspections",
-      "Bundled SMS allowance",
-      "Xero, Google Calendar & Gmail",
+      "Everything in Freemium, plus:",
+      "Unlimited users & photos",
+      "Safety & compliance suite",
+      "Equipment & fleet management",
+      "Roles, permissions & time tracking",
+      "Advanced analytics & job costing",
+      "Communications, inbox & templates",
+      "AI assist — dispatch & speech-to-quote",
+      "200 SMS / month included",
+      "Xero, Google Calendar, Gmail & Mailchimp",
     ],
   },
   {
     name: "Business",
     blurb: "Multi-crew operations running at scale.",
     jobsPerMonth: "Unlimited jobs",
-    price: "$189",
+    price: "$150",
     priceNote: "+ GST · billed monthly",
-    cta: "Talk to us",
+    cta: "Start with Business",
+    href: "/contact",
     features: [
-      "Everything in Crew",
-      "Marketing & reputation suite",
-      "Advanced analytics & job costing",
-      "AI smart dispatch & speech-to-quote",
+      "Everything in Crew, plus:",
       "Workflow automation",
-      "Mailchimp & Facebook integrations",
+      "800 SMS / month included",
       "Priority onboarding & support",
     ],
   },
 ];
 
 const addOns = [
-  { name: "Call recording", desc: "Record and log inbound/outbound calls against the right job. Flat monthly plus usage." },
-  { name: "AI assist", desc: "Smart dispatch, speech-to-quote and photo lead capture. Metered, or bundled on Business." },
-  { name: "Extra SMS", desc: "Top up beyond your plan's monthly allowance for reminders and customer comms." },
+  { name: "Call recording", desc: "Record and log inbound and outbound calls against the right job, with searchable history. $55 / month + usage." },
+  { name: "Extra SMS", desc: "Top up beyond your plan's monthly allowance for booking reminders and customer texts." },
 ];
 
 const faqs = [
   {
-    q: "Is there really a free plan?",
-    a: "Yes — Freemium is free forever. One user, up to 15 jobs a month, and the core tools to run your day. No card required. Move up to Crew when you outgrow it.",
+    q: "Is there a free trial?",
+    a: "Yes — Freemium gives you 30 days free. Up to 3 users, 15 jobs a month, and the core tools to run your day. No card required to start. When your 30 days are up, move to Crew to keep going.",
   },
   {
     q: "Is it really unlimited users?",
-    a: "On every paid plan, yes. Bring your whole crew on — office, foremen, casuals — at no per-seat cost. You pay by jobs per month, not by people. (The free Freemium plan is single-user.)",
+    a: "On every paid plan, yes. Bring your whole crew on — office, foremen, casuals — at no per-seat cost. You pay by jobs per month, not by people. (The Freemium trial includes up to 3 users.)",
   },
   {
     q: "What if I go over my job limit?",
@@ -90,11 +92,11 @@ const faqs = [
   },
   {
     q: "Do you charge for SMS?",
-    a: "The Crew and Business plans include a monthly SMS allowance. If you need more, it's a simple add-on. The free plan doesn't include SMS.",
+    a: "The Crew and Business plans include a monthly SMS allowance — 200 and 800 texts respectively. Need more? Extra SMS is a simple add-on. The Freemium trial doesn't include SMS.",
   },
   {
     q: "How does onboarding work?",
-    a: "We onboard each business by hand right now — a short call to understand your workflow, then we set up your account, import your customers, and walk your team through the first jobs.",
+    a: "Right now we hand-onboard every business personally. Tell us about yours and we'll set up your account with you — and if you're moving from another tool, we'll help bring across your customers and get your team going.",
   },
   {
     q: "Can I cancel anytime?",
@@ -106,14 +108,14 @@ export default function Pricing() {
   return (
     <>
       <Section className="pb-10">
-        <div className="max-w-3xl">
+        <div className="max-w-3xl mx-auto text-center">
           <span className="eyebrow">Pricing</span>
           <h1 className="heading-display text-5xl md:text-6xl mt-5">
             Start free.
             <br />
             <span className="text-ink-500">Unlimited users on every paid plan.</span>
           </h1>
-          <p className="mt-6 text-lg text-ink-500 leading-relaxed max-w-prose">
+          <p className="mt-6 text-lg text-ink-500 leading-relaxed max-w-prose mx-auto">
             Pay by the volume of work, not by how many people are doing it. NZD, plus GST. Monthly. No lock-in.
           </p>
         </div>
@@ -124,7 +126,7 @@ export default function Pricing() {
           {tiers.map((t) => (
             <div
               key={t.name}
-              className={`relative rounded-2xl p-7 flex flex-col ${
+              className={`relative rounded-2xl p-7 flex flex-col text-left ${
                 t.highlight
                   ? "bg-ink-900 text-paper border border-ink-900 shadow-lift"
                   : "bg-paper border border-ink-100"
@@ -173,7 +175,7 @@ export default function Pricing() {
 
               <div className="mt-8">
                 <LinkButton
-                  href="/contact"
+                  href={t.href}
                   variant={t.highlight ? "secondary" : "primary"}
                   size="md"
                   className="w-full"
@@ -185,7 +187,7 @@ export default function Pricing() {
           ))}
         </div>
 
-        <p className="mt-6 text-xs text-ink-500">
+        <p className="mt-6 text-xs text-ink-500 text-center max-w-2xl mx-auto">
           Prices in NZD and exclude GST. Indicative while we lock in plans with early customers — confirmed when we onboard you.
         </p>
       </Section>
@@ -193,15 +195,15 @@ export default function Pricing() {
       {/* Add-ons */}
       <section className="bg-ink-50">
         <Container className="py-20">
-          <div className="max-w-2xl">
+          <div className="max-w-2xl mx-auto text-center">
             <span className="eyebrow">Add-ons</span>
             <h2 className="heading-section text-3xl md:text-4xl mt-3">
               Bolt on what you need, skip what you don't.
             </h2>
           </div>
-          <div className="mt-10 grid md:grid-cols-3 gap-5">
+          <div className="mt-10 grid md:grid-cols-2 gap-5 max-w-3xl mx-auto">
             {addOns.map((a) => (
-              <div key={a.name} className="rounded-xl bg-paper border border-ink-100 p-6">
+              <div key={a.name} className="rounded-xl bg-paper border border-ink-100 p-6 text-center">
                 <h3 className="font-semibold tracking-snug">{a.name}</h3>
                 <p className="mt-2 text-sm text-ink-500 leading-relaxed">{a.desc}</p>
               </div>
@@ -212,8 +214,8 @@ export default function Pricing() {
 
       {/* FAQ */}
       <Section>
-        <div className="grid lg:grid-cols-[1fr_1.4fr] gap-10">
-          <div>
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center">
             <span className="eyebrow">FAQ</span>
             <h2 className="heading-section text-3xl md:text-4xl mt-3">
               Pricing questions, answered.
@@ -227,7 +229,7 @@ export default function Pricing() {
             </p>
           </div>
 
-          <div className="divide-y divide-ink-100 border-y border-ink-100">
+          <div className="mt-10 text-left divide-y divide-ink-100 border-y border-ink-100">
             {faqs.map((f) => (
               <details key={f.q} className="group py-5">
                 <summary className="cursor-pointer list-none flex items-center justify-between gap-4">

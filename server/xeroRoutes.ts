@@ -246,14 +246,35 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       }
       
       console.log(`📤 Processing send-invoice for jobId: ${jobId}`);
-      
+
+      // Persist failure reasons to the Job Diary so they're visible in the
+      // Timeline even when the client's transient error toast is missed/off
+      // screen. This is the reliable surfacing channel on this app (see the
+      // matching success entry written further down).
+      const recordXeroFailure = async (reason: string) => {
+        try {
+          await storage.createJobDiaryEntry({
+            jobId,
+            entryType: 'note',
+            title: 'Xero send failed',
+            description: reason,
+            authorName: 'System',
+            authorRole: 'system',
+            metadata: { action: 'xero_send_failed' },
+          });
+        } catch (e) {
+          console.error('Failed to write Xero-failure diary entry:', e);
+        }
+      };
+
       // Get Xero client with valid token
       const client = await getValidXeroClient();
       if (!client) {
         console.error('❌ Not connected to Xero');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Not connected to Xero. Please connect first.' 
+        await recordXeroFailure('Not connected to Xero. Reconnect in Settings → Integrations, then send again.');
+        return res.status(400).json({
+          success: false,
+          message: 'Not connected to Xero. Please connect first.'
         });
       }
       
@@ -369,8 +390,9 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         const errorMessage = error?.response?.body?.Message || error?.message || 'Unknown error';
         const errorDetails = error?.response?.body?.Elements?.[0]?.ValidationErrors || [];
         console.error('Xero error details:', errorMessage, errorDetails);
-        return res.status(500).json({ 
-          success: false, 
+        await recordXeroFailure(`Failed to create/find the customer contact in Xero: ${errorMessage}. (If a contact with this name already exists in Xero but is archived, restore it first — Xero blocks duplicate contact names.)`);
+        return res.status(500).json({
+          success: false,
           message: `Failed to create/find contact in Xero: ${errorMessage}`,
           details: errorDetails
         });
@@ -384,8 +406,9 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       
       if (!address || address.length < 5) {
         console.error(`❌ Job ${job.jobNumber} has invalid or missing address`);
-        return res.status(400).json({ 
-          success: false, 
+        await recordXeroFailure('Cannot send to Xero: the job/invoice needs a valid address (at least 5 characters). Add an address on the invoice, then send again.');
+        return res.status(400).json({
+          success: false,
           message: 'Cannot send to Xero: Job/Invoice must have a valid address (at least 5 characters). Please edit the invoice to add an address.',
           missingField: 'address',
           invoiceId: jobInvoice?.id
@@ -480,9 +503,10 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         if (invoiceLineItems.length === 0) {
           const jobLineItems = job.lineItems || [];
           if (jobLineItems.length === 0) {
-            return res.status(400).json({ 
-              success: false, 
-              message: 'Job must have at least one line item to create an invoice' 
+            await recordXeroFailure('Cannot send to Xero: this job has no invoice line items. Add at least one line item (or an invoice amount) before sending.');
+            return res.status(400).json({
+              success: false,
+              message: 'Job must have at least one line item to create an invoice'
             });
           }
           invoiceLineItems = jobLineItems.map((item: any) => ({
@@ -496,7 +520,8 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         
         const lineItems = invoiceLineItems;
         
-        const xeroInvoicePayload = {
+        const baseInvoiceNumber = String(invoice?.invoiceNumber || job.jobNumber || job.id);
+        const buildXeroInvoicePayload = (invoiceNumber: string) => ({
           type: 'ACCREC' as any, // Accounts Receivable (sales invoice)
           contact: {
             contactID: xeroContactId,
@@ -504,20 +529,54 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           lineItems,
           date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD
           dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days from now
-          // Prefer the local invoice's number (so users can suffix it, e.g.
-          // "3963-V2", when the original number has been consumed in Xero
-          // by a voided invoice — voids are permanent and reserve the number).
-          invoiceNumber: String(invoice?.invoiceNumber || job.jobNumber || job.id),
+          invoiceNumber,
           reference: `Job #${job.jobNumber || job.id}`,
           status: 'AUTHORISED' as any,
+        });
+
+        // Xero reserves invoice numbers permanently — even a voided or deleted
+        // invoice keeps its number, and such invoices don't show in a normal
+        // search, so the number looks "free" but isn't. Rather than dead-end on
+        // a duplicate-number rejection, retry with a -2, -3… suffix so the send
+        // still goes through. The local/customer-facing number is left as the
+        // original (the customer already has it); the "Job #<n>" reference keeps
+        // reconciliation working.
+        const isDuplicateNumberError = (err: any): boolean => {
+          let e: any = err;
+          if (typeof e === 'string') { try { e = JSON.parse(e); } catch { e = { message: err }; } }
+          const rawBody = e?.body ?? e?.response?.body;
+          const body = typeof rawBody === 'string'
+            ? (() => { try { return JSON.parse(rawBody); } catch { return null; } })()
+            : rawBody;
+          const msgs: string[] = body?.Elements?.flatMap((el: any) =>
+            (el?.ValidationErrors ?? []).map((v: any) => v?.Message).filter(Boolean)) ?? [];
+          return msgs.some((m: string) => /unique/i.test(m));
         };
-        
-        const invoiceResponse = await client.accountingApi.createInvoices(
-          tenantId,
-          { invoices: [xeroInvoicePayload] }
-        );
-        
-        const xeroInvoice = invoiceResponse.body.invoices![0];
+
+        let xeroInvoice: any;
+        let usedInvoiceNumber = baseInvoiceNumber;
+        const maxNumberAttempts = 6;
+        for (let attempt = 1; attempt <= maxNumberAttempts; attempt++) {
+          const candidate = attempt === 1 ? baseInvoiceNumber : `${baseInvoiceNumber}-${attempt}`;
+          try {
+            const invoiceResponse = await client.accountingApi.createInvoices(
+              tenantId,
+              { invoices: [buildXeroInvoicePayload(candidate)] }
+            );
+            xeroInvoice = invoiceResponse.body.invoices![0];
+            usedInvoiceNumber = candidate;
+            if (attempt > 1) {
+              console.log(`✅ Invoice number "${baseInvoiceNumber}" was already used in Xero; sent as "${candidate}"`);
+            }
+            break;
+          } catch (err: any) {
+            if (isDuplicateNumberError(err) && attempt < maxNumberAttempts) {
+              console.log(`⚠️ Xero invoice number "${candidate}" already in use, retrying with a suffix...`);
+              continue;
+            }
+            throw err;
+          }
+        }
         console.log(`✅ Invoice created in Xero: ${xeroInvoice.invoiceID}`);
         
         // Capture confirmed totals from Xero response
@@ -561,7 +620,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           jobId,
           entryType: 'note',
           title: 'Invoice Sent to Xero',
-          description: `Invoice #${xeroInvoice.invoiceNumber || xeroInvoice.invoiceID} sent to Xero successfully. Total: $${invoiceTotal}`,
+          description: `Invoice #${xeroInvoice.invoiceNumber || xeroInvoice.invoiceID} sent to Xero successfully. Total: $${invoiceTotal}.${usedInvoiceNumber !== baseInvoiceNumber ? ` (Number ${baseInvoiceNumber} was already used in Xero — even voided/deleted invoices keep their number — so it was sent as ${usedInvoiceNumber}.)` : ''}`,
           authorName: 'System',
           authorRole: 'system',
           metadata: {
@@ -616,6 +675,8 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         const suggestion = isDuplicateNumber
           ? `Xero won't accept invoice #${job.jobNumber} because that number is already in use in Xero (a previous invoice with the same number — even if voided or deleted — still reserves it). In Xero, find invoice #${job.jobNumber}, edit it, and change its invoice number (e.g. ${job.jobNumber}-V) to free up the number, then send again.`
           : 'If this error persists, please verify that the Account Code and Tax Type exist in your Xero organization. You can configure these in Settings > Xero Configuration.';
+
+        await recordXeroFailure(`${errorMessage} — ${suggestion}`);
 
         res.status(500).json({
           success: false,

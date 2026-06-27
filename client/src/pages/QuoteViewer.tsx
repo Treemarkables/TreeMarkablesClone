@@ -164,6 +164,9 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   const quote = actualQuoteResponse.data;
   const customer = customerResponse?.data;
   const job = jobResponse?.data;
+  // Company branding from the (tenant-scoped) default quote template — never a
+  // hardcoded Treemarkables fallback. Blank fields simply don't render.
+  const template = (templateResponse as { data?: Record<string, string> } | undefined)?.data ?? {};
   type VideoItem = {
     id: string;
     url: string;
@@ -257,7 +260,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
           <div className="flex justify-center mb-3 sm:mb-4">
             <img
               src={logoUrl}
-              alt="Treemarkables"
+              alt={template.companyName || "Quote"}
               className="h-12 sm:h-16 object-contain"
             />
           </div>
@@ -330,18 +333,18 @@ export default function QuoteViewer({}: QuoteViewerProps) {
         <div className="px-2 sm:px-4">
           <Card className="bg-white shadow-sm w-full">
             <CardContent className="p-4 sm:p-6">
-              {/* Company Header */}
+              {/* Company Header — from the tenant's quote template */}
               <div className="text-center mb-3">
-                <h1 className="text-base font-bold text-orange-600 mb-0.5">
-                  Treemarkables
-                </h1>
-                <p className="text-xs text-gray-600">
-                  Professional Tree Care Services
-                </p>
-                <p className="text-[10px] text-gray-500">
-                  Gisborne, New Zealand | Phone: +64 6 867 1234 | Email:
-                  info@treemarkables.co.nz
-                </p>
+                {template.companyName ? (
+                  <h1 className="text-base font-bold text-orange-600 mb-0.5">
+                    {template.companyName}
+                  </h1>
+                ) : null}
+                {[template.companyAddress, template.companyPhone ? `Phone: ${template.companyPhone}` : "", template.companyEmail ? `Email: ${template.companyEmail}` : ""].filter(Boolean).length ? (
+                  <p className="text-[10px] text-gray-500">
+                    {[template.companyAddress, template.companyPhone ? `Phone: ${template.companyPhone}` : "", template.companyEmail ? `Email: ${template.companyEmail}` : ""].filter(Boolean).join(" | ")}
+                  </p>
+                ) : null}
               </div>
 
               {/* Status Banner */}
@@ -482,7 +485,17 @@ export default function QuoteViewer({}: QuoteViewerProps) {
                           playsInline
                           className="w-full max-h-[480px] rounded-lg bg-black object-contain"
                           data-testid={`video-${v.id}`}
-                        />
+                        >
+                          {v.captionsStatus === "ready" && (
+                            <track
+                              kind="captions"
+                              srcLang="en"
+                              label="English"
+                              src={`/api/videos/${v.id}/captions.vtt`}
+                              default
+                            />
+                          )}
+                        </video>
                         {v.description && (
                           <p className="text-xs text-gray-600 mt-2 whitespace-pre-wrap">
                             {v.description}

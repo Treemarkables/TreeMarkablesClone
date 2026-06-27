@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 import {
   Tooltip as UITooltip,
   TooltipContent,
@@ -249,6 +250,8 @@ interface ChecklistUsageData {
 }
 
 export default function MetricsDashboard() {
+  // Role checklist usage card (Kaitiaki / Kaiwhangai / Kaitirotiro) is Treemarkables-only.
+  const roleChecklistEnabled = useRoleChecklistFeature();
   const [kpiCollapsed, setKpiCollapsed] = useState(false);
   const [manHoursCollapsed, setManHoursCollapsed] = useState(false);
   const [servicePerformanceCollapsed, setServicePerformanceCollapsed] =
@@ -936,6 +939,8 @@ export default function MetricsDashboard() {
       return res.json();
     },
     staleTime: 60_000,
+    // Treemarkables-only feature — don't fetch for other tenants.
+    enabled: roleChecklistEnabled,
   });
   const checklistUsage = checklistUsageResp?.data;
 
@@ -2916,7 +2921,8 @@ export default function MetricsDashboard() {
             </Card>
           </div>
 
-          {/* Checklist Usage Section — how often each per-role item gets ticked on completed jobs */}
+          {/* Checklist Usage Section — how often each per-role item gets ticked on completed jobs. Treemarkables-only. */}
+          {roleChecklistEnabled && (
           <div className="mt-8">
             <Card data-testid="card-checklist-usage">
               <CardHeader>
@@ -3000,6 +3006,7 @@ export default function MetricsDashboard() {
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* Unsuccessful Jobs Analysis Section */}
           <div className="col-span-full">

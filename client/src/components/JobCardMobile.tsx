@@ -10,7 +10,7 @@
  * preview route /job-card-preview/:jobId for visual + interaction QA before
  * we wire it into the real flow.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useJobActions } from "@/hooks/useJobActions";
@@ -30,7 +30,6 @@ import {
   FileText,
   CreditCard,
   FilePen,
-  Clock,
   TrendingUp,
   ListOrdered,
   Send,
@@ -60,6 +59,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
@@ -184,6 +184,23 @@ export function JobCardMobile({
 }: JobCardMobileProps) {
   const [activeTab, setActiveTab] = useState<JobCardMobileTab>(initialTab);
 
+  // When a notification arrives for the job that's already open, DispatchBoard
+  // fires `job-card-switch-tab` so the card jumps to the right tab (e.g. diary)
+  // without remounting. GlobalJobCard handles this for desktop; the mobile card
+  // owns its own tab state, so it has to listen too — otherwise tapping a
+  // diary notification while the card is open does nothing.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const requested = (event as CustomEvent<JobCardMobileTab>).detail;
+      if (requested) setActiveTab(requested);
+    };
+    window.addEventListener("job-card-switch-tab", handler);
+    return () => window.removeEventListener("job-card-switch-tab", handler);
+  }, []);
+
+  // Role checklist (Kaitiaki / Kaiwhangai / Kaitirotiro) is Treemarkables-only.
+  const roleChecklistEnabled = useRoleChecklistFeature();
+
   // Fetch job — uses the same query key GlobalJobCard does so cache is shared.
   const { data: jobResp } = useQuery<{ success?: boolean; data?: Record<string, unknown> }>({
     queryKey: ["/api/jobs", jobId],
@@ -213,7 +230,10 @@ export function JobCardMobile({
   // Desktop header displays the ex-GST total, so we do too.
   //
   // Fallback chain: line items → job.subtotal (already ex-GST) →
-  // job.totalAmount / 1.15 (totalAmount is stored inc-GST).
+  // job.totalIncludingGst / 1.15 → job.totalAmount / 1.15 (both stored inc-GST).
+  // The totalIncludingGst step matters: jobs whose value lives only in
+  // total_including_gst otherwise render as $0.00 here while the roster
+  // (StaffSchedule.getJobPrice) shows the real figure.
   const jobValue = useMemo(() => {
     const toNum = (v: unknown): number => {
       if (v == null) return 0;
@@ -231,6 +251,8 @@ export function JobCardMobile({
     if (lineItemsTotal > 0) return lineItemsTotal;
     const jobSubtotal = toNum(job?.subtotal);
     if (jobSubtotal > 0) return jobSubtotal;
+    const incGst = toNum(job?.totalIncludingGst);
+    if (incGst > 0) return incGst / 1.15;
     const totalAmount = toNum(job?.totalAmount);
     return totalAmount > 0 ? totalAmount / 1.15 : undefined;
   }, [job]);
@@ -355,6 +377,10 @@ export function JobCardMobile({
           if (t.id === "backcosting" && (status === "lead" || status === "quote")) {
             return false;
           }
+          // Role checklist tab is Treemarkables-only.
+          if (t.id === "checklist" && !roleChecklistEnabled) {
+            return false;
+          }
           return true;
         }).map((t) => {
           const on = t.id === activeTab;
@@ -384,13 +410,10 @@ export function JobCardMobile({
           {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
           {activeTab === "backcosting" && (
             <div className="bg-white">
-              <BackCostingPanel
-                jobId={jobId}
-                onOpenTimeEntries={actions?.timeTracking}
-              />
+              <BackCostingPanel jobId={jobId} />
             </div>
           )}
-          {activeTab === "checklist" && (
+          {activeTab === "checklist" && roleChecklistEnabled && (
             <div className="bg-white">
               <JobChecklistPanel jobId={jobId} />
             </div>
@@ -470,7 +493,6 @@ export function JobCardMobile({
                 <ActionTile label="Quote" icon={FileText} colour="amber" onClick={actions?.quote ?? actionStub("Quote")} />
                 <ActionTile label="Invoice" icon={CreditCard} colour="green" onClick={actions?.invoice ?? actionStub("Invoice")} />
                 <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actions?.proposal ?? actionStub("Proposal")} />
-                <ActionTile label="Time Tracking" icon={Clock} colour="orange" onClick={actions?.timeTracking ?? actionStub("Time Tracking")} />
                 <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
                 <ActionTile
                   label={jobInQueue ? "In Queue" : "Queue Job"}

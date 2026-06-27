@@ -172,10 +172,16 @@ export function NotificationBell() {
     };
   }, []);
 
-  // Fetch notification summary for badge count
+  // Fetch notification summary for badge count. Poll every 20s (was 60s, which
+  // left the bell looking dead for up to a minute after a reply arrived) and
+  // refetch the moment the window regains focus / the tab becomes visible — so
+  // returning to the app lights the bell up immediately instead of on the next
+  // tick. Keep polling while the tab is in the background so a backgrounded PWA
+  // still surfaces the count on return.
   const { data: summaryData } = useQuery({
     queryKey: ["/api/notifications/summary"],
-    refetchInterval: 60000, // Poll every 60 seconds
+    refetchInterval: 20000,
+    refetchOnWindowFocus: true,
   });
 
   // Always fetch the list (same cadence as the summary) so the badge count
@@ -183,7 +189,8 @@ export function NotificationBell() {
   const { data: notificationsData, isLoading: isLoadingNotifications } =
     useQuery({
       queryKey: ["/api/notifications"],
-      refetchInterval: 60000,
+      refetchInterval: 20000,
+      refetchOnWindowFocus: true,
     });
 
   // Check for new notifications and show browser notification
@@ -237,34 +244,35 @@ export function NotificationBell() {
             let targetUrl = "/dispatch"; // Default fallback
 
             if (latestNotification) {
-              // Use actionUrl if available
-              targetUrl = latestNotification.actionUrl || targetUrl;
-
-              // If no actionUrl, build one based on the notification type and IDs
-              if (!latestNotification.actionUrl) {
-                const diaryTypes = [
-                  "email_reply",
-                  "sms_reply",
-                  "proposal_sent",
-                  "photo_added",
-                  "note_added",
-                ];
-                if (
-                  diaryTypes.includes(latestNotification.type) &&
-                  latestNotification.jobId
-                ) {
-                  targetUrl = `/dispatch?job=${latestNotification.jobId}&tab=diary`;
-                } else if (latestNotification.jobId) {
-                  targetUrl = `/dispatch?job=${latestNotification.jobId}`;
-                } else if (latestNotification.proposalId) {
-                  targetUrl = `/proposal/${latestNotification.proposalId}?preview=true`;
-                } else if (latestNotification.quoteId) {
-                  targetUrl = `/quote/${latestNotification.quoteId}`;
-                } else if (latestNotification.leadId) {
-                  targetUrl = `/opportunities?lead=${latestNotification.leadId}`;
-                } else if (latestNotification.customerId) {
-                  targetUrl = `/clients?customer=${latestNotification.customerId}`;
-                }
+              const diaryTypes = [
+                "email_reply",
+                "sms_reply",
+                "proposal_sent",
+                "photo_added",
+                "note_added",
+                "holding_message_pending",
+              ];
+              // Diary-activity notifications always open the diary tab — even
+              // when an older row carries a stale actionUrl (e.g. '/dispatch?
+              // job=X' with no '&tab=diary'). Add '&entry=' when we know the
+              // diary entry so the message is scrolled to and highlighted.
+              if (
+                diaryTypes.includes(latestNotification.type) &&
+                latestNotification.jobId
+              ) {
+                targetUrl = `/dispatch?job=${latestNotification.jobId}&tab=diary${latestNotification.diaryEntryId ? `&entry=${latestNotification.diaryEntryId}` : ""}`;
+              } else if (latestNotification.actionUrl) {
+                targetUrl = latestNotification.actionUrl;
+              } else if (latestNotification.jobId) {
+                targetUrl = `/dispatch?job=${latestNotification.jobId}`;
+              } else if (latestNotification.proposalId) {
+                targetUrl = `/proposal/${latestNotification.proposalId}?preview=true`;
+              } else if (latestNotification.quoteId) {
+                targetUrl = `/quote/${latestNotification.quoteId}`;
+              } else if (latestNotification.leadId) {
+                targetUrl = `/opportunities?lead=${latestNotification.leadId}`;
+              } else if (latestNotification.customerId) {
+                targetUrl = `/clients?customer=${latestNotification.customerId}`;
               }
             }
 
@@ -453,13 +461,24 @@ export function NotificationBell() {
     // Close popover first to ensure clean navigation
     setIsOpen(false);
 
-    // Holding-message notifications with a jobId always belong on the job's
-    // diary tab, where the draft is rendered for in-line approval. Older
-    // rows in the DB still carry actionUrl: '/communications?tab=pending'
-    // from before the in-diary flow existed — override that here so the
-    // legacy notifications also route correctly without a backfill.
+    // Diary-activity notifications (email/SMS replies, photos, notes,
+    // proposals, holding messages) always belong on the job's diary tab. Many
+    // older rows in the DB carry a stale actionUrl from before the in-diary
+    // deep-link existed — e.g. '/dispatch?job=X' with no '&tab=diary', or
+    // '/communications?tab=pending'. Override those here so legacy
+    // notifications also land on the diary (and scroll to the entry when we
+    // know it) without needing a DB backfill. The diary-URL builder below
+    // adds '&entry=' when diaryEntryId is present.
+    const diaryTypes = [
+      "email_reply",
+      "sms_reply",
+      "proposal_sent",
+      "photo_added",
+      "note_added",
+      "holding_message_pending",
+    ];
     const overrideToJobDiary =
-      notification.type === "holding_message_pending" && !!notification.jobId;
+      !!notification.jobId && diaryTypes.includes(notification.type);
 
     // Navigate to action URL if provided and it's an internal route
     if (
@@ -503,17 +522,9 @@ export function NotificationBell() {
     // PRIORITY: If notification has a jobId, always open the job card modal
     // This ensures all job-related notifications open the job card, regardless of type
     if (notification.jobId) {
-      // Check if this is a diary-related notification to open the diary tab
-      const diaryTypes = [
-        "email_reply",
-        "sms_reply",
-        "proposal_sent",
-        "photo_added",
-        "note_added",
-        "holding_message_pending",
-      ];
+      // Diary-related notifications open the diary tab (see diaryTypes above).
       if (diaryTypes.includes(notification.type)) {
-        const url = `/dispatch?job=${notification.jobId}&tab=diary`;
+        const url = `/dispatch?job=${notification.jobId}&tab=diary${notification.diaryEntryId ? `&entry=${notification.diaryEntryId}` : ""}`;
         console.log("🔀 Navigating to job card with diary tab:", url);
         setLocation(url);
 

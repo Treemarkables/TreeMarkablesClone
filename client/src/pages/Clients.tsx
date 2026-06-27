@@ -423,7 +423,17 @@ export default function Clients() {
 
   const handleSubmitEdit = (data: z.infer<typeof editCustomerSchema>) => {
     if (!editingCustomer) return;
-    editCustomerMutation.mutate({ id: editingCustomer.id, data });
+    // The server preserves empty values for these fields unless they're named
+    // in _clearFields (anti-wipe safeguard), so blanking a number/email would
+    // otherwise silently revert. Flag the ones the user actually cleared.
+    const clearable = ["email", "phone", "mobile", "address"] as const;
+    const _clearFields = clearable.filter(
+      (f) => !(data[f] ?? "").trim() && ((editingCustomer as any)[f] ?? "").toString().trim(),
+    );
+    editCustomerMutation.mutate({
+      id: editingCustomer.id,
+      data: (_clearFields.length ? { ...data, _clearFields } : data) as typeof data,
+    });
   };
 
   const handleCustomerCardClick = (customerId: string) => {

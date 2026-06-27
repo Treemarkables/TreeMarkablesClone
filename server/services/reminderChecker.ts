@@ -1,5 +1,7 @@
 import { storage } from '../storage.js';
 import { generateQuoteFollowupDraft } from './quoteFollowupAi.js';
+import { getBusinessIdentity } from '../businessIdentity.js';
+import * as usageMeter from './usageMeter.js';
 
 // De-duplication helper: check if a reminder of this type for this entity was already sent in the last 24 hours
 async function wasReminderSentRecently(type: string, entityId: string, entityField: 'jobId' | 'quoteId'): Promise<boolean> {
@@ -89,7 +91,15 @@ async function checkStaleQuotes(): Promise<void> {
       continue;
     }
 
+    // AI usage cap (cron path — businessId comes off the quote, not request context).
+    const fuBusinessId = (quote as any).businessId as string | undefined;
+    if (fuBusinessId && !(await usageMeter.guard('ai', fuBusinessId, 'quote_followup'))) {
+      console.log(`[ReminderChecker] Quote #${quote.quoteNumber}: monthly AI cap reached — skipping follow-up draft`);
+      continue;
+    }
+
     try {
+      const identity = getBusinessIdentity(settings);
       const { body } = await generateQuoteFollowupDraft({
         customerFirstName: firstNameFrom(customer?.name),
         jobDescription: null,
@@ -98,6 +108,9 @@ async function checkStaleQuotes(): Promise<void> {
         daysSince,
         attemptNumber: currentAttempts + 1,
         channel,
+        businessName: identity.name,
+        ownerName: identity.ownerName,
+        discipline: identity.discipline,
       });
 
       await storage.createPendingOutboundMessage({
@@ -119,6 +132,7 @@ async function checkStaleQuotes(): Promise<void> {
         nextFollowUpDate: new Date(Date.now() + thresholdDays * 24 * 60 * 60 * 1000),
       } as any);
 
+      if (fuBusinessId) await usageMeter.recordUsage('ai', fuBusinessId, { feature: 'quote_followup', ref: quote.id });
       console.log(`[ReminderChecker] Queued follow-up draft for Quote #${quote.quoteNumber} (${channel}, attempt ${currentAttempts + 1}/${maxAttempts})`);
     } catch (err) {
       console.error(`[ReminderChecker] Failed to draft follow-up for Quote #${quote.quoteNumber}:`, err);

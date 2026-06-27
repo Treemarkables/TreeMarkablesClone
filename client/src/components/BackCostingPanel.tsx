@@ -13,10 +13,10 @@ import {
   CheckCircle2,
   TrendingUp,
 } from "lucide-react";
+import { RecordedTimeEntries } from "./RecordedTimeEntries";
 
 interface BackCostingPanelProps {
   jobId: string;
-  onOpenTimeEntries?: () => void;
 }
 
 type CostField =
@@ -107,7 +107,7 @@ const COMPLETION_ROWS: Array<{
   { field: "otherExpensesComplete", key: "other", label: "Other costs finalised (permits / travel / disposal / misc)" },
 ];
 
-export function BackCostingPanel({ jobId, onOpenTimeEntries }: BackCostingPanelProps) {
+export function BackCostingPanel({ jobId }: BackCostingPanelProps) {
   const queryClient = useQueryClient();
   const queryKey = ["/api/jobs", jobId, "back-costing"];
 
@@ -215,22 +215,12 @@ export function BackCostingPanel({ jobId, onOpenTimeEntries }: BackCostingPanelP
       </Card>
 
       <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+        <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Clock className="h-4 w-4" /> Labor
           </CardTitle>
-          {onOpenTimeEntries && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onOpenTimeEntries}
-              data-testid="back-costing-view-time-entries"
-            >
-              View time entries
-            </Button>
-          )}
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {labor.entryCount === 0 ? (
             <div className="text-sm text-muted-foreground">No time logged yet.</div>
           ) : (
@@ -245,13 +235,24 @@ export function BackCostingPanel({ jobId, onOpenTimeEntries }: BackCostingPanelP
                 </div>
               </div>
               {labor.hasOverride && (
-                <div className="mt-2 text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   Manual override — calculated from time entries would be{" "}
                   {fmt(labor.calculatedCost)}.
                 </div>
               )}
             </>
           )}
+
+          {/* Time tracking lives inline here so logging staff time and
+              reviewing job cost stay in one place. Saving invalidates
+              ["/api/jobs", jobId] which (by prefix match) also refreshes the
+              back-costing rollup above, so the labour total updates in place. */}
+          <div className="pt-2 border-t">
+            <RecordedTimeEntries
+              jobId={jobId}
+              jobNumber={rollup.job.jobNumber ?? ""}
+            />
+          </div>
         </CardContent>
       </Card>
 

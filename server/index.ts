@@ -16,7 +16,8 @@ import path from "path";
 import { fileURLToPath } from 'url';
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { pool } from "./db";
+import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
+import { ensureSchemaUpToDate } from "./schemaMigrations";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
 if (!process.env.ALLOW_EMPLOYEE_ID_LOGIN) {
@@ -128,12 +129,17 @@ app.use(
       pruneSessionInterval: 60 * 15,
     }),
     cookie: {
-      secure: true,
+      // Local dev runs over http://localhost, where browsers silently drop a
+      // `Secure` cookie — and `SameSite=None` *requires* Secure, so the session
+      // cookie would never persist and every post-login /api/auth/me would 401,
+      // bouncing the user back to /login. Use lax + non-secure in dev. Production
+      // (https, PWA/iOS webview cross-site context) keeps secure + sameSite:none.
+      secure: !isDevelopment,
       httpOnly: true,
       maxAge: isDevelopment
         ? 1000 * 60 * 60 * 24 * 90
         : 1000 * 60 * 60 * 24 * 30,
-      sameSite: 'none',
+      sameSite: isDevelopment ? 'lax' : 'none',
       // Host-only cookie: omit domain so it scopes to app.treemarkables.co.nz
       // exactly. Domain-scoped cookies (.treemarkables.co.nz) caused PWA users
       // to lose sessions on Chrome's installed-PWA storage partition.
@@ -403,6 +409,17 @@ function startNotificationQueueWorker() {
       const err = error as Error;
       log(`[Booking Reminders] Worker error: ${err.message}`, "error");
     }
+
+    // Vehicle compliance expiry reminders (rego / CoF / scheduled service).
+    // Self-throttles to hourly internally and is idempotent via the
+    // equipment_compliance_reminders dedupe table, so the 60s tick is safe.
+    try {
+      const { runComplianceReminderScan } = await import("./services/complianceReminderService");
+      await runComplianceReminderScan();
+    } catch (error) {
+      const err = error as Error;
+      log(`[Compliance Reminders] Worker error: ${err.message}`, "error");
+    }
   }, 60000);
 
   log("🔔 Notification queue worker started (checking every 60 seconds)", "startup");
@@ -411,6 +428,34 @@ function startNotificationQueueWorker() {
 (async () => {
   try {
     log("Starting server initialization...", "startup");
+
+    // Fail fast if the tenant connection points at a different database than the
+    // owner connection (a wrong DIRECT_DATABASE_URL once made prod data appear to
+    // "vanish" — owner-path login worked, tenant reads hit an empty branch). Refuse
+    // to boot so the misconfig surfaces as an obvious deploy failure.
+    try {
+      await assertTenantDbMatchesOwner();
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
+
+    // Tenant-isolation backstop: any business_id table without an RLS policy is
+    // cross-tenant readable under the app_tenant grant. Logs loudly; hard-fails
+    // only under TENANT_RLS_STRICT (then the outer catch exits). Runs after the
+    // self-healing boot DDL on the previous deploy has had a chance to add policies.
+    await assertTenantTablesHaveRlsPolicies();
+
+    // Self-healing schema: bring the database up to match the deployed code so a
+    // schema change can't silently outrun the prod DB (caused the deposit-column /
+    // billing-table scrambles). Non-fatal — log loudly but keep booting, so a
+    // transient migration hiccup doesn't take the whole app down.
+    try {
+      await ensureSchemaUpToDate();
+      log("✅ Schema up to date", "startup");
+    } catch (e) {
+      console.error("[schema] boot migrations failed (continuing):", e);
+    }
 
     let devServer: http.Server | undefined;
     try {
@@ -630,6 +675,32 @@ The Treemarkables Team';
         );
         CREATE INDEX IF NOT EXISTS booking_reminders_job_id_idx ON booking_reminders (job_id);
         CREATE INDEX IF NOT EXISTS booking_reminders_pending_idx ON booking_reminders (status, scheduled_for);
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminders_enabled BOOLEAN DEFAULT true;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminder_offsets JSONB DEFAULT '[30, 7]'::jsonb;
+        CREATE TABLE IF NOT EXISTS equipment_compliance_reminders (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          business_id VARCHAR,
+          equipment_id VARCHAR NOT NULL,
+          kind TEXT NOT NULL,
+          expiry_date TEXT NOT NULL,
+          offset_days INTEGER NOT NULL,
+          sent_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS equipment_compliance_reminders_uniq ON equipment_compliance_reminders (equipment_id, kind, expiry_date, offset_days);
+        -- This table carries business_id but shipped without an RLS policy, so under
+        -- the blanket app_tenant GRANT it was cross-tenant readable/writable even with
+        -- RLS on. ENABLE (not FORCE) + tenant_isolation policy closes that. The boot
+        -- backstop (assertTenantTablesHaveRlsPolicies) guards against a repeat.
+        ALTER TABLE equipment_compliance_reminders ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON equipment_compliance_reminders;
+        CREATE POLICY tenant_isolation ON equipment_compliance_reminders
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON equipment_compliance_reminders TO app_tenant;
+          END IF;
+        END $$;
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           role_key VARCHAR NOT NULL,
@@ -920,7 +991,118 @@ The Treemarkables Team';
             '[{"stepNumber":1,"taskStep":"Confirm voltage & permits","hazards":["Electrocution"],"controls":["Treat all lines as live","Confirm voltage & NZECP 34 distance","Obtain network operator permit if inside zone"],"riskRating":5},{"stepNumber":2,"taskStep":"Work to safe distances","hazards":["Contact with conductor","Conductive limbs/tools"],"controls":["Maintain minimum approach distance","No metal tools or wet ropes in the zone","Stop work if distances cannot be kept"],"riskRating":5}]', true, 5)
         ON CONFLICT (key) DO NOTHING;
       `);
-      log("✅ Background schema migrations complete", "startup");
+
+      // --- Per-business GST number (trade-gen Phase A) ---
+      // Isolated from the big block (its own try/catch) and split into two queries:
+      // the column add + the TM seed are kept out of one batched statement to dodge a
+      // first-run parse quirk, and so a hiccup here can't skip the other migrations.
+      // Mirrors migrations/manual/20260627_business_gst_number.sql.
+      try {
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS business_gst_number TEXT DEFAULT ''`);
+        await pool.query(
+          `UPDATE business_settings SET business_gst_number = '131-047-592-GST004'
+            WHERE business_name = 'Treemarkables' AND (business_gst_number IS NULL OR business_gst_number = '')`,
+        );
+      } catch (gstErr) {
+        log(`⚠️ business_gst_number migration warning: ${(gstErr as Error).message}`, "startup");
+      }
+
+      // --- Per-business invoice bank details (trade-gen Phase A) ---
+      // Same isolated + split-statement pattern. Seed TM's real details by name so
+      // its invoices are unchanged; new tenants stay empty (no payment block shown,
+      // never TM's account). Mirrors migrations/manual/20260627_business_bank_details.sql.
+      try {
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS bank_account_name TEXT DEFAULT ''`);
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS bank_account_number TEXT DEFAULT ''`);
+        await pool.query(
+          `UPDATE business_settings SET bank_account_name = 'Treemarkables Ltd', bank_account_number = '06-0637-0768850-00'
+            WHERE business_name = 'Treemarkables' AND (bank_account_number IS NULL OR bank_account_number = '')`,
+        );
+      } catch (bankErr) {
+        log(`⚠️ business bank-details migration warning: ${(bankErr as Error).message}`, "startup");
+      }
+
+      // --- Universal identity defaults (trade-gen) ---
+      // Neutralise the column defaults so NEW tenants start trade-agnostic, not as
+      // Jules/arborist/tree. Schema-only + idempotent; existing rows (incl.
+      // Treemarkables) keep their values. The demo-row cleanup lives in the manual
+      // migration (20260628_universal_identity_defaults.sql) so a data change isn't
+      // applied automatically.
+      try {
+        await pool.query(`ALTER TABLE business_settings ALTER COLUMN owner_name SET DEFAULT ''`);
+        await pool.query(`ALTER TABLE business_settings ALTER COLUMN business_tagline SET DEFAULT ''`);
+        await pool.query(`ALTER TABLE business_settings ALTER COLUMN business_discipline SET DEFAULT ''`);
+        await pool.query(`ALTER TABLE business_settings ALTER COLUMN industry SET DEFAULT 'general'`);
+        await pool.query(`ALTER TABLE business_settings ALTER COLUMN business_name SET DEFAULT 'My Business'`);
+      } catch (identErr) {
+        log(`⚠️ identity-defaults migration warning: ${(identErr as Error).message}`, "startup");
+      }
+
+      // --- Per-business email brand colours (trade-gen Phase A) ---
+      // Header background + accent for branded customer emails. Defaults reproduce
+      // Treemarkables' black + neon-green so every existing email is unchanged until
+      // a business picks its own; no TM seed needed (the default IS TM's brand).
+      // Mirrors migrations/manual/20260628_business_brand_colors.sql.
+      try {
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS brand_header_color TEXT DEFAULT '#0b0b0b'`);
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS brand_accent_color TEXT DEFAULT '#39FF14'`);
+      } catch (brandErr) {
+        log(`⚠️ brand-colours migration warning: ${(brandErr as Error).message}`, "startup");
+      }
+
+      // --- Inbound channel → tenant map (Group B tenant-resolution infra) ---
+      // Resolves a dialed number / inbound SMS sender / email recipient / FB page
+      // id to the owning business, so session-less webhooks stop defaulting writes
+      // to the column-default tenant and stop matching callers across all tenants.
+      // ENABLE (not FORCE) RLS so the owner connection resolves across tenants while
+      // app_tenant only sees its own rows. Grant guarded — app_tenant may not exist
+      // in dev. Mirrors migrations/manual/20260627_tenant_channels.sql.
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS tenant_channels (
+          id           VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          business_id  VARCHAR NOT NULL,
+          channel_type TEXT NOT NULL,
+          identifier   TEXT NOT NULL,
+          label        TEXT,
+          is_active    BOOLEAN NOT NULL DEFAULT true,
+          created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS tenant_channels_type_identifier_idx
+          ON tenant_channels (channel_type, identifier);
+        CREATE INDEX IF NOT EXISTS tenant_channels_business_idx
+          ON tenant_channels (business_id);
+        ALTER TABLE tenant_channels ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON tenant_channels;
+        CREATE POLICY tenant_isolation ON tenant_channels
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_channels TO app_tenant;
+          END IF;
+        END $$;
+      `);
+      // Seed the existing tenant's channels from the single-tenant ENV config so
+      // resolution works immediately. Idempotent; a 2nd tenant registers its own.
+      try {
+        const { rows } = await pool.query(
+          `SELECT bs.business_id, bs.business_email
+             FROM business_settings bs
+             ORDER BY (bs.id = 'default') DESC, bs.created_at ASC
+             LIMIT 1`,
+        );
+        let seedBusinessId: string | undefined = rows[0]?.business_id ?? undefined;
+        if (!seedBusinessId) {
+          const fallback = await pool.query(`SELECT id FROM businesses ORDER BY created_at ASC LIMIT 1`);
+          seedBusinessId = fallback.rows[0]?.id ?? undefined;
+        }
+        if (seedBusinessId) {
+          const { seedChannelsFromEnv } = await import('./tenancy/channelMap');
+          await seedChannelsFromEnv(seedBusinessId, rows[0]?.business_email ?? null);
+        }
+      } catch (channelSeedErr) {
+        log(`⚠️ Tenant-channel seed warning: ${(channelSeedErr as Error).message}`, "startup");
+      }
 
       try {
         const { seedDefaultBlockConfig } = await import('./seedTemplates');

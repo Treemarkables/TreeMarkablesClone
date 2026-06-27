@@ -11,6 +11,7 @@ import { ProposalReviewsWidget } from "@/components/ProposalReviewsWidget";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { RecipientPicker } from "@/components/RecipientPicker";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -121,8 +122,9 @@ interface ProposalBuilderV2Props {
   lineItems?: unknown;
   // When "quote", the builder UI stays identical to proposal mode — only the
   // save payload (templateUsed='quote') and the email endpoint change. The
-  // quote email delivers a PDF attachment with a mailto "Accept Quote" button
-  // (no public viewer link).
+  // quote email delivers a PDF attachment with a "View Quote" button that
+  // opens the online accept page (replying "I accept quote Q-*" still works
+  // as a fallback).
   kind?: "proposal" | "quote";
 }
 
@@ -1346,6 +1348,22 @@ export function ProposalBuilderV2({
     setDepositType((["none", "percent", "fixed"].includes(depRaw) ? depRaw : "none") as "none" | "percent" | "fixed");
     setDepositValue(parseFloat(p.depositValue as string) || 0);
 
+    // Restore the discount. The server stores discountAmount as a dollar amount
+    // (see the CREATE/PUT/accept handlers); the builder treats the field as a
+    // percentage when discountType is "percentage". Reconstruct the original
+    // percent from the stored dollars and the pre-discount subtotal so a "10%"
+    // discount round-trips; otherwise fall back to a fixed dollar discount.
+    // Without this, reopening a proposal reset the discount to 0 and it vanished.
+    const savedDiscountDollars = parseFloat(p.discountAmount as string) || 0;
+    const preDiscountSubtotal = parseFloat(p.subtotal as string) || 0;
+    if (p.discountType === "percentage" && savedDiscountDollars > 0 && preDiscountSubtotal > 0) {
+      setDiscountAmount(Math.round((savedDiscountDollars / preDiscountSubtotal) * 10000) / 100);
+      setDiscountType("percentage");
+    } else {
+      setDiscountAmount(savedDiscountDollars);
+      setDiscountType("fixed");
+    }
+
     if (Array.isArray(p.sections)) {
       const loadedBlocks: WysiwygBlock[] = (p.sections as Array<{
         id: string;
@@ -1692,7 +1710,11 @@ export function ProposalBuilderV2({
 
   useEffect(() => {
     if (!isOpen || blocks.length === 0) return;
-    const snap = JSON.stringify({ blocks, proposalTitle });
+    // Include the discount, deposit and validUntil in the snapshot — otherwise
+    // applying a VIP/discount (or changing the deposit) without also editing a
+    // block or the title never changes the snapshot, so auto-save never fires
+    // and the change is silently lost on close.
+    const snap = JSON.stringify({ blocks, proposalTitle, discountAmount, discountType, depositType, depositValue, validUntil });
     latestSnapshotRef.current = snap;
     latestPayloadRef.current = buildPayload();
     latestDraftIdRef.current = draftId ?? null;
@@ -1720,7 +1742,7 @@ export function ProposalBuilderV2({
     }, 2000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blocks, proposalTitle, isOpen, draftId]);
+  }, [blocks, proposalTitle, isOpen, draftId, discountAmount, discountType, depositType, depositValue, validUntil]);
 
   // Flush any pending auto-save when the builder closes or unmounts.
   // The 2s debounce above gets cancelled silently on unmount — if the user
@@ -1769,8 +1791,15 @@ export function ProposalBuilderV2({
 
   const sendSmsMutation = useMutation({
     mutationFn: async (d: { to: string; message: string; jobId?: string; customerId?: string; proposalId?: string }) => {
-      const res = await apiRequest("POST", "/api/communications/sms", d);
-      return await res.json();
+      // One copy of the message per number when sending to multiple contacts.
+      const numbers = d.to.split(/[,;]+/).map((s) => s.trim()).filter(Boolean);
+      const targets = numbers.length > 0 ? numbers : [d.to];
+      let last: any;
+      for (const to of targets) {
+        const res = await apiRequest("POST", "/api/communications/sms", { ...d, to });
+        last = await res.json();
+      }
+      return last;
     },
     onSuccess: () => { setShowSmsDialog(false); setSmsForm({ to: "", message: "" }); },
     onError: (err: Error) => toast({ title: "SMS Failed", description: err.message || "Failed to send SMS", variant: "destructive" }),
@@ -1791,23 +1820,30 @@ export function ProposalBuilderV2({
   }, [onRequestJobSave, jobId, toast]);
 
   const ensureDraftSaved = useCallback(async (): Promise<string | null> => {
-    if (draftId) return draftId;
-    const resolvedJobId = await ensureJobSaved();
-    if (onRequestJobSave && !resolvedJobId) return null;
+    // Always flush the latest state before sending — auto-save only watches
+    // blocks/title, so a discount-only (or deposit-only) change may not have
+    // been persisted yet. Previously this returned early when a draftId already
+    // existed, which meant the email/live link went out with stale totals and
+    // the applied discount silently vanished.
+    const resolvedJobId = draftId ? jobId || null : await ensureJobSaved();
+    if (!draftId && onRequestJobSave && !resolvedJobId) return null;
     setAutoSaveStatus("saving");
     try {
       const payload = buildPayload();
       const res = await saveDraftMutation.mutateAsync({ ...payload, jobId: resolvedJobId || payload.jobId });
-      const id = res?.data?.id || res?.id;
+      const id = res?.data?.id || res?.id || draftId;
       if (id) {
-        setDraftId(id);
+        if (!draftId) setDraftId(id);
         return id;
       }
     } catch {
       toast({ title: "Save Failed", description: "Could not save proposal.", variant: "destructive" });
+      // For an existing draft, let the send proceed with what's already saved
+      // rather than blocking entirely.
+      return draftId;
     }
-    return null;
-  }, [draftId, ensureJobSaved, buildPayload, saveDraftMutation, onRequestJobSave, toast]);
+    return draftId;
+  }, [draftId, ensureJobSaved, buildPayload, saveDraftMutation, onRequestJobSave, toast, jobId]);
 
   const initEmailForm = useCallback(() => {
     const email = customEmail || (job as { jobContactEmail?: string } | null)?.jobContactEmail || (customer as { email?: string } | null)?.email || "";
@@ -2500,7 +2536,17 @@ export function ProposalBuilderV2({
               <h2 className="text-base font-semibold mb-4">Send Proposal via Email</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-gray-500 font-medium">To</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-gray-500 font-medium">To</label>
+                    <RecipientPicker
+                      channel="email"
+                      customerId={(customer as { id?: string } | null)?.id || customerId}
+                      job={job}
+                      customer={customer}
+                      value={emailForm.to}
+                      onChange={(to) => setEmailForm((f) => ({ ...f, to }))}
+                    />
+                  </div>
                   <Input value={emailForm.to} onChange={(e) => setEmailForm((f) => ({ ...f, to: e.target.value }))} className="mt-1" placeholder="recipient@email.com" />
                 </div>
                 <div>
@@ -2535,7 +2581,17 @@ export function ProposalBuilderV2({
               <h2 className="text-base font-semibold mb-4">Send Proposal via SMS</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-gray-500 font-medium">Phone Number</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-gray-500 font-medium">Phone Number</label>
+                    <RecipientPicker
+                      channel="sms"
+                      customerId={(customer as { id?: string } | null)?.id || customerId}
+                      job={job}
+                      customer={customer}
+                      value={smsForm.to}
+                      onChange={(to) => setSmsForm((f) => ({ ...f, to }))}
+                    />
+                  </div>
                   <Input value={smsForm.to} onChange={(e) => setSmsForm((f) => ({ ...f, to: e.target.value }))} className="mt-1" placeholder="+64 21 xxx xxxx" />
                 </div>
                 <div>

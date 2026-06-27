@@ -63,7 +63,17 @@ export default function WatchVideo() {
               playsInline
               className="w-full max-h-[70vh] rounded-lg bg-black object-contain"
               data-testid="watch-video-player"
-            />
+            >
+              {video.captionsStatus === "ready" && (
+                <track
+                  kind="captions"
+                  srcLang="en"
+                  label="English"
+                  src={`/api/videos/${video.id}/captions.vtt`}
+                  default
+                />
+              )}
+            </video>
             {video.title && (
               <h1 className="text-2xl font-semibold" data-testid="watch-video-title">
                 {video.title}

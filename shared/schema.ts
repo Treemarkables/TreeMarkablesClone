@@ -386,6 +386,12 @@ export const jobs = pgTable("jobs", {
   address: text("address").notNull().default("Address not specified"),
   scheduledDate: timestamp("scheduled_date"),
   scheduledEndDate: timestamp("scheduled_end_date"), // For multi-day jobs — last day of the job
+  // Explicit set of NZ calendar dates (YYYY-MM-DD) the job actually runs on. Lets a
+  // multi-day booking skip days inside the span (e.g. Wed–Mon excluding the weekend).
+  // When null/empty, consumers fall back to the contiguous scheduledDate..scheduledEndDate
+  // span. scheduledDate/scheduledEndDate stay populated as the first/last day for
+  // backward compatibility with range-based readers.
+  scheduledDates: jsonb("scheduled_dates").$type<string[]>(),
   scheduledStartTime: text("scheduled_start_time"), // e.g., "08:00"
   scheduledEndTime: text("scheduled_end_time"), // e.g., "10:00"
   completedDate: timestamp("completed_date"),
@@ -533,6 +539,12 @@ export const jobs = pgTable("jobs", {
   inQueue: boolean("in_queue").default(false),
   queueReason: text("queue_reason"), // Weather Hold, Awaiting Permit, Customer Not Ready, Awaiting Quote Approval, Materials Needed, Crew Unavailable, Other
 
+  // Lanes — optional, user-defined bucket the job sits in (orthogonal to status). See `lanes`.
+  // lane_entered_at is stamped/cleared in storage.updateJob whenever lane_id changes; it is the
+  // clock the "N days in lane" automations and the UI badge read.
+  laneId: varchar("lane_id"),
+  laneEnteredAt: timestamp("lane_entered_at"),
+
   // Loom Video
   loomVideoUrl: text("loom_video_url"),
 
@@ -627,6 +639,76 @@ export const updateTaskSchema = insertTaskSchema.partial();
 export type Task = typeof tasks.$inferSelect;
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type UpdateTask = z.infer<typeof updateTaskSchema>;
+
+// Lanes — per-business, user-defined buckets a job can OPTIONALLY sit in, orthogonal to
+// jobs.status (a job keeps its status AND can sit in one lane). Mirrors the existing
+// inQueue/queueReason Dispatch Queue hold as an additive flag. The lane a job is in is the
+// jobs.lane_id pointer; lane_entered_at is the clock the "N days in lane" automations read.
+export const lanes = pgTable("lanes", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  color: text("color").notNull().default("#64748b"), // hex; rendered as a dot/badge
+  sortOrder: integer("sort_order").notNull().default(0),
+  archived: boolean("archived").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  businessIdx: index("lanes_business_idx").on(table.businessId),
+  sortIdx: index("lanes_sort_idx").on(table.businessId, table.sortOrder),
+}));
+
+// One row per automation attached to a lane. The cron queries these by type/trigger/enabled
+// across businesses, so discrete indexed rows (not a JSON blob on lanes) are the right shape.
+// type-specific params live in `config`:
+//   customer_nudge: { channel:'sms'|'email', template:string, requireApproval?:boolean }
+//   staff_reminder: { recipients:'owner'|'assigned'|'both', message:string, priority?:string }
+//   auto_move:      { targetLaneId:string }
+//   create_task:    { title:string, category?:string, assigneeId?:string, dueInDays?:number }
+export const laneAutomations = pgTable("lane_automations", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  laneId: varchar("lane_id").notNull().references(() => lanes.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // customer_nudge | staff_reminder | auto_move | create_task
+  trigger: text("trigger").notNull().default("days_in_lane"), // days_in_lane | on_enter | status_changed
+  triggerDays: integer("trigger_days"), // required when trigger = 'days_in_lane'
+  enabled: boolean("enabled").notNull().default(true),
+  config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  laneIdx: index("lane_automations_lane_idx").on(table.laneId),
+  dueIdx: index("lane_automations_due_idx").on(table.type, table.trigger, table.enabled),
+}));
+
+// De-dup ledger: "fire once per lane stay". An automation is considered already-fired for a job
+// if a run row exists with fired_at >= job.lane_entered_at. Re-entering a lane advances
+// lane_entered_at and re-arms the automations cleanly.
+export const laneAutomationRuns = pgTable("lane_automation_runs", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(),
+  laneId: varchar("lane_id").notNull(),
+  automationId: varchar("automation_id").notNull(),
+  firedAt: timestamp("fired_at").defaultNow().notNull(),
+}, (table) => ({
+  jobAutoIdx: index("lane_runs_job_auto_idx").on(table.jobId, table.automationId),
+}));
+
+export const insertLaneSchema = createInsertSchema(lanes)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export const updateLaneSchema = insertLaneSchema.partial();
+export const insertLaneAutomationSchema = createInsertSchema(laneAutomations)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export const updateLaneAutomationSchema = insertLaneAutomationSchema.partial();
+
+export type Lane = typeof lanes.$inferSelect;
+export type InsertLane = z.infer<typeof insertLaneSchema>;
+export type UpdateLane = z.infer<typeof updateLaneSchema>;
+export type LaneAutomation = typeof laneAutomations.$inferSelect;
+export type InsertLaneAutomation = z.infer<typeof insertLaneAutomationSchema>;
+export type UpdateLaneAutomation = z.infer<typeof updateLaneAutomationSchema>;
+export type LaneAutomationRun = typeof laneAutomationRuns.$inferSelect;
 
 // Safety Incident Management
 export const safetyIncidents = pgTable("safety_incidents", {
@@ -893,6 +975,15 @@ export const videos = pgTable("videos", {
   generatedDescription: text("generated_description"),
   transcriptStatus: text("transcript_status").default("none"), // 'none' | 'processing' | 'ready' | 'error'
   transcriptError: text("transcript_error"),
+  // Loom-style on-video captions. Generated automatically on upload: Whisper
+  // transcribes with segment timestamps, which we render to a WebVTT document
+  // stored inline here (captions are a few KB) and served as text/vtt for the
+  // <video><track> element. Independent of the quote-gen transcript above —
+  // that pass is opt-in and produces a cleaned description, this one is
+  // automatic and produces timed cues.
+  captionsVtt: text("captions_vtt"),
+  captionsStatus: text("captions_status").default("none"), // 'none' | 'processing' | 'ready' | 'error'
+  captionsError: text("captions_error"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -1236,13 +1327,43 @@ export const businessSettings = pgTable("business_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
   // Business Information
-  businessName: text("business_name").notNull().default("Treemarkables"),
+  businessName: text("business_name").notNull().default("My Business"),
   businessAddress: text("business_address").default(""),
   businessPhone: text("business_phone").default(""),
   businessEmail: text("business_email").default(""),
   businessWebsite: text("business_website").default(""),
   businessLogo: text("business_logo").default(""),
-  
+  // Per-business GST number for quote/invoice/email footers. Default EMPTY on
+  // purpose: a new tenant shows NO GST line until they set their own — it must
+  // never fall back to Treemarkables' GST. TM's real number is seeded into its
+  // row by migration so TM's output is unchanged. See businessIdentity.ts.
+  businessGstNumber: text("business_gst_number").default(""),
+  // Trade Generalization Phase B — which trade's preset this business uses
+  // (tree | plumbing | electrical | building | general). Default 'tree' keeps
+  // Treemarkables on the arborist preset. See server/trades/presets.ts.
+  industry: text("industry").default("general"),
+  // Identity de-hardcoding (Trade Generalization Phase A). Defaults reproduce
+  // Treemarkables' current literals so behaviour is unchanged until a business
+  // sets its own. ownerName → AI persona / email sign-offs; businessDiscipline
+  // → "a New Zealand {discipline} business" in AI prompts; businessTagline →
+  // PDF/email footer line. See INFLOW_TRADE_GENERALIZATION_PLAN.md + businessIdentity.ts.
+  ownerName: text("owner_name").default(""),
+  businessTagline: text("business_tagline").default(""),
+  businessDiscipline: text("business_discipline").default(""),
+  // Per-business bank-transfer details shown on invoices so a customer pays the
+  // RIGHT business. Default EMPTY on purpose: a tenant shows NO payment block
+  // until they set their own — it must never fall back to Treemarkables' account.
+  // TM's real details are seeded into its row by migration.
+  bankAccountName: text("bank_account_name").default(""),
+  bankAccountNumber: text("bank_account_number").default(""),
+  // Per-business email brand colours. Drive the header/footer background and the
+  // accent (wordmark, divider, CTA, amount) in branded customer emails so each
+  // tenant's invoice/proposal/quote emails carry THEIR brand — not Treemarkables'.
+  // Defaults reproduce Treemarkables' current black + neon-green so existing emails
+  // render byte-identical until a business picks its own. See server/emailTemplates.ts.
+  brandHeaderColor: text("brand_header_color").default("#0b0b0b"),
+  brandAccentColor: text("brand_accent_color").default("#39FF14"),
+
   // Business Rules & Workflow
   leadAssignmentMethod: text("lead_assignment_method").default("round_robin"), // round_robin, skill_based, manual
   autoFollowUpDays: integer("auto_follow_up_days").default(3),
@@ -1326,6 +1447,12 @@ export const businessSettings = pgTable("business_settings", {
   bookingReminderSmsTemplateId: varchar("booking_reminder_sms_template_id"),
   bookingReminderDefaultOn: boolean("booking_reminder_default_on").default(false), // Pre-tick the per-job toggle when scheduling
 
+  // Vehicle/equipment compliance expiry reminders (rego, CoF, scheduled service).
+  // A daily scan notifies admins when an active vehicle's expiry date crosses one
+  // of these lead times. Offsets is an array of whole days before expiry, e.g. [30, 7].
+  complianceRemindersEnabled: boolean("compliance_reminders_enabled").default(true),
+  complianceReminderOffsets: jsonb("compliance_reminder_offsets").$type<number[]>().default(sql`'[30, 7]'::jsonb`),
+
   // Inquiry auto-reply (sent to the customer immediately on website form submission)
   // The default copy follows what Jules asked for: "Hey, we have received your
   // inquiry. Jules will be in touch within 24 hours to schedule in your quote."
@@ -1375,6 +1502,8 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
     label: z.string().optional(),
     channel: z.enum(['email', 'sms', 'both']).optional(),
   })).optional(),
+  // Lead times (whole days before expiry) for vehicle compliance reminders, e.g. [30, 7].
+  complianceReminderOffsets: z.array(z.number().int().min(1).max(365)).max(6).optional(),
   inquiryAutoReplyChannel: z.enum(['email', 'sms', 'both']).optional(),
   inquiryAutoReplyEmailSubject: z.string().max(200).optional(),
   inquiryAutoReplyEmailMessage: z.string().max(5000).optional(),
@@ -1383,6 +1512,23 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
 
 // Business Settings Update Schema - partial with same constraints
 export const updateBusinessSettingsSchema = insertBusinessSettingsSchema.partial();
+
+// Log of compliance-expiry reminders already sent, so the daily scan fires each
+// (vehicle, kind, expiry-date, lead-time) combination exactly once. When a vehicle
+// is renewed the expiry date changes, producing fresh keys, so reminders re-arm.
+// The unique (equipment_id, kind, expiry_date, offset_days) constraint is created
+// in the boot DDL block in server/index.ts.
+export const equipmentComplianceReminders = pgTable("equipment_compliance_reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id"),
+  equipmentId: varchar("equipment_id").notNull(),
+  kind: text("kind").notNull(), // 'rego' | 'cof' | 'service'
+  expiryDate: text("expiry_date").notNull(), // YYYY-MM-DD (NZ) of the tracked expiry
+  offsetDays: integer("offset_days").notNull(), // lead time fired at; 0 = on/after expiry
+  sentAt: timestamp("sent_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+export type EquipmentComplianceReminder = typeof equipmentComplianceReminders.$inferSelect;
+export type InsertEquipmentComplianceReminder = typeof equipmentComplianceReminders.$inferInsert;
 
 // Settings Types
 export type BusinessSettings = typeof businessSettings.$inferSelect;
@@ -2025,7 +2171,21 @@ export const equipment = pgTable("equipment", {
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-export const insertEquipmentSchema = createInsertSchema(equipment);
+// Compliance/maintenance dates arrive from forms as "YYYY-MM-DD" strings, but
+// drizzle-zod maps these timestamp columns to z.date() and rejects strings.
+// Coerce string|date -> Date (empty string -> null) so the equipment form can
+// set rego / CoF / next-service dates. Mirrors the insertTaskSchema dueDate pattern.
+const equipmentDateCoercion = z
+  .union([z.string(), z.date()])
+  .nullish()
+  .transform((v) => (!v ? null : v instanceof Date ? v : new Date(v)));
+
+export const insertEquipmentSchema = createInsertSchema(equipment).extend({
+  registrationExpiryDate: equipmentDateCoercion,
+  cofExpiryDate: equipmentDateCoercion,
+  nextMaintenanceDate: equipmentDateCoercion,
+  lastMaintenanceDate: equipmentDateCoercion,
+});
 
 export const updateEquipmentSchema = insertEquipmentSchema.partial();
 
@@ -2719,6 +2879,7 @@ export type InsertHelpArticle = z.infer<typeof insertHelpArticleSchema>;
 export type UpdateHelpArticle = z.infer<typeof updateHelpArticleSchema>;
 
 export const photoSearchSchema = z.object({
+  q: z.string().optional(), // free-text: matches notes / aiDescription / gpsAddress / location / filename
   jobId: z.string().optional(),
   customerId: z.string().optional(),
   type: z.string().optional(),
@@ -2734,6 +2895,24 @@ export const photoSearchSchema = z.object({
   limit: z.number().min(1).max(100).default(20),
   offset: z.number().min(0).default(0),
 });
+
+// Mirror of photoSearchSchema for videos. Videos don't have type/category/quality
+// score; otherwise the shape is identical so the same UI surface can drive both.
+// NOTE: hasGps is reserved for Phase 2 — videos table has no GPS columns yet.
+export const videoSearchSchema = z.object({
+  q: z.string().optional(), // matches title / description / filename
+  kind: z.enum(["job", "knowledge"]).optional(),
+  jobId: z.string().optional(),
+  customerId: z.string().optional(),
+  category: z.string().optional(), // only meaningful for kind='knowledge'
+  uploadedBy: z.string().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  showToCustomer: z.boolean().optional(),
+  limit: z.number().min(1).max(100).default(20),
+  offset: z.number().min(0).default(0),
+});
+export type VideoSearch = z.infer<typeof videoSearchSchema>;
 
 // Type exports for photos
 export type Photo = typeof photos.$inferSelect;
@@ -4870,6 +5049,133 @@ export const notifiableEvents = pgTable("notifiable_events", {
 export const insertNotifiableEventSchema = createInsertSchema(notifiableEvents).omit({ id: true, eventNumber: true, createdAt: true, updatedAt: true });
 export type NotifiableEvent = typeof notifiableEvents.$inferSelect;
 export type InsertNotifiableEvent = z.infer<typeof insertNotifiableEventSchema>;
+
+// Tenant root (Inflow multi-tenancy). Created by the Phase 1 migration; declared here so
+// the ORM can read/write it (signup, billing FKs). RLS-isolated to the current tenant.
+export const businesses = pgTable("businesses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").unique(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertBusinessSchema = createInsertSchema(businesses).omit({ id: true, createdAt: true });
+export type Business = typeof businesses.$inferSelect;
+export type InsertBusiness = z.infer<typeof insertBusinessSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inbound channel → tenant map. A GLOBAL lookup table that resolves an inbound
+// identifier — the dialed phone number, an inbound SMS sender, an email
+// recipient, or a Facebook page id — to the owning business. Session-less inbound
+// handlers (Twilio voice/SMS, email, Messenger) run on the owner connection with
+// no logged-in user, so without this map their writes fall to the column-default
+// tenant (Treemarkables) and they match callers across ALL tenants. Resolution
+// runs as owner (see server/tenancy/channelMap.ts); RLS is enabled so an authed
+// tenant only ever sees its own rows. The (channel_type, identifier) pair is
+// UNIQUE (enforced in the migration) so an identifier maps to exactly one tenant.
+// ─────────────────────────────────────────────────────────────────────────────
+export const tenantChannels = pgTable("tenant_channels", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull(),
+  // 'phone' (voice + SMS — both key off a number) | 'email' | 'fb_page'
+  channelType: text("channel_type").notNull(),
+  // Normalized for matching: phone = last 8 digits, email = trimmed+lowercased,
+  // fb_page = raw page id. Normalization lives in channelMap.ts.
+  identifier: text("identifier").notNull(),
+  label: text("label"), // optional human note, e.g. "main line"
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  businessIdx: index("tenant_channels_business_idx").on(table.businessId),
+}));
+export const insertTenantChannelSchema = createInsertSchema(tenantChannels).omit({ id: true, createdAt: true });
+export type TenantChannel = typeof tenantChannels.$inferSelect;
+export type InsertTenantChannel = z.infer<typeof insertTenantChannelSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SaaS subscription billing (Inflow — Phase 4). `subscriptionPlans` + `addOns` are the
+// GLOBAL catalog (no tenant). `subscriptions` + `businessAddOns` are per-business
+// (tenant-scoped — need businessId RLS + app_tenant grants when migrated). Stripe is the
+// source of truth for billing state; these rows mirror it via webhooks.
+// NOT YET MIGRATED — needs a DB migration (+ RLS on the two tenant tables) before use.
+// ─────────────────────────────────────────────────────────────────────────────
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),                 // 'freemium' | 'crew' | 'business'
+  name: text("name").notNull(),
+  stripePriceId: text("stripe_price_id"),              // recurring price id (null for freemium)
+  priceNzd: decimal("price_nzd", { precision: 10, scale: 2 }).notNull().default("0"),
+  interval: text("interval").notNull().default("month"),
+  activeJobCap: integer("active_job_cap"),             // null = unlimited
+  smsCap: integer("sms_cap"),                          // bundled SMS/mo, null = unlimited
+  aiActionCap: integer("ai_action_cap"),              // bundled AI actions/mo, null = unlimited
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull(),        // FK -> businesses(id), enforced at DB level
+  planId: varchar("plan_id").references(() => subscriptionPlans.id),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  status: text("status").notNull().default("active"),  // trialing|active|past_due|canceled|incomplete
+  currentPeriodEnd: timestamp("current_period_end"),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  trialEnd: timestamp("trial_end"),
+  overagePolicy: text("overage_policy").notNull().default("soft_stop"), // 'soft_stop' | 'metered'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const addOns = pgTable("add_ons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),                 // matches capability `requires`, e.g. 'call_recording'
+  name: text("name").notNull(),
+  stripePriceId: text("stripe_price_id"),
+  priceNzd: decimal("price_nzd", { precision: 10, scale: 2 }),
+  billingType: text("billing_type").notNull().default("flat"), // 'flat' | 'metered'
+  isActive: boolean("is_active").notNull().default(true),
+});
+
+export const businessAddOns = pgTable("business_add_ons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull(),
+  addOnId: varchar("add_on_id").references(() => addOns.id),
+  status: text("status").notNull().default("active"),
+  stripeSubscriptionItemId: text("stripe_subscription_item_id"),
+  activatedAt: timestamp("activated_at").defaultNow(),
+});
+
+// Append-only per-business usage log — one row per metered SMS send / AI action.
+// Tenant-scoped (RLS + app_tenant grant). Counted per NZ calendar month to enforce
+// the plan's bundled allowances (see INFLOW_USAGE_CAPS_PLAN.md).
+export const usageEvents = pgTable("usage_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull(),        // FK -> businesses(id), enforced at DB level
+  metric: text("metric").notNull(),                    // 'sms' | 'ai'
+  quantity: integer("quantity").notNull().default(1),
+  feature: text("feature"),                            // e.g. 'booking_reminder' | 'speech_to_quote'
+  ref: text("ref"),                                    // optional jobId / quoteId / messageId
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertUsageEventSchema = createInsertSchema(usageEvents).omit({ id: true, createdAt: true });
+export type UsageEvent = typeof usageEvents.$inferSelect;
+export type InsertUsageEvent = z.infer<typeof insertUsageEventSchema>;
+
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({ id: true, createdAt: true });
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true, updatedAt: true });
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export const insertAddOnSchema = createInsertSchema(addOns).omit({ id: true });
+export type AddOn = typeof addOns.$inferSelect;
+export type InsertAddOn = z.infer<typeof insertAddOnSchema>;
+export const insertBusinessAddOnSchema = createInsertSchema(businessAddOns).omit({ id: true, activatedAt: true });
+export type BusinessAddOn = typeof businessAddOns.$inferSelect;
+export type InsertBusinessAddOn = z.infer<typeof insertBusinessAddOnSchema>;
 
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';

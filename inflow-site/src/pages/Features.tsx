@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Section, Container } from "@/components/Container";
 import { LinkButton } from "@/components/Button";
 
@@ -7,6 +8,7 @@ type Feature = {
   body: string;
   bullets: string[];
   visual: "jobs" | "quote" | "crew" | "safety" | "crm" | "help";
+  tier: "All plans" | "Crew & up" | "Business";
 };
 
 const features: Feature[] = [
@@ -21,18 +23,21 @@ const features: Feature[] = [
       "Time tracking on the job, not after-hours guessing",
     ],
     visual: "jobs",
+    tier: "All plans",
   },
   {
-    eyebrow: "Quotes & Invoicing",
-    title: "Quotes that win. Invoices that send themselves.",
-    body: "Branded quotes go out fast and look right. When the job's done, the invoice is already drafted from the quote, materials used and time logged.",
+    eyebrow: "Quotes, proposals & invoicing",
+    title: "Quotes that win. Proposals that close. Invoices that send themselves.",
+    body: "Build a quick quote or a detailed multi-item proposal, send it branded, and let the customer accept, sign and pay online. When the job's done, the invoice is already drafted from the quote, the materials used and the time logged.",
     bullets: [
       "Quote templates with margin, GST and acceptance built in",
+      "Multi-item proposals with optional add-ons — accepted & paid online",
       "Customer portal for accept / pay / sign",
       "Auto-drafted invoices from completed jobs",
-      "Quote follow-ups so nothing goes cold",
+      "Quote & proposal follow-ups so nothing goes cold",
     ],
     visual: "quote",
+    tier: "All plans",
   },
   {
     eyebrow: "Customers & CRM",
@@ -41,10 +46,10 @@ const features: Feature[] = [
     bullets: [
       "Inbox + SMS + calls captured against the customer",
       "Pipeline view for opportunities and follow-ups",
-      "Automated review and reputation requests",
       "Property history — what we did and when",
     ],
     visual: "crm",
+    tier: "Crew & up",
   },
   {
     eyebrow: "Staff & Permissions",
@@ -57,6 +62,7 @@ const features: Feature[] = [
       "Competency register — who's qualified for what",
     ],
     visual: "crew",
+    tier: "Crew & up",
   },
   {
     eyebrow: "Safety",
@@ -69,6 +75,7 @@ const features: Feature[] = [
       "Toolbox talks and notifiable event registers",
     ],
     visual: "safety",
+    tier: "Crew & up",
   },
   {
     eyebrow: "Help & Training",
@@ -81,6 +88,97 @@ const features: Feature[] = [
       "Owner-editable so it stays current with your business",
     ],
     visual: "help",
+    tier: "All plans",
+  },
+];
+
+// Shorter detail cards — the rest of the toolkit, each with its plan tag.
+const detailFeatures: { title: string; body: string; tier: Feature["tier"] }[] = [
+  {
+    title: "Supplier invoice importing",
+    body: "Snap a photo or drop in a PDF of a supplier bill — Inflow reads the line items and lands the costs straight on the right job. No manual entry.",
+    tier: "Crew & up",
+  },
+  {
+    title: "Asset & equipment management",
+    body: "Register plant, vehicles and tools with maintenance schedules, inductions, vehicle inspections and check-in / check-out.",
+    tier: "Crew & up",
+  },
+  {
+    title: "Job costing & back-costing",
+    body: "Compare quoted vs actual labour, materials and supplier costs on every job — so you know exactly what made money.",
+    tier: "Crew & up",
+  },
+  {
+    title: "Scheduling & dispatch",
+    body: "Calendar and staff scheduling on every plan; a drag-to-reschedule dispatch board across crews from Crew up.",
+    tier: "All plans",
+  },
+  {
+    title: "Photos & media",
+    body: "Annotated site photos, before / after and voice captions, with public timeline links to share progress with customers.",
+    tier: "All plans",
+  },
+  {
+    title: "Document builder",
+    body: "Generate branded documents and templates — SWMS, certificates, handover packs — straight from job data.",
+    tier: "Crew & up",
+  },
+  {
+    title: "AI assist",
+    body: "Smart dispatch, speech-to-quote, and lead capture from photos and messages — bundled on every paid plan.",
+    tier: "Crew & up",
+  },
+  {
+    title: "Workflow automation",
+    body: "Trigger-based rules that move jobs, send comms and assign work without anyone lifting a finger.",
+    tier: "Business",
+  },
+];
+
+// Consolidated plan comparison — feature groups mapped to the three tiers.
+const planCols = ["Freemium", "Crew", "Business"] as const;
+type Cell = boolean | string;
+const comparison: { group: string; rows: { label: string; values: [Cell, Cell, Cell] }[] }[] = [
+  {
+    group: "Core — every plan",
+    rows: [
+      { label: "Active jobs / month", values: ["15", "150", "Unlimited"] },
+      { label: "Users", values: ["3", "Unlimited", "Unlimited"] },
+      { label: "Jobs, scheduling & dispatch", values: [true, true, true] },
+      { label: "Quoting, proposals & invoicing", values: [true, true, true] },
+      { label: "Customers & customer portal", values: [true, true, true] },
+      { label: "Photos / job", values: ["10", "Unlimited", "Unlimited"] },
+      { label: "Mobile app & help hub", values: [true, true, true] },
+    ],
+  },
+  {
+    group: "Crew & up",
+    rows: [
+      { label: "Safety & compliance suite", values: [false, true, true] },
+      { label: "Equipment & fleet management", values: [false, true, true] },
+      { label: "Roles, permissions & time tracking", values: [false, true, true] },
+      { label: "Communications, inbox & templates", values: [false, true, true] },
+      { label: "AI assist — dispatch & speech-to-quote", values: [false, true, true] },
+      { label: "Advanced analytics & job costing", values: [false, true, true] },
+      { label: "SMS / month included", values: ["—", "200", "800"] },
+      { label: "Document builder", values: [false, true, true] },
+      { label: "Xero, Google Calendar, Gmail & Mailchimp", values: [false, true, true] },
+    ],
+  },
+  {
+    group: "Business",
+    rows: [
+      { label: "Workflow automation", values: [false, false, true] },
+      { label: "Priority onboarding & support", values: [false, false, true] },
+    ],
+  },
+  {
+    group: "Add-ons (any paid plan)",
+    rows: [
+      { label: "Call recording — $55/mo + usage", values: ["—", "Add-on", "Add-on"] },
+      { label: "Extra SMS top-up", values: ["—", "Add-on", "Add-on"] },
+    ],
   },
 ];
 
@@ -89,23 +187,70 @@ export default function Features() {
     <>
       {/* Header */}
       <Section className="pb-10 md:pb-12">
-        <div className="max-w-3xl">
+        <div className="max-w-3xl mx-auto text-center">
           <span className="eyebrow">Features</span>
           <h1 className="heading-display text-5xl md:text-6xl mt-5">
             Every workflow a trades business runs on. In one place.
           </h1>
-          <p className="mt-6 text-lg text-ink-500 leading-relaxed max-w-prose">
+          <p className="mt-6 text-lg text-ink-500 leading-relaxed max-w-prose mx-auto">
             Inflow replaces the patchwork most trades businesses run on — a job book, a quoting tool, an invoicing tool, a CRM, a safety binder, three group chats and a spreadsheet.
           </p>
         </div>
       </Section>
 
-      {/* Alternating feature blocks */}
+      {/* Feature blocks */}
       <div className="border-t border-ink-100">
-        {features.map((f, i) => (
-          <FeatureBlock key={f.title} feature={f} flipped={i % 2 === 1} />
+        {features.map((f) => (
+          <FeatureBlock key={f.title} feature={f} />
         ))}
       </div>
+
+      {/* More in the box — detail cards */}
+      <section className="border-t border-ink-100">
+        <Container className="py-20 md:py-24">
+          <div className="max-w-2xl mx-auto text-center">
+            <span className="eyebrow">More in the box</span>
+            <h2 className="heading-section text-3xl md:text-4xl mt-3">
+              Everything else you run on.
+            </h2>
+            <p className="mt-5 text-ink-500 leading-relaxed">
+              From supplier bills to back-costing — the rest of the toolkit, and which plan each lands on.
+            </p>
+          </div>
+          <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {detailFeatures.map((d) => (
+              <div key={d.title} className="rounded-2xl border border-ink-100 bg-paper p-6 text-center">
+                <div className="flex justify-center">
+                  <TierTag tier={d.tier} />
+                </div>
+                <h3 className="heading-section text-lg mt-4">{d.title}</h3>
+                <p className="mt-2 text-sm text-ink-500 leading-relaxed">{d.body}</p>
+              </div>
+            ))}
+          </div>
+        </Container>
+      </section>
+
+      {/* Plan comparison */}
+      <section className="bg-ink-50 border-t border-ink-100">
+        <Container className="py-20 md:py-24">
+          <div className="max-w-2xl mx-auto text-center">
+            <span className="eyebrow">Compare plans</span>
+            <h2 className="heading-section text-3xl md:text-4xl mt-3">
+              What's in each plan.
+            </h2>
+            <p className="mt-5 text-ink-500 leading-relaxed">
+              Every plan runs the core of your business. Crew adds the suite a working team needs; Business adds the tools to grow it. Pay by jobs per month, not per seat.
+            </p>
+          </div>
+          <ComparisonTable />
+          <div className="mt-8 text-center">
+            <LinkButton href="/pricing" variant="primary" size="md">
+              See pricing
+            </LinkButton>
+          </div>
+        </Container>
+      </section>
 
       {/* CTA */}
       <section className="bg-ink-900 text-paper">
@@ -130,20 +275,92 @@ export default function Features() {
   );
 }
 
-function FeatureBlock({ feature, flipped }: { feature: Feature; flipped: boolean }) {
+function TierTag({ tier }: { tier: Feature["tier"] }) {
+  const styles: Record<Feature["tier"], string> = {
+    "All plans": "bg-ink-100 text-ink-600",
+    "Crew & up": "bg-lime text-ink-900",
+    Business: "bg-ink-900 text-paper",
+  };
+  return (
+    <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-snug ${styles[tier]}`}>
+      {tier === "Business" ? "Business" : tier === "Crew & up" ? "Crew & up" : "All plans"}
+    </span>
+  );
+}
+
+function ComparisonTable() {
+  return (
+    <div className="mt-10 rounded-2xl border border-ink-100 bg-paper overflow-x-auto">
+      <table className="w-full text-sm border-collapse min-w-[640px]">
+        <thead>
+          <tr className="border-b border-ink-100">
+            <th className="text-left font-medium text-ink-500 p-4 min-w-[260px]">Feature</th>
+            {planCols.map((c) => (
+              <th
+                key={c}
+                className={`p-4 text-center font-semibold min-w-[110px] ${c === "Crew" ? "text-ink-900 bg-lime/10" : "text-ink-900"}`}
+              >
+                {c}
+                {c === "Crew" && (
+                  <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-lime-deep">Popular</span>
+                )}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {comparison.map((sec) => (
+            <Fragment key={sec.group}>
+              <tr className="bg-ink-50/60 border-b border-ink-100">
+                <td colSpan={4} className="px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">
+                  {sec.group}
+                </td>
+              </tr>
+              {sec.rows.map((row) => (
+                <tr key={row.label} className="border-b border-ink-100/70 last:border-b-0">
+                  <td className="p-4 text-ink-700">{row.label}</td>
+                  {row.values.map((v, i) => (
+                    <td key={i} className={`p-4 text-center ${planCols[i] === "Crew" ? "bg-lime/5" : ""}`}>
+                      {typeof v === "boolean" ? (
+                        v ? <CheckMark /> : <span className="text-ink-300">—</span>
+                      ) : (
+                        <span className="text-ink-700 font-medium tabular-nums">{v}</span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CheckMark() {
+  return (
+    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-ink-900 text-paper">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    </span>
+  );
+}
+
+function FeatureBlock({ feature }: { feature: Feature }) {
   return (
     <section className="border-b border-ink-100 last:border-b-0">
       <Container className="py-20 md:py-28">
-        <div
-          className={`grid lg:grid-cols-2 gap-12 lg:gap-16 items-center ${
-            flipped ? "lg:[&>*:first-child]:order-2" : ""
-          }`}
-        >
-          <div>
-            <span className="eyebrow">{feature.eyebrow}</span>
+        <div className="flex flex-col items-center text-center">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3 flex-wrap justify-center">
+              <span className="eyebrow">{feature.eyebrow}</span>
+              <TierTag tier={feature.tier} />
+            </div>
             <h2 className="heading-section text-3xl md:text-4xl mt-4">{feature.title}</h2>
             <p className="mt-5 text-ink-500 leading-relaxed">{feature.body}</p>
-            <ul className="mt-7 space-y-3">
+            <ul className="mt-7 space-y-3 inline-block text-left">
               {feature.bullets.map((b) => (
                 <li key={b} className="flex items-start gap-3 text-[15px]">
                   <span className="mt-2 h-1.5 w-1.5 rounded-full bg-lime-deep shrink-0" />
@@ -152,7 +369,9 @@ function FeatureBlock({ feature, flipped }: { feature: Feature; flipped: boolean
               ))}
             </ul>
           </div>
-          <FeatureVisual kind={feature.visual} />
+          <div className="mt-12 w-full max-w-xl">
+            <FeatureVisual kind={feature.visual} />
+          </div>
         </div>
       </Container>
     </section>

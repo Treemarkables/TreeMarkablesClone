@@ -4,6 +4,7 @@ import { db } from '../db';
 import { jobs, jobDiaryEntries, customers, conversationMessages } from '../../shared/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { PhotoStorageService } from '../photoStorage';
+import { onLaneJobEvent } from './laneAutomationService';
 
 interface ParsedEmailAttachment {
   filename?: string;
@@ -385,7 +386,8 @@ class GmailReplyService {
             console.log(`📧 ✅ Found existing conversation for ${email.from}: ${conversation.id}`);
             await notificationHelper.notifyConversationReply(
               { id: conversation.id, title: conversation.title, source: 'email', customerName: senderName },
-              cleanedBody
+              cleanedBody,
+              email.messageId,
             );
           } else {
             // No open conversation — check if ANY conversation (even closed/converted) already has a
@@ -408,7 +410,8 @@ class GmailReplyService {
               conversation = { ...priorConv, status: 'open' };
               await notificationHelper.notifyConversationReply(
                 { id: conversation.id, title: conversation.title, source: 'email', customerName: senderName },
-                cleanedBody
+                cleanedBody,
+                email.messageId,
               );
             } else {
               // Truly new lead — create a fresh conversation
@@ -505,8 +508,10 @@ class GmailReplyService {
           }
         }
 
-        // Create job diary entry for the email reply
-        await db.insert(jobDiaryEntries).values({
+        // Create job diary entry for the email reply.
+        // Capture the inserted id so the notification can deep-link straight to
+        // this entry in the diary (scroll + highlight), not just the diary tab.
+        const [insertedDiaryEntry] = await db.insert(jobDiaryEntries).values({
           jobId: job.id,
           entryType: 'email',
           title: `Email reply: ${email.subject}`,
@@ -529,20 +534,41 @@ class GmailReplyService {
             rawBody: email.textBody, // Store raw body for debugging
             ...(photoUrls.length > 0 && { attachmentCount: photoUrls.length }),
           }
-        });
+        }).returning({ id: jobDiaryEntries.id });
+        const diaryEntryId = insertedDiaryEntry?.id;
 
         console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
-        
-        // Create notification for email reply so it appears in notification bell
-        // De-dup: skip if an email_reply notification for this job was already created in the last 24h
-        // (includes archived records so the guard survives a "Clear all")
+
+        // Lanes: a customer reply can auto-remove the job from a follow-up lane (or move it).
+        onLaneJobEvent(job.id, 'customer_replied').catch(err => console.error('[Lanes] email-reply trigger error:', err));
+
+        // Create notification for email reply so it appears in notification bell.
+        // Dedup by the email's Message-ID — NOT "any reply for this job in the
+        // last 24h". The diary insert above already skips re-polled emails by
+        // messageId, so every reply that reaches here is a genuinely NEW message
+        // and earns its own bell entry. The previous 24h/job guard silently
+        // swallowed every reply after the first for a whole day, so distinct
+        // customer replies went un-notified. Falls back to a short per-job
+        // window only when the email has no Message-ID to identify it.
+        // getNotificationsCreatedSince includes archived rows, so a reply the
+        // user already cleared won't re-notify on the next poll.
         try {
           const { storage } = await import('../storage.js');
           const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
           const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
-          const jobAlreadyNotified = recentNotifs.some(
-            (n) => n.type === 'email_reply' && n.jobId === job.id
-          );
+          const jobAlreadyNotified = email.messageId
+            ? recentNotifs.some(
+                (n) =>
+                  n.type === 'email_reply' &&
+                  (n.metadata as any)?.emailMessageId === email.messageId,
+              )
+            : recentNotifs.some(
+                (n) =>
+                  n.type === 'email_reply' &&
+                  n.jobId === job.id &&
+                  Date.now() - new Date(n.createdAt as any).getTime() <
+                    5 * 60 * 1000,
+              );
           if (!jobAlreadyNotified) {
             const emailPreview = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
             await storage.createNotification({
@@ -552,7 +578,12 @@ class GmailReplyService {
               priority: 'medium',
               jobId: job.id,
               customerId: job.customerId,
-              actionUrl: `/dispatch?job=${job.id}`
+              ...(diaryEntryId && { diaryEntryId }),
+              // Stamp the Message-ID so the dedup above can recognise this exact
+              // email on later polls / the webhook path without suppressing
+              // other replies on the same job.
+              ...(email.messageId && { metadata: { emailMessageId: email.messageId } }),
+              actionUrl: `/dispatch?job=${job.id}&tab=diary${diaryEntryId ? `&entry=${diaryEntryId}` : ''}`
             });
             console.log(`🔔 Created notification for email reply from ${customer.name} on job #${job.jobNumber}`);
 
@@ -560,7 +591,7 @@ class GmailReplyService {
             const pushCount = await pushToAdminsWithCustomerMessages({
               title: `Email Reply — ${customer.name}`,
               body: emailPreview || `Re: ${email.subject}`,
-              clickAction: `/dispatch?job=${job.id}&tab=diary`,
+              clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntryId ? `&entry=${diaryEntryId}` : ''}`,
               data: {
                 type: 'email_reply',
                 jobId: job.id,
@@ -620,10 +651,11 @@ class GmailReplyService {
           console.log(`📧 ✅ Found existing open conversation for ${email.from}, adding message to: ${conversation.id}`);
           await notificationHelper.notifyConversationReply(
             { id: conversation.id, title: conversation.title, source: 'email', customerName: senderName },
-            cleanedBody
+            cleanedBody,
+            email.messageId,
           );
         }
-        
+
         // Create conversation message with optional job info
         const messageMetadata: Record<string, any> = {
           subject: email.subject,

@@ -6,12 +6,12 @@ export default function Contact() {
   return (
     <>
       <Section className="pb-10">
-        <div className="max-w-3xl">
+        <div className="max-w-3xl mx-auto text-center">
           <span className="eyebrow">Contact</span>
           <h1 className="heading-display text-5xl md:text-6xl mt-5">
             Tell us about your business.
           </h1>
-          <p className="mt-6 text-lg text-ink-500 leading-relaxed max-w-prose">
+          <p className="mt-6 text-lg text-ink-500 leading-relaxed max-w-prose mx-auto">
             We're onboarding a small group of NZ trades businesses one at a time. Drop in a few details and we'll be in touch personally.
           </p>
         </div>
@@ -19,8 +19,11 @@ export default function Contact() {
 
       <section className="pb-20 md:pb-28">
         <Container>
-          <div className="grid lg:grid-cols-[1fr_1.4fr] gap-10">
-            <aside className="space-y-8 lg:pr-6">
+          <div className="max-w-xl mx-auto">
+            <div>
+              <RequestAccessForm />
+            </div>
+            <aside className="mt-12 grid sm:grid-cols-3 gap-8 text-center">
               <Block
                 title="Email"
                 body={
@@ -48,10 +51,6 @@ export default function Contact() {
                 }
               />
             </aside>
-
-            <div>
-              <RequestAccessForm />
-            </div>
           </div>
         </Container>
       </section>

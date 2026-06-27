@@ -11,6 +11,7 @@ import {
 import { format as formatDate } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
+import { RecipientPicker } from "./RecipientPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -151,7 +152,7 @@ export function SMSComposerModal({
         customer.firstName ||
         customer.name?.split(" ")[0] ||
         "there";
-      const defaultMessage = `Hi ${recipientFirstName}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${window.location.origin}/invoice/${invoiceData.id || "preview"}`;
+      const defaultMessage = `Hi ${recipientFirstName}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${window.location.origin}/invoice/${invoiceData.id || "preview"}/view`;
       form.setValue("message", defaultMessage);
       setCharacterCount(defaultMessage.length);
     }
@@ -276,13 +277,24 @@ export function SMSComposerModal({
 
   const sendSMSMutation = useMutation({
     mutationFn: async (data: SMSFormData) => {
-      return apiRequest("POST", "/api/sms/send", {
-        phone: data.phone,
-        message: data.message,
-        jobId: job?.id,
-        customerId: customer?.id,
-        invoiceId: invoiceData?.id,
-      });
+      // SMS has no shared "To" line, so sending to multiple contacts means one
+      // copy of the message per number. Split on comma/semicolon and send each.
+      const numbers = data.phone
+        .split(/[,;]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const targets = numbers.length > 0 ? numbers : [data.phone];
+      let last;
+      for (const phone of targets) {
+        last = await apiRequest("POST", "/api/sms/send", {
+          phone,
+          message: data.message,
+          jobId: job?.id,
+          customerId: customer?.id,
+          invoiceId: invoiceData?.id,
+        });
+      }
+      return last;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
@@ -367,6 +379,18 @@ export function SMSComposerModal({
                   Tenant
                 </button>
               </div>
+              {/* Multi-select picker — tick saved contacts to text more than one
+                  person (one copy of the message is sent to each number). */}
+              <RecipientPicker
+                channel="sms"
+                customerId={customer?.id}
+                job={job}
+                customer={customer}
+                value={form.watch("phone") || ""}
+                onChange={(phone) =>
+                  form.setValue("phone", phone, { shouldDirty: true, shouldValidate: true })
+                }
+              />
             </div>
 
             {/* Phone Number Field */}

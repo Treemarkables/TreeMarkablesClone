@@ -94,6 +94,7 @@ import { InvoiceBuilder } from "./InvoiceBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { JobVideos } from "./JobVideos";
 import { JobChecklistPanel } from "./JobChecklistPanel";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 import { JobQuotingPanel } from "./JobQuotingPanel";
 import { JobCardMobile } from "./JobCardMobile";
 import { JobCardDesktop } from "./JobCardDesktop";
@@ -192,7 +193,9 @@ import {
   type Customer,
 } from "@shared/schema";
 import { cn } from "@/lib/utils";
-import { formatTime12Hour, nzTimeToUTC, utcToNZTime } from "@shared/dateUtils";
+import { registerReloadGuard } from "@/lib/foregroundReloadGuard";
+import { formatTime12Hour, nzTimeToUTC, utcToNZTime, getNZDateString, getJobScheduledNZDates } from "@shared/dateUtils";
+import { Calendar as DayCalendar } from "@/components/ui/calendar";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { Linkify, LinkifyMultiline } from "@/lib/linkify";
 import { Link } from "wouter";
@@ -429,6 +432,8 @@ export function GlobalJobCard({
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { isAdmin, currentUser } = useAuth();
+  // Role checklist (Kaitiaki / Kaiwhangai / Kaitirotiro) is Treemarkables-only.
+  const roleChecklistEnabled = useRoleChecklistFeature();
 
   // Fetch customers for the dropdown (needed upfront)
   const { data: customersData, isLoading: customersLoading } = useQuery({
@@ -748,6 +753,10 @@ export function GlobalJobCard({
   const [schedulingData, setSchedulingData] = useState({
     date: "",
     endDate: "", // For multi-day jobs — blank means single-day
+    // Explicit NZ calendar days (YYYY-MM-DD) the job runs on. Source of truth for
+    // the day picker; date/endDate are kept in sync as the first/last selected day
+    // so existing range-based logic (conflict checks, toast) keeps working.
+    selectedDates: [] as string[],
     startTime: "",
     duration: "", // in minutes — day 1
     day2Duration: "", // in minutes — last day (only used when endDate is set)
@@ -1226,6 +1235,15 @@ export function GlobalJobCard({
       setLocalQuoteMethod(jobQuoteMethod);
     }
   }, [editingJob?.id]);
+
+  // While the job card is open the user is mid-edit, so block the foreground
+  // staleness reload (client/src/main.tsx) from refreshing the page out from
+  // under them and wiping anything not yet auto-saved. Fresh code is picked up
+  // on the next foreground after they close the card.
+  useEffect(() => {
+    if (!isOpen) return;
+    return registerReloadGuard(() => true);
+  }, [isOpen]);
 
   // Reset internal state when modal closes
   useEffect(() => {
@@ -2657,6 +2675,40 @@ export function GlobalJobCard({
       );
       return response.json();
     },
+    // Optimistically patch every cached jobs list (incl. the Despatch Board) so a
+    // status change shows instantly instead of waiting for the post-success refetch.
+    onMutate: async (data: GlobalJobCardFormData) => {
+      const jobId = (data as any)._jobId || editingJob?.id;
+      if (!jobId) return { previous: [] as [readonly unknown[], unknown][] };
+      const { _jobId, ...patch } = data as any;
+      await queryClient.cancelQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          (query.queryKey[0] as string).startsWith("/api/jobs"),
+      });
+      const previous = queryClient.getQueriesData({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          (query.queryKey[0] as string).startsWith("/api/jobs"),
+      });
+      queryClient.setQueriesData(
+        {
+          predicate: (query) =>
+            typeof query.queryKey[0] === "string" &&
+            (query.queryKey[0] as string).startsWith("/api/jobs"),
+        },
+        (old: any) => {
+          if (!old || !Array.isArray(old.data)) return old;
+          return {
+            ...old,
+            data: old.data.map((j: any) =>
+              j?.id === jobId ? { ...j, ...patch } : j,
+            ),
+          };
+        },
+      );
+      return { previous };
+    },
     onSuccess: (updatedJob) => {
       // Invalidate all jobs queries to update dispatch board and job lists
       queryClient.invalidateQueries({
@@ -2681,8 +2733,14 @@ export function GlobalJobCard({
       queryClient.refetchQueries({ queryKey: ["/api/customers"] });
       onJobUpdated?.(updatedJob);
     },
-    onError: (error) => {
+    onError: (error, _vars, context: any) => {
       console.error("Error updating job:", error);
+      // Roll back the optimistic cache patch so the board reflects the real state.
+      if (context?.previous) {
+        for (const [key, data] of context.previous) {
+          queryClient.setQueryData(key, data);
+        }
+      }
       toast({
         title: "Update Error",
         description: "Failed to update job. Please try again.",
@@ -2771,9 +2829,35 @@ export function GlobalJobCard({
     },
     onError: (error: any) => {
       console.error("Error sending to Xero:", error);
+      // apiRequest throws an ApiError whose structured backend payload lives on
+      // `error.body` (errorCode / missingField / details.suggestion), NOT spread
+      // onto the error itself. Read from there so Xero's actual reason (e.g. a
+      // duplicate invoice number, which Xero reserves permanently) is surfaced
+      // instead of a vague "Xero Error".
+      const body = error?.body ?? error;
+      let title = "Xero error";
+      let description =
+        error?.message ||
+        body?.message ||
+        "Failed to send invoice to Xero. Please try again.";
+
+      if (body?.errorCode === "DUPLICATE_INVOICE_NUMBER") {
+        title = `Invoice #${body?.jobNumber ?? ""} already exists in Xero`;
+        description =
+          body?.details?.suggestion ||
+          "That invoice number is already in use in Xero — even a voided or deleted invoice keeps the number reserved. Renumber the existing invoice in Xero, then send again.";
+      } else if (body?.missingField === "address") {
+        title = "Missing address";
+        description =
+          body?.message ||
+          "This job/invoice needs a valid address before it can go to Xero.";
+      } else if (body?.details?.suggestion) {
+        description = body.details.suggestion;
+      }
+
       toast({
-        title: "Xero Error",
-        description: error?.message || "Failed to send invoice to Xero. Please try again.",
+        title,
+        description,
         variant: "destructive",
       });
     },
@@ -3238,6 +3322,12 @@ export function GlobalJobCard({
       existingEndDate = endDateNZ.date;
     }
 
+    // The exact days this job is already booked on — honours a non-contiguous
+    // scheduledDates set, else falls back to the contiguous span.
+    const existingSelectedDates: string[] = editingJob?.scheduledDate
+      ? getJobScheduledNZDates(editingJob as any)
+      : [];
+
     let baseDate = "";
     let baseStartTime = "";
     let baseDuration = "";
@@ -3286,6 +3376,7 @@ export function GlobalJobCard({
     let nextData = {
       date: baseDate,
       endDate: existingEndDate,
+      selectedDates: existingSelectedDates,
       startTime: baseStartTime,
       duration: baseDuration,
       day2Duration: "",
@@ -3345,9 +3436,21 @@ export function GlobalJobCard({
           ),
         ] as string[];
 
+        // Distinct NZ days across all assignment rows — the precise day set the
+        // crew is actually booked on (covers non-contiguous multi-day jobs).
+        const assignmentDays = [
+          ...new Set(
+            (data.data as any[]).map((a: any) =>
+              getNZDateString(new Date(a.startTime)),
+            ),
+          ),
+        ].sort() as string[];
+
         nextData = {
           ...nextData,
           date: startNZ.date,
+          selectedDates:
+            assignmentDays.length > 0 ? assignmentDays : nextData.selectedDates,
           startTime: startNZ.time,
           duration: durationMinutes.toString(),
           assignedTo:
@@ -3663,28 +3766,26 @@ The Treemarkables Team`;
   // selection — just lets us highlight the row.
   const busyEmployees = useMemo(() => {
     const map = new Map<string, { startTime: Date; endTime: Date }[]>();
-    const { date, startTime, duration, endDate, day2Duration } = schedulingData;
+    const { startTime, duration, day2Duration } = schedulingData;
+    const days = [...schedulingData.selectedDates].sort();
     const assignments = allStaffAssignmentsData?.data ?? [];
-    if (!date || !startTime || !duration || assignments.length === 0) return map;
+    if (days.length === 0 || !startTime || !duration || assignments.length === 0) return map;
     const durMs = parseInt(duration, 10) * 60_000;
     if (!durMs || Number.isNaN(durMs)) return map;
 
-    // Build every [startUTC, endUTC] window the user's selection covers —
-    // mirrors how saveSchedule creates one assignment per day.
-    const isMultiDay = !!(endDate && endDate !== date);
+    // Build a [startUTC, endUTC] window for each selected day — mirrors how
+    // saveSchedule creates one assignment per day. Only the actual selected days
+    // are checked, so carved-out days (e.g. weekends) raise no false conflicts.
+    const isMultiDay = days.length > 1;
     const day2Ms = isMultiDay && day2Duration ? parseInt(day2Duration, 10) * 60_000 : durMs;
-    const lastDay = isMultiDay ? endDate : date;
+    const lastDay = days[days.length - 1];
     const windows: { start: number; end: number }[] = [];
     try {
-      const d = new Date(date + "T12:00:00Z");
-      const end = new Date(lastDay + "T12:00:00Z");
-      while (d <= end) {
-        const dayStr = d.toISOString().split("T")[0];
+      for (const dayStr of days) {
         const isLast = dayStr === lastDay;
         const thisMs = isMultiDay && isLast ? day2Ms : durMs;
         const ws = nzTimeToUTC(dayStr, startTime).getTime();
         windows.push({ start: ws, end: ws + thisMs });
-        d.setUTCDate(d.getUTCDate() + 1);
       }
     } catch {
       return map;
@@ -3704,10 +3805,9 @@ The Treemarkables Team`;
     }
     return map;
   }, [
-    schedulingData.date,
+    schedulingData.selectedDates,
     schedulingData.startTime,
     schedulingData.duration,
-    schedulingData.endDate,
     schedulingData.day2Duration,
     allStaffAssignmentsData,
     editingJob?.id,
@@ -3718,18 +3818,29 @@ The Treemarkables Team`;
     if (!editingJob?.id) return;
 
     try {
-      // Parse date and time components
-      const dateStr = schedulingData.date; // Already in YYYY-MM-DD format
+      // The exact days the user picked in the calendar (YYYY-MM-DD NZ dates),
+      // sorted ascending. This is the source of truth — it may skip days inside
+      // the span (e.g. a Wed–Mon job that excludes the weekend).
+      const allDays = [...schedulingData.selectedDates].sort();
+      if (allDays.length === 0) {
+        toast({
+          title: "Pick at least one day",
+          description: "Tap the days in the calendar you want to schedule this job for.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const timeStr = schedulingData.startTime; // Already in HH:MM format
+      const dateStr = allDays[0]; // First selected day
+      const endDateStr = allDays[allDays.length - 1]; // Last selected day
+      const isMultiDay = allDays.length > 1;
 
       // Convert NZ local time to UTC using the proper timezone conversion function
       const startTimeUTC = nzTimeToUTC(dateStr, timeStr);
       const startTimeISO = startTimeUTC.toISOString();
 
       // Calculate end times — day 1 and last day may differ
-      const isMultiDay = !!(
-        schedulingData.endDate && schedulingData.endDate !== schedulingData.date
-      );
       const durationMs = parseInt(schedulingData.duration) * 60000;
       const day2DurationMs =
         isMultiDay && schedulingData.day2Duration
@@ -3746,22 +3857,8 @@ The Treemarkables Team`;
 
       // Create staff assignments - remove duplicates first
       const uniqueEmployeeIds = [...new Set(schedulingData.assignedTo)];
-      const endDateStr = isMultiDay
-        ? schedulingData.endDate
-        : schedulingData.date;
 
-      // Build list of all days in range (YYYY-MM-DD NZ dates)
-      const allDays: string[] = [];
-      {
-        const d = new Date(schedulingData.date + "T12:00:00Z");
-        const last = new Date(endDateStr + "T12:00:00Z");
-        while (d <= last) {
-          allDays.push(d.toISOString().split("T")[0]);
-          d.setUTCDate(d.getUTCDate() + 1);
-        }
-      }
-
-      // One assignment per employee per day — last day uses day2DurationMs if set
+      // One assignment per employee per selected day — last day uses day2DurationMs if set
       const staffAssignments: Array<{
         employeeId: string;
         startTime: string;
@@ -3809,6 +3906,7 @@ The Treemarkables Team`;
       setSchedulingData({
         date: "",
         endDate: "",
+        selectedDates: [],
         startTime: "",
         duration: "",
         day2Duration: "",
@@ -3824,8 +3922,9 @@ The Treemarkables Team`;
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scheduledDate: startTimeISO, // Send full UTC ISO string
-          scheduledEndDate: scheduledEndDateISO, // null for single-day jobs
+          scheduledDate: startTimeISO, // Send full UTC ISO string (first day)
+          scheduledEndDate: scheduledEndDateISO, // null for single-day jobs (last day)
+          scheduledDates: isMultiDay ? allDays : null, // explicit day set (may skip days); null clears it for single-day
           scheduledStartTime: timeStr, // NZ local time (HH:MM format)
           scheduledEndTime: endTimeNZ.time, // NZ local time (HH:MM format)
           assignedTo: uniqueEmployeeIds,
@@ -3898,13 +3997,10 @@ The Treemarkables Team`;
             editingJob.billingContactEmail ||
             editingJobCustomer?.email ||
             "";
-          // schedulingData.date is a YYYY-MM-DD NZ calendar date from the
-          // date input. Parse the parts directly so format() prints that
-          // same day — appending "T...Z" treats it as UTC and rolls forward
-          // a day once rendered in NZ time.
-          const [dateY, dateM, dateD] = schedulingData.date
-            .split("-")
-            .map(Number);
+          // dateStr is the first selected day as a YYYY-MM-DD NZ calendar date.
+          // Parse the parts directly so format() prints that same day — appending
+          // "T...Z" treats it as UTC and rolls forward a day once rendered in NZ.
+          const [dateY, dateM, dateD] = dateStr.split("-").map(Number);
           const dateDisplay = format(
             new Date(dateY, dateM - 1, dateD),
             "EEEE d MMMM yyyy",
@@ -4095,7 +4191,7 @@ The Treemarkables Team`;
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary-timeline"] });
       setIsSchedulingModalOpen(false);
-      setSchedulingData({ date: "", endDate: "", startTime: "", duration: "", day2Duration: "", assignedTo: [], notes: "", sendClientNotification: false, sendProposalEmail: false, scheduleBookingReminders: false });
+      setSchedulingData({ date: "", endDate: "", selectedDates: [], startTime: "", duration: "", day2Duration: "", assignedTo: [], notes: "", sendClientNotification: false, sendProposalEmail: false, scheduleBookingReminders: false });
     } catch (error) {
       console.error("Error unscheduling job:", error);
       toast({ title: "Error", description: "Could not unschedule the job.", variant: "destructive" });
@@ -4635,6 +4731,34 @@ The Treemarkables Team`;
   const currentStatus =
     mode === "edit" ? (watchedStatus || editingJob?.status) : watchedStatus;
 
+  // Single entry point for every "Send to Xero" control. The buttons used to be
+  // silently `disabled` when preconditions weren't met, so a tap/click did
+  // nothing and the user had no idea why (the dominant case: the job isn't
+  // marked Completed yet). Surface the reason instead of dead-ending.
+  const handleSendToXeroClick = () => {
+    if (!editingJob?.id || mode === "create") return;
+    if (sendToXeroMutation.isPending) return;
+    if (editingJob?.xeroStatus === "sent") {
+      toast({
+        title: "Already sent to Xero",
+        description:
+          'This invoice is already in Xero. Use "Reset Xero Sync" first if you need to re-send it.',
+        variant: "destructive",
+      });
+      return;
+    }
+    if (currentStatus !== "completed") {
+      toast({
+        title: "Can't send to Xero yet",
+        description:
+          "Mark this job as Completed before sending its invoice to Xero.",
+        variant: "destructive",
+      });
+      return;
+    }
+    sendToXeroMutation.mutate();
+  };
+
   if (jobLoading) {
     const loadingContent = (
       <div className="flex items-center justify-center h-full w-full bg-gray-50">
@@ -5073,11 +5197,10 @@ The Treemarkables Team`;
                   Archive
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => sendToXeroMutation.mutate()}
+                  onClick={handleSendToXeroClick}
                   disabled={
                     !editingJob?.id ||
                     mode === "create" ||
-                    currentStatus !== "completed" ||
                     editingJob?.xeroStatus === "sent" ||
                     sendToXeroMutation.isPending
                   }
@@ -5213,6 +5336,7 @@ The Treemarkables Team`;
           >
             Billing
           </button>
+          {roleChecklistEnabled && (
           <button
             className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b inline-flex items-center justify-center gap-1.5 ${
               currentStatus === "completed"
@@ -5263,6 +5387,7 @@ The Treemarkables Team`;
             <ListChecks className="w-3.5 h-3.5" />
             Checklist
           </button>
+          )}
           {/* On-site quoting process — only relevant while a job is in lead/quote
               stage. Once it advances to work_order/scheduled/completed the tab
               hides so the sidebar stays focused on the job's current state. */}
@@ -9917,7 +10042,7 @@ The Treemarkables Team`;
                     </div>
                   )}
 
-                  {sidebarTab === "checklist" && (
+                  {sidebarTab === "checklist" && roleChecklistEnabled && (
                     <>
                       {editingJob ? (
                         <>
@@ -10243,13 +10368,12 @@ The Treemarkables Team`;
                 disabled={
                   !editingJob?.id ||
                   mode === "create" ||
-                  currentStatus !== "completed" ||
                   editingJob?.xeroStatus === "sent" ||
                   sendToXeroMutation.isPending
                 }
                 onClick={() => {
                   setShowMoreActionsSheet(false);
-                  sendToXeroMutation.mutate();
+                  handleSendToXeroClick();
                 }}
                 data-testid="more-sheet-send-xero"
               >
@@ -10766,7 +10890,7 @@ The Treemarkables Team`;
     proposal: () => setIsProposalBuilderOpen(true),
     timeTracking: () => setIsTimeTrackingOpen(true),
     profitTracker: () => setIsProfitTrackerOpen(true),
-    sendToXero: () => sendToXeroMutation.mutate(),
+    sendToXero: handleSendToXeroClick,
   };
 
   // Diary doc-click handlers reused by both surfaces. Quote/invoice just
@@ -10788,6 +10912,10 @@ The Treemarkables Team`;
       {showMobileCard ? (
         <JobCardMobile
           jobId={editingJob!.id}
+          // Honour the deep-link tab (e.g. a notification opening straight to
+          // the diary). Without this the mobile card always defaulted to
+          // Details, so notification clicks opened the job but never the diary.
+          initialTab={initialSidebarTab}
           onClose={() => handleDialogClose(false)}
           onDuplicated={(newJobId) => {
             // Swap the open modal over to the duplicate. setCreatedJobId
@@ -10874,8 +11002,8 @@ The Treemarkables Team`;
       )}
 
       {/* Quote Builder — proposal-builder-style UI in quote mode.
-          Sends by email with a PDF attachment and a mailto "Accept Quote"
-          button (no public viewer link). */}
+          Sends by email with a PDF attachment and a "View Quote" button that
+          opens the online accept page (/proposal/:id/accept?type=quote). */}
       {isQuoteModalOpen && editingJob && (
         <ProposalBuilderV2
           kind="quote"
@@ -11024,47 +11152,73 @@ The Treemarkables Team`;
             <h2 className="text-lg font-semibold">Schedule Job</h2>
           </DialogHeader>
           <div className="space-y-4 px-6 py-2 overflow-y-auto flex-1 min-h-0">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium">Start Date</label>
-                <Input
-                  type="date"
-                  value={schedulingData.date}
-                  onChange={(e) => {
-                    const newDate = e.target.value;
+            <div>
+              <label className="text-sm font-medium">Select Days</label>
+              <p className="text-xs text-muted-foreground">
+                Tap each day this job runs. Tap a day again to remove it — skip
+                the weekend or any other days you don't want.
+              </p>
+              <div className="mt-2 rounded-md border flex justify-center">
+                <DayCalendar
+                  mode="multiple"
+                  selected={schedulingData.selectedDates.map(
+                    (s) => new Date(s + "T00:00:00"),
+                  )}
+                  onSelect={(dates) => {
+                    const strs = ((dates as Date[] | undefined) ?? [])
+                      .map((d) => format(d, "yyyy-MM-dd"))
+                      .sort();
                     setSchedulingData((prev) => ({
                       ...prev,
-                      date: newDate,
-                      // If end date is now before start date, clear it
-                      endDate:
-                        prev.endDate && prev.endDate < newDate
-                          ? ""
-                          : prev.endDate,
+                      selectedDates: strs,
+                      date: strs[0] ?? "",
+                      endDate: strs.length > 1 ? strs[strs.length - 1] : "",
                     }));
                   }}
-                  data-testid="input-schedule-date"
+                  data-testid="calendar-schedule-days"
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium">
-                  End Date
-                  <span className="text-xs text-muted-foreground font-normal ml-1">
-                    (multi-day)
-                  </span>
-                </label>
-                <Input
-                  type="date"
-                  value={schedulingData.endDate}
-                  min={schedulingData.date || undefined}
-                  onChange={(e) =>
-                    setSchedulingData((prev) => ({
-                      ...prev,
-                      endDate: e.target.value,
-                    }))
-                  }
-                  data-testid="input-schedule-end-date"
-                  placeholder="Same day"
-                />
+              <div className="mt-2 flex items-center justify-between">
+                <span
+                  className="text-xs text-muted-foreground"
+                  data-testid="text-selected-day-count"
+                >
+                  {schedulingData.selectedDates.length === 0
+                    ? "No days selected"
+                    : schedulingData.selectedDates.length === 1
+                      ? "1 day selected"
+                      : `${schedulingData.selectedDates.length} days selected`}
+                </span>
+                {schedulingData.selectedDates.some((s) => {
+                  const dow = new Date(s + "T00:00:00").getDay();
+                  return dow === 0 || dow === 6;
+                }) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() =>
+                      setSchedulingData((prev) => {
+                        const strs = prev.selectedDates
+                          .filter((s) => {
+                            const dow = new Date(s + "T00:00:00").getDay();
+                            return dow !== 0 && dow !== 6;
+                          })
+                          .sort();
+                        return {
+                          ...prev,
+                          selectedDates: strs,
+                          date: strs[0] ?? "",
+                          endDate: strs.length > 1 ? strs[strs.length - 1] : "",
+                        };
+                      })
+                    }
+                    data-testid="button-remove-weekends"
+                  >
+                    Remove weekends
+                  </Button>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -11424,6 +11578,7 @@ The Treemarkables Team`;
                   setSchedulingData({
                     date: "",
                     endDate: "",
+                    selectedDates: [],
                     startTime: "",
                     duration: "",
                     day2Duration: "",

@@ -177,7 +177,7 @@ export default function EquipmentRegister() {
       </Card>
 
       <Dialog open={!!editingEquip} onOpenChange={open => { if (!open) { setEditingEquip(null); setLicenceValue(""); setCustomLicence(""); setUseCustom(false); } }}>
-        <DialogContent data-testid="dialog-edit-licence">
+        <DialogContent data-testid="dialog-edit-licence" className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Licence Requirement — {editingEquip?.name}</DialogTitle>
           </DialogHeader>

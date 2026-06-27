@@ -649,6 +649,29 @@ type NoteFormData = z.infer<typeof noteSchema>;
 type SMSFormData = z.infer<typeof smsSchema>;
 type EmailFormData = z.infer<typeof emailSchema>;
 
+// ── Deep-link-to-entry highlight bus ────────────────────────────────────────
+// Notifications (e.g. an email reply) deep-link to a specific diary entry, not
+// just the diary tab. The diary lives behind several call sites (mobile +
+// desktop layouts inside GlobalJobCard), and DispatchBoard strips the URL
+// params the moment it opens the card — so prop-drilling the target id is
+// brittle. Instead we use a tiny module bus: the navigator calls
+// `requestDiaryHighlight(id)`, which both fires an event (for an already-mounted
+// diary) and parks the id in a module var (for a diary that mounts a beat
+// later). Each JobDiarySection picks it up, scrolls the entry into view, and
+// pulses a highlight. The id is consumed once so it can't re-fire on later opens.
+let pendingDiaryHighlightEntryId: string | null = null;
+const DIARY_HIGHLIGHT_EVENT = "diary-highlight-entry";
+
+export function requestDiaryHighlight(entryId: string) {
+  if (!entryId) return;
+  pendingDiaryHighlightEntryId = entryId;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(DIARY_HIGHLIGHT_EVENT, { detail: entryId }),
+    );
+  }
+}
+
 interface JobDiarySectionProps {
   jobId: string;
   customerId?: string;
@@ -735,6 +758,19 @@ export function JobDiarySection({
   const [annotatorOpen, setAnnotatorOpen] = useState(false);
   const [diaryTab, setDiaryTab] = useState<"timeline" | "photos">("timeline");
   const quickNoteInputRef = React.useRef<HTMLTextAreaElement>(null);
+  // Root element of this diary instance — used to scope the deep-link entry
+  // lookup so multiple mounted diaries (mobile + desktop) don't cross-match.
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  // The diary entry a notification deep-linked to. Seeded from the module bus
+  // on mount (covers the case where DispatchBoard requested the highlight just
+  // before this diary mounted) and updated live via the highlight event.
+  const [highlightEntryId, setHighlightEntryId] = useState<string | null>(
+    () => {
+      const pending = pendingDiaryHighlightEntryId;
+      pendingDiaryHighlightEntryId = null;
+      return pending;
+    },
+  );
   const [replyToEmail, setReplyToEmail] = useState<string>("");
   const [replyToPhone, setReplyToPhone] = useState<string>("");
   // Pre-filled body when opening the email composer from an AI-drafted
@@ -1484,6 +1520,66 @@ export function JobDiarySection({
     return groups;
   }, [diaryEntries]);
 
+  // Listen for deep-link highlight requests fired while this diary is already
+  // mounted (e.g. a notification clicked while the job card is open).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (id) setHighlightEntryId(id);
+    };
+    window.addEventListener(DIARY_HIGHLIGHT_EVENT, handler);
+    return () => window.removeEventListener(DIARY_HIGHLIGHT_EVENT, handler);
+  }, []);
+
+  // Scroll the deep-linked entry into view and pulse a highlight once its row
+  // has rendered. Email replies render inside a thread, so the row can mount a
+  // beat after the entries load — retry briefly before giving up.
+  useEffect(() => {
+    if (!highlightEntryId || isLoading || diaryEntries.length === 0) return;
+    // A deep-linked entry always lives in the timeline, never the photos grid.
+    if (diaryTab !== "timeline") {
+      setDiaryTab("timeline");
+      return;
+    }
+
+    let cleared = false;
+    let attempts = 0;
+    let frame = 0;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    const tryHighlight = () => {
+      if (cleared) return;
+      const el = rootRef.current?.querySelector<HTMLElement>(
+        `[data-diary-entry-id="${CSS.escape(highlightEntryId)}"]`,
+      );
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("diary-entry-highlight");
+        timers.push(
+          setTimeout(
+            () => el.classList.remove("diary-entry-highlight"),
+            2600,
+          ),
+        );
+        cleared = true;
+        setHighlightEntryId(null); // consume so reopening can't re-fire it
+        return;
+      }
+      if (attempts++ < 20) {
+        timers.push(setTimeout(tryHighlight, 100));
+      } else {
+        setHighlightEntryId(null); // entry may be beyond the initial fetch
+      }
+    };
+
+    frame = requestAnimationFrame(tryHighlight);
+    return () => {
+      cleared = true;
+      cancelAnimationFrame(frame);
+      timers.forEach(clearTimeout);
+    };
+  }, [highlightEntryId, isLoading, diaryEntries.length, diaryTab]);
+
   // Function to handle opening invoices from diary entries
   const handleOpenInvoice = (invoiceNumber: string) => {
     if (onInvoiceClick) {
@@ -2000,7 +2096,10 @@ export function JobDiarySection({
 
   return (
     <PullToRefresh onRefresh={handleRefresh} enabled={false}>
-      <div className={embedded ? (className ?? "") : `h-full flex flex-col ${className ?? ""}`}>
+      <div
+        ref={rootRef}
+        className={embedded ? (className ?? "") : `h-full flex flex-col ${className ?? ""}`}
+      >
         {/* Header */}
         <div className="flex-shrink-0 p-2 border-b bg-gray-50 dark:bg-gray-900">
           <div className="flex items-center justify-between mb-1">
@@ -2366,12 +2465,8 @@ export function JobDiarySection({
                             const accent = isOutgoing
                               ? "border-blue-400 dark:border-blue-500"
                               : "border-purple-400 dark:border-purple-500";
-                            const bubbleBg = isOutgoing
-                              ? "bg-blue-50 dark:bg-blue-900/30"
-                              : "bg-purple-50 dark:bg-purple-900/30";
-                            const bubbleText = isOutgoing
-                              ? "text-blue-900 dark:text-blue-100"
-                              : "text-purple-900 dark:text-purple-100";
+                            const bubbleBg = "bg-gray-50 dark:bg-gray-800/60";
+                            const bubbleText = "text-gray-800 dark:text-gray-200";
                             const labelText = isOutgoing
                               ? "text-blue-700 dark:text-blue-300"
                               : "text-purple-700 dark:text-purple-300";
@@ -2381,7 +2476,8 @@ export function JobDiarySection({
                             return (
                               <div
                                 key={msg.id}
-                                className={`border-l-2 pl-3 ml-1 ${accent}`}
+                                data-diary-entry-id={msg.id}
+                                className={`border-l-2 pl-3 ml-1 rounded-md transition-shadow ${accent}`}
                                 data-testid={`email-thread-msg-${msg.id}`}
                               >
                                 <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -2546,12 +2642,8 @@ export function JobDiarySection({
                             const accent = isOutgoing
                               ? "border-blue-400 dark:border-blue-500"
                               : "border-purple-400 dark:border-purple-500";
-                            const bubbleBg = isOutgoing
-                              ? "bg-blue-50 dark:bg-blue-900/30"
-                              : "bg-purple-50 dark:bg-purple-900/30";
-                            const bubbleText = isOutgoing
-                              ? "text-blue-900 dark:text-blue-100"
-                              : "text-purple-900 dark:text-purple-100";
+                            const bubbleBg = "bg-gray-50 dark:bg-gray-800/60";
+                            const bubbleText = "text-gray-800 dark:text-gray-200";
                             const labelText = isOutgoing
                               ? "text-blue-700 dark:text-blue-300"
                               : "text-purple-700 dark:text-purple-300";
@@ -2563,7 +2655,8 @@ export function JobDiarySection({
                             return (
                               <div
                                 key={msg.id}
-                                className={`border-l-2 pl-3 ml-1 ${accent}`}
+                                data-diary-entry-id={msg.id}
+                                className={`border-l-2 pl-3 ml-1 rounded-md transition-shadow ${accent}`}
                                 data-testid={`sms-thread-msg-${msg.id}`}
                               >
                                 <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -2847,22 +2940,14 @@ export function JobDiarySection({
                   }
 
                   return (
-                    <div key={entry.id} className="group">
-                      <div
-                        className={`rounded-xl overflow-hidden shadow-sm ${
-                          isSent
-                            ? "bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
-                            : "bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800"
-                        }`}
-                      >
+                    <div
+                      key={entry.id}
+                      data-diary-entry-id={entry.id}
+                      className="group rounded-xl transition-shadow"
+                    >
+                      <div className="rounded-xl overflow-hidden shadow-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
                         {/* Header */}
-                        <div
-                          className={`flex items-center justify-between px-3 py-1.5 ${
-                            isSent
-                              ? "border-b border-gray-200 dark:border-gray-700"
-                              : "border-b border-purple-200 dark:border-purple-800"
-                          }`}
-                        >
+                        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 dark:border-gray-700">
                           <div className="flex items-center gap-1.5">
                             {entry.type === "email" ? (
                               <MdEmail
@@ -2890,7 +2975,7 @@ export function JobDiarySection({
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span
-                              className={`text-[10px] whitespace-nowrap ${isSent ? "text-gray-400 dark:text-gray-500" : "text-purple-500 dark:text-purple-400"}`}
+                              className="text-[10px] whitespace-nowrap text-gray-400 dark:text-gray-500"
                             >
                               {formatInTimeZone(
                                 new Date(entry.timestamp),
@@ -2924,24 +3009,14 @@ export function JobDiarySection({
                           onClick={isClickable ? handleEntryClick : undefined}
                         >
                           <p
-                            className={`text-xs leading-relaxed whitespace-pre-wrap break-words w-full ${
-                              isSent
-                                ? "text-gray-700 dark:text-gray-300"
-                                : "text-purple-900 dark:text-purple-100"
-                            } ${isClickable ? "underline underline-offset-2 decoration-dashed" : ""}`}
+                            className={`text-xs leading-relaxed whitespace-pre-wrap break-words w-full text-gray-700 dark:text-gray-300 ${isClickable ? "underline underline-offset-2 decoration-dashed" : ""}`}
                             style={{ wordBreak: "break-word" }}
                           >
                             {messageText}
                           </p>
                         </div>
                         {/* Footer with tracking and reply */}
-                        <div
-                          className={`px-3 py-1.5 flex items-center justify-between gap-2 ${
-                            isSent
-                              ? "border-t border-gray-200 dark:border-gray-700"
-                              : "border-t border-purple-200 dark:border-purple-800"
-                          }`}
-                        >
+                        <div className="px-3 py-1.5 flex items-center justify-between gap-2 border-t border-gray-200 dark:border-gray-700">
                           {/* Email tracking for sent emails */}
                           {isSent && entry.type === "email" ? (
                             entry.metadata?.sendgridMessageId ? (
@@ -3121,45 +3196,29 @@ export function JobDiarySection({
                   );
                 }
 
-                // Get entry-specific styling
+                // Get entry-specific styling.
+                // Option A: every entry sits on a white card with a hairline
+                // neutral border — colour survives only in the small per-type
+                // icon chip below, so the diary scans by type without the
+                // full-card colour washes.
                 const getEntryStyle = (type: string) => {
+                  const surface = {
+                    bg: "bg-white dark:bg-gray-900",
+                    border: "border-gray-200 dark:border-gray-700",
+                  };
                   switch (type) {
                     case "note":
-                      return {
-                        bg: "bg-yellow-50 dark:bg-yellow-900/20",
-                        border: "border-yellow-200 dark:border-yellow-800",
-                        icon: "bg-yellow-100 dark:bg-yellow-900/50",
-                      };
+                      return { ...surface, icon: "bg-yellow-100 dark:bg-yellow-900/50" };
                     case "proposal":
-                      return {
-                        bg: "bg-indigo-50 dark:bg-indigo-900/20",
-                        border: "border-indigo-200 dark:border-indigo-800",
-                        icon: "bg-indigo-100 dark:bg-indigo-900/50",
-                      };
+                      return { ...surface, icon: "bg-indigo-100 dark:bg-indigo-900/50" };
                     case "quote":
-                      return {
-                        bg: "bg-teal-50 dark:bg-teal-900/20",
-                        border: "border-teal-200 dark:border-teal-800",
-                        icon: "bg-teal-100 dark:bg-teal-900/50",
-                      };
+                      return { ...surface, icon: "bg-teal-100 dark:bg-teal-900/50" };
                     case "job_event":
-                      return {
-                        bg: "bg-green-50 dark:bg-green-900/20",
-                        border: "border-green-200 dark:border-green-800",
-                        icon: "bg-green-100 dark:bg-green-900/50",
-                      };
+                      return { ...surface, icon: "bg-green-100 dark:bg-green-900/50" };
                     case "call":
-                      return {
-                        bg: "bg-orange-50 dark:bg-orange-900/20",
-                        border: "border-orange-200 dark:border-orange-800",
-                        icon: "bg-orange-100 dark:bg-orange-900/50",
-                      };
+                      return { ...surface, icon: "bg-orange-100 dark:bg-orange-900/50" };
                     default:
-                      return {
-                        bg: "bg-gray-50 dark:bg-gray-800",
-                        border: "border-gray-200 dark:border-gray-700",
-                        icon: "bg-gray-100 dark:bg-gray-900/50",
-                      };
+                      return { ...surface, icon: "bg-gray-100 dark:bg-gray-900/50" };
                   }
                 };
                 const entryStyle = getEntryStyle(entry.type);
@@ -3167,7 +3226,8 @@ export function JobDiarySection({
                 return (
                   <div
                     key={entry.id}
-                    className="group"
+                    data-diary-entry-id={entry.id}
+                    className="group rounded-xl transition-shadow"
                     data-testid={`diary-entry-${entry.type}`}
                   >
                     <div

@@ -77,7 +77,7 @@ function SidebarNavContent({
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const safetyActive = location === "/safety" || location.startsWith("/safety/") || ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
   const financeActive = ["/metrics", "/profitability-calculator"].includes(location);
-  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/equipment"].includes(location);
+  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
   const [safetyOpen, setSafetyOpen] = useState(safetyActive);
@@ -140,6 +140,16 @@ function SidebarNavContent({
                 </SidebarMenuItem>
               )}
 
+              {/* Today — daily command centre */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/today"} className={ITEM}>
+                  <Link href="/today" onClick={handleLinkClick} data-testid="link-today">
+                    <Glyph>📌</Glyph>
+                    <span>Today</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {/* Dispatch Board */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/dispatch"} className={ITEM}>
@@ -166,6 +176,16 @@ function SidebarNavContent({
                   <Link href="/videos" onClick={handleLinkClick} data-testid="link-videos">
                     <Glyph>🎥</Glyph>
                     <span>Videos</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Library — unified search across all photos + videos with optional map view */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/library"} className={ITEM}>
+                  <Link href="/library" onClick={handleLinkClick} data-testid="link-library">
+                    <Glyph>🔍</Glyph>
+                    <span>Library</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -468,11 +488,6 @@ function SidebarNavContent({
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/inbox"}>
                             <Link href="/inbox" onClick={handleLinkClick} data-testid="link-inbox"><span>Inbox</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/equipment"}>
-                            <Link href="/equipment" onClick={handleLinkClick} data-testid="link-equipment"><span>Equipment</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       </SidebarMenuSub>

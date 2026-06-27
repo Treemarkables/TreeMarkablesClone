@@ -348,7 +348,12 @@ export function AddressAutocomplete({
           value={formatAddress(value)}
           onChange={(e) => handleInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          onFocus={() => value.length >= 3 && setShowSuggestions(suggestions.length > 0)}
+          onFocus={(e) => {
+            // Highlight the whole address on focus so typing immediately replaces it
+            // (no need to manually delete the pre-filled value first)
+            e.target.select();
+            if (value.length >= 3) setShowSuggestions(suggestions.length > 0);
+          }}
           onBlur={onBlur}
           placeholder={placeholder}
           className={`${className} leading-relaxed`}
