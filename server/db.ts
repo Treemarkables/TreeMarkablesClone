@@ -137,6 +137,23 @@ export const db: typeof ownerDb = new Proxy(ownerDb, {
  */
 export async function assertTenantDbMatchesOwner(): Promise<void> {
   if (!RLS_ENABLED || !tenantPool) return;
+
+  // The tenant pool MUST use a DIRECT (non-pooler) endpoint. Through Neon's
+  // transaction pooler, session-level SET ROLE / set_config GUCs do not stick to a
+  // backend across queries and cross-contaminate between concurrent requests — i.e.
+  // requests read back the WRONG tenant's GUC under load (cross-tenant reads). The
+  // counts check below passes for a same-database pooler URL, so it can't catch this;
+  // guard the endpoint shape explicitly. Only a misconfigured DIRECT_DATABASE_URL can
+  // trip this (the auto-derivation strips '-pooler.'), so fail loudly at deploy time.
+  if (/-pooler\./.test(DIRECT_URL) || /pgbouncer=true/i.test(DIRECT_URL)) {
+    const safe = DIRECT_URL.replace(/:[^:@/]*@/, ":***@");
+    throw new Error(
+      `FATAL: tenant RLS pool is using a POOLER endpoint (${safe}). Session GUCs leak ` +
+        `across tenants through the pooler under load. Set DIRECT_DATABASE_URL to the direct ` +
+        `(non-pooler) endpoint, or unset it to auto-derive by stripping '-pooler.' from DATABASE_URL.`,
+    );
+  }
+
   const sigOf = async (p: pg.Pool): Promise<string> => {
     const c = await p.connect();
     try {
