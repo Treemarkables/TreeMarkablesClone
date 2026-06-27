@@ -5948,9 +5948,23 @@ class DatabaseStorage implements IStorage {
     return this.getInvoiceSectionsByInvoice(invoiceId);
   }
 
-  async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> { throw new Error("Not implemented"); }
-  async getServiceRequest(id: string): Promise<ServiceRequest | undefined> { return undefined; }
-  async getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]> { return []; }
+  async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> {
+    const [result] = await db.insert(schema.serviceRequests).values(withTenant(request)).returning();
+    return result;
+  }
+  async getServiceRequest(id: string): Promise<ServiceRequest | undefined> {
+    const [result] = await db.select()
+      .from(schema.serviceRequests)
+      .where(eq(schema.serviceRequests.id, id))
+      .limit(1);
+    return result;
+  }
+  async getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]> {
+    return db.select()
+      .from(schema.serviceRequests)
+      .where(eq(schema.serviceRequests.customerId, customerId))
+      .orderBy(desc(schema.serviceRequests.createdAt));
+  }
   
   // Xero Integration Implementation
   async createXeroConnection(connection: InsertXeroConnection): Promise<XeroConnection> {
