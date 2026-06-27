@@ -12870,11 +12870,25 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const invoice = result[0];
       
       // Fetch related customer, job, and sections data in parallel for faster loading
-      const [customerData, jobData, sections] = await Promise.all([
+      const [customerData, jobData, sections, tpl, bizSettings] = await Promise.all([
         invoice.customerId ? db.select().from(customers).where(eq(customers.id, invoice.customerId)).limit(1) : Promise.resolve([]),
         invoice.jobId ? db.select().from(jobs).where(eq(jobs.id, invoice.jobId)).limit(1) : Promise.resolve([]),
         storage.getInvoiceSectionsByInvoice(invoice.id),
+        // Per-tenant identity scoped to the invoice owner (so the viewer never shows
+        // another business's contact — or bank account). Same shape as the public route.
+        storage.getDefaultDocumentTemplateForBusiness(invoice.businessId, 'invoice'),
+        storage.getBusinessSettingsForBusiness(invoice.businessId),
       ]);
+
+      const company = {
+        name: tpl?.companyName ?? '',
+        email: tpl?.companyEmail ?? '',
+        phone: tpl?.companyPhone ?? '',
+        address: tpl?.companyAddress ?? '',
+        gstNumber: tpl?.gstNumber ?? '',
+        bankAccountName: bizSettings?.bankAccountName ?? '',
+        bankAccountNumber: bizSettings?.bankAccountNumber ?? '',
+      };
 
       res.json({
         success: true,
@@ -12882,6 +12896,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           ...invoice,
           customer: customerData[0] || null,
           job: jobData[0] || null,
+          company,
           sections: sections.map(s => ({
             ...s,
             images: Array.isArray(s.images) ? s.images : [],
@@ -22252,7 +22267,32 @@ Transcription: ${transcriptText}`;
   app.get('/api/customer/:id/invoices', async (req: Request, res: Response) => {
     try {
       const invoices = await storage.getCustomerInvoices(req.params.id);
-      res.json({ success: true, data: invoices });
+      // Attach per-tenant identity (incl. bank) so the portal's invoice dialog shows
+      // the OWNING business's details instead of a hardcoded Treemarkables fallback —
+      // a customer must never be told to pay into another business's account. Resolve
+      // once per businessId (a customer's invoices are normally all one tenant's).
+      const companyCache = new Map<string, any>();
+      const resolveCompany = async (businessId: string | null | undefined) => {
+        const key = businessId || '';
+        if (companyCache.has(key)) return companyCache.get(key);
+        const [tpl, bs] = await Promise.all([
+          storage.getDefaultDocumentTemplateForBusiness(businessId, 'invoice'),
+          storage.getBusinessSettingsForBusiness(businessId),
+        ]);
+        const company = {
+          name: tpl?.companyName ?? '',
+          email: tpl?.companyEmail ?? '',
+          phone: tpl?.companyPhone ?? '',
+          bankAccountName: bs?.bankAccountName ?? '',
+          bankAccountNumber: bs?.bankAccountNumber ?? '',
+        };
+        companyCache.set(key, company);
+        return company;
+      };
+      const withCompany = await Promise.all(
+        invoices.map(async (inv: any) => ({ ...inv, company: await resolveCompany(inv.businessId) })),
+      );
+      res.json({ success: true, data: withCompany });
     } catch (error) {
       console.error('Error fetching customer invoices:', error);
       res.status(500).json({ success: false, message: 'Error fetching invoices' });
