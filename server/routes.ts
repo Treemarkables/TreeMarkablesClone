@@ -449,9 +449,14 @@ if (!fs.existsSync(recordingsDir)) {
 // of them would do — proposal is the canonical read.
 const FALLBACK_LOGO_PATH = '/treemarkables-logo.png';
 
-async function getCompanyLogoUrl(): Promise<string> {
+async function getCompanyLogoUrl(businessId?: string | null): Promise<string> {
   try {
-    const tpl = await storage.getDefaultDocumentTemplate('proposal');
+    // Scope to the document's tenant when known (public PDF/email paths are
+    // session-less, so the unscoped lookup returns Treemarkables' logo for every
+    // tenant). Falls back to the unscoped default when no businessId is supplied.
+    const tpl = businessId
+      ? await storage.getDefaultDocumentTemplateForBusiness(businessId, 'proposal')
+      : await storage.getDefaultDocumentTemplate('proposal');
     return tpl?.logoUrl || FALLBACK_LOGO_PATH;
   } catch {
     return FALLBACK_LOGO_PATH;
@@ -464,8 +469,8 @@ function resolveLogoFsPath(logoUrl: string): string {
   return path.join(__dirname, '..', 'client', 'public', relative);
 }
 
-async function getCompanyLogoFilePath(): Promise<string> {
-  const url = await getCompanyLogoUrl();
+async function getCompanyLogoFilePath(businessId?: string | null): Promise<string> {
+  const url = await getCompanyLogoUrl(businessId);
   const resolved = resolveLogoFsPath(url);
   if (fs.existsSync(resolved)) return resolved;
   return path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
@@ -477,8 +482,8 @@ async function getCompanyLogoFilePath(): Promise<string> {
 //   • /treemarkables-logo.png      — bundled fallback in client/public/
 // Used for the email's inline CID attachment and the PDF generator's image
 // embed, both of which need raw bytes (not a URL).
-async function getCompanyLogoBytes(): Promise<{ buffer: Buffer; contentType: string; ext: string } | null> {
-  const url = await getCompanyLogoUrl();
+async function getCompanyLogoBytes(businessId?: string | null): Promise<{ buffer: Buffer; contentType: string; ext: string } | null> {
+  const url = await getCompanyLogoUrl(businessId);
   try {
     if (url.startsWith('/objects/photos/')) {
       const svc = new PhotoStorageService();
@@ -904,7 +909,10 @@ async function generateProposalPDFBuffer(
   console.log(`📄 Generating ${docTitle.toLowerCase()} PDF for ${proposalId} (${sections.length} sections, ${lineItems.length} line items)`);
 
   const PDFDoc = (await import('pdfkit')).default;
-  const __pdfIdentity = getBusinessIdentity(await storage.getBusinessSettings());
+  // Scope identity to the proposal's owning tenant — this generator is reached via
+  // a public PDF route, where unscoped getBusinessSettings() returns Treemarkables'
+  // identity for every tenant's proposal/quote PDF.
+  const __pdfIdentity = getBusinessIdentity(await storage.getBusinessSettingsForBusiness(proposal.businessId));
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDoc({ size: 'A4', margin: 50 });
     const chunks: Buffer[] = [];
@@ -1103,7 +1111,9 @@ async function generateProposalPDFBuffer(
 async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
   const proposal = await storage.getProposal(proposalId);
   if (!proposal) throw new Error('Proposal not found');
-  const __htmlIdentity = getBusinessIdentity(await storage.getBusinessSettings());
+  // Scope identity to the proposal's owning tenant (this summary is reachable on
+  // public/session-less paths, where unscoped getBusinessSettings() = Treemarkables).
+  const __htmlIdentity = getBusinessIdentity(await storage.getBusinessSettingsForBusiness(proposal.businessId));
   const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
   const sections = await storage.getProposalSectionsByProposal(proposalId);
   const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
@@ -1216,7 +1226,15 @@ async function generateInvoicePDFBuffer(
   // synchronous, so we can't await inside it). getCompanyLogoBytes handles
   // GCS-backed URLs, legacy /logos/ local-disk paths, and the bundled
   // /treemarkables-logo.png fallback in one place.
-  const logoBytes = await getCompanyLogoBytes();
+  const logoBytes = await getCompanyLogoBytes(invoiceData?.businessId);
+
+  // Per-tenant bank details for the payment block — scoped to the invoice's owning
+  // business so a tenant's PDF never tells the customer to pay into another
+  // business's account (this generator is reached via a public PDF route). Blank
+  // when unset → the bank lines are omitted, never a hardcoded Treemarkables account.
+  const bankSettings = await storage.getBusinessSettingsForBusiness(invoiceData?.businessId);
+  const bankAccountName = bankSettings?.bankAccountName || '';
+  const bankAccountNumber = bankSettings?.bankAccountNumber || '';
 
   // Pre-fetch + re-encode photo buffers to JPEG (PDFKit only accepts JPEG/PNG).
   // Done up-front because the PDFKit Promise executor below is synchronous.
@@ -1489,9 +1507,11 @@ async function generateInvoicePDFBuffer(
           const showTerms = cfg.showTerms === true;
           const payLines: string[] = [];
           if (showDueDateP && dueDate) payLines.push(`Due Date: ${dueDate}`);
-          if (showBank) payLines.push('Bank: ANZ');
-          if (showAccNum) payLines.push('Account Number: 06 0637 0768850 00');
-          if (showAccName) payLines.push(`Account Name: ${co.name}`);
+          // Bank details come from the invoice owner's settings; render only when set
+          // (never a hardcoded Treemarkables account). The account number identifies
+          // the bank, so the standalone "Bank: ANZ" line is dropped.
+          if (showAccName && bankAccountName) payLines.push(`Account Name: ${bankAccountName}`);
+          if (showAccNum && bankAccountNumber) payLines.push(`Account Number: ${bankAccountNumber}`);
           if (showTerms && co.paymentTerms) payLines.push(`Terms: ${co.paymentTerms}`);
           const boxH = Math.max(60, 20 + payLines.length * 14);
           const boxY = doc.y;
@@ -12935,10 +12955,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const customer = customerData[0] || null;
       const job = jobData[0] || null;
       
-      // Fetch invoice template for block-config-aware PDF rendering
-      const invoiceTemplateRows2 = await db.select().from(documentTemplates)
-        .where(eq(documentTemplates.type, 'invoice')).limit(1);
-      const invoiceTemplate2 = invoiceTemplateRows2[0] || null;
+      // Fetch invoice template for block-config-aware PDF rendering. Scope to the
+      // invoice's OWNING tenant — this is a public, session-less route, so the
+      // unscoped lookup returned Treemarkables' template (name/GST) for every
+      // tenant's PDF.
+      const invoiceTemplate2 = (await storage.getDefaultDocumentTemplateForBusiness(invoice.businessId, 'invoice')) || null;
 
       // Photos for the PDF: prefer images persisted on the invoice's photo sections
       // (these are the ones the sender explicitly attached at send time), then fall

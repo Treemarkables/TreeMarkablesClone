@@ -226,17 +226,19 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const proposal = actualProposalResponse.data;
   const customer = customerResponse?.data;
   const job = jobResponse?.data;
+  // Company fields come from the (tenant-scoped) default template. Fallback is
+  // BLANK — never another business's details — for the rare no-template case.
   const template = templateResponse?.data || {
     id: "default",
     name: "Default Template",
     type: "proposal",
-    companyName: "Treemarkables",
-    companyPhone: "+64 6 867 1234",
-    companyEmail: "info@treemarkables.co.nz",
-    companyAddress: "Gisborne, New Zealand",
+    companyName: "",
+    companyPhone: "",
+    companyEmail: "",
+    companyAddress: "",
     paymentTerms:
       "This proposal is valid for 30 days from the date above. Payment due within 7 days of acceptance.",
-    gstNumber: "123-456-789",
+    gstNumber: "",
   };
 
   const isExpired =
