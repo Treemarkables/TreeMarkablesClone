@@ -68,7 +68,6 @@ const StaffSchedule = lazy(() => import("@/pages/StaffSchedule"));
 const SettingsPreferences = lazy(() => import("@/pages/SettingsPreferences"));
 const BookingReminderSettings = lazy(() => import("@/pages/BookingReminderSettings"));
 const LaneSettings = lazy(() => import("@/pages/LaneSettings"));
-const LanesBoard = lazy(() => import("@/pages/LanesBoard"));
 const CommunicationTemplates = lazy(() => import("@/pages/CommunicationTemplates"));
 const VehicleInspectionSettings = lazy(() => import("@/pages/VehicleInspectionSettings"));
 const NotificationPreferences = lazy(() => import("@/pages/NotificationPreferences"));
@@ -117,8 +116,8 @@ const UnlinkedCalls = lazy(() => import("@/pages/UnlinkedCalls"));
 const Reconciliation = lazy(() => import("@/pages/Reconciliation"));
 const ProfitabilityCalculator = lazy(() => import("@/pages/ProfitabilityCalculator"));
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft, LayoutGrid } from "lucide-react";
 import { useJobFilter, useLaneFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect, useCallback } from "react";
@@ -412,20 +411,34 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                           {tab.label}
                         </DropdownMenuItem>
                       ))}
-                      {dispatchLanes.length > 0 && <DropdownMenuSeparator />}
-                      {dispatchLanes.length > 0 && <DropdownMenuLabel>Lanes</DropdownMenuLabel>}
-                      {dispatchLanes.map(lane => (
-                        <DropdownMenuItem
-                          key={lane.id}
-                          onClick={() => selectLane(lane.id)}
-                          data-testid={`mobile-lane-${lane.id}`}
-                        >
-                          <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: lane.color }} />
-                          {lane.name}
-                        </DropdownMenuItem>
-                      ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  {/* Dedicated Lanes filter button — mobile */}
+                  {dispatchLanes.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-11 w-11 ${dispatchLane !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                          data-testid="dispatch-lanes-button-mobile"
+                        >
+                          <LayoutGrid className="h-6 w-6" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => selectLane("all")} data-testid="mobile-lane-all">
+                          All lanes
+                        </DropdownMenuItem>
+                        {dispatchLanes.map(lane => (
+                          <DropdownMenuItem key={lane.id} onClick={() => selectLane(lane.id)} data-testid={`mobile-lane-${lane.id}`}>
+                            <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: lane.color }} />
+                            {lane.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </>
               )}
 
@@ -600,20 +613,36 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                           {tab.label}
                         </DropdownMenuItem>
                       ))}
-                      {dispatchLanes.length > 0 && <DropdownMenuSeparator />}
-                      {dispatchLanes.length > 0 && <DropdownMenuLabel>Lanes</DropdownMenuLabel>}
-                      {dispatchLanes.map(lane => (
-                        <DropdownMenuItem
-                          key={lane.id}
-                          onClick={() => selectLane(lane.id)}
-                          data-testid={`desktop-lane-${lane.id}`}
-                        >
-                          <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: lane.color }} />
-                          {lane.name}
-                        </DropdownMenuItem>
-                      ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  {/* Dedicated Lanes filter button */}
+                  {dispatchLanes.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid="dispatch-lanes-button-desktop"
+                          className={`gap-1.5 ${dispatchLane !== "all" ? "text-[#1877F2]" : "text-black"}`}
+                        >
+                          <LayoutGrid className="h-4 w-4" />
+                          {dispatchLane !== "all" ? (dispatchLanes.find(l => l.id === dispatchLane)?.name ?? "Lanes") : "Lanes"}
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => selectLane("all")} data-testid="desktop-lane-all">
+                          All lanes
+                        </DropdownMenuItem>
+                        {dispatchLanes.map(lane => (
+                          <DropdownMenuItem key={lane.id} onClick={() => selectLane(lane.id)} data-testid={`desktop-lane-${lane.id}`}>
+                            <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: lane.color }} />
+                            {lane.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1090,13 +1119,6 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <Pipeline />
-          </SidebarLayout>
-        </ProtectedRoute>
-      </Route>
-      <Route path="/lanes">
-        <ProtectedRoute>
-          <SidebarLayout>
-            <LanesBoard />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
