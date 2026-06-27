@@ -1007,6 +1007,21 @@ The Treemarkables Team';
         log(`⚠️ business_gst_number migration warning: ${(gstErr as Error).message}`, "startup");
       }
 
+      // --- Per-business invoice bank details (trade-gen Phase A) ---
+      // Same isolated + split-statement pattern. Seed TM's real details by name so
+      // its invoices are unchanged; new tenants stay empty (no payment block shown,
+      // never TM's account). Mirrors migrations/manual/20260627_business_bank_details.sql.
+      try {
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS bank_account_name TEXT DEFAULT ''`);
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS bank_account_number TEXT DEFAULT ''`);
+        await pool.query(
+          `UPDATE business_settings SET bank_account_name = 'Treemarkables Ltd', bank_account_number = '06-0637-0768850-00'
+            WHERE business_name = 'Treemarkables' AND (bank_account_number IS NULL OR bank_account_number = '')`,
+        );
+      } catch (bankErr) {
+        log(`⚠️ business bank-details migration warning: ${(bankErr as Error).message}`, "startup");
+      }
+
       // --- Inbound channel → tenant map (Group B tenant-resolution infra) ---
       // Resolves a dialed number / inbound SMS sender / email recipient / FB page
       // id to the owning business, so session-less webhooks stop defaulting writes

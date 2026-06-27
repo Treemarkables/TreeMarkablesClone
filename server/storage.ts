@@ -721,6 +721,7 @@ export interface IStorage {
 
   // Business Settings Management
   getBusinessSettings(): Promise<BusinessSettings>;
+  getBusinessSettingsForBusiness(businessId: string | null | undefined): Promise<BusinessSettings | undefined>;
   updateBusinessSettings(updates: UpdateBusinessSettings): Promise<BusinessSettings>;
   resetBusinessSettings(): Promise<BusinessSettings>;
   
@@ -5288,6 +5289,21 @@ class DatabaseStorage implements IStorage {
              OR ${schema.equipment.cofExpiryDate} < ${today})`
       ))
       .orderBy(schema.equipment.registrationExpiryDate);
+  }
+
+  // Resolve a SPECIFIC tenant's settings on the owner connection — for public,
+  // session-less document routes that must read the owning business's row (e.g.
+  // bank details on an invoice) regardless of RLS context. Returns undefined when
+  // the business has no row; callers treat unset fields as blank (never TM's).
+  async getBusinessSettingsForBusiness(businessId: string | null | undefined): Promise<BusinessSettings | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb
+      .select()
+      .from(schema.businessSettings)
+      .where(eq(schema.businessSettings.businessId, businessId))
+      .orderBy(sql`(${schema.businessSettings.id} = 'default') DESC`, asc(schema.businessSettings.createdAt))
+      .limit(1);
+    return row;
   }
 
   async getBusinessSettings(): Promise<BusinessSettings> {

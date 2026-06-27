@@ -1350,6 +1350,12 @@ export const businessSettings = pgTable("business_settings", {
   ownerName: text("owner_name").default("Jules"),
   businessTagline: text("business_tagline").default("Qualified Arborists"),
   businessDiscipline: text("business_discipline").default("arborist"),
+  // Per-business bank-transfer details shown on invoices so a customer pays the
+  // RIGHT business. Default EMPTY on purpose: a tenant shows NO payment block
+  // until they set their own — it must never fall back to Treemarkables' account.
+  // TM's real details are seeded into its row by migration.
+  bankAccountName: text("bank_account_name").default(""),
+  bankAccountNumber: text("bank_account_number").default(""),
 
   // Business Rules & Workflow
   leadAssignmentMethod: text("lead_assignment_method").default("round_robin"), // round_robin, skill_based, manual

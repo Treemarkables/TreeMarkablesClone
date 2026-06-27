@@ -13141,11 +13141,25 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         return res.status(404).json({ success: false, message: 'Invoice not found' });
       }
 
-      const [customer, job, sections] = await Promise.all([
+      const [customer, job, sections, tpl, bizSettings] = await Promise.all([
         invoice.customerId ? storage.getCustomer(invoice.customerId) : Promise.resolve(null),
         invoice.jobId ? storage.getJob(invoice.jobId) : Promise.resolve(null),
         storage.getInvoiceSectionsByInvoice(invoice.id),
+        // Per-tenant identity for this PUBLIC, session-less route: company contact
+        // from the invoice owner's document template, bank details from its
+        // settings. Both scoped by invoice.businessId so a customer never sees
+        // another business's name — or pays into another business's bank account.
+        storage.getDefaultDocumentTemplateForBusiness(invoice.businessId, 'invoice'),
+        storage.getBusinessSettingsForBusiness(invoice.businessId),
       ]);
+
+      const company = {
+        name: tpl?.companyName ?? '',
+        email: tpl?.companyEmail ?? '',
+        phone: tpl?.companyPhone ?? '',
+        bankAccountName: bizSettings?.bankAccountName ?? '',
+        bankAccountNumber: bizSettings?.bankAccountNumber ?? '',
+      };
 
       res.json({
         success: true,
@@ -13153,6 +13167,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           ...invoice,
           customer: customer || null,
           job: job || null,
+          company,
           sections: sections.map(s => ({
             ...s,
             images: Array.isArray(s.images) ? s.images : [],
