@@ -798,7 +798,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       </div>
 
       {/* ── Status grid ── */}
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <SelectField
           label="Job Status"
           value={status}
