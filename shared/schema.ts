@@ -1356,6 +1356,13 @@ export const businessSettings = pgTable("business_settings", {
   // TM's real details are seeded into its row by migration.
   bankAccountName: text("bank_account_name").default(""),
   bankAccountNumber: text("bank_account_number").default(""),
+  // Per-business email brand colours. Drive the header/footer background and the
+  // accent (wordmark, divider, CTA, amount) in branded customer emails so each
+  // tenant's invoice/proposal/quote emails carry THEIR brand — not Treemarkables'.
+  // Defaults reproduce Treemarkables' current black + neon-green so existing emails
+  // render byte-identical until a business picks its own. See server/emailTemplates.ts.
+  brandHeaderColor: text("brand_header_color").default("#0b0b0b"),
+  brandAccentColor: text("brand_accent_color").default("#39FF14"),
 
   // Business Rules & Workflow
   leadAssignmentMethod: text("lead_assignment_method").default("round_robin"), // round_robin, skill_based, manual

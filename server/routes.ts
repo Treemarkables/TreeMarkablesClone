@@ -16,7 +16,7 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
-import { getBusinessIdentity } from "./businessIdentity";
+import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { resolveBusinessIdByChannel } from "./tenancy/channelMap";
 import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
@@ -141,7 +141,7 @@ import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
-import { renderBrandedEmail } from "./emailTemplates";
+import { renderBrandedEmail, renderInvoiceEmail } from "./emailTemplates";
 import { getVonageCredentials } from "./services/vonageClient";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./photoStorage";
@@ -3077,14 +3077,19 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         const bizSettings = await storage.getBusinessSettings();
         if (bizSettings?.inquiryAutoReplyEnabled) {
           const channel = (bizSettings.inquiryAutoReplyChannel || 'email') as 'email' | 'sms' | 'both';
-          const firstName = trimmedName.split(/\s+/)[0] || trimmedName || 'there';
+          // Title-case the submitted name so a lowercase web-form entry ("jules
+          // halley") greets as "Jules Halley". Handles spaces, hyphens, apostrophes.
+          const titleCaseName = (s: string) =>
+            (s || '').toLowerCase().replace(/(^|[\s'’-])([a-z])/g, (_m, sep, ch) => sep + ch.toUpperCase());
+          const displayName = titleCaseName(trimmedName) || 'there';
+          const firstName = displayName.split(/\s+/)[0] || displayName;
           const subject = bizSettings.inquiryAutoReplyEmailSubject || "We've received your inquiry — Treemarkables";
           const emailTemplate = bizSettings.inquiryAutoReplyEmailMessage || '';
           const smsTemplate = bizSettings.inquiryAutoReplySmsMessage || '';
 
           const fillVars = (s: string) =>
             s
-              .replace(/\{customerName\}/g, trimmedName || 'there')
+              .replace(/\{customerName\}/g, displayName)
               .replace(/\{firstName\}/g, firstName)
               .replace(/\{businessName\}/g, bizSettings.businessName || 'Treemarkables')
               .replace(/\{businessPhone\}/g, bizSettings.businessPhone || '');
@@ -3092,13 +3097,41 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
           if ((channel === 'email' || channel === 'both') && lowerEmail) {
             const emailBodyText = fillVars(emailTemplate);
             const emailSubject = fillVars(subject);
+
+            // Signature: business name + phone + email + clickable website, pulled
+            // from business settings so each tenant signs off with its own details
+            // and a real hyperlink (the auto-reply previously had no signature).
+            const escSig = (v: string) => (v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            const sigName = bizSettings.businessName || 'Treemarkables';
+            const sigPhone = (bizSettings.businessPhone || '').trim();
+            const sigEmail = (bizSettings.businessEmail || '').trim();
+            const sigWebsiteRaw = (bizSettings.businessWebsite || '').trim();
+            const sigWebsiteHref = sigWebsiteRaw ? (/^https?:\/\//i.test(sigWebsiteRaw) ? sigWebsiteRaw : `https://${sigWebsiteRaw}`) : '';
+            const sigWebsiteLabel = sigWebsiteRaw.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+
+            const sigTextLines = [
+              '—',
+              sigName,
+              sigPhone ? `Phone: ${sigPhone}` : '',
+              sigEmail ? `Email: ${sigEmail}` : '',
+              sigWebsiteHref ? sigWebsiteLabel : '',
+            ].filter(Boolean);
+            const emailBodyTextWithSig = `${emailBodyText}\n\n${sigTextLines.join('\n')}`;
+
+            const sigHtml = `<div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.6;color:#555;">
+              <div style="font-weight:600;color:#111;">${escSig(sigName)}</div>
+              ${sigPhone ? `<div>Phone: <a href="tel:${escSig(sigPhone.replace(/\s+/g, ''))}" style="color:#555;text-decoration:none;">${escSig(sigPhone)}</a></div>` : ''}
+              ${sigEmail ? `<div>Email: <a href="mailto:${escSig(sigEmail)}" style="color:#1155cc;text-decoration:underline;">${escSig(sigEmail)}</a></div>` : ''}
+              ${sigWebsiteHref ? `<div><a href="${escSig(sigWebsiteHref)}" style="color:#1155cc;text-decoration:underline;">${escSig(sigWebsiteLabel)}</a></div>` : ''}
+            </div>`;
+
             const emailBodyHtml = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#222;">${
               emailBodyText.split('\n').map(line => line ? line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '').join('<br>')
-            }</div>`;
+            }${sigHtml}</div>`;
             emailService.sendEmail({
               to: lowerEmail,
               subject: emailSubject,
-              text: emailBodyText,
+              text: emailBodyTextWithSig,
               html: emailBodyHtml,
             })
               .then(async () => {
@@ -10566,207 +10599,72 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
           totalAmount = subtotal + gstAmount;
         }
         
-        // Generate line items HTML
-        const lineItemsHtml = lineItems && lineItems.length > 0 ? lineItems.map((item: any) => {
-          const itemTotal = item.total || item.amount;
-          const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
-          return `
-          <tr>
-            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${item.description || ''}</td>
-            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity || 1}</td>
-            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0))}</td>
-            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${formatCurrency(total)}</td>
-          </tr>
-        `;
-        }).join('') : `
-          <tr>
-            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service'}</td>
-            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">1</td>
-            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(subtotal)}</td>
-            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${formatCurrency(subtotal)}</td>
-          </tr>
-        `;
-        
-        // Logo is embedded as inline attachment (CID). Microsoft recipients still get the
-        // real logo — the PDF-stripping mitigation is the download-link banner below, so
-        // replacing the logo with text is no longer required.
-        const logoBlockHtml = `<img src="cid:treemarkables-logo" alt="Treemarkables" style="height: 70px; width: auto;" />`;
+        // Build the branded invoice email (per-business identity + brand colours +
+        // bank details). Replaces the old Treemarkables-only markup. The composed
+        // message is rendered as the intro, with the structured invoice below it —
+        // see renderInvoiceEmail in server/emailTemplates.ts.
+        const invBizSettings = await storage.getBusinessSettings();
+        const invIdentity = getBusinessIdentity(invBizSettings);
+        const invBrand = getBrandColors(invBizSettings);
 
-        // For Microsoft-hosted recipients (Hotmail / Outlook / Live / MSN), the PDF
-        // attachment is silently stripped by their spam filters. Instead of attaching
-        // the PDF, we surface a single banner that links to the online invoice page
-        // — that page renders the photos in-browser and exposes its own "Download PDF"
-        // button, so one link is enough.
-        const pdfDownloadBanner = (recipientIsMicrosoft && invoiceDetails?.id)
-          ? `<div style="margin: 0 0 30px 0; padding: 18px 20px; background: #fff7ed; border: 1px solid #f97316; border-radius: 8px; text-align: center;">
-               <div style="font-size: 14px; color: #7c2d12; margin-bottom: 12px; font-weight: 600;">View your invoice online to see photos and download the PDF</div>
-               <a href="https://app.treemarkables.co.nz/invoice/${invoiceDetails.id}/view" style="display: inline-block; padding: 12px 24px; background: #f97316; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">View invoice online</a>
-             </div>`
-          : '';
+        const templateLineItems = (lineItems && lineItems.length > 0)
+          ? lineItems.map((item: any) => {
+              const itemTotal = item.total || item.amount;
+              const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
+              return { description: item.description || '', quantity: item.quantity || 1, price: total };
+            })
+          : [{ description: invoiceDetails.notes || invoiceDetails.jobTitle || job?.title || 'Service', quantity: 1, price: subtotal }];
 
-        // Email-safe layout: nested tables, not flexbox. Outlook / Hotmail / Apple-Mail
-        // inconsistently render `display: flex`, which is why the previous version showed
-        // up vertically-stacked and caused a horizontal side-scroll on iOS Hotmail.
-        const lineItemsRowsHtml = lineItems && lineItems.length > 0 ? lineItems.map((item: any) => {
-          const itemTotal = item.total || item.amount;
-          const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
-          return `
-            <tr>
-              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">${item.quantity || 1}</td>
-              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">${item.description || ''}</td>
-              <td style="padding: 10px 8px; text-align: right; border-bottom: 1px solid #ddd; vertical-align: top; white-space: nowrap;">${formatCurrency(total)}</td>
-            </tr>
-          `;
-        }).join('') : `
-            <tr>
-              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">1</td>
-              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">${invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service'}</td>
-              <td style="padding: 10px 8px; text-align: right; border-bottom: 1px solid #ddd; vertical-align: top; white-space: nowrap;">${formatCurrency(subtotal)}</td>
-            </tr>
-        `;
-
-        const dueDateFormatted = invoiceDetails.dueDate
+        const dueDateText = invoiceDetails.dueDate
           ? new Date(invoiceDetails.dueDate).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })
           : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
 
-        invoiceHtml = `
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 640px; margin: 0 auto; background: #ffffff; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #000;">
-          <tr>
-            <td style="padding: 24px;">
+        // Customer-facing link is always the app domain (CLAUDE.md), regardless of tenant.
+        const onlineInvoiceUrl = invoiceDetails?.id
+          ? `https://app.treemarkables.co.nz/invoice/${invoiceDetails.id}/view`
+          : 'https://app.treemarkables.co.nz';
 
-              <!-- Header: logo (left) + company info (right) -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px; border-bottom: 2px solid #000;">
-                <tr>
-                  <td width="50%" valign="top" style="padding-bottom: 16px;">
-                    ${logoBlockHtml}
-                  </td>
-                  <td width="50%" valign="top" align="right" style="padding-bottom: 16px; font-size: 12px;">
-                    <div style="font-weight: bold; margin-bottom: 6px;">Treemarkables LTD</div>
-                    <div>GST Number: 33 047 160 882</div>
-                    <div>213 Stanley Road</div>
-                    <div>Gisborne 4010</div>
-                    <div style="margin-top: 6px;">Phone: 027 216 6882</div>
-                    <div>Email: info@treemarkables.nz</div>
-                  </td>
-                </tr>
-              </table>
+        const invCustomerName = job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'there';
 
-              ${pdfDownloadBanner}
-
-              <!-- Invoice meta + Bill To -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px;">
-                <tr>
-                  <td width="55%" valign="top">
-                    <div style="font-size: 22px; font-weight: bold; margin-bottom: 10px;">TAX INVOICE</div>
-                    <div style="margin-bottom: 4px;"><strong>Invoice No.:</strong> ${invoiceDetails.invoiceNumber || ''}</div>
-                    <div style="margin-bottom: 4px;"><strong>Cust Order No.:</strong> ${job?.jobNumber ? 'Job #' + job.jobNumber : 'N/A'}</div>
-                    <div><strong>Date:</strong> ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}</div>
-                  </td>
-                  <td width="45%" valign="top" align="right">
-                    <div style="font-weight: bold; margin-bottom: 6px;">Bill To:</div>
-                    <div>${job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'Customer'}</div>
-                    ${composeCustomerAddress(customer) ? `<div>${composeCustomerAddress(customer)}</div>` : ''}
-                    ${customer?.phone ? `<div>${customer.phone}</div>` : ''}
-                    ${customer?.email ? `<div style="word-break: break-all;">${customer.email}</div>` : ''}
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Work Carried Out At -->
-              ${invoiceDetails.address || job?.address ? `
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 20px;">
-                <tr>
-                  <td style="padding: 10px 12px; background: #f5f5f5;">
-                    <strong>WORK CARRIED OUT AT</strong> ${invoiceDetails.address || job?.address}
-                  </td>
-                </tr>
-              </table>
-              ` : ''}
-
-              <!-- Line Items -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 20px;">
-                <thead>
-                  <tr>
-                    <th align="left" style="padding: 10px 8px; font-weight: bold; border-bottom: 2px solid #000; width: 60px;">QTY</th>
-                    <th align="left" style="padding: 10px 8px; font-weight: bold; border-bottom: 2px solid #000;">DESCRIPTION</th>
-                    <th align="right" style="padding: 10px 8px; font-weight: bold; border-bottom: 2px solid #000; width: 100px;">PRICE</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${lineItemsRowsHtml}
-                </tbody>
-              </table>
-
-              <!-- Totals (right-aligned via nested table) -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px;">
-                <tr>
-                  <td align="right">
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="260" style="border-collapse: collapse;">
-                      <tr>
-                        <td style="padding: 6px 0; border-bottom: 1px solid #ddd;">SUBTOTAL</td>
-                        <td align="right" style="padding: 6px 0; border-bottom: 1px solid #ddd; white-space: nowrap;">${formatCurrency(subtotal)}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 6px 0; border-bottom: 1px solid #ddd;">GST</td>
-                        <td align="right" style="padding: 6px 0; border-bottom: 1px solid #ddd; white-space: nowrap;">${formatCurrency(gstAmount)}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 10px 0; border-bottom: 2px solid #000; font-weight: bold; font-size: 15px;">TOTAL</td>
-                        <td align="right" style="padding: 10px 0; border-bottom: 2px solid #000; font-weight: bold; font-size: 15px; white-space: nowrap;">${formatCurrency(totalAmount)}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 6px 0; border-bottom: 1px solid #ddd;">PAID</td>
-                        <td align="right" style="padding: 6px 0; border-bottom: 1px solid #ddd; white-space: nowrap;">$0.00</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 6px 0; font-weight: bold;">BALANCE DUE</td>
-                        <td align="right" style="padding: 6px 0; font-weight: bold; white-space: nowrap;">${formatCurrency(totalAmount)}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Work Completed -->
-              <div style="margin-bottom: 16px;"><strong>WORK COMPLETED</strong></div>
-
-              <!-- Payment and Terms -->
-              <div style="margin-bottom: 16px;">
-                <div style="font-weight: bold; margin-bottom: 6px;">How to Pay</div>
-                <div>We accept payment by: Cash and bank transfer</div>
-              </div>
-
-              <!-- Bank Details (left) + Cheque (right) -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px;">
-                <tr>
-                  <td width="55%" valign="top">
-                    <div style="font-weight: bold; margin-bottom: 4px;">Bank Details</div>
-                    <div>Account Name: Treemarkables</div>
-                    <div>Account Number:</div>
-                    <div>06 0637 0768850 00</div>
-                  </td>
-                  <td width="45%" valign="top" align="right">
-                    <div style="font-weight: bold; margin-bottom: 4px;">Cheque</div>
-                    <div>Harora st.</div>
-                    <div>Gisborne</div>
-                    <div>4010</div>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Footer -->
-              <div style="text-align: center; padding-top: 16px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
-                Payment due within 7 days &middot; Due: ${dueDateFormatted}
-              </div>
-
-            </td>
-          </tr>
-        </table>
-        `;
+        invoiceHtml = renderInvoiceEmail({
+          customerName: invCustomerName,
+          intro: emailBody,
+          invoiceLabel: invoiceDetails.invoiceNumber ? `Invoice #${invoiceDetails.invoiceNumber}` : 'Invoice',
+          dueDateText,
+          workAddress: invoiceDetails.address || job?.address || undefined,
+          lineItems: templateLineItems,
+          subtotal,
+          gst: gstAmount,
+          total: totalAmount,
+          paidAmount: 0,
+          balanceDue: totalAmount,
+          ctaUrl: onlineInvoiceUrl,
+          ctaText: 'View & pay invoice online',
+          bank: {
+            accountName: invBizSettings?.bankAccountName || undefined,
+            accountNumber: invBizSettings?.bankAccountNumber || undefined,
+            reference: invoiceDetails.invoiceNumber ? `Invoice ${invoiceDetails.invoiceNumber}` : undefined,
+          },
+          company: {
+            name: invIdentity.name,
+            tagline: invIdentity.tagline,
+            address: invIdentity.address,
+            phone: invIdentity.phone,
+            email: invIdentity.email,
+            website: invBizSettings?.businessWebsite || undefined,
+            gstNumber: invIdentity.gstNumber,
+          },
+          brand: invBrand,
+        });
       }
       
       // Prepare email content with any necessary formatting
-      let emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') + invoiceHtml;
+      // When an invoice is present, renderInvoiceEmail already wraps the composed
+      // message (intro) + the structured invoice in one branded layout, so use it as
+      // the whole body. Otherwise fall back to the plain formatted message.
+      let emailHtml = (invoice || validatedInvoiceData)
+        ? invoiceHtml
+        : emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
       
       // If no invoice was found via invoiceId but the client explicitly attached an invoice,
       // fetch it from storage so the PDF gets generated
@@ -10816,27 +10714,11 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         console.log(`📄 Skipped PDF attachment for Microsoft-hosted recipient ${to} (Invoice #${invNum}) — delivering via download link`);
       }
 
-      
-      // Add logo as inline CID attachment for emails with invoices. Attached for all
-      // recipients (incl. Microsoft) — the PDF-stripping workaround is the download-link
-      // banner, so the inline logo no longer needs to be suppressed for deliverability.
-      if (validatedInvoiceData || invoiceId || invoice) {
-        try {
-          const logo = await getCompanyLogoBytes();
-          if (logo) {
-            emailAttachments.push({
-              content: logo.buffer.toString('base64'),
-              filename: `company-logo${logo.ext}`,
-              type: logo.contentType,
-              disposition: 'inline',
-              content_id: 'treemarkables-logo'
-            });
-          }
-        } catch (logoError) {
-          console.error('Error adding logo attachment:', logoError);
-        }
-      }
-      
+
+      // The branded invoice email uses a text wordmark in the per-business brand
+      // colour (renderInvoiceEmail), not an inline logo image — so no logo CID
+      // attachment is needed here. The PDF (above) renders its own logo.
+
       // Embed photos as true inline CID attachments — no external URL dependency.
       // Photos are fetched from object storage server-side and embedded directly in the
       // email body, so they display in every email client regardless of auth or server state.

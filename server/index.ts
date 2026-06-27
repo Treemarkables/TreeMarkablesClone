@@ -1038,6 +1038,18 @@ The Treemarkables Team';
         log(`⚠️ identity-defaults migration warning: ${(identErr as Error).message}`, "startup");
       }
 
+      // --- Per-business email brand colours (trade-gen Phase A) ---
+      // Header background + accent for branded customer emails. Defaults reproduce
+      // Treemarkables' black + neon-green so every existing email is unchanged until
+      // a business picks its own; no TM seed needed (the default IS TM's brand).
+      // Mirrors migrations/manual/20260628_business_brand_colors.sql.
+      try {
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS brand_header_color TEXT DEFAULT '#0b0b0b'`);
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS brand_accent_color TEXT DEFAULT '#39FF14'`);
+      } catch (brandErr) {
+        log(`⚠️ brand-colours migration warning: ${(brandErr as Error).message}`, "startup");
+      }
+
       // --- Inbound channel → tenant map (Group B tenant-resolution infra) ---
       // Resolves a dialed number / inbound SMS sender / email recipient / FB page
       // id to the owning business, so session-less webhooks stop defaulting writes
