@@ -75,6 +75,7 @@ function jobFieldValue(job: Job, field: string): string | number | null {
       const v = (job.totalAmount ?? job.totalIncludingGst ?? job.subtotal);
       return v != null ? Number(v) : null;
     }
+    case 'amountOwing': return job.balanceDue != null ? Number(job.balanceDue) : null;
     case 'title': return job.title ?? '';
     case 'description': return job.description ?? '';
     default: return null;
@@ -467,6 +468,54 @@ export async function onLaneJobEvent(jobId: string, event: string): Promise<void
   if (!job) return;
   await runLaneExitForEvent(job, event);
   await runLaneEntryForEvent(job, event);
+}
+
+/** Does the job still have an invoice that isn't paid or cancelled? (i.e. still owing). */
+async function jobStillOwes(jobId: string): Promise<boolean> {
+  const invoices = await storage.getInvoicesByJob(jobId).catch(() => []);
+  return invoices.some((inv) => inv.status !== 'paid' && inv.status !== 'cancelled');
+}
+
+/**
+ * Late-payment scan (runs hourly, just before the day-automation cron). Two halves:
+ *  1. ENTRY — any job with an overdue, still-owing invoice is auto-added to a lane configured to
+ *     auto-enter on 'invoice_overdue' (only if the job isn't already in a lane, so we never yank it
+ *     out of another bucket).
+ *  2. EXIT — any job sitting in a lane that auto-exits on 'invoice_paid' is removed once its
+ *     invoices are all settled. Running this before the reminder cron means a paid job leaves the
+ *     chase lane in the same tick, so no further late-payment reminder fires for it.
+ */
+export async function runLaneInvoiceChecks(): Promise<void> {
+  // 1. Entry: overdue + still owing → chase lane.
+  try {
+    const overdue = await storage.getOverdueUnpaidInvoicesGlobal();
+    const seen = new Set<string>();
+    for (const inv of overdue) {
+      if (!inv.jobId || seen.has(inv.jobId)) continue;
+      seen.add(inv.jobId);
+      const job = await storage.getJob(inv.jobId);
+      if (!job || job.laneId) continue; // already in a lane — don't move it
+      await runLaneEntryForEvent(job, 'invoice_overdue');
+    }
+  } catch (err) {
+    console.error('[Lanes] overdue-invoice entry scan failed:', err);
+  }
+
+  // 2. Exit: jobs in an "auto-exit on payment" lane that no longer owe → remove them.
+  try {
+    const jobs = await storage.getJobsInLanesGlobal();
+    for (const job of jobs) {
+      if (!job.laneId) continue;
+      const lane = await storage.getLaneAutomations(job.laneId);
+      const exitsOnPaid = lane.some((a) => a.enabled && a.type === 'auto_exit' && a.trigger === 'invoice_paid');
+      if (!exitsOnPaid) continue;
+      if (await jobStillOwes(job.id)) continue;
+      await storage.assignJobToLane(job.id, null);
+      console.log(`[Lanes] job #${job.jobNumber} auto-left its lane (invoice settled)`);
+    }
+  } catch (err) {
+    console.error('[Lanes] paid-invoice exit scan failed:', err);
+  }
 }
 
 /** Hourly cron entry point — evaluates all days_in_lane automations with fire-once de-dup. */

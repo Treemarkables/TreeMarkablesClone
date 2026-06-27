@@ -2,7 +2,7 @@ import { notificationService } from './notificationService';
 import { storage } from '../storage';
 import { workflowAutomationService } from './workflowAutomation';
 import { runAllReminderChecks } from './reminderChecker';
-import { runLaneAutomationChecks, runLaneStatusChangeAutomations, runLaneEntryForEvent, runLaneExitForEvent, onLaneJobEvent } from './laneAutomationService';
+import { runLaneAutomationChecks, runLaneInvoiceChecks, runLaneStatusChangeAutomations, runLaneEntryForEvent, runLaneExitForEvent, onLaneJobEvent } from './laneAutomationService';
 import type { Job, Customer, InsertJob } from '@shared/schema';
 
 // Hook into job status changes to trigger automated notifications
@@ -276,15 +276,20 @@ export class AutomatedTriggers {
       runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Reminder check error:', err));
     }, 60 * 60 * 1000); // 1 hour
 
-    // Run lane "days in lane" automation checks every hour
+    // Run lane checks every hour: settle late-payment entry/exit FIRST (so a paid job leaves the
+    // chase lane before reminders run), then the "days in lane" automations.
     setInterval(() => {
-      runLaneAutomationChecks().catch(err => console.error('[AutomatedTriggers] Lane automation check error:', err));
+      runLaneInvoiceChecks()
+        .catch(err => console.error('[AutomatedTriggers] Lane invoice check error:', err))
+        .finally(() => runLaneAutomationChecks().catch(err => console.error('[AutomatedTriggers] Lane automation check error:', err)));
     }, 60 * 60 * 1000); // 1 hour
 
     // Run once shortly after startup (90 second delay to let DB connect)
     setTimeout(() => {
       runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Initial reminder check error:', err));
-      runLaneAutomationChecks().catch(err => console.error('[AutomatedTriggers] Initial lane automation check error:', err));
+      runLaneInvoiceChecks()
+        .catch(err => console.error('[AutomatedTriggers] Initial lane invoice check error:', err))
+        .finally(() => runLaneAutomationChecks().catch(err => console.error('[AutomatedTriggers] Initial lane automation check error:', err)));
     }, 90 * 1000);
 
     console.log('✅ Automated communication system initialized');

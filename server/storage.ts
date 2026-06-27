@@ -5776,6 +5776,18 @@ class DatabaseStorage implements IStorage {
       .orderBy(desc(schema.invoices.createdAt));
     return invoices;
   }
+  // Cron-only (no tenant filter): invoices that are past due and still owing, linked to a job.
+  // Used by the lane late-payment scan to auto-add jobs to a chase lane.
+  async getOverdueUnpaidInvoicesGlobal(): Promise<Invoice[]> {
+    return await db.select()
+      .from(schema.invoices)
+      .where(and(
+        ne(schema.invoices.status, 'paid'),
+        ne(schema.invoices.status, 'cancelled'),
+        lt(schema.invoices.dueDate, new Date()),
+        sql`${schema.invoices.jobId} IS NOT NULL`,
+      ));
+  }
   async getAllInvoices(): Promise<Invoice[]> {
     const invoices = await db.select()
       .from(schema.invoices)
