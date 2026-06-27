@@ -1022,6 +1022,22 @@ The Treemarkables Team';
         log(`⚠️ business bank-details migration warning: ${(bankErr as Error).message}`, "startup");
       }
 
+      // --- Universal identity defaults (trade-gen) ---
+      // Neutralise the column defaults so NEW tenants start trade-agnostic, not as
+      // Jules/arborist/tree. Schema-only + idempotent; existing rows (incl.
+      // Treemarkables) keep their values. The demo-row cleanup lives in the manual
+      // migration (20260628_universal_identity_defaults.sql) so a data change isn't
+      // applied automatically.
+      try {
+        await pool.query(`ALTER TABLE business_settings ALTER COLUMN owner_name SET DEFAULT ''`);
+        await pool.query(`ALTER TABLE business_settings ALTER COLUMN business_tagline SET DEFAULT ''`);
+        await pool.query(`ALTER TABLE business_settings ALTER COLUMN business_discipline SET DEFAULT ''`);
+        await pool.query(`ALTER TABLE business_settings ALTER COLUMN industry SET DEFAULT 'general'`);
+        await pool.query(`ALTER TABLE business_settings ALTER COLUMN business_name SET DEFAULT 'My Business'`);
+      } catch (identErr) {
+        log(`⚠️ identity-defaults migration warning: ${(identErr as Error).message}`, "startup");
+      }
+
       // --- Inbound channel → tenant map (Group B tenant-resolution infra) ---
       // Resolves a dialed number / inbound SMS sender / email recipient / FB page
       // id to the owning business, so session-less webhooks stop defaulting writes

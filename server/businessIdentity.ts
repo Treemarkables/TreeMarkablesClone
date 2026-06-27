@@ -5,10 +5,10 @@
  * strings that customer-facing output + AI prompts should use, instead of the
  * literals "Treemarkables" / "Jules" / "arborist" hardcoded across the app.
  *
- * Every field falls back to Treemarkables' current value, so behaviour is
- * UNCHANGED until a business sets its own — the de-hardcoding is safe to roll
- * out incrementally (wire one consumer at a time). See
- * INFLOW_TRADE_GENERALIZATION_PLAN.md (Track A).
+ * Fields fall back to NEUTRAL / generic values, not Treemarkables' — so a new
+ * tenant starts trade-agnostic and fills in its own via Company Info. Treemarkables
+ * keeps its values because they're stored on its own settings row (seeded by name),
+ * not because they're the fallback. See INFLOW_TRADE_GENERALIZATION_PLAN.md.
  */
 
 import type { BusinessSettings } from "@shared/schema";
@@ -24,18 +24,19 @@ export interface BusinessIdentity {
   gstNumber: string;   // per-business GST; "" when unset (NEVER Treemarkables')
 }
 
-// Current Treemarkables literals — the fallback so nothing changes until a
-// business overrides them.
+// NEUTRAL fallbacks — never Treemarkables/Jules/arborist. An unset business shows
+// nothing (blank name/owner/tagline) rather than leaking another business's
+// identity; `discipline` falls back to a generic "field-service" so AI prompts
+// ("a New Zealand {discipline} business") still read naturally. Treemarkables keeps
+// its values from its own settings row.
 const DEFAULTS: BusinessIdentity = {
-  name: "Treemarkables",
-  ownerName: "Jules",
-  discipline: "arborist",
-  tagline: "Qualified Arborists",
+  name: "",
+  ownerName: "",
+  discipline: "field-service",
+  tagline: "",
   phone: "",
   email: "",
   address: "",
-  // No GST fallback: an unset business shows no GST line rather than leaking
-  // Treemarkables' number. TM's own number lives on its settings row.
   gstNumber: "",
 };
 

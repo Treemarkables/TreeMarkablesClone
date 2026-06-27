@@ -102,7 +102,7 @@ export function renderBrandedEmail(opts: BrandedEmailOptions): string {
       <!-- Header: business wordmark, uppercased via CSS to render like a logotype -->
       <tr><td style="background:${BRAND.black};padding:22px 28px;">
         <div style="color:${BRAND.neon};font-size:22px;font-weight:800;letter-spacing:-0.01em;line-height:1;text-transform:uppercase;">${esc(opts.company?.name || COMPANY.name)}</div>
-        <div style="color:#9ca3af;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px;">${esc(opts.company?.tagline || COMPANY.tagline)}</div>
+        ${opts.company?.tagline ? `<div style="color:#9ca3af;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px;">${esc(opts.company.tagline)}</div>` : ''}
       </td></tr>
 
       <!-- Greeting + intro -->
