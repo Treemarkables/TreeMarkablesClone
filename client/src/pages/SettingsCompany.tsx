@@ -8,9 +8,37 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, Upload, Building2, Phone, Mail, MapPin, Hash, CreditCard, Image, AlignLeft, AlignCenter, AlignRight, Type, User, Tag, Briefcase, Landmark } from "lucide-react";
+import { ChevronLeft, Upload, Building2, Phone, Mail, MapPin, Hash, CreditCard, Image, AlignLeft, AlignCenter, AlignRight, Type, User, Tag, Briefcase, Landmark, Palette } from "lucide-react";
 import { Link } from "wouter";
 import { HelpLink } from "@/components/HelpLink";
+
+// Contrast helpers for the email-brand preview — mirror server/emailTemplates.ts so
+// the wordmark / button text shown here matches what the sent email computes.
+function hexToRgb(hex: string): [number, number, number] {
+  let h = (hex || "").replace("#", "").trim();
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  if (h.length !== 6 || /[^0-9a-fA-F]/.test(h)) return [11, 11, 11];
+  const int = parseInt(h, 16);
+  return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+}
+function relLuminance(hex: string): number {
+  const lin = hexToRgb(hex).map((v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+function contrastRatio(a: string, b: string): number {
+  const hi = Math.max(relLuminance(a), relLuminance(b));
+  const lo = Math.min(relLuminance(a), relLuminance(b));
+  return (hi + 0.05) / (lo + 0.05);
+}
+function readableOn(bg: string): string {
+  return contrastRatio("#ffffff", bg) >= contrastRatio("#0b0b0b", bg) ? "#ffffff" : "#0b0b0b";
+}
+function wordmarkOn(accent: string, header: string): string {
+  return contrastRatio(accent, header) >= 2.5 ? accent : readableOn(header);
+}
 
 interface Template {
   id: string;
@@ -52,6 +80,8 @@ export default function SettingsCompany() {
     businessDiscipline: string;
     bankAccountName: string;
     bankAccountNumber: string;
+    brandHeaderColor: string;
+    brandAccentColor: string;
   };
   const { data: bizData } = useQuery<{ success: boolean; data: Partial<BizFields> }>({
     queryKey: ["/api/business-settings"],
@@ -59,6 +89,7 @@ export default function SettingsCompany() {
   const [biz, setBiz] = useState<BizFields>({
     businessName: "", ownerName: "", businessTagline: "", businessDiscipline: "",
     bankAccountName: "", bankAccountNumber: "",
+    brandHeaderColor: "#0b0b0b", brandAccentColor: "#39FF14",
   });
   const [bizLoaded, setBizLoaded] = useState(false);
   if (bizData?.data && !bizLoaded) {
@@ -69,6 +100,8 @@ export default function SettingsCompany() {
       businessDiscipline: bizData.data.businessDiscipline ?? "",
       bankAccountName: bizData.data.bankAccountName ?? "",
       bankAccountNumber: bizData.data.bankAccountNumber ?? "",
+      brandHeaderColor: bizData.data.brandHeaderColor || "#0b0b0b",
+      brandAccentColor: bizData.data.brandAccentColor || "#39FF14",
     });
     setBizLoaded(true);
   }
@@ -108,6 +141,8 @@ export default function SettingsCompany() {
         businessDiscipline: biz.businessDiscipline,
         bankAccountName: biz.bankAccountName,
         bankAccountNumber: biz.bankAccountNumber,
+        brandHeaderColor: biz.brandHeaderColor,
+        brandAccentColor: biz.brandAccentColor,
         businessGstNumber: values.gstNumber ?? "",
       });
     },
@@ -539,6 +574,97 @@ export default function SettingsCompany() {
             placeholder="e.g. Qualified Arborists"
           />
           <p className="text-xs text-muted-foreground">Appears under your brand name in the email header.</p>
+        </div>
+
+        {/* Email brand colours (business_settings) — drive the header band, accent
+            rule and buttons in customer emails. Text colour is auto-computed for
+            contrast so any combination stays legible. */}
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <Palette className="w-4 h-4 text-muted-foreground" />
+            Email brand colours
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Used for the header band, accent line and buttons in your customer emails. Text colour adjusts automatically for readability.
+          </p>
+
+          {/* Live preview — mirrors the sent email's header + accent + CTA */}
+          <div className="rounded-md border overflow-hidden">
+            <div style={{ background: biz.brandHeaderColor, padding: "16px 18px" }}>
+              <div
+                style={{
+                  color: wordmarkOn(biz.brandAccentColor, biz.brandHeaderColor),
+                  fontWeight: 800,
+                  fontSize: 18,
+                  lineHeight: 1,
+                  textTransform: "uppercase",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {biz.businessName || "Your business"}
+              </div>
+              {biz.businessTagline ? (
+                <div style={{ color: "#9ca3af", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 3 }}>
+                  {biz.businessTagline}
+                </div>
+              ) : null}
+            </div>
+            <div style={{ height: 3, background: biz.brandAccentColor }} />
+            <div className="bg-white px-[18px] py-3">
+              <span
+                style={{
+                  display: "inline-block",
+                  background: biz.brandAccentColor,
+                  color: readableOn(biz.brandAccentColor),
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                View &amp; pay invoice online
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 pt-1">
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Header background</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  aria-label="Header background colour"
+                  value={biz.brandHeaderColor}
+                  onChange={(e) => setB("brandHeaderColor", e.target.value)}
+                  className="h-9 w-12 rounded border cursor-pointer bg-transparent p-0.5"
+                />
+                <Input
+                  value={biz.brandHeaderColor}
+                  onChange={(e) => setB("brandHeaderColor", e.target.value)}
+                  placeholder="#0b0b0b"
+                  className="font-mono"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Accent</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  aria-label="Accent colour"
+                  value={biz.brandAccentColor}
+                  onChange={(e) => setB("brandAccentColor", e.target.value)}
+                  className="h-9 w-12 rounded border cursor-pointer bg-transparent p-0.5"
+                />
+                <Input
+                  value={biz.brandAccentColor}
+                  onChange={(e) => setB("brandAccentColor", e.target.value)}
+                  placeholder="#39FF14"
+                  className="font-mono"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

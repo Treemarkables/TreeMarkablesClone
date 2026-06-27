@@ -51,6 +51,9 @@ type SettingsLike = Partial<
     | "businessEmail"
     | "businessAddress"
     | "businessGstNumber"
+    | "businessWebsite"
+    | "brandHeaderColor"
+    | "brandAccentColor"
   >
 > | null | undefined;
 
@@ -64,5 +67,27 @@ export function getBusinessIdentity(settings: SettingsLike): BusinessIdentity {
     email: settings?.businessEmail || DEFAULTS.email,
     address: settings?.businessAddress || DEFAULTS.address,
     gstNumber: settings?.businessGstNumber || DEFAULTS.gstNumber,
+  };
+}
+
+export interface BrandColors {
+  headerColor: string; // header/footer band background
+  accentColor: string; // wordmark / accent rule / CTA / amount
+}
+
+// Default brand palette = Treemarkables' black + neon-green. Matches the
+// business_settings column defaults, so every email is unchanged until a business
+// picks its own colours in Company Info. Unlike identity text, colours are not an
+// identity leak, so a shared visual default is acceptable per the product call.
+const BRAND_COLOR_DEFAULTS: BrandColors = {
+  headerColor: "#0b0b0b",
+  accentColor: "#39FF14",
+};
+
+/** Resolve a business's email brand colours, falling back to the default palette. */
+export function getBrandColors(settings: SettingsLike): BrandColors {
+  return {
+    headerColor: settings?.brandHeaderColor || BRAND_COLOR_DEFAULTS.headerColor,
+    accentColor: settings?.brandAccentColor || BRAND_COLOR_DEFAULTS.accentColor,
   };
 }
