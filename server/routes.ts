@@ -1829,6 +1829,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     app.use(p, requireEntitlement('plan:crew', 'analytics'));
   }
 
+  // ── Widen gates to the remaining ENTIRELY-premium modules (capabilities.ts) ──
+  // Only prefixes with NO free sub-capability are gated by prefix here. Mixed
+  // prefixes are intentionally NOT blanket-gated — doing so would break freemium's
+  // free sub-features — and stay UI-gated (PlanGate) until per-handler gating lands:
+  //   /api/staff (staff.view free), /api/photos (view/upload free), /api/jobs +
+  //   dispatch (jobs free), /api/videos (public/knowledge), /api/documents +
+  //   document-templates (invoice/proposal PDFs free), /api/analytics (basic free),
+  //   /api/materials + /api/services (read by free quoting), /api/conversations +
+  //   /api/reviews + /api/price-rules (entangled with free lead/quote flows).
+  //   ServiceM8 import is left open so freemium can import during onboarding.
+  for (const p of ['/api/safety-assets', '/api/swms-templates', '/api/toolbox-talk-topics', '/api/toolbox-talk-attendees', '/api/induction-photos']) {
+    app.use(p, requireEntitlement('plan:crew', 'safety'));
+  }
+  for (const p of ['/api/equipment', '/api/job-templates', '/api/follow-up-queue', '/api/booking-reminders']) {
+    app.use(p, requireEntitlement('plan:crew', 'premium_module'));
+  }
+  app.use('/api/campaigns', requireEntitlement('plan:business', 'marketing'));
+
   // TEMP DEBUG: Verify fresh code is running
   app.get('/api/test-fresh-code', (req: Request, res: Response) => {
     console.log('🟢 FRESH CODE TEST ENDPOINT HIT - Version 2025-11-25-002');
