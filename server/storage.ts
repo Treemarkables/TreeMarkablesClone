@@ -5341,6 +5341,44 @@ class DatabaseStorage implements IStorage {
       .orderBy(schema.tenantChannels.channelType, schema.tenantChannels.createdAt);
   }
 
+  // Concierge plan/status helpers — owner connection, explicit businessId. Only
+  // requirePlatformAdmin routes (+ the login suspension check) call these.
+  async getBusinessById(businessId: string): Promise<(typeof schema.businesses.$inferSelect) | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb.select().from(schema.businesses).where(eq(schema.businesses.id, businessId)).limit(1);
+    return row;
+  }
+
+  async setBusinessStatus(businessId: string, status: string): Promise<(typeof schema.businesses.$inferSelect) | undefined> {
+    const [row] = await ownerDb.update(schema.businesses).set({ status }).where(eq(schema.businesses.id, businessId)).returning();
+    return row;
+  }
+
+  async getSubscriptionForBusiness(businessId: string): Promise<(typeof schema.subscriptions.$inferSelect) | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb.select().from(schema.subscriptions).where(eq(schema.subscriptions.businessId, businessId)).limit(1);
+    return row;
+  }
+
+  async listSubscriptionPlans(): Promise<Array<typeof schema.subscriptionPlans.$inferSelect>> {
+    return await ownerDb.select().from(schema.subscriptionPlans)
+      .where(eq(schema.subscriptionPlans.isActive, true))
+      .orderBy(schema.subscriptionPlans.sortOrder);
+  }
+
+  async setSubscriptionPlanForBusiness(businessId: string, planId: string): Promise<(typeof schema.subscriptions.$inferSelect) | undefined> {
+    const existing = await this.getSubscriptionForBusiness(businessId);
+    if (existing) {
+      const [row] = await ownerDb.update(schema.subscriptions)
+        .set({ planId, status: 'active', updatedAt: new Date() })
+        .where(eq(schema.subscriptions.id, existing.id)).returning();
+      return row;
+    }
+    const [row] = await ownerDb.insert(schema.subscriptions)
+      .values({ businessId, planId, status: 'active' }).returning();
+    return row;
+  }
+
   async getBusinessSettings(): Promise<BusinessSettings> {
     // Try to get existing business settings from database.
     // Deterministic ordering guards against stray duplicate rows for a tenant:
