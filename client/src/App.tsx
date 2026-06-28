@@ -112,6 +112,7 @@ const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
 const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
 const SettingsAccount = lazy(() => import("@/pages/SettingsAccount"));
 const SettingsChannels = lazy(() => import("@/pages/SettingsChannels"));
+const SettingsSetup = lazy(() => import("@/pages/SettingsSetup"));
 const SettingsQuoteFollowup = lazy(() => import("@/pages/SettingsQuoteFollowup"));
 const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoReply"));
 const FollowUpQueue = lazy(() => import("@/pages/FollowUpQueue"));
@@ -1467,6 +1468,11 @@ function Router() {
       <Route path="/settings/channels">
         <SidebarLayout>
           <SettingsChannels />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/setup">
+        <SidebarLayout>
+          <SettingsSetup />
         </SidebarLayout>
       </Route>
       <Route path="/settings/security">
