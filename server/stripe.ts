@@ -7,6 +7,8 @@
 //   STRIPE_SECRET_KEY        sk_live_... or sk_test_...
 //   STRIPE_PUBLISHABLE_KEY   pk_live_... or pk_test_... (only sent to client)
 //   STRIPE_WEBHOOK_SECRET    whsec_... — required for signature verification
+//   STRIPE_GST_TAX_RATE_ID   txr_... — optional; a 15% tax-exclusive NZ GST rate added
+//                            to subscription checkouts (prices are GST-exclusive). Unset = no GST added.
 
 import { TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
 
@@ -271,9 +273,17 @@ export interface SubscriptionCheckoutInput {
 // metadata so the webhook can map the resulting subscription back to the tenant.
 export async function createSubscriptionCheckoutSession(input: SubscriptionCheckoutInput): Promise<{ id: string; url: string }> {
   const stripe = await getStripe();
+  // The plan prices are GST-EXCLUSIVE (the billing page says so + Jules set them as
+  // $89/$150 + GST). Apply a NZ GST tax rate so Stripe adds 15% on top of each charge
+  // and the Stripe invoice doubles as a GST tax receipt. STRIPE_GST_TAX_RATE_ID is the
+  // id (txr_…) of a 15%, tax-exclusive "GST" rate created in the Stripe dashboard.
+  // Unset → no tax added (current behaviour), so this is safe to ship before the rate
+  // exists. NB: only subscriptions need this — invoice/deposit/job checkouts already
+  // charge GST-inclusive amounts (the tenant's own invoicing).
+  const gstRate = process.env.STRIPE_GST_TAX_RATE_ID?.trim();
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
-    line_items: [{ price: input.priceId, quantity: 1 }],
+    line_items: [{ price: input.priceId, quantity: 1, ...(gstRate ? { tax_rates: [gstRate] } : {}) }],
     customer: input.customerId || undefined,
     customer_email: input.customerId ? undefined : (input.customerEmail || undefined),
     client_reference_id: input.businessId,
