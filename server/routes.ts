@@ -19083,6 +19083,51 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // ========================================
+  // ONBOARDING SETUP CHECKLIST
+  // Aggregates the bring-your-own setup fields a new subscriber should complete
+  // (identity, branding, bank, GST, trade vocab, inbound channels) into one
+  // progress list so they/concierge see what's left. Read-only; each item
+  // deep-links to the Settings page that edits it. Identity/logo/contact come
+  // from the invoice document template; the rest from business_settings.
+  // ========================================
+  app.get('/api/onboarding/checklist', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+
+      const settings = await storage.getBusinessSettingsForBusiness(businessId);
+      const invoiceTemplate = await storage.getDefaultDocumentTemplateForBusiness(businessId, 'invoice');
+      const [{ count: channelCount }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.tenantChannels)
+        .where(and(eq(schema.tenantChannels.businessId, businessId), eq(schema.tenantChannels.isActive, true)));
+
+      const has = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+
+      const items = [
+        { key: 'businessName', label: 'Business name', description: 'Shown on documents and as your email sender name.', path: '/settings/company', optional: false, done: has(settings?.businessName) },
+        { key: 'ownerName', label: 'Owner name', description: 'Signs off your emails and AI-drafted replies.', path: '/settings/company', optional: false, done: has(settings?.ownerName) },
+        { key: 'logo', label: 'Logo', description: 'Appears on your quotes, proposals and invoices.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.logoUrl) },
+        { key: 'contact', label: 'Contact details', description: 'Phone and email shown to your customers.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyPhone) && has(invoiceTemplate?.companyEmail) },
+        { key: 'address', label: 'Business address', description: 'Shown on your documents.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyAddress) },
+        { key: 'bank', label: 'Bank details', description: "So customers can pay your invoices — without it, no payment block shows.", path: '/settings/company', optional: false, done: has(settings?.bankAccountName) && has(settings?.bankAccountNumber) },
+        { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: (channelCount ?? 0) > 0 },
+        { key: 'gst', label: 'GST number', description: 'Shown on tax invoices (only if GST-registered).', path: '/settings/company', optional: true, done: has(settings?.businessGstNumber) },
+        { key: 'tradeVocabulary', label: 'Trade vocabulary', description: 'Improves voice-to-quote and AI accuracy for your trade.', path: '/settings/company', optional: true, done: has(settings?.tradeVocabulary) },
+        { key: 'replyForward', label: 'Forward customer replies', description: 'Optionally copy job replies to your own inbox.', path: '/settings/company', optional: true, done: has(settings?.jobReplyForwardEmail) },
+      ];
+
+      const required = items.filter((i) => !i.optional);
+      const requiredDone = required.filter((i) => i.done).length;
+
+      res.json({ success: true, data: { items, requiredDone, requiredTotal: required.length } });
+    } catch (error) {
+      console.error('Error building onboarding checklist:', error);
+      res.status(500).json({ success: false, message: 'Error building onboarding checklist' });
+    }
+  });
+
+  // ========================================
   // BOOKING REMINDER ENDPOINTS
   // Customer-facing reminders sent before a scheduled job. Backed by
   // server/services/bookingReminderService.ts and processed by the

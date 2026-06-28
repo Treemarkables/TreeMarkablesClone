@@ -37,6 +37,7 @@ import {
   FileStack,
   CreditCard,
   Search,
+  Rocket,
   type LucideIcon
 } from "lucide-react";
 import { Link } from "wouter";
@@ -67,6 +68,13 @@ const settingsSections: SettingSection[] = [
     chip: "bg-blue-50",
     dot: "bg-blue-600",
     options: [
+      {
+        id: "setup",
+        title: "Finish Setup",
+        description: "Complete your account setup — see what's left to do",
+        icon: Rocket,
+        path: "/settings/setup"
+      },
       {
         id: "company",
         title: "Company Info",
