@@ -423,11 +423,13 @@ function SidebarNavContent({
                             <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics"><span>Metrics Dashboard</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        <PlanGate requires="plan:crew">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/profitability-calculator"}>
                             <Link href="/profitability-calculator" onClick={handleLinkClick} data-testid="link-profitability-calculator"><span>Profitability Calculator</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        </PlanGate>
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>
@@ -458,11 +460,13 @@ function SidebarNavContent({
                             <Link href="/calendar" onClick={handleLinkClick} data-testid="link-calendar"><span>Calendar</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        <PlanGate requires="plan:business">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/workflows"}>
                             <Link href="/workflows" onClick={handleLinkClick} data-testid="link-workflows"><span>Workflows</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        </PlanGate>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/opportunities"}>
                             <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-opportunities"><span>Conversations</span></Link>

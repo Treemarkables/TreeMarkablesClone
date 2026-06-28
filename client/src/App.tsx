@@ -1109,7 +1109,9 @@ function Router() {
       <Route path="/profitability-calculator">
         <ProtectedRoute>
           <SidebarLayout>
-            <ProfitabilityCalculator />
+            <UpgradeGate requires="plan:crew" feature="The Profitability Calculator">
+              <ProfitabilityCalculator />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1380,7 +1382,9 @@ function Router() {
       <Route path="/workflows">
         <ProtectedRoute>
           <SidebarLayout>
-            <WorkflowAutomation />
+            <UpgradeGate requires="plan:business" feature="Workflow automation">
+              <WorkflowAutomation />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
