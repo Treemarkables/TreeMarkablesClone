@@ -19,7 +19,7 @@ import { storage, invoiceRevenueExGst } from "./storage";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { requireEntitlement } from "./tenancy/requireEntitlement";
-import { resolveBusinessIdByChannel } from "./tenancy/channelMap";
+import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
 import { resolveEntitlements } from "./tenancy/entitlements";
 import { jwksHandler } from "./tenancy/jwksHandler";
@@ -18982,6 +18982,103 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         success: false,
         message: 'Error resetting business settings'
       });
+    }
+  });
+
+  // ========================================
+  // INBOUND CHANNEL REGISTRATION
+  // Map a tenant's phone number(s) / email(s) → their business so session-less
+  // inbound webhooks (Twilio voice/SMS, inbound email) route to the right tenant.
+  // Replaces the manual SQL insert at onboarding. Scoped to the logged-in business;
+  // a global UNIQUE(channel_type, identifier) means an identifier belongs to exactly
+  // one tenant, so we pre-check cross-tenant collisions and return a clear error.
+  // ========================================
+  const CHANNEL_LABELS: Record<string, string> = { phone: 'phone number', email: 'email address' };
+
+  // List the current tenant's registered inbound channels.
+  app.get('/api/channels', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      // RLS db proxy → already scoped to this tenant; businessId filter is belt-and-braces.
+      const rows = await db.select().from(schema.tenantChannels)
+        .where(eq(schema.tenantChannels.businessId, businessId))
+        .orderBy(schema.tenantChannels.channelType, schema.tenantChannels.createdAt);
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('Error listing channels:', error);
+      res.status(500).json({ success: false, message: 'Error listing channels' });
+    }
+  });
+
+  // Register a phone number or email for the current tenant.
+  app.post('/api/channels', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+
+      const channelType = req.body?.channelType as ChannelType;
+      const rawIdentifier = req.body?.identifier as string | undefined;
+      const label = (req.body?.label as string | undefined)?.trim() || undefined;
+
+      // FB pages are intentionally not offered (Facebook integration was dropped).
+      if (channelType !== 'phone' && channelType !== 'email') {
+        return res.status(400).json({ success: false, message: 'Channel type must be a phone number or email.' });
+      }
+      const identifier = normalizeChannelIdentifier(channelType, rawIdentifier);
+      if (!identifier) {
+        return res.status(400).json({ success: false, message: `Enter a valid ${CHANNEL_LABELS[channelType]}.` });
+      }
+
+      // A given number/email maps to exactly ONE tenant (global unique index).
+      // Look up the existing owner (ownerDb, sees all tenants) for a friendly error.
+      const existingOwner = await resolveBusinessIdByChannel(channelType, rawIdentifier);
+      if (existingOwner && existingOwner !== businessId) {
+        return res.status(409).json({ success: false, message: `That ${CHANNEL_LABELS[channelType]} is already registered to another business.` });
+      }
+
+      // Find this tenant's own row (active OR inactive) to make register idempotent
+      // and to reactivate a previously-removed channel instead of erroring.
+      const [mine] = await db.select().from(schema.tenantChannels)
+        .where(and(
+          eq(schema.tenantChannels.businessId, businessId),
+          eq(schema.tenantChannels.channelType, channelType),
+          eq(schema.tenantChannels.identifier, identifier),
+        ))
+        .limit(1);
+
+      let row;
+      if (mine) {
+        [row] = await db.update(schema.tenantChannels)
+          .set({ isActive: true, ...(label !== undefined ? { label } : {}) })
+          .where(eq(schema.tenantChannels.id, mine.id))
+          .returning();
+      } else {
+        [row] = await db.insert(schema.tenantChannels)
+          .values({ businessId, channelType, identifier, label })
+          .returning();
+      }
+      res.json({ success: true, data: row });
+    } catch (error) {
+      console.error('Error registering channel:', error);
+      res.status(500).json({ success: false, message: 'Error registering channel' });
+    }
+  });
+
+  // Remove a channel (hard delete, scoped to the current tenant).
+  app.delete('/api/channels/:id', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      await db.delete(schema.tenantChannels)
+        .where(and(
+          eq(schema.tenantChannels.id, req.params.id),
+          eq(schema.tenantChannels.businessId, businessId),
+        ));
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error removing channel:', error);
+      res.status(500).json({ success: false, message: 'Error removing channel' });
     }
   });
 
