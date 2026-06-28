@@ -2379,7 +2379,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         location: 'Facebook',
         rating: review.rating || 5,
         comment: review.review_text || '',
-        service: 'Tree Services',
+        service: 'Service',
         source: 'facebook',
         date: review.created_time
       })) || [];
@@ -2753,6 +2753,13 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         recommendations: []
       };
 
+      // Discover THIS business's own Google listing from its settings — not a
+      // hardcoded Treemarkables query — so any tenant finds their own reviews.
+      const __rdSettings = await storage.getBusinessSettings();
+      const __rdName = __rdSettings?.businessName || '';
+      const __rdLocality = (__rdSettings?.businessAddress || '').split(',').pop()?.trim() || '';
+      const __rdQuery = [__rdName, __rdLocality, 'New Zealand'].filter(Boolean).join(' ');
+
       // Method 1: Try New Google Places API to find Treemarkables business
       try {
         // Try the new Places API (Text Search)
@@ -2766,7 +2773,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
             'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.reviews'
           },
           body: JSON.stringify({
-            textQuery: 'Treemarkables tree removal Gisborne New Zealand',
+            textQuery: __rdQuery,
             maxResultCount: 5
           })
         });
@@ -2862,11 +2869,11 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
           body: JSON.stringify({
             location: {
               address: {
-                locality: 'Gisborne',
+                locality: __rdLocality || 'New Zealand',
                 countryCode: 'NZ'
               }
             },
-            query: 'Treemarkables'
+            query: __rdName
           })
         });
 
@@ -30662,7 +30669,7 @@ Transcription: ${transcriptText}`;
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     recipient: { id: senderId },
-                    message:   { text: "Hi! Thanks for reaching out to Treemarkables. We've received your message and will be in touch shortly!" }
+                    message:   { text: "Hi! Thanks for reaching out. We've received your message and will be in touch shortly!" }
                   })
                 });
               } catch (err) {
@@ -30750,13 +30757,13 @@ ${messageText}`
             content: [
               {
                 type: 'text',
-                text: `You are a data extraction assistant for Treemarkables, a New Zealand tree service company that delivers free wood mulch. This screenshot is likely from a Facebook post, comment, message, or website form requesting a mulch delivery.
+                text: `You are a data extraction assistant for a New Zealand field-service business. This screenshot is likely from a Facebook post, comment, message, or website form requesting a service.
 
 Extract the following information and return ONLY valid JSON with these exact keys:
-- name (full name of the person requesting mulch, string or null)
+- name (full name of the person making the request, string or null)
 - phone (NZ phone number, string or null)
-- address (delivery address, string or null)
-- notes (any extra details about where to drop it, how much they want, timing preferences, etc., string or null)
+- address (the address for the job/delivery, string or null)
+- notes (any extra details about the request, location, quantity, timing preferences, etc., string or null)
 
 If you cannot find a value, use null. Do not guess.`
               },
