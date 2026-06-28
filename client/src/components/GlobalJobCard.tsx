@@ -117,6 +117,7 @@ import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
 import { formatInTimeZone } from "date-fns-tz";
 
 import { Button } from "@/components/ui/button";
+import { PlanGate } from "@/components/PlanGate";
 import {
   Dialog,
   DialogContent,
@@ -5196,6 +5197,7 @@ The Treemarkables Team`;
                   <Archive className="w-4 h-4 mr-2" />
                   Archive
                 </DropdownMenuItem>
+                <PlanGate requires="plan:crew">
                 <DropdownMenuItem
                   onClick={handleSendToXeroClick}
                   disabled={
@@ -5212,6 +5214,7 @@ The Treemarkables Team`;
                       ? "Sent to Xero"
                       : "Send to Xero"}
                 </DropdownMenuItem>
+                </PlanGate>
                 {editingJob?.xeroStatus === "sent" && (
                   <DropdownMenuItem
                     onClick={() => setShowXeroResetConfirm(true)}
@@ -10362,6 +10365,7 @@ The Treemarkables Team`;
               </button>
 
               {/* Send to Xero */}
+              <PlanGate requires="plan:crew">
               <button
                 type="button"
                 className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
@@ -10382,6 +10386,7 @@ The Treemarkables Team`;
                   {sendToXeroMutation.isPending ? "Sending..." : "Send to Xero"}
                 </span>
               </button>
+              </PlanGate>
 
               {/* Re-send to Xero (conditional) */}
               {editingJob?.xeroStatus === "sent" && (
