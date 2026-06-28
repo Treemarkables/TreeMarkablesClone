@@ -19298,6 +19298,57 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Concierge: register an inbound channel ON A SUBSCRIBER'S BEHALF. Mirrors the
+  // per-tenant POST /api/channels logic but targets :id on the owner connection.
+  app.post('/api/admin/subscribers/:id/channels', requirePlatformAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.params.id;
+      const business = (await storage.listBusinesses()).find((b) => b.id === businessId);
+      if (!business) return res.status(404).json({ success: false, message: 'Subscriber not found' });
+
+      const channelType = req.body?.channelType as ChannelType;
+      const rawIdentifier = req.body?.identifier as string | undefined;
+      const label = (req.body?.label as string | undefined)?.trim() || undefined;
+      const LABELS: Record<string, string> = { phone: 'phone number', email: 'email address' };
+
+      if (channelType !== 'phone' && channelType !== 'email') {
+        return res.status(400).json({ success: false, message: 'Channel type must be a phone number or email.' });
+      }
+      const identifier = normalizeChannelIdentifier(channelType, rawIdentifier);
+      if (!identifier) {
+        return res.status(400).json({ success: false, message: `Enter a valid ${LABELS[channelType]}.` });
+      }
+
+      // A number/email maps to exactly ONE tenant (global unique). resolveBusinessIdByChannel
+      // runs on the owner connection and sees all tenants.
+      const existingOwner = await resolveBusinessIdByChannel(channelType, rawIdentifier);
+      if (existingOwner && existingOwner !== businessId) {
+        return res.status(409).json({ success: false, message: `That ${LABELS[channelType]} is already registered to another business.` });
+      }
+
+      const mine = await storage.findTenantChannelForBusiness(businessId, channelType, identifier);
+      const row = mine
+        ? await storage.setTenantChannelActive(mine.id, true, label)
+        : await storage.insertTenantChannel({ businessId, channelType, identifier, label });
+      res.json({ success: true, data: row });
+    } catch (error) {
+      console.error('Error registering subscriber channel:', error);
+      res.status(500).json({ success: false, message: 'Error registering channel' });
+    }
+  });
+
+  // Concierge: remove a subscriber's channel.
+  app.delete('/api/admin/subscribers/:id/channels/:channelId', requirePlatformAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.params.id;
+      await storage.deleteTenantChannelForBusiness(businessId, req.params.channelId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error removing subscriber channel:', error);
+      res.status(500).json({ success: false, message: 'Error removing channel' });
+    }
+  });
+
   // ========================================
   // BOOKING REMINDER ENDPOINTS
   // Customer-facing reminders sent before a scheduled job. Backed by
