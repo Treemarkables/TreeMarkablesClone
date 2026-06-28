@@ -69,7 +69,8 @@ These files are critical infrastructure or tooling-owned:
 | UI | No emoji in the UI |
 | Buttons | No manual `hover:bg-*` or `active:bg-*` classes — Shadcn handles this |
 | GPT calls | Do **not** pass `temperature` — GPT-5+ doesn't support it |
-| Customer URLs | Always hardcode `https://app.treemarkables.co.nz` for customer-facing links |
+| Customer URLs | Always hardcode `https://app.treemarkables.co.nz` for customer-facing links (invoices, proposals, emails) |
+| Native app-shell URL | The URL the iOS/Android/Electron shells load is **not** a customer link — it's centralized in `appShell.config.json` + `scripts/sync-app-shell-url.mjs`. Never hand-edit it in `capacitor.config.ts`/`electron/main.js`/native files; change the config and run the sync script. (Earmarked to move to `app.inflowapp.co.nz` once that host serves over grey-cloud HTTPS.) |
 
 ---
 

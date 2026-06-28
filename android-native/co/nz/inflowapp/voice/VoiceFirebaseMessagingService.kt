@@ -35,6 +35,8 @@ class VoiceFirebaseMessagingService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "InflowFCM"
+        // MANAGED: app-shell container URL. Change via appShell.config.json +
+        // `node scripts/sync-app-shell-url.mjs`, not by hand.
         private const val SERVER_URL = "https://app.treemarkables.co.nz"
 
         // Injected at build time from android-native/secrets.properties (gitignored) via

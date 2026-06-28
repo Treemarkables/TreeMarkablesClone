@@ -111,6 +111,23 @@ changes to `main.js`/the shell itself.
 
 ---
 
+## Changing the app-shell URL (Inflow domain)
+
+The URL all shells load is centralized in **`appShell.config.json`** (repo root). It is the
+app *container* only — not customer-facing links. To move iOS/Android/Electron to a new
+domain (e.g. `app.inflowapp.co.nz`):
+
+```bash
+# 1. edit appShell.config.json → "host" + "url"
+node scripts/sync-app-shell-url.mjs   # stamps all shell files (idempotent, reversible)
+# 2. rebuild: electron `npm start`/`dist`, Android `cap sync`, iOS Xcode
+```
+
+⚠️ The target domain must already serve the app over HTTPS (added as a custom domain on
+the DO app, DNS as a **grey-cloud** CNAME to the DO app — mirroring `app.treemarkables.co.nz`).
+A proxied/orange-cloud record double-proxies through DO's own Cloudflare edge and returns
+**525** (broken TLS). Don't flip the shells until the new host returns 200.
+
 ## Notes
 
 - `contextIsolation` is **on** and Node integration is **off** — the page is treated as an

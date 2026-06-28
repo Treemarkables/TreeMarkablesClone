@@ -6,6 +6,8 @@ const config: CapacitorConfig = {
   webDir: "dist/public",
   server: {
     // Shared across iOS + Android — both shells load the live web app.
+    // MANAGED: this URL is the native app-shell container. Change it via
+    // appShell.config.json + `node scripts/sync-app-shell-url.mjs`, not by hand.
     url: "https://app.treemarkables.co.nz",
     cleartext: false,
   },

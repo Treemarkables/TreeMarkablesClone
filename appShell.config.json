@@ -1,0 +1,5 @@
+{
+  "_comment": "Single source of truth for the URL the NATIVE APP SHELLS (iOS / Android / Electron) load. This is the app container only — NOT customer-facing links (invoices, proposals, emails), which stay per-tenant / treemarkables. To change it: edit `host` below, run `node scripts/sync-app-shell-url.mjs`, then rebuild each shell. See DESKTOP_BUILD_GUIDE.md / ANDROID_BUILD_GUIDE.md.",
+  "host": "app.treemarkables.co.nz",
+  "url": "https://app.treemarkables.co.nz"
+}

@@ -9,6 +9,8 @@
 const { app, BrowserWindow, Menu, shell, session } = require("electron");
 const path = require("path");
 
+// MANAGED: app-shell container URL. Change via appShell.config.json +
+// `node scripts/sync-app-shell-url.mjs`, not by hand.
 const APP_URL = "https://app.treemarkables.co.nz";
 const APP_ORIGIN = new URL(APP_URL).origin;
 

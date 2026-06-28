@@ -43,6 +43,8 @@ echo "    ✓ Android platform ready"
 
 # --- Step 3: Copy native Kotlin sources ---
 echo "[3/7] Copying native Kotlin sources..."
+# Ensure the staged sources point at the configured app-shell URL first.
+node "$SCRIPT_DIR/sync-app-shell-url.mjs" >/dev/null 2>&1 || true
 mkdir -p "$PKG_DIR/voice"
 cp "$NATIVE_DIR/co/nz/inflowapp/MainActivity.kt"      "$PKG_DIR/"
 cp "$NATIVE_DIR/co/nz/inflowapp/voice/"*.kt            "$PKG_DIR/voice/"

@@ -34,6 +34,15 @@ The same FCM channel carries both regular notifications and call invites —
 
 ---
 
+## App-shell URL (Inflow domain)
+
+The URL the shell loads + the native FCM-registration server are centralized in
+**`appShell.config.json`** (repo root) — the app *container*, not customer-facing links.
+To move to a new domain (e.g. `app.inflowapp.co.nz`): edit `appShell.config.json`, run
+`node scripts/sync-app-shell-url.mjs` (idempotent; `android-setup.sh`/`android-sync.sh`
+run it for you), then rebuild. The target host must already serve the app over HTTPS via a
+**grey-cloud** CNAME to the DO app — a proxied/orange-cloud record returns **525**.
+
 ## Prerequisites
 
 - **Android Studio** (latest) with the Android SDK + **JDK 17**

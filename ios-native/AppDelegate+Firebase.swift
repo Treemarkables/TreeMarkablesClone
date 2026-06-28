@@ -45,6 +45,8 @@ import UserNotifications
 // authenticated endpoint — works even when the WebView is loading local assets
 // (no active session required).
 private enum NativeTokenRegistration {
+    // MANAGED: app-shell container URL. Change via appShell.config.json +
+    // `node scripts/sync-app-shell-url.mjs`, not by hand.
     static let serverURL = "https://app.treemarkables.co.nz"
 
     // ⚠️  FILL THIS IN — paste the value of HERO_WEBHOOK_SECRET from Replit Secrets.
