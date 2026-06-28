@@ -874,11 +874,70 @@ async function requireAdmin(req: Request, res: Response, next: express.NextFunct
     next();
   } catch (error) {
     console.error('Error in requireAdmin middleware:', error);
-    res.status(403).json({ 
-      success: false, 
-      message: 'Admin access required' 
+    res.status(403).json({
+      success: false,
+      message: 'Admin access required'
     });
   }
+}
+
+// Platform-operator gate for the CONCIERGE endpoints, which read/write OTHER
+// tenants' data on the owner connection. Strict: must be a logged-in admin whose
+// own business is in the Treemarkables/Inflow operator allowlist (same allowlist
+// stripe/entitlements/usageMeter treat as the platform owner).
+async function requirePlatformAdmin(req: Request, res: Response, next: express.NextFunction): Promise<void> {
+  try {
+    const employeeId = req.session.employeeId;
+    const businessId = req.session.businessId;
+    if (!employeeId) {
+      res.status(403).json({ success: false, message: 'Admin access required. Please log in.' });
+      return;
+    }
+    const employee = await storage.getEmployee(employeeId);
+    if (!employee || employee.role !== 'admin') {
+      res.status(403).json({ success: false, message: 'Admin access required' });
+      return;
+    }
+    if (!businessId || !TREEMARKABLES_BUSINESS_IDS.includes(businessId)) {
+      res.status(403).json({ success: false, message: 'Platform administrator access required' });
+      return;
+    }
+    next();
+  } catch (error) {
+    console.error('Error in requirePlatformAdmin middleware:', error);
+    res.status(403).json({ success: false, message: 'Platform administrator access required' });
+  }
+}
+
+// Shared builder for the onboarding setup checklist (used by the per-tenant
+// /api/onboarding/checklist and the concierge subscriber views). Aggregates the
+// bring-your-own setup fields for ONE business into a progress list. Reads via
+// storage helpers that take an explicit businessId, so it's safe cross-tenant.
+async function buildOnboardingChecklist(businessId: string) {
+  const settings = await storage.getBusinessSettingsForBusiness(businessId);
+  const invoiceTemplate = await storage.getDefaultDocumentTemplateForBusiness(businessId, 'invoice');
+  const [{ count: channelCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.tenantChannels)
+    .where(and(eq(schema.tenantChannels.businessId, businessId), eq(schema.tenantChannels.isActive, true)));
+
+  const has = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+
+  const items = [
+    { key: 'businessName', label: 'Business name', description: 'Shown on documents and as your email sender name.', path: '/settings/company', optional: false, done: has(settings?.businessName) },
+    { key: 'ownerName', label: 'Owner name', description: 'Signs off your emails and AI-drafted replies.', path: '/settings/company', optional: false, done: has(settings?.ownerName) },
+    { key: 'logo', label: 'Logo', description: 'Appears on your quotes, proposals and invoices.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.logoUrl) },
+    { key: 'contact', label: 'Contact details', description: 'Phone and email shown to your customers.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyPhone) && has(invoiceTemplate?.companyEmail) },
+    { key: 'address', label: 'Business address', description: 'Shown on your documents.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyAddress) },
+    { key: 'bank', label: 'Bank details', description: "So customers can pay your invoices — without it, no payment block shows.", path: '/settings/company', optional: false, done: has(settings?.bankAccountName) && has(settings?.bankAccountNumber) },
+    { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: (channelCount ?? 0) > 0 },
+    { key: 'gst', label: 'GST number', description: 'Shown on tax invoices (only if GST-registered).', path: '/settings/company', optional: true, done: has(settings?.businessGstNumber) },
+    { key: 'tradeVocabulary', label: 'Trade vocabulary', description: 'Improves voice-to-quote and AI accuracy for your trade.', path: '/settings/company', optional: true, done: has(settings?.tradeVocabulary) },
+    { key: 'replyForward', label: 'Forward customer replies', description: 'Optionally copy job replies to your own inbox.', path: '/settings/company', optional: true, done: has(settings?.jobReplyForwardEmail) },
+  ];
+
+  const required = items.filter((i) => !i.optional);
+  return { items, requiredDone: required.filter((i) => i.done).length, requiredTotal: required.length };
 }
 
 // Middleware to require API key for mobile app endpoints
@@ -19094,36 +19153,76 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     try {
       const businessId = req.session.businessId;
       if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
-
-      const settings = await storage.getBusinessSettingsForBusiness(businessId);
-      const invoiceTemplate = await storage.getDefaultDocumentTemplateForBusiness(businessId, 'invoice');
-      const [{ count: channelCount }] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.tenantChannels)
-        .where(and(eq(schema.tenantChannels.businessId, businessId), eq(schema.tenantChannels.isActive, true)));
-
-      const has = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
-
-      const items = [
-        { key: 'businessName', label: 'Business name', description: 'Shown on documents and as your email sender name.', path: '/settings/company', optional: false, done: has(settings?.businessName) },
-        { key: 'ownerName', label: 'Owner name', description: 'Signs off your emails and AI-drafted replies.', path: '/settings/company', optional: false, done: has(settings?.ownerName) },
-        { key: 'logo', label: 'Logo', description: 'Appears on your quotes, proposals and invoices.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.logoUrl) },
-        { key: 'contact', label: 'Contact details', description: 'Phone and email shown to your customers.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyPhone) && has(invoiceTemplate?.companyEmail) },
-        { key: 'address', label: 'Business address', description: 'Shown on your documents.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyAddress) },
-        { key: 'bank', label: 'Bank details', description: "So customers can pay your invoices — without it, no payment block shows.", path: '/settings/company', optional: false, done: has(settings?.bankAccountName) && has(settings?.bankAccountNumber) },
-        { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: (channelCount ?? 0) > 0 },
-        { key: 'gst', label: 'GST number', description: 'Shown on tax invoices (only if GST-registered).', path: '/settings/company', optional: true, done: has(settings?.businessGstNumber) },
-        { key: 'tradeVocabulary', label: 'Trade vocabulary', description: 'Improves voice-to-quote and AI accuracy for your trade.', path: '/settings/company', optional: true, done: has(settings?.tradeVocabulary) },
-        { key: 'replyForward', label: 'Forward customer replies', description: 'Optionally copy job replies to your own inbox.', path: '/settings/company', optional: true, done: has(settings?.jobReplyForwardEmail) },
-      ];
-
-      const required = items.filter((i) => !i.optional);
-      const requiredDone = required.filter((i) => i.done).length;
-
-      res.json({ success: true, data: { items, requiredDone, requiredTotal: required.length } });
+      res.json({ success: true, data: await buildOnboardingChecklist(businessId) });
     } catch (error) {
       console.error('Error building onboarding checklist:', error);
       res.status(500).json({ success: false, message: 'Error building onboarding checklist' });
+    }
+  });
+
+  // ========================================
+  // CONCIERGE — platform-operator subscriber management (CROSS-TENANT).
+  // Gated by requirePlatformAdmin. Lets the operator set up/inspect any
+  // subscriber during onboarding without logging in as them. All reads/writes
+  // target an explicit :id on the owner connection (via ownerDb-backed storage
+  // helpers) — never the operator's own RLS tenant. Channel editing is read-only
+  // here for now (subscribers add their own via /settings/channels).
+  // ========================================
+  // Fields the operator may edit on a subscriber's behalf (business_settings only).
+  const CONCIERGE_EDITABLE_FIELDS = [
+    'businessName', 'ownerName', 'businessTagline', 'businessDiscipline', 'tradeVocabulary',
+    'businessPhone', 'businessEmail', 'businessAddress', 'businessGstNumber',
+    'bankAccountName', 'bankAccountNumber', 'brandHeaderColor', 'brandAccentColor', 'jobReplyForwardEmail',
+  ] as const;
+
+  app.get('/api/admin/subscribers', requirePlatformAdmin, async (_req: Request, res: Response) => {
+    try {
+      const businesses = await storage.listBusinesses();
+      const data = await Promise.all(businesses.map(async (b) => {
+        const cl = await buildOnboardingChecklist(b.id);
+        return { id: b.id, name: b.name, slug: b.slug, status: b.status, createdAt: b.createdAt, requiredDone: cl.requiredDone, requiredTotal: cl.requiredTotal };
+      }));
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('Error listing subscribers:', error);
+      res.status(500).json({ success: false, message: 'Error listing subscribers' });
+    }
+  });
+
+  app.get('/api/admin/subscribers/:id', requirePlatformAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.params.id;
+      const business = (await storage.listBusinesses()).find((b) => b.id === businessId);
+      if (!business) return res.status(404).json({ success: false, message: 'Subscriber not found' });
+      const settings = await storage.getBusinessSettingsForBusiness(businessId);
+      const channels = await storage.listTenantChannelsForBusiness(businessId);
+      const checklist = await buildOnboardingChecklist(businessId);
+      res.json({ success: true, data: { business, settings: settings ?? null, channels, checklist } });
+    } catch (error) {
+      console.error('Error loading subscriber:', error);
+      res.status(500).json({ success: false, message: 'Error loading subscriber' });
+    }
+  });
+
+  app.put('/api/admin/subscribers/:id/settings', requirePlatformAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.params.id;
+      const business = (await storage.listBusinesses()).find((b) => b.id === businessId);
+      if (!business) return res.status(404).json({ success: false, message: 'Subscriber not found' });
+
+      // Whitelist — only Company Info fields, never arbitrary columns / tenant ids.
+      const updates: Record<string, unknown> = {};
+      for (const field of CONCIERGE_EDITABLE_FIELDS) {
+        if (field in (req.body ?? {})) updates[field] = typeof req.body[field] === 'string' ? req.body[field].trim() : req.body[field];
+      }
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ success: false, message: 'No editable fields provided' });
+      }
+      const settings = await storage.updateBusinessSettingsForBusiness(businessId, updates as any);
+      res.json({ success: true, data: settings ?? null });
+    } catch (error) {
+      console.error('Error updating subscriber settings:', error);
+      res.status(500).json({ success: false, message: 'Error updating subscriber settings' });
     }
   });
 
