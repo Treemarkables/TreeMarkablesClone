@@ -6,7 +6,7 @@
  * sets `business_id` explicitly — the column default is Treemarkables and would be wrong.
  */
 import { db } from "./db";
-import { businesses, businessSettings, employees, subscriptions, subscriptionPlans } from "@shared/schema";
+import { businesses, businessSettings, employees, subscriptions, subscriptionPlans, documentTemplates } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
@@ -63,9 +63,37 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
       await db.insert(subscriptions).values({ businessId: biz.id, planId: freemium.id, status: "active" });
     }
 
+    // Seed the tenant's OWN default PDF/document templates (quote, proposal, invoice).
+    // Without these, the session-less document viewers fall back to an arbitrary
+    // (Treemarkables) default template — a cross-tenant branding leak. The company
+    // identity fields MUST be set explicitly: the column defaults are Treemarkables'
+    // (companyName/address/email/phone/GST), so an unset insert would re-introduce
+    // the very leak this closes. Address/phone are unknown at signup → blank (the
+    // renderers hide empty fields); the owner fills them later in Company Info.
+    const defaultDocTemplates = [
+      { type: "quote", name: "Standard Quote" },
+      { type: "proposal", name: "Standard Proposal" },
+      { type: "invoice", name: "Tax Invoice" },
+    ];
+    await db.insert(documentTemplates).values(
+      defaultDocTemplates.map((d) => ({
+        businessId: biz.id,
+        name: d.name,
+        type: d.type,
+        isDefault: true,
+        isActive: true,
+        companyName: input.businessName,
+        companyEmail: email,
+        companyAddress: "",
+        companyPhone: "",
+        gstNumber: "",
+      })),
+    );
+
     return { businessId: biz.id, employeeId: emp.id };
   } catch (err) {
     // Compensating rollback — undo the partial tenant.
+    await db.delete(documentTemplates).where(eq(documentTemplates.businessId, biz.id)).catch(() => {});
     await db.delete(subscriptions).where(eq(subscriptions.businessId, biz.id)).catch(() => {});
     await db.delete(employees).where(eq(employees.businessId, biz.id)).catch(() => {});
     await db.delete(businessSettings).where(eq(businessSettings.businessId, biz.id)).catch(() => {});
