@@ -50,11 +50,15 @@ export function Button({
 type LinkButtonProps = CommonProps & {
   href: string;
   external?: boolean;
+  // External links navigate in the same tab by default (e.g. "Log in"). Opt in
+  // to a new tab for genuinely external destinations.
+  newTab?: boolean;
 };
 
 export function LinkButton({
   href,
   external,
+  newTab,
   variant = "primary",
   size = "md",
   className = "",
@@ -63,7 +67,11 @@ export function LinkButton({
   const cls = `${base} ${variants[variant]} ${sizes[size]} ${className}`;
   if (external) {
     return (
-      <a href={href} className={cls} target="_blank" rel="noreferrer">
+      <a
+        href={href}
+        className={cls}
+        {...(newTab ? { target: "_blank", rel: "noreferrer" } : {})}
+      >
         {children}
       </a>
     );
