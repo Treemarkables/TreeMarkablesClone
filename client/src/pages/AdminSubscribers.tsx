@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Loader2, Phone, Mail, Building2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Phone, Mail, Building2, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -78,6 +79,40 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
     onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't save", description: e.message }),
   });
 
+  const [chType, setChType] = useState<"phone" | "email">("phone");
+  const [chIdentifier, setChIdentifier] = useState("");
+  const [chLabel, setChLabel] = useState("");
+
+  const addChannel = useMutation({
+    mutationFn: async () => {
+      const r = await apiRequest("POST", `/api/admin/subscribers/${id}/channels`, { channelType: chType, identifier: chIdentifier, label: chLabel });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.message || "Could not add channel.");
+      return j;
+    },
+    onSuccess: () => {
+      setChIdentifier("");
+      setChLabel("");
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/subscribers/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/subscribers"] });
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't add channel", description: e.message }),
+  });
+
+  const removeChannel = useMutation({
+    mutationFn: async (channelId: string) => {
+      const r = await apiRequest("DELETE", `/api/admin/subscribers/${id}/channels/${channelId}`, {});
+      const j = await r.json();
+      if (!j.success) throw new Error(j.message || "Could not remove channel.");
+      return j;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/subscribers/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/subscribers"] });
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't remove channel", description: e.message }),
+  });
+
   if (isLoading) {
     return <div className="flex items-center text-sm text-muted-foreground"><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading…</div>;
   }
@@ -121,20 +156,54 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
       <Card className="border-border">
         <CardHeader><CardTitle>Inbound channels</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {channels.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No channels registered. The subscriber can add these under Settings → Inbound Channels.</p>
-          ) : (
-            channels.filter((c) => c.isActive).map((c) => (
-              <div key={c.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
-                {c.channelType === "email" ? <Mail className="h-4 w-4 text-muted-foreground" /> : <Phone className="h-4 w-4 text-muted-foreground" />}
-                <div className="min-w-0">
-                  <p className="font-medium truncate">{c.label || c.identifier}</p>
-                  <p className="text-xs text-muted-foreground truncate">{c.channelType} · {c.identifier}</p>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            {channels.filter((c) => c.isActive).length === 0 ? (
+              <p className="text-sm text-muted-foreground">No channels registered yet.</p>
+            ) : (
+              channels.filter((c) => c.isActive).map((c) => (
+                <div key={c.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
+                  {c.channelType === "email" ? <Mail className="h-4 w-4 text-muted-foreground shrink-0" /> : <Phone className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{c.label || c.identifier}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {c.channelType === "phone" ? `Phone / SMS · matches last 8 digits: ${c.identifier}` : c.identifier}
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="sm" aria-label="Remove channel" disabled={removeChannel.isPending} onClick={() => removeChannel.mutate(c.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
+
+          <form
+            className="grid grid-cols-1 sm:grid-cols-[140px_1fr_1fr_auto] gap-2 items-end pt-2 border-t border-border"
+            onSubmit={(e) => { e.preventDefault(); if (chIdentifier.trim()) addChannel.mutate(); }}
+          >
+            <div>
+              <Label htmlFor="chType" className="text-xs">Type</Label>
+              <Select value={chType} onValueChange={(v) => setChType(v as "phone" | "email")}>
+                <SelectTrigger id="chType"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="phone">Phone / SMS</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="chIdentifier" className="text-xs">{chType === "email" ? "Email address" : "Phone number"}</Label>
+              <Input id="chIdentifier" type={chType === "email" ? "email" : "tel"} value={chIdentifier} onChange={(e) => setChIdentifier(e.target.value)} placeholder={chType === "email" ? "jobs@…" : "04 …"} autoComplete="off" />
+            </div>
+            <div>
+              <Label htmlFor="chLabel" className="text-xs">Label (optional)</Label>
+              <Input id="chLabel" value={chLabel} onChange={(e) => setChLabel(e.target.value)} placeholder="Main line" autoComplete="off" />
+            </div>
+            <Button type="submit" disabled={!chIdentifier.trim() || addChannel.isPending}>
+              {addChannel.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

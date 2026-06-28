@@ -5341,6 +5341,43 @@ class DatabaseStorage implements IStorage {
       .orderBy(schema.tenantChannels.channelType, schema.tenantChannels.createdAt);
   }
 
+  // Concierge channel mutations — owner connection, explicit businessId. Only
+  // requirePlatformAdmin routes call these (cross-tenant); the per-tenant
+  // /api/channels endpoints use the RLS db proxy instead.
+  async findTenantChannelForBusiness(businessId: string, channelType: string, identifier: string): Promise<(typeof schema.tenantChannels.$inferSelect) | undefined> {
+    const [row] = await ownerDb
+      .select()
+      .from(schema.tenantChannels)
+      .where(and(
+        eq(schema.tenantChannels.businessId, businessId),
+        eq(schema.tenantChannels.channelType, channelType),
+        eq(schema.tenantChannels.identifier, identifier),
+      ))
+      .limit(1);
+    return row;
+  }
+
+  async insertTenantChannel(values: { businessId: string; channelType: string; identifier: string; label?: string }): Promise<typeof schema.tenantChannels.$inferSelect> {
+    const [row] = await ownerDb.insert(schema.tenantChannels).values(values).returning();
+    return row;
+  }
+
+  async setTenantChannelActive(id: string, isActive: boolean, label?: string): Promise<typeof schema.tenantChannels.$inferSelect | undefined> {
+    const [row] = await ownerDb
+      .update(schema.tenantChannels)
+      .set({ isActive, ...(label !== undefined ? { label } : {}) })
+      .where(eq(schema.tenantChannels.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteTenantChannelForBusiness(businessId: string, id: string): Promise<void> {
+    await ownerDb.delete(schema.tenantChannels).where(and(
+      eq(schema.tenantChannels.id, id),
+      eq(schema.tenantChannels.businessId, businessId),
+    ));
+  }
+
   async getBusinessSettings(): Promise<BusinessSettings> {
     // Try to get existing business settings from database.
     // Deterministic ordering guards against stray duplicate rows for a tenant:
