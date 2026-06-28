@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PlanGate } from "@/components/PlanGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -334,18 +335,20 @@ export default function Invoices() {
             data-testid="input-search-invoices"
           />
         </div>
-        <Button
-          variant="outline"
-          onClick={syncPaymentsFromXero}
-          disabled={isSyncingPayments}
-          data-testid="button-sync-xero-payments"
-          className="shrink-0"
-        >
-          <RefreshCw
-            className={`h-4 w-4 mr-2 ${isSyncingPayments ? "animate-spin" : ""}`}
-          />
-          {isSyncingPayments ? "Syncing..." : "Sync from Xero"}
-        </Button>
+        <PlanGate requires="plan:crew">
+          <Button
+            variant="outline"
+            onClick={syncPaymentsFromXero}
+            disabled={isSyncingPayments}
+            data-testid="button-sync-xero-payments"
+            className="shrink-0"
+          >
+            <RefreshCw
+              className={`h-4 w-4 mr-2 ${isSyncingPayments ? "animate-spin" : ""}`}
+            />
+            {isSyncingPayments ? "Syncing..." : "Sync from Xero"}
+          </Button>
+        </PlanGate>
       </div>
 
       <Tabs
@@ -511,17 +514,19 @@ export default function Invoices() {
                         <Pencil className="h-4 w-4" />
                       </Button>
                       {invoice.jobId && !invoice.xeroSyncedAt && (
-                        <Button
-                          className="flex-1 gap-2"
-                          onClick={() => handleSendToXero(invoice.jobId!)}
-                          disabled={sendingJobId === invoice.jobId}
-                          data-testid={`button-send-to-xero-${invoice.id}`}
-                        >
-                          <Send className="h-4 w-4" />
-                          {sendingJobId === invoice.jobId
-                            ? "Sending..."
-                            : "Send to Xero"}
-                        </Button>
+                        <PlanGate requires="plan:crew">
+                          <Button
+                            className="flex-1 gap-2"
+                            onClick={() => handleSendToXero(invoice.jobId!)}
+                            disabled={sendingJobId === invoice.jobId}
+                            data-testid={`button-send-to-xero-${invoice.id}`}
+                          >
+                            <Send className="h-4 w-4" />
+                            {sendingJobId === invoice.jobId
+                              ? "Sending..."
+                              : "Send to Xero"}
+                          </Button>
+                        </PlanGate>
                       )}
                       {invoice.jobId && invoice.xeroSyncedAt && (
                         <Button
