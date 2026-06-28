@@ -80,7 +80,7 @@ import { PendingMessagesCard } from "@/components/PendingMessagesCard";
 import PhotoAnnotator, { type AnnotationShape } from "@/components/PhotoAnnotator";
 import {
   savePhotoAnnotation,
-  fetchPhotoAnnotation,
+  fetchPhotoAnnotationsBatch,
 } from "@/lib/photoAnnotations";
 import { MdStickyNote2, MdEmail } from "react-icons/md";
 
@@ -1416,37 +1416,54 @@ export function JobDiarySection({
     return photos;
   }, [diaryEntries]);
 
-  // Lazy-fetch any saved annotation for the currently-viewed photo. Result is
-  // cached in `annotationsByUrl` so we don't re-fetch as the user navigates
-  // back and forth.
+  // Prefetch annotations for every photo in one batch so the baked annotated
+  // PNG shows in the timeline + grid thumbnails, not just the click-into
+  // viewer. Result is cached in `annotationsByUrl`; URLs with no saved
+  // annotation are recorded as empty to prevent re-fetch loops.
   React.useEffect(() => {
-    if (viewingPhotoIndex === null) return;
-    const url = allPhotos[viewingPhotoIndex];
-    if (!url || annotationsByUrl[url] !== undefined) return;
+    const missing = allPhotos.filter((u) => annotationsByUrl[u] === undefined);
+    if (missing.length === 0) return;
     let cancelled = false;
-    fetchPhotoAnnotation(url)
-      .then((rec) => {
+    fetchPhotoAnnotationsBatch(missing)
+      .then((map) => {
         if (cancelled) return;
-        setAnnotationsByUrl((m) => ({
-          ...m,
-          [url]: rec
-            ? { annotatedUrl: rec.annotatedUrl, shapes: rec.annotations }
-            : { annotatedUrl: null, shapes: [] },
-        }));
+        setAnnotationsByUrl((m) => {
+          const next = { ...m };
+          for (const url of missing) {
+            const rec = map[url];
+            next[url] = rec
+              ? { annotatedUrl: rec.annotatedUrl, shapes: rec.annotations }
+              : { annotatedUrl: null, shapes: [] };
+          }
+          return next;
+        });
       })
       .catch(() => {
-        // Network errors shouldn't break the viewer — just leave it
-        // un-annotated. Marking with an empty record prevents re-fetch loops.
+        // Network errors shouldn't break the thumbnails — just leave them
+        // un-annotated.
         if (cancelled) return;
-        setAnnotationsByUrl((m) => ({
-          ...m,
-          [url]: { annotatedUrl: null, shapes: [] },
-        }));
+        setAnnotationsByUrl((m) => {
+          const next = { ...m };
+          for (const url of missing) {
+            if (next[url] === undefined) {
+              next[url] = { annotatedUrl: null, shapes: [] };
+            }
+          }
+          return next;
+        });
       });
     return () => {
       cancelled = true;
     };
-  }, [viewingPhotoIndex, allPhotos, annotationsByUrl]);
+  }, [allPhotos, annotationsByUrl]);
+
+  // Resolve a source URL to the annotated PNG when one exists, else the
+  // original. Used by thumbnail renderers.
+  const resolveDisplayUrl = React.useCallback(
+    (url: string | null | undefined): string | undefined =>
+      (url && annotationsByUrl[url]?.annotatedUrl) || url || undefined,
+    [annotationsByUrl],
+  );
 
   // Resolved URL/shapes for the currently-viewed photo
   const currentSourceUrl =
@@ -2307,7 +2324,7 @@ export function JobDiarySection({
                       data-testid={`photo-tile-${photo.id ?? idx}`}
                     >
                       <img
-                        src={photo.url}
+                        src={resolveDisplayUrl(photo.url)}
                         alt={`Diary photo ${idx + 1}`}
                         loading="lazy"
                         className="w-full h-full object-cover"
@@ -2816,7 +2833,7 @@ export function JobDiarySection({
                               }}
                             >
                               <img
-                                src={photo.photoUrl}
+                                src={resolveDisplayUrl(photo.photoUrl)}
                                 alt="Job photo"
                                 className={
                                   photos.length === 1

@@ -16287,6 +16287,37 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Batch lookup: given many source URLs, return a sourceUrl -> annotation map.
+  // Lets thumbnail grids, the diary timeline, and proposals swap in the baked
+  // annotated PNG without firing one request per photo.
+  app.post('/api/photo-annotations/batch', async (req: Request, res: Response) => {
+    try {
+      const sourceUrls = Array.isArray(req.body?.sourceUrls)
+        ? (req.body.sourceUrls as unknown[]).filter(
+            (u): u is string => typeof u === 'string' && u.length > 0,
+          )
+        : [];
+      if (sourceUrls.length === 0) {
+        return res.json({ success: true, annotations: {} });
+      }
+      const rows = await db
+        .select()
+        .from(schema.photoAnnotations)
+        .where(inArray(schema.photoAnnotations.sourceUrl, sourceUrls));
+      const annotations: Record<string, typeof rows[number]> = {};
+      for (const row of rows) {
+        annotations[row.sourceUrl] = row;
+      }
+      return res.json({ success: true, annotations });
+    } catch (error) {
+      console.error('Error batch-fetching photo annotations:', error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error fetching annotations',
+      });
+    }
+  });
+
   // Clear an annotation: revert to showing the original. Drops the baked PNG
   // from GCS too so we don't keep paying for orphaned bytes.
   app.delete('/api/photo-annotations', async (req: Request, res: Response) => {
