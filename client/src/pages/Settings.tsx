@@ -108,6 +108,13 @@ const settingsSections: SettingSection[] = [
         description: "Time zones, currency, date formats and defaults",
         icon: Sliders,
         path: "/settings/preferences"
+      },
+      {
+        id: "channels",
+        title: "Inbound Channels",
+        description: "Phone numbers and emails that route calls, texts and replies to you",
+        icon: Plug,
+        path: "/settings/channels"
       }
     ]
   },
