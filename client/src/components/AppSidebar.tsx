@@ -24,6 +24,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { PlanGate } from "@/components/PlanGate";
 
 interface AppSidebarProps {
   activeTab: string;
@@ -130,6 +131,7 @@ function SidebarNavContent({
             <SidebarMenu className="font-normal text-[16px]">
               {/* One Dashboard — top-level overview */}
               {isAdmin && (
+                <PlanGate requires="plan:crew">
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/metrics"} className={ITEM}>
                     <Link href="/metrics" onClick={handleLinkClick} data-testid="link-one-dashboard">
@@ -138,6 +140,7 @@ function SidebarNavContent({
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                </PlanGate>
               )}
 
               {/* Today — daily command centre */}
@@ -292,7 +295,8 @@ function SidebarNavContent({
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* Safety — collapsible group (JHA + Near Miss) */}
+              {/* Safety — collapsible group (JHA + Near Miss). Crew+ only — hidden on Freemium. */}
+              <PlanGate requires="plan:crew">
               <Collapsible open={safetyOpen} onOpenChange={setSafetyOpen} className="group/safety-collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
@@ -385,6 +389,7 @@ function SidebarNavContent({
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </Collapsible>
+              </PlanGate>
 
               {/* Mulch Drops */}
               <SidebarMenuItem>
@@ -415,16 +420,20 @@ function SidebarNavContent({
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarMenuSub>
+                        <PlanGate requires="plan:crew">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/metrics"}>
                             <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics"><span>Metrics Dashboard</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        </PlanGate>
+                        <PlanGate requires="plan:crew">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/profitability-calculator"}>
                             <Link href="/profitability-calculator" onClick={handleLinkClick} data-testid="link-profitability-calculator"><span>Profitability Calculator</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        </PlanGate>
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>
@@ -455,11 +464,13 @@ function SidebarNavContent({
                             <Link href="/calendar" onClick={handleLinkClick} data-testid="link-calendar"><span>Calendar</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        <PlanGate requires="plan:business">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/workflows"}>
                             <Link href="/workflows" onClick={handleLinkClick} data-testid="link-workflows"><span>Workflows</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        </PlanGate>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/opportunities"}>
                             <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-opportunities"><span>Conversations</span></Link>
