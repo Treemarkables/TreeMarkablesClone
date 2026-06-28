@@ -3474,11 +3474,15 @@ export const documentTemplates = pgTable("document_templates", {
   isActive: boolean("is_active").default(true),
   
   // Company Branding
-  companyName: text("company_name").default("Treemarkables LTD"),
-  companyAddress: text("company_address").default("213 Stanley road, Gisborne"),
-  companyEmail: text("company_email").default("quotes@treemarkables.nz"),
-  companyPhone: text("company_phone").default("027 216 6882"),
-  gstNumber: text("gst_number").default("131-047-592-GST004"),
+  // Neutral defaults — never Treemarkables'. A new tenant's templates are seeded
+  // explicitly by createTenant; these blanks just stop any other insert path from
+  // re-introducing TM's identity onto another business's PDFs. TM keeps its values
+  // because they're stored on its own template rows, not via these defaults.
+  companyName: text("company_name").default(""),
+  companyAddress: text("company_address").default(""),
+  companyEmail: text("company_email").default(""),
+  companyPhone: text("company_phone").default(""),
+  gstNumber: text("gst_number").default(""),
   
   // Layout Configuration
   headerLayout: jsonb("header_layout"), // Logo position, company info layout
