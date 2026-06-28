@@ -914,6 +914,15 @@ async function requirePlatformAdmin(req: Request, res: Response, next: express.N
   }
 }
 
+// Staff-write gate (capabilities.ts: staff.manage = Crew) with a self-exemption:
+// a freemium solo owner can always edit their OWN record (e.g. fix their name);
+// adding or editing OTHER staff requires Crew. Routes with no :id (creating a new
+// staff member) are never "self" → fall through to the Crew check.
+function requireCrewUnlessSelf(req: Request, res: Response, next: express.NextFunction) {
+  if (req.params.id && req.params.id === req.session.employeeId) return next();
+  return requireEntitlement('plan:crew', 'staff_manage')(req, res, next);
+}
+
 // Shared builder for the onboarding setup checklist (used by the per-tenant
 // /api/onboarding/checklist and the concierge subscriber views). Aggregates the
 // bring-your-own setup fields for ONE business into a progress list. Reads via
@@ -14043,7 +14052,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     return out;
   };
 
-  app.post('/api/reviews', async (req: Request, res: Response) => {
+  app.post('/api/reviews', requireEntitlement('plan:business', 'reputation'), async (req: Request, res: Response) => {
     try {
       const validation = insertReviewSchema.safeParse(coerceReviewDates(req.body));
       if (!validation.success) {
@@ -14106,7 +14115,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  app.put('/api/reviews/:id', async (req: Request, res: Response) => {
+  app.put('/api/reviews/:id', requireEntitlement('plan:business', 'reputation'), async (req: Request, res: Response) => {
     try {
       const updates = insertReviewSchema.partial().safeParse(coerceReviewDates(req.body));
       if (!updates.success) {
@@ -14125,7 +14134,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  app.delete('/api/reviews/:id', async (req: Request, res: Response) => {
+  app.delete('/api/reviews/:id', requireEntitlement('plan:business', 'reputation'), async (req: Request, res: Response) => {
     try {
       await storage.deleteReview(req.params.id);
       res.json({ success: true });
@@ -16816,7 +16825,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Create new employee
-  app.post('/api/employees', async (req: Request, res: Response) => {
+  app.post('/api/employees', requireCrewUnlessSelf, async (req: Request, res: Response) => {
     try {
       // Convert hourlyRate to string if it's a number
       const bodyData = { ...req.body };
@@ -16853,7 +16862,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Update employee
-  app.put('/api/employees/:id', async (req: Request, res: Response) => {
+  app.put('/api/employees/:id', requireCrewUnlessSelf, async (req: Request, res: Response) => {
     try {
       const validatedData = updateEmployeeSchema.parse(req.body);
       
@@ -16892,7 +16901,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Delete employee
-  app.delete('/api/employees/:id', async (req: Request, res: Response) => {
+  app.delete('/api/employees/:id', requireCrewUnlessSelf, async (req: Request, res: Response) => {
     try {
       await storage.deleteEmployee(req.params.id);
       res.json({
@@ -16909,7 +16918,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Set employee password
-  app.patch('/api/employees/:id/password', async (req: Request, res: Response) => {
+  app.patch('/api/employees/:id/password', requireCrewUnlessSelf, async (req: Request, res: Response) => {
     try {
       const { password } = req.body;
       
