@@ -27592,7 +27592,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Create material
-  app.post('/api/materials', async (req: Request, res: Response) => {
+  app.post('/api/materials', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       const validation = z.object({
         itemNumber: z.string().min(1, "Item number is required"),
@@ -27623,7 +27623,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Update material
-  app.put('/api/materials/:id', async (req: Request, res: Response) => {
+  app.put('/api/materials/:id', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       const validation = z.object({
         itemNumber: z.string().min(1).optional(),
@@ -27656,7 +27656,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Delete material
-  app.delete('/api/materials/:id', async (req: Request, res: Response) => {
+  app.delete('/api/materials/:id', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       await storage.deleteMaterial(req.params.id);
       res.json({ success: true, message: 'Material deleted successfully' });
@@ -27682,7 +27682,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Create service
-  app.post('/api/services', async (req: Request, res: Response) => {
+  app.post('/api/services', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       const validation = z.object({
         name: z.string().min(1, "Service name is required"),
@@ -27712,7 +27712,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Update service
-  app.put('/api/services/:id', async (req: Request, res: Response) => {
+  app.put('/api/services/:id', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       const validation = z.object({
         name: z.string().min(1).optional(),
@@ -27744,7 +27744,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Delete service
-  app.delete('/api/services/:id', async (req: Request, res: Response) => {
+  app.delete('/api/services/:id', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       await storage.deleteService(req.params.id);
       res.json({ success: true, message: 'Service deleted successfully' });
