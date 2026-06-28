@@ -18,6 +18,7 @@ declare module 'express-session' {
 import { storage, invoiceRevenueExGst } from "./storage";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
+import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel } from "./tenancy/channelMap";
 import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
 import { jwksHandler } from "./tenancy/jwksHandler";
@@ -1738,6 +1739,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   ensureRoleTiersSeeded().catch((err) => {
     console.error('[startup] Role tier seed failed (will retry on first permission check):', err);
   });
+
+  // ── Feature gates (Inflow plan entitlements) ──────────────────────────────
+  // Lock premium feature areas to the right subscription tier. Path-prefix gates so
+  // we don't touch each handler; registered here (before the route definitions +
+  // registerXeroRoutes below) so they run first. DARK-LAUNCHED behind
+  // FEATURE_GATES_ENFORCE — off = log `FEATURE_GATE_BLOCK ... enforced=false`, never
+  // blocks. Treemarkables + session-less (webhook/OAuth-callback) requests pass through.
+  // Safety suite + integrations → Crew; workflow automation + safety analytics → Business.
+  for (const p of ['/api/swms', '/api/toolbox-talks', '/api/safety-incidents', '/api/prestart-templates', '/api/prestart-checklists', '/api/competency-types']) {
+    app.use(p, requireEntitlement('plan:crew', 'safety'));
+  }
+  for (const p of ['/api/xero', '/api/google-calendar', '/api/gmail', '/api/mailchimp']) {
+    app.use(p, requireEntitlement('plan:crew', 'integrations'));
+  }
+  app.use('/api/safety-analytics', requireEntitlement('plan:business', 'safety_analytics'));
+  app.use('/api/workflows', requireEntitlement('plan:business', 'workflow_automation'));
+  app.use('/api/lane-automations', requireEntitlement('plan:business', 'workflow_automation'));
 
   // TEMP DEBUG: Verify fresh code is running
   app.get('/api/test-fresh-code', (req: Request, res: Response) => {
