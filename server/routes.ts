@@ -10132,6 +10132,7 @@ Draft the reply now.`;
       const emailResult = await emailService.sendEmail({
         to,
         cc,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         html: htmlContent,
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our services.'}`,
@@ -10374,6 +10375,7 @@ Draft the reply now.`;
       const emailResult = await emailService.sendEmail({
         to,
         cc,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         html: htmlContent,
         text: textContent,
@@ -13335,6 +13337,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const emailResult = await emailService.sendEmail({
         to,
         cc,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         html: htmlContent,
         text: `Invoice ${invoice.invoiceNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD.`,
