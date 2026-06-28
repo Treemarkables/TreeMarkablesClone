@@ -1053,6 +1053,26 @@ The Treemarkables Team';
         log(`⚠️ trade-vocabulary migration warning: ${(vocabErr as Error).message}`, "startup");
       }
 
+      // --- Neutralize document_templates' Treemarkables identity defaults ---
+      // Mirrors migrations/manual/20260628_document_template_neutral_defaults.sql.
+      // Blank the TM-hardcoded column defaults (existing rows unchanged, TM keeps its
+      // values) + clear leftover TM defaults from non-TM templates (TM excluded by id).
+      try {
+        for (const col of ['company_name', 'company_address', 'company_email', 'company_phone', 'gst_number']) {
+          await pool.query(`ALTER TABLE document_templates ALTER COLUMN ${col} SET DEFAULT ''`);
+        }
+        await pool.query(
+          `UPDATE document_templates
+              SET company_name='', company_address='', company_email='', company_phone='', gst_number=''
+            WHERE business_id IS DISTINCT FROM (SELECT business_id FROM business_settings WHERE business_name='Treemarkables' LIMIT 1)
+              AND company_name='Treemarkables LTD' AND company_address='213 Stanley road, Gisborne'
+              AND company_email='quotes@treemarkables.nz' AND company_phone='027 216 6882'
+              AND gst_number='131-047-592-GST004'`,
+        );
+      } catch (tmplErr) {
+        log(`⚠️ document-template-defaults migration warning: ${(tmplErr as Error).message}`, "startup");
+      }
+
       // --- Per-business email brand colours (trade-gen Phase A) ---
       // Header background + accent for branded customer emails. Defaults reproduce
       // Treemarkables' black + neon-green so every existing email is unchanged until
