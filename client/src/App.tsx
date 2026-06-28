@@ -3,6 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { UpgradeGate } from "@/components/PlanGate";
+import { GettingStarted } from "@/components/GettingStarted";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
@@ -813,6 +814,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           </header>
           <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col md:pt-6" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="h-full flex flex-col md:pb-0">
+              <GettingStarted />
               {/* Closest Suspense boundary to sidebar pages — keeps the sidebar
                   + header mounted while the next page's chunk loads, showing the
                   spinner only in the content area instead of full-screen. */}

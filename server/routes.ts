@@ -25384,6 +25384,30 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
+  // Getting-started checklist state for the current business (drives the new-tenant
+  // onboarding card). Each step is "done" once the tenant has configured that thing.
+  // A fully set-up business (incl. comped Treemarkables) has every step done → card hides.
+  app.get('/api/onboarding-status', async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      const settings = await storage.getBusinessSettings().catch(() => null);
+      const [channel] = await db.select({ id: schema.tenantChannels.id }).from(schema.tenantChannels)
+        .where(eq(schema.tenantChannels.businessId, businessId)).limit(1);
+      const [job] = await db.select({ id: schema.jobs.id }).from(schema.jobs)
+        .where(eq(schema.jobs.businessId, businessId)).limit(1);
+      const name = (settings?.businessName ?? '').trim();
+      res.json({ success: true, data: {
+        business: !!name && name !== 'My Business',
+        channel: !!channel,
+        bank: !!(settings?.bankAccountNumber ?? '').trim(),
+        firstJob: !!job,
+      }});
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Failed to load onboarding status' });
+    }
+  });
+
   // Current business's subscription status.
   app.get('/api/billing/subscription', async (req: Request, res: Response) => {
     const businessId = req.session.businessId;
