@@ -1177,7 +1177,9 @@ function Router() {
       <Route path="/integrations">
         <ProtectedRoute>
           <SidebarLayout>
-            <Integrations />
+            <UpgradeGate requires="plan:crew" feature="Integrations">
+              <Integrations />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
