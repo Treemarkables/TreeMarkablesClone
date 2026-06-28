@@ -131,6 +131,7 @@ function SidebarNavContent({
             <SidebarMenu className="font-normal text-[16px]">
               {/* One Dashboard — top-level overview */}
               {isAdmin && (
+                <PlanGate requires="plan:crew">
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/metrics"} className={ITEM}>
                     <Link href="/metrics" onClick={handleLinkClick} data-testid="link-one-dashboard">
@@ -139,6 +140,7 @@ function SidebarNavContent({
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                </PlanGate>
               )}
 
               {/* Today — daily command centre */}
@@ -418,11 +420,13 @@ function SidebarNavContent({
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarMenuSub>
+                        <PlanGate requires="plan:crew">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/metrics"}>
                             <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics"><span>Metrics Dashboard</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        </PlanGate>
                         <PlanGate requires="plan:crew">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/profitability-calculator"}>

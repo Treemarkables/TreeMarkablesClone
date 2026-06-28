@@ -1067,7 +1067,9 @@ function Router() {
       <Route path="/metrics">
         <ProtectedRoute>
           <SidebarLayout>
-            <MetricsDashboard />
+            <UpgradeGate requires="plan:crew" feature="The Metrics Dashboard">
+              <MetricsDashboard />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
