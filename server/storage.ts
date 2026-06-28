@@ -5312,6 +5312,35 @@ class DatabaseStorage implements IStorage {
     return row;
   }
 
+  // Cross-tenant CONCIERGE helpers — owner connection, scoped by explicit
+  // businessId. Only the platform-operator routes (requirePlatformAdmin) call
+  // these; they intentionally bypass RLS to manage other tenants' setup.
+  async listBusinesses(): Promise<Array<typeof schema.businesses.$inferSelect>> {
+    return await ownerDb.select().from(schema.businesses).orderBy(asc(schema.businesses.createdAt));
+  }
+
+  async updateBusinessSettingsForBusiness(
+    businessId: string,
+    updates: Partial<InsertBusinessSettings>,
+  ): Promise<BusinessSettings | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb
+      .update(schema.businessSettings)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(schema.businessSettings.businessId, businessId))
+      .returning();
+    return row;
+  }
+
+  async listTenantChannelsForBusiness(businessId: string): Promise<Array<typeof schema.tenantChannels.$inferSelect>> {
+    if (!businessId) return [];
+    return await ownerDb
+      .select()
+      .from(schema.tenantChannels)
+      .where(eq(schema.tenantChannels.businessId, businessId))
+      .orderBy(schema.tenantChannels.channelType, schema.tenantChannels.createdAt);
+  }
+
   async getBusinessSettings(): Promise<BusinessSettings> {
     // Try to get existing business settings from database.
     // Deterministic ordering guards against stray duplicate rows for a tenant:
