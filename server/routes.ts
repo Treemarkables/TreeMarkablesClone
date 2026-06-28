@@ -20,7 +20,8 @@ import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
-import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
+import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
+import { resolveEntitlements } from "./tenancy/entitlements";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
@@ -1756,6 +1757,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/safety-analytics', requireEntitlement('plan:business', 'safety_analytics'));
   app.use('/api/workflows', requireEntitlement('plan:business', 'workflow_automation'));
   app.use('/api/lane-automations', requireEntitlement('plan:business', 'workflow_automation'));
+  // Metrics Dashboard (advanced analytics) → Crew. These endpoints are exclusive to the
+  // (UI-gated) Metrics Dashboard, so gating them is safe; /api/analytics/* is deliberately
+  // NOT here — it's shared with the executive dashboard + settings. Profitability has no
+  // server route (computed client-side), so its UI gate needs no server twin.
+  for (const p of ['/api/today-metrics', '/api/dashboard-stats', '/api/revenue-stats', '/api/revenue-breakdown', '/api/quote-breakdown', '/api/proposals-accepted', '/api/quote-analytics', '/api/quote-method-analytics', '/api/lead-source-analysis', '/api/quote-presentation-analysis', '/api/man-hours-metrics', '/api/checklist-usage']) {
+    app.use(p, requireEntitlement('plan:crew', 'analytics'));
+  }
 
   // TEMP DEBUG: Verify fresh code is running
   app.get('/api/test-fresh-code', (req: Request, res: Response) => {
@@ -2026,6 +2034,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const permsSet = await getEmployeePermissions(employee);
       const tier = employee.roleTierId ? await storage.getRoleTier(employee.roleTierId) : null;
 
+      // Subscription entitlements for plan-based UI gating. Treemarkables (platform
+      // owner) is comped → full Business-tier access; otherwise resolve from the live
+      // subscription. Mirrors the server feature gates so the UI matches enforcement.
+      const __entBizId = req.session.businessId;
+      let planKey = 'freemium';
+      let entitlements: string[] = [];
+      if (__entBizId && TREEMARKABLES_BUSINESS_IDS.includes(__entBizId)) {
+        planKey = 'business';
+        entitlements = ['plan:crew', 'plan:business'];
+      } else if (__entBizId) {
+        try {
+          const ent = await resolveEntitlements(__entBizId);
+          planKey = ent.planKey;
+          entitlements = Array.from(ent.entitlements);
+        } catch { /* fail-open: empty entitlements */ }
+      }
+
       res.json({
         success: true,
         data: {
@@ -2041,6 +2066,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? { id: tier.id, key: tier.key, name: tier.name, description: tier.description }
             : null,
           permissions: Array.from(permsSet),
+          planKey,
+          entitlements,
         }
       });
     } catch (error) {

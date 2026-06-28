@@ -2,6 +2,7 @@ import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { UpgradeGate } from "@/components/PlanGate";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
@@ -1067,7 +1068,9 @@ function Router() {
       <Route path="/metrics">
         <ProtectedRoute>
           <SidebarLayout>
-            <MetricsDashboard />
+            <UpgradeGate requires="plan:crew" feature="The Metrics Dashboard">
+              <MetricsDashboard />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1109,7 +1112,9 @@ function Router() {
       <Route path="/profitability-calculator">
         <ProtectedRoute>
           <SidebarLayout>
-            <ProfitabilityCalculator />
+            <UpgradeGate requires="plan:crew" feature="The Profitability Calculator">
+              <ProfitabilityCalculator />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1177,7 +1182,9 @@ function Router() {
       <Route path="/integrations">
         <ProtectedRoute>
           <SidebarLayout>
-            <Integrations />
+            <UpgradeGate requires="plan:crew" feature="Integrations">
+              <Integrations />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1310,7 +1317,9 @@ function Router() {
       <Route path="/safety">
         <AuthenticatedRoute>
           <SidebarLayout>
-            <SafetyHub />
+            <UpgradeGate requires="plan:crew" feature="The safety suite">
+              <SafetyHub />
+            </UpgradeGate>
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>
@@ -1376,7 +1385,9 @@ function Router() {
       <Route path="/workflows">
         <ProtectedRoute>
           <SidebarLayout>
-            <WorkflowAutomation />
+            <UpgradeGate requires="plan:business" feature="Workflow automation">
+              <WorkflowAutomation />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
