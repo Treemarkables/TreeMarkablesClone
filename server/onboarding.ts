@@ -5,10 +5,17 @@
  * subscription. Runs as the DB owner (signup has no tenant context yet), so every insert
  * sets `business_id` explicitly — the column default is Treemarkables and would be wrong.
  */
-import { db } from "./db";
+import { db, ownerDb } from "./db";
 import { businesses, businessSettings, employees, subscriptions, subscriptionPlans, documentTemplates } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
+
+// The default document templates every tenant gets (one per document type).
+const DEFAULT_DOC_TEMPLATES: Array<{ type: string; name: string }> = [
+  { type: "quote", name: "Standard Quote" },
+  { type: "proposal", name: "Standard Proposal" },
+  { type: "invoice", name: "Tax Invoice" },
+];
 
 export interface CreateTenantInput {
   businessName: string;
@@ -70,13 +77,8 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
     // (companyName/address/email/phone/GST), so an unset insert would re-introduce
     // the very leak this closes. Address/phone are unknown at signup → blank (the
     // renderers hide empty fields); the owner fills them later in Company Info.
-    const defaultDocTemplates = [
-      { type: "quote", name: "Standard Quote" },
-      { type: "proposal", name: "Standard Proposal" },
-      { type: "invoice", name: "Tax Invoice" },
-    ];
     await db.insert(documentTemplates).values(
-      defaultDocTemplates.map((d) => ({
+      DEFAULT_DOC_TEMPLATES.map((d) => ({
         businessId: biz.id,
         name: d.name,
         type: d.type,
@@ -100,4 +102,54 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
     await db.delete(businesses).where(eq(businesses.id, biz.id)).catch(() => {});
     throw err;
   }
+}
+
+/**
+ * One-off, idempotent backfill: seed the default document templates for any existing
+ * business that has NONE. Tenants created before per-tenant template seeding (PR #276)
+ * — e.g. the demo tenant — otherwise fall back to an arbitrary (Treemarkables) default
+ * on their public proposal/quote/invoice views, leaking TM's name/contact/GST.
+ *
+ * Identity is taken from the business's own settings (blank where unset — never
+ * Treemarkables'). Runs on the owner connection at boot; businesses that already have
+ * templates are skipped, so it's safe to run on every deploy. Returns the count seeded.
+ */
+export async function backfillMissingDocumentTemplates(): Promise<number> {
+  const allBiz = await ownerDb.select({ id: businesses.id, name: businesses.name }).from(businesses);
+  let seeded = 0;
+  for (const biz of allBiz) {
+    const [hasTpl] = await ownerDb
+      .select({ id: documentTemplates.id })
+      .from(documentTemplates)
+      .where(eq(documentTemplates.businessId, biz.id))
+      .limit(1);
+    if (hasTpl) continue; // already has templates — skip (incl. Treemarkables)
+
+    const [settings] = await ownerDb
+      .select()
+      .from(businessSettings)
+      .where(eq(businessSettings.businessId, biz.id))
+      .limit(1);
+
+    await ownerDb.insert(documentTemplates).values(
+      DEFAULT_DOC_TEMPLATES.map((d) => ({
+        businessId: biz.id,
+        name: d.name,
+        type: d.type,
+        isDefault: true,
+        isActive: true,
+        // Explicit identity from the business's own settings; blank (NOT the TM
+        // column defaults) where unset, so a leak can never be re-introduced.
+        companyName: settings?.businessName || biz.name || "",
+        companyEmail: settings?.businessEmail || "",
+        companyPhone: settings?.businessPhone || "",
+        companyAddress: settings?.businessAddress || "",
+        gstNumber: settings?.businessGstNumber || "",
+      })),
+    );
+    seeded++;
+    console.log(`[DOC_TEMPLATE_BACKFILL] seeded default templates for business ${biz.id} (${biz.name})`);
+  }
+  if (seeded > 0) console.log(`[DOC_TEMPLATE_BACKFILL] complete — seeded ${seeded} business(es)`);
+  return seeded;
 }
