@@ -888,7 +888,6 @@ async function requireAdmin(req: Request, res: Response, next: express.NextFunct
 async function requirePlatformAdmin(req: Request, res: Response, next: express.NextFunction): Promise<void> {
   try {
     const employeeId = req.session.employeeId;
-    const businessId = req.session.businessId;
     if (!employeeId) {
       res.status(403).json({ success: false, message: 'Admin access required. Please log in.' });
       return;
@@ -898,7 +897,9 @@ async function requirePlatformAdmin(req: Request, res: Response, next: express.N
       res.status(403).json({ success: false, message: 'Admin access required' });
       return;
     }
-    if (!businessId || !TREEMARKABLES_BUSINESS_IDS.includes(businessId)) {
+    // Allowlist-check against the employee's OWN business (the authoritative DB
+    // value), not session.businessId — defence-in-depth against a stale session.
+    if (!employee.businessId || !TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
       res.status(403).json({ success: false, message: 'Platform administrator access required' });
       return;
     }
@@ -19243,6 +19244,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const business = await storage.getBusinessById(businessId);
       if (!business) return res.status(404).json({ success: false, message: 'Subscriber not found' });
       const updated = await storage.setBusinessStatus(businessId, status);
+      console.log(`[CONCIERGE_AUDIT] operator=${req.session.employeeId} action=set_status target=${businessId} value=${status}`);
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error updating subscriber status:', error);
@@ -19269,6 +19271,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         return res.status(409).json({ success: false, message: 'This subscriber is billed through Stripe — change their plan in Stripe, not here.' });
       }
       const updated = await storage.setSubscriptionPlanForBusiness(businessId, planId);
+      console.log(`[CONCIERGE_AUDIT] operator=${req.session.employeeId} action=set_plan target=${businessId} planId=${planId}`);
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error updating subscriber plan:', error);
@@ -19291,6 +19294,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         return res.status(400).json({ success: false, message: 'No editable fields provided' });
       }
       const settings = await storage.updateBusinessSettingsForBusiness(businessId, updates as any);
+      console.log(`[CONCIERGE_AUDIT] operator=${req.session.employeeId} action=update_settings target=${businessId} fields=${Object.keys(updates).join(',')}`);
       res.json({ success: true, data: settings ?? null });
     } catch (error) {
       console.error('Error updating subscriber settings:', error);
@@ -19330,6 +19334,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const row = mine
         ? await storage.setTenantChannelActive(mine.id, true, label)
         : await storage.insertTenantChannel({ businessId, channelType, identifier, label });
+      console.log(`[CONCIERGE_AUDIT] operator=${req.session.employeeId} action=add_channel target=${businessId} type=${channelType} identifier=${identifier}`);
       res.json({ success: true, data: row });
     } catch (error) {
       console.error('Error registering subscriber channel:', error);
@@ -19342,6 +19347,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     try {
       const businessId = req.params.id;
       await storage.deleteTenantChannelForBusiness(businessId, req.params.channelId);
+      console.log(`[CONCIERGE_AUDIT] operator=${req.session.employeeId} action=remove_channel target=${businessId} channel=${req.params.channelId}`);
       res.json({ success: true });
     } catch (error) {
       console.error('Error removing subscriber channel:', error);
