@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, TreePine } from "lucide-react";
 
 interface Plan {
@@ -13,6 +14,17 @@ interface Plan {
   name: string;
   priceNzd: string;
 }
+
+// Trades offered at signup. Canonical source is server/trades/presets.ts
+// (TRADE_KEYS + each preset's label) — keep this list in sync. Picking one seeds
+// the tenant's discipline, AI vocabulary and defaults so the app speaks their trade.
+const TRADE_OPTIONS: { key: string; label: string }[] = [
+  { key: "tree", label: "Tree services" },
+  { key: "plumbing", label: "Plumbing" },
+  { key: "electrical", label: "Electrical" },
+  { key: "building", label: "Building" },
+  { key: "general", label: "Other / general field services" },
+];
 
 export default function Signup() {
   const [error, setError] = useState("");
@@ -23,6 +35,8 @@ export default function Signup() {
   // here so someone landing on /signup directly can choose. Paid → Stripe; free → app.
   const [planKey, setPlanKey] = useState(params.get("plan") || "freemium");
   const planLabel = planKey === "crew" ? "Crew" : planKey === "business" ? "Business" : "Free";
+  // Default 'general' (neutral) — never auto-assume a trade; the subscriber picks.
+  const [industry, setIndustry] = useState("general");
 
   // Live plans so the picker shows the current prices (never hardcoded).
   const { data: plansResp } = useQuery<{ success: boolean; data: Plan[] }>({
@@ -43,6 +57,7 @@ export default function Signup() {
       email: val("email").trim(),
       password: val("password"),
       planKey,
+      industry,
     };
     try {
       const r = await apiRequest("POST", "/api/signup", data);
@@ -105,6 +120,20 @@ export default function Signup() {
             <div>
               <Label htmlFor="businessName">Business name</Label>
               <Input id="businessName" name="businessName" required autoComplete="organization" />
+            </div>
+            <div>
+              <Label htmlFor="industry">Your trade</Label>
+              <Select value={industry} onValueChange={setIndustry}>
+                <SelectTrigger id="industry">
+                  <SelectValue placeholder="Select your trade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRADE_OPTIONS.map((t) => (
+                    <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Sets up your app with the right job types and wording. You can change it later.</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

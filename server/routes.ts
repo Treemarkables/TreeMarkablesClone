@@ -1804,8 +1804,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // logs them straight in, and (for a paid plan) returns a Stripe Checkout URL to finish.
   app.post('/api/signup', async (req: Request, res: Response) => {
     try {
-      const { businessName, firstName, lastName, email, password, planKey } = req.body as {
-        businessName?: string; firstName?: string; lastName?: string; email?: string; password?: string; planKey?: string;
+      const { businessName, firstName, lastName, email, password, planKey, industry } = req.body as {
+        businessName?: string; firstName?: string; lastName?: string; email?: string; password?: string; planKey?: string; industry?: string;
       };
       if (!businessName || !firstName || !lastName || !email || !password) {
         return res.status(400).json({ success: false, message: 'All fields are required.' });
@@ -1814,7 +1814,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
       }
 
-      const { businessId, employeeId } = await createTenant({ businessName, firstName, lastName, email, password });
+      const { businessId, employeeId } = await createTenant({ businessName, firstName, lastName, email, password, industry });
 
       // If they chose a paid plan, prepare a Checkout URL to redirect to after signup.
       let checkoutUrl: string | undefined;

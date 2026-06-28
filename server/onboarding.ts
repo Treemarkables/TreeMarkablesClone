@@ -9,6 +9,7 @@ import { db } from "./db";
 import { businesses, businessSettings, employees, subscriptions, subscriptionPlans, documentTemplates } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
+import { getTradePreset } from "./trades/presets";
 
 export interface CreateTenantInput {
   businessName: string;
@@ -17,6 +18,8 @@ export interface CreateTenantInput {
   email: string;
   password: string;
   position?: string;
+  /** Trade key (tree/plumbing/electrical/building/general). Unknown/blank → general. */
+  industry?: string;
 }
 
 export interface CreateTenantResult {
@@ -44,7 +47,19 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
   // partial tenant) if any later step fails — keeps signup atomic, no orphaned rows.
   const [biz] = await db.insert(businesses).values({ name: input.businessName, slug }).returning();
   try {
-    await db.insert(businessSettings).values({ businessId: biz.id, businessName: input.businessName });
+    // Apply the chosen trade's preset so the app speaks the subscriber's trade from
+    // day one — discipline + AI vocabulary steer AI drafts (speech-to-quote, replies)
+    // and getBusinessIdentity. A blank/unknown industry → 'general' (neutral), NOT
+    // 'tree' — only Treemarkables should default to arborist. preset.key normalises
+    // the stored industry to a known key.
+    const preset = getTradePreset(input.industry?.trim() || "general");
+    await db.insert(businessSettings).values({
+      businessId: biz.id,
+      businessName: input.businessName,
+      industry: preset.key,
+      businessDiscipline: preset.discipline,
+      tradeVocabulary: preset.aiVocabulary,
+    });
     const [emp] = await db.insert(employees).values({
       businessId: biz.id,
       firstName: input.firstName,
