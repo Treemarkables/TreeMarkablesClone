@@ -26,7 +26,7 @@ import { resolveEntitlements } from "./tenancy/entitlements";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
-import { db } from "./db";
+import { db, ownerDb } from "./db";
 import { eq, desc, sql, inArray, and, gte, lt, lte, ne } from "drizzle-orm";
 import { invoices, invoiceLineItems, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
@@ -1797,6 +1797,25 @@ function isMicrosoftEmailDomain(email: string): boolean {
   return knownDomains.has(domain)
     || domain.endsWith('.outlook.com')
     || domain.endsWith('.hotmail.com');
+}
+
+/**
+ * Whether a business can take online CARD payments, and (for Connect tenants) which
+ * connected account the charge is created on. Treemarkables uses the single platform
+ * account (no connected account → returns no id). A non-TM tenant can take card only
+ * once its Stripe Connect onboarding has charges enabled — then the charge is a DIRECT
+ * charge on its connected account so the money lands with the tenant. Everyone else →
+ * bank transfer. Loads settings on the owner connection (these run on public payment routes).
+ */
+async function resolveCardPayment(
+  businessId: string | null | undefined,
+): Promise<{ canTakeCard: boolean; connectedAccountId?: string }> {
+  if (!businessId) return { canTakeCard: false };
+  if (businessOwnsStripeAccount(businessId)) return { canTakeCard: true }; // platform account (TM)
+  const settings = await storage.getBusinessSettingsForBusiness(businessId).catch(() => null);
+  const acct = (settings?.stripeConnectAccountId ?? '').trim();
+  if (settings?.stripeConnectChargesEnabled && acct) return { canTakeCard: true, connectedAccountId: acct };
+  return { canTakeCard: false };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -6171,9 +6190,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
-      // Only Treemarkables may take card payments (single Stripe account, no Connect);
-      // every other tenant collects by bank transfer. See businessOwnsStripeAccount.
-      if (!businessOwnsStripeAccount((job as any).businessId)) {
+      // Card payments: Treemarkables (platform account) or a Connect tenant with charges
+      // enabled (direct charge → funds go to the tenant). Everyone else → bank transfer.
+      const { canTakeCard: jobCanCard, connectedAccountId: jobConnectAccount } = await resolveCardPayment((job as any).businessId);
+      if (!jobCanCard) {
         return res.status(403).json({
           success: false,
           message: 'Online card payment is not available for this business. Please pay by bank transfer.',
@@ -6214,6 +6234,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         successUrl,
         cancelUrl,
         businessName: (settings as any)?.businessName || 'Treemarkables',
+        connectedAccountId: jobConnectAccount,
       });
 
       res.json({ success: true, data: { sessionId: session.id, url: session.url, amount: outstanding } });
@@ -13324,10 +13345,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           customer: customer || null,
           job: job || null,
           company,
-          // Whether this business can take card payments online (single Stripe
-          // account = Treemarkables only, until Connect). Drives the "Pay now" button;
+          // Whether this business can take card payments online — Treemarkables (platform
+          // account) or a Connect tenant with charges enabled. Drives the "Pay now" button;
           // everyone else shows bank-transfer details instead.
-          onlinePaymentEnabled: businessOwnsStripeAccount(invoice.businessId),
+          onlinePaymentEnabled: businessOwnsStripeAccount(invoice.businessId) || !!bizSettings?.stripeConnectChargesEnabled,
           sections: sections.map(s => ({
             ...s,
             images: Array.isArray(s.images) ? s.images : [],
@@ -13363,10 +13384,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (invoice.status === 'cancelled') {
         return res.status(400).json({ success: false, message: 'This invoice has been cancelled' });
       }
-      // Card payments settle into the single (Treemarkables) Stripe account. Until
-      // Connect routes funds per-tenant, only TM may take them; everyone else is
-      // paid by bank transfer (their details are on the invoice). See businessOwnsStripeAccount.
-      if (!businessOwnsStripeAccount(invoice.businessId)) {
+      // Card payments: Treemarkables (platform account) or a Connect tenant with charges
+      // enabled (direct charge → funds go to the tenant). Everyone else → bank transfer.
+      const { canTakeCard: invoiceCanCard, connectedAccountId: invoiceConnectAccount } = await resolveCardPayment(invoice.businessId);
+      if (!invoiceCanCard) {
         return res.status(403).json({
           success: false,
           message: 'Online card payment is not available for this business. Please pay using the bank-transfer details on your invoice.',
@@ -13421,6 +13442,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         successUrl,
         cancelUrl,
         businessName: (settings as any)?.businessName || 'Treemarkables',
+        connectedAccountId: invoiceConnectAccount,
       });
 
       res.json({ success: true, data: { sessionId: session.id, url: session.url, amount: outstanding } });
@@ -25488,9 +25510,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       if (!proposal) {
         return res.status(404).json({ success: false, message: 'Proposal not found' });
       }
-      // Deposits settle into the single (Treemarkables) Stripe account; until Connect
-      // routes per-tenant, only TM may collect them online. See businessOwnsStripeAccount.
-      if (!businessOwnsStripeAccount(proposal.businessId)) {
+      // Deposits: Treemarkables (platform account) or a Connect tenant with charges
+      // enabled (direct charge → funds go to the tenant). Everyone else → bank transfer.
+      const { canTakeCard: depositCanCard, connectedAccountId: depositConnectAccount } = await resolveCardPayment(proposal.businessId);
+      if (!depositCanCard) {
         return res.status(403).json({
           success: false,
           message: 'Online card payment is not available for this business. Please arrange the deposit by bank transfer.',
@@ -25536,6 +25559,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         successUrl,
         cancelUrl,
         businessName: (settings as any)?.businessName || 'Treemarkables',
+        connectedAccountId: depositConnectAccount,
       });
 
       res.json({ success: true, data: { sessionId: session.id, url: session.url, depositAmount } });
@@ -25751,6 +25775,25 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
 
     try {
+      // ── Stripe Connect: a connected account's capabilities changed ──
+      // Keep stripe_connect_charges_enabled current so the card-payment gate reflects
+      // reality without waiting for the owner to reopen Settings → Billing. Owner
+      // connection (session-less webhook), matched by the stored account id. NOTE: only
+      // delivered if the webhook endpoint listens to "events on Connected accounts".
+      if (event.type === 'account.updated') {
+        const acct = event.data.object as any;
+        if (acct?.id) {
+          try {
+            await ownerDb.update(schema.businessSettings)
+              .set({ stripeConnectChargesEnabled: !!acct.charges_enabled })
+              .where(eq(schema.businessSettings.stripeConnectAccountId, acct.id));
+          } catch (e: any) {
+            console.error('Stripe Connect account.updated sync failed:', e?.message);
+          }
+        }
+        return res.json({ received: true });
+      }
+
       // ── Subscription billing events (Inflow — Phase 4) ──
       // Keep each business's `subscriptions` row in sync with Stripe. Runs outside any
       // request (owner connection), so businessId comes from the event metadata.
