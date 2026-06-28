@@ -1073,6 +1073,18 @@ The Treemarkables Team';
         log(`⚠️ document-template-defaults migration warning: ${(tmplErr as Error).message}`, "startup");
       }
 
+      // --- Backfill default document templates for pre-#276 tenants ---
+      // Idempotent: seeds the 3 defaults (scoped + identity from the business's own
+      // settings) for any business that has NONE — e.g. the demo tenant — so their
+      // public proposal/quote/invoice views stop falling back to Treemarkables'
+      // template. Businesses that already have templates are skipped. See onboarding.ts.
+      try {
+        const { backfillMissingDocumentTemplates } = await import('./onboarding');
+        await backfillMissingDocumentTemplates();
+      } catch (backfillErr) {
+        log(`⚠️ document-template backfill warning: ${(backfillErr as Error).message}`, "startup");
+      }
+
       // --- Per-business email brand colours (trade-gen Phase A) ---
       // Header background + accent for branded customer emails. Defaults reproduce
       // Treemarkables' black + neon-green so every existing email is unchanged until
