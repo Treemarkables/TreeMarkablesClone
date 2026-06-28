@@ -6,8 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+interface PlanOpt { id: string; key: string; name: string; }
+interface SubscriptionInfo { status: string; planId: string | null; planKey: string | null; planName: string | null; stripeManaged: boolean; }
 
 interface SubscriberSummary {
   id: string;
@@ -50,7 +54,7 @@ function ProgressPill({ done, total }: { done: number; total: number }) {
 
 function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { toast } = useToast();
-  const { data, isLoading } = useQuery<{ success: boolean; data: { business: SubscriberSummary; settings: Record<string, any> | null; channels: Channel[]; checklist: { requiredDone: number; requiredTotal: number } } }>({
+  const { data, isLoading } = useQuery<{ success: boolean; data: { business: SubscriberSummary; settings: Record<string, any> | null; channels: Channel[]; checklist: { requiredDone: number; requiredTotal: number }; plans: PlanOpt[]; subscription: SubscriptionInfo | null } }>({
     queryKey: [`/api/admin/subscribers/${id}`],
   });
 
@@ -78,11 +82,46 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
     onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't save", description: e.message }),
   });
 
+  const [planSel, setPlanSel] = useState<string>("");
+  useEffect(() => {
+    if (data?.data?.subscription?.planId) setPlanSel(data.data.subscription.planId);
+  }, [data]);
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: [`/api/admin/subscribers/${id}`] });
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/subscribers"] });
+  };
+
+  const setStatus = useMutation({
+    mutationFn: async (status: "active" | "suspended") => {
+      const r = await apiRequest("PUT", `/api/admin/subscribers/${id}/status`, { status });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.message || "Could not update status.");
+      return j;
+    },
+    onSuccess: invalidate,
+    onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't update status", description: e.message }),
+  });
+
+  const setPlan = useMutation({
+    mutationFn: async () => {
+      const r = await apiRequest("PUT", `/api/admin/subscribers/${id}/plan`, { planId: planSel });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.message || "Could not change plan.");
+      return j;
+    },
+    onSuccess: invalidate,
+    onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't change plan", description: e.message }),
+  });
+
   if (isLoading) {
     return <div className="flex items-center text-sm text-muted-foreground"><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading…</div>;
   }
   const biz = data?.data?.business;
   const channels = data?.data?.channels ?? [];
+  const subscription = data?.data?.subscription ?? null;
+  const plans = data?.data?.plans ?? [];
+  const suspended = biz?.status === "suspended";
 
   return (
     <div>
@@ -92,7 +131,58 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
       <div className="flex items-center gap-3 mb-6">
         <h2 className="text-xl font-semibold">{biz?.name}</h2>
         {biz && <ProgressPill done={biz.requiredDone} total={biz.requiredTotal} />}
+        {suspended && <span className="text-xs px-2 py-0.5 rounded-full border border-destructive/40 text-destructive">Suspended</span>}
       </div>
+
+      <Card className="mb-6 border-border">
+        <CardHeader><CardTitle>Plan &amp; status</CardTitle></CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-medium">Account status</p>
+              <p className="text-sm text-muted-foreground">{suspended ? "Suspended — this subscriber can't log in." : "Active."}</p>
+            </div>
+            <Button
+              variant={suspended ? "default" : "destructive"}
+              size="sm"
+              disabled={setStatus.isPending}
+              onClick={() => setStatus.mutate(suspended ? "active" : "suspended")}
+            >
+              {setStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : suspended ? "Reactivate" : "Suspend"}
+            </Button>
+          </div>
+
+          <div className="pt-4 border-t border-border">
+            <p className="font-medium mb-1">Plan</p>
+            {subscription?.stripeManaged ? (
+              <p className="text-sm text-muted-foreground">
+                {subscription.planName || subscription.planKey || "—"} · managed via Stripe (change it in Stripe, not here).
+              </p>
+            ) : (
+              <div className="flex items-end gap-2">
+                <div className="flex-1 max-w-xs">
+                  <Label htmlFor="planSel" className="text-xs">Comp / set plan</Label>
+                  <Select value={planSel} onValueChange={setPlanSel}>
+                    <SelectTrigger id="planSel"><SelectValue placeholder="Choose a plan" /></SelectTrigger>
+                    <SelectContent>
+                      {plans.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  size="sm"
+                  disabled={!planSel || planSel === subscription?.planId || setPlan.isPending}
+                  onClick={() => setPlan.mutate()}
+                >
+                  {setPlan.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="mb-6 border-border">
         <CardHeader><CardTitle>Company info</CardTitle></CardHeader>

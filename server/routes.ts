@@ -2004,6 +2004,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Block suspended subscribers from logging in. The platform operator
+      // (Treemarkables/Inflow) is exempt so an accidental status flip can never
+      // lock the operator out. Existing sessions persist until expiry.
+      if (employee.businessId && !TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
+        const biz = await storage.getBusinessById(employee.businessId);
+        if (biz?.status === 'suspended') {
+          return res.status(403).json({
+            success: false,
+            message: 'This account has been suspended. Please contact support.',
+          });
+        }
+      }
+
       // Regenerate session ID on login so any stale cookie in the browser
       // is always replaced by a fresh Set-Cookie. Also defends against
       // session fixation.
@@ -19197,10 +19210,69 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const settings = await storage.getBusinessSettingsForBusiness(businessId);
       const channels = await storage.listTenantChannelsForBusiness(businessId);
       const checklist = await buildOnboardingChecklist(businessId);
-      res.json({ success: true, data: { business, settings: settings ?? null, channels, checklist } });
+      const plans = await storage.listSubscriptionPlans();
+      const sub = await storage.getSubscriptionForBusiness(businessId);
+      const subscription = sub
+        ? {
+            status: sub.status,
+            planId: sub.planId,
+            planKey: plans.find((p) => p.id === sub.planId)?.key ?? null,
+            planName: plans.find((p) => p.id === sub.planId)?.name ?? null,
+            stripeManaged: !!sub.stripeSubscriptionId,
+          }
+        : null;
+      res.json({ success: true, data: { business, settings: settings ?? null, channels, checklist, plans: plans.map((p) => ({ id: p.id, key: p.key, name: p.name })), subscription } });
     } catch (error) {
       console.error('Error loading subscriber:', error);
       res.status(500).json({ success: false, message: 'Error loading subscriber' });
+    }
+  });
+
+  // Concierge: suspend / reactivate a subscriber. The platform operator can't be
+  // suspended (guards against self-lockout). Login enforcement lives in /api/auth/login.
+  app.put('/api/admin/subscribers/:id/status', requirePlatformAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.params.id;
+      const status = req.body?.status;
+      if (status !== 'active' && status !== 'suspended') {
+        return res.status(400).json({ success: false, message: "Status must be 'active' or 'suspended'." });
+      }
+      if (TREEMARKABLES_BUSINESS_IDS.includes(businessId)) {
+        return res.status(400).json({ success: false, message: 'The platform operator account cannot be suspended.' });
+      }
+      const business = await storage.getBusinessById(businessId);
+      if (!business) return res.status(404).json({ success: false, message: 'Subscriber not found' });
+      const updated = await storage.setBusinessStatus(businessId, status);
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating subscriber status:', error);
+      res.status(500).json({ success: false, message: 'Error updating subscriber status' });
+    }
+  });
+
+  // Concierge: set a subscriber's plan — MANUAL/comped subscribers only. Refuses
+  // when the subscription is Stripe-managed (a DB change would be overwritten by
+  // the next Stripe webhook → billing drift); those change plan via Stripe.
+  app.put('/api/admin/subscribers/:id/plan', requirePlatformAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.params.id;
+      const planId = req.body?.planId;
+      const business = await storage.getBusinessById(businessId);
+      if (!business) return res.status(404).json({ success: false, message: 'Subscriber not found' });
+
+      const plans = await storage.listSubscriptionPlans();
+      if (!plans.some((p) => p.id === planId)) {
+        return res.status(400).json({ success: false, message: 'Unknown plan.' });
+      }
+      const existing = await storage.getSubscriptionForBusiness(businessId);
+      if (existing?.stripeSubscriptionId) {
+        return res.status(409).json({ success: false, message: 'This subscriber is billed through Stripe — change their plan in Stripe, not here.' });
+      }
+      const updated = await storage.setSubscriptionPlanForBusiness(businessId, planId);
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating subscriber plan:', error);
+      res.status(500).json({ success: false, message: 'Error updating subscriber plan' });
     }
   });
 
