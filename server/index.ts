@@ -677,6 +677,7 @@ The Treemarkables Team';
         CREATE INDEX IF NOT EXISTS booking_reminders_pending_idx ON booking_reminders (status, scheduled_for);
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminders_enabled BOOLEAN DEFAULT true;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminder_offsets JSONB DEFAULT '[30, 7]'::jsonb;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS job_reply_forward_email TEXT;
         CREATE TABLE IF NOT EXISTS equipment_compliance_reminders (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           business_id VARCHAR,

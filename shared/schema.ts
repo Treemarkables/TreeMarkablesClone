@@ -1370,6 +1370,13 @@ export const businessSettings = pgTable("business_settings", {
   brandHeaderColor: text("brand_header_color").default("#0b0b0b"),
   brandAccentColor: text("brand_accent_color").default("#39FF14"),
 
+  // When set, a copy of every inbound customer reply on a job is also forwarded
+  // to this inbox, so the subscriber receives replies in their normal email — not
+  // only on the job card. Null/blank = off (in-app only; the default). The forward's
+  // Reply-To is the customer, so the subscriber can answer them directly. Wired in
+  // the inbound email webhook (server/routes.ts).
+  jobReplyForwardEmail: text("job_reply_forward_email"),
+
   // Business Rules & Workflow
   leadAssignmentMethod: text("lead_assignment_method").default("round_robin"), // round_robin, skill_based, manual
   autoFollowUpDays: integer("auto_follow_up_days").default(3),
