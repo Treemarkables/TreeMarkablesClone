@@ -5,6 +5,8 @@ import { jobs, jobDiaryEntries, customers, conversationMessages } from '../../sh
 import { eq, and, sql } from 'drizzle-orm';
 import { PhotoStorageService } from '../photoStorage';
 import { onLaneJobEvent } from './laneAutomationService';
+import { resolveBusinessIdByChannel } from '../tenancy/channelMap';
+import { runWithBusiness } from '../tenancy/tenantStore';
 
 interface ParsedEmailAttachment {
   filename?: string;
@@ -324,21 +326,33 @@ class GmailReplyService {
         }
       }
       
+      // Resolve which tenant this email was addressed to: its To address is a
+      // registered inbound channel (server/tenancy/channelMap). This session-less
+      // poller reads on the owner connection (sees ALL tenants), so the fallback
+      // lookups below must self-scope by this businessId or they could match
+      // another business's customer/conversation. Undefined when the address isn't
+      // a registered channel → unchanged, single-tenant-safe behaviour.
+      const channelBusinessId = await resolveBusinessIdByChannel('email', email.to);
+
       // STEP 2: If no job found by TO address, fall back to finding customer by FROM email
       if (!job) {
-        console.log(`📧 Looking up customer with email: ${email.from}`);
-        
-        // Find customer by email address
+        console.log(`📧 Looking up customer with email: ${email.from}${channelBusinessId ? ` (scoped to tenant ${channelBusinessId})` : ''}`);
+
+        // Find customer by email address — scoped to the addressed tenant when known.
         customer = await db.query.customers.findFirst({
-          where: eq(customers.email, email.from)
+          where: channelBusinessId
+            ? and(eq(customers.email, email.from), eq(customers.businessId, channelBusinessId))
+            : eq(customers.email, email.from)
         });
 
         if (customer) {
           console.log(`📧 ✅ Found customer: ${customer.name} (ID: ${customer.id})`);
 
-          // Find the most recent job for this customer
+          // Find the most recent job for this customer (same tenant scope).
           const customerJobs = await db.query.jobs.findMany({
-            where: eq(jobs.customerId, customer.id),
+            where: channelBusinessId
+              ? and(eq(jobs.customerId, customer.id), eq(jobs.businessId, channelBusinessId))
+              : eq(jobs.customerId, customer.id),
             orderBy: (jobs, { desc }) => [desc(jobs.createdAt)],
             limit: 1
           });
@@ -353,7 +367,13 @@ class GmailReplyService {
       // This handles replies from leads who haven't been converted to customers yet
       if (!customer && !job) {
         console.log(`📧 No customer found for email: ${email.from} - checking for existing conversation`);
-        
+
+        // Scope this brand-new-lead path to the addressed tenant: runWithBusiness
+        // stamps every conversation/message/notification insert below (via withTenant)
+        // with channelBusinessId, and the cross-tenant reads are guarded explicitly.
+        // When the address isn't a registered channel, channelBusinessId is undefined
+        // and this is a no-op (unchanged behaviour).
+        return await runWithBusiness(channelBusinessId, async () => {
         try {
           const notificationHelper = await import('./notificationHelper.js');
           const { storage } = await import('../storage.js');
@@ -373,8 +393,12 @@ class GmailReplyService {
             }
           }
 
-          // Check for existing open conversation from this email
+          // Check for existing open conversation from this email. The helper reads
+          // across all tenants, so ignore a match owned by a different business.
           let conversation = await notificationHelper.findExistingOpenConversation(email.from.trim().toLowerCase());
+          if (channelBusinessId && conversation && (conversation as any).businessId !== channelBusinessId) {
+            conversation = null;
+          }
           
           // Clean up email body text (remove quoted replies)
           const cleanedBody = this.cleanEmailBody(email.textBody);
@@ -396,6 +420,8 @@ class GmailReplyService {
             const allConvs = await storage.getAllConversations({});
             let priorConv: any = null;
             for (const c of allConvs) {
+              // Don't reopen/attach to another tenant's conversation.
+              if (channelBusinessId && (c as any).businessId !== channelBusinessId) continue;
               const msgs = await storage.getConversationMessages(c.id);
               if (msgs.some((m: any) => m.fromContact?.toLowerCase() === email.from.trim().toLowerCase())) {
                 priorConv = c;
@@ -463,6 +489,7 @@ class GmailReplyService {
           console.error('📧 Error creating conversation from lead email:', convError);
           return false;
         }
+        }); // runWithBusiness(channelBusinessId)
       }
 
       // Clean up email body text (remove quoted replies)
