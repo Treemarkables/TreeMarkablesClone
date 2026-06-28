@@ -1362,6 +1362,13 @@ export const businessSettings = pgTable("business_settings", {
   // TM's real details are seeded into its row by migration.
   bankAccountName: text("bank_account_name").default(""),
   bankAccountNumber: text("bank_account_number").default(""),
+  // Stripe Connect (Express) — lets a tenant accept card payments from THEIR customers
+  // into THEIR OWN Stripe account. stripeConnectAccountId is the acct_… id; charges are
+  // only enabled once Stripe finishes onboarding (chargesEnabled, synced from the
+  // account.updated webbook). Blank/false = no Connect → invoices fall back to bank
+  // transfer. Treemarkables keeps using the single platform account, not Connect.
+  stripeConnectAccountId: text("stripe_connect_account_id").default(""),
+  stripeConnectChargesEnabled: boolean("stripe_connect_charges_enabled").default(false),
   // Per-business email brand colours. Drive the header/footer background and the
   // accent (wordmark, divider, CTA, amount) in branded customer emails so each
   // tenant's invoice/proposal/quote emails carry THEIR brand — not Treemarkables'.

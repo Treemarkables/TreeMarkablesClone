@@ -87,6 +87,10 @@ import {
   getOrCreateStripeCustomer,
   retrieveStripeSubscription,
   createBillingPortalSession,
+  createConnectAccount,
+  createConnectAccountLink,
+  retrieveConnectAccount,
+  createConnectLoginLink,
 } from "./stripe";
 import * as billing from "./billing";
 import * as usageMeter from "./services/usageMeter";
@@ -25613,6 +25617,64 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       res.json({ success: true, url });
     } catch (e: any) {
       res.status(500).json({ success: false, message: e?.message });
+    }
+  });
+
+  // ── Stripe Connect (Express) — per-tenant card payments, Phase 1: onboarding ──
+  const CONNECT_RETURN = 'https://app.treemarkables.co.nz/settings/billing?connect=done';
+  const CONNECT_REFRESH = 'https://app.treemarkables.co.nz/settings/billing?connect=refresh';
+
+  // Start (or resume) Stripe-hosted onboarding. Creates the tenant's Express account on
+  // first call, stores the acct_… id, and returns a hosted onboarding URL to redirect to.
+  app.post('/api/billing/connect/onboard', requireAdmin, async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      const settings = await storage.getBusinessSettings();
+      let accountId = (settings?.stripeConnectAccountId ?? '').trim();
+      if (!accountId) {
+        const employee = req.session.employeeId ? await storage.getEmployee(req.session.employeeId) : null;
+        accountId = await createConnectAccount({ email: employee?.email, businessName: settings?.businessName });
+        await storage.updateBusinessSettings({ stripeConnectAccountId: accountId } as any);
+      }
+      const url = await createConnectAccountLink(accountId, { returnUrl: CONNECT_RETURN, refreshUrl: CONNECT_REFRESH });
+      res.json({ success: true, url });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Could not start Stripe onboarding.' });
+    }
+  });
+
+  // Current Connect status for the UI. Does a fresh retrieve + syncs chargesEnabled to
+  // the DB, so the card-payment gate (Phase 2) reflects reality without the webhook.
+  app.get('/api/billing/connect/status', async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      const settings = await storage.getBusinessSettings();
+      const accountId = (settings?.stripeConnectAccountId ?? '').trim();
+      if (!accountId) return res.json({ success: true, data: { connected: false, chargesEnabled: false } });
+      const status = await retrieveConnectAccount(accountId);
+      if (status.chargesEnabled !== !!settings?.stripeConnectChargesEnabled) {
+        await storage.updateBusinessSettings({ stripeConnectChargesEnabled: status.chargesEnabled } as any);
+      }
+      res.json({ success: true, data: { connected: true, ...status } });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Could not load Stripe status.' });
+    }
+  });
+
+  // Express dashboard login link, so a connected tenant can view their payouts.
+  app.post('/api/billing/connect/dashboard', requireAdmin, async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      const settings = await storage.getBusinessSettings();
+      const accountId = (settings?.stripeConnectAccountId ?? '').trim();
+      if (!accountId) return res.status(400).json({ success: false, message: 'Not connected to Stripe yet.' });
+      const url = await createConnectLoginLink(accountId);
+      res.json({ success: true, url });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Could not open Stripe dashboard.' });
     }
   });
 
