@@ -1756,6 +1756,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/safety-analytics', requireEntitlement('plan:business', 'safety_analytics'));
   app.use('/api/workflows', requireEntitlement('plan:business', 'workflow_automation'));
   app.use('/api/lane-automations', requireEntitlement('plan:business', 'workflow_automation'));
+  // Metrics Dashboard (advanced analytics) → Crew. These endpoints are exclusive to the
+  // (UI-gated) Metrics Dashboard, so gating them is safe; /api/analytics/* is deliberately
+  // NOT here — it's shared with the executive dashboard + settings. Profitability has no
+  // server route (computed client-side), so its UI gate needs no server twin.
+  for (const p of ['/api/today-metrics', '/api/dashboard-stats', '/api/revenue-stats', '/api/revenue-breakdown', '/api/quote-breakdown', '/api/proposals-accepted', '/api/quote-analytics', '/api/quote-method-analytics', '/api/lead-source-analysis', '/api/quote-presentation-analysis', '/api/man-hours-metrics', '/api/checklist-usage']) {
+    app.use(p, requireEntitlement('plan:crew', 'analytics'));
+  }
 
   // TEMP DEBUG: Verify fresh code is running
   app.get('/api/test-fresh-code', (req: Request, res: Response) => {
