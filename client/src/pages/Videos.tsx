@@ -108,9 +108,12 @@ export default function Videos() {
   const q = search.trim().toLowerCase();
   const filteredVideos = q
     ? videos.filter((v: any) =>
-        [v.title, v.originalName, v.filename, v.description]
-          .filter(Boolean)
-          .some((field: string) => field.toLowerCase().includes(q)),
+        // Search the video's own fields AND the linked job/customer fields shown on
+        // the card (customer name, job #, address) — people search by site/customer,
+        // not just the video title.
+        [v.title, v.originalName, v.filename, v.description, v.customerName, v.jobTitle, v.jobAddress, v.jobNumber]
+          .filter((field) => field != null && field !== "")
+          .some((field: any) => String(field).toLowerCase().includes(q)),
       )
     : videos;
 
@@ -207,7 +210,7 @@ export default function Videos() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Search videos by title or keyword…"
+            placeholder="Search by title, customer, address or job #…"
             className="pl-10"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
