@@ -1053,6 +1053,15 @@ The Treemarkables Team';
         log(`⚠️ trade-vocabulary migration warning: ${(vocabErr as Error).message}`, "startup");
       }
 
+      // --- Stripe Connect (per-tenant card payments) columns ---
+      // Mirrors migrations/manual/20260628_stripe_connect.sql.
+      try {
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS stripe_connect_account_id TEXT DEFAULT ''`);
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS stripe_connect_charges_enabled BOOLEAN DEFAULT false`);
+      } catch (connectErr) {
+        log(`⚠️ stripe-connect migration warning: ${(connectErr as Error).message}`, "startup");
+      }
+
       // --- Neutralize document_templates' Treemarkables identity defaults ---
       // Mirrors migrations/manual/20260628_document_template_neutral_defaults.sql.
       // Blank the TM-hardcoded column defaults (existing rows unchanged, TM keeps its

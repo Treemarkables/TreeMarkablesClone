@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { ChevronLeft, Check, CreditCard, Loader2, MessageSquare, Sparkles } from "lucide-react";
+import { ChevronLeft, Check, CheckCircle2, CreditCard, Loader2, MessageSquare, Sparkles } from "lucide-react";
 import { isNativeApp } from "@/lib/platform";
 
 interface Plan {
@@ -130,6 +130,34 @@ export default function SettingsBilling() {
     onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't open billing", description: e.message }),
   });
 
+  // Stripe Connect — accept card payments from your own customers into your own account.
+  const { data: connectResp } = useQuery<{ success: boolean; data: { connected: boolean; chargesEnabled: boolean } }>({
+    queryKey: ["/api/billing/connect/status"],
+    enabled: !native,
+  });
+  const connect = connectResp?.data;
+
+  const connectOnboard = useMutation({
+    mutationFn: async () => {
+      const r = await apiRequest("POST", "/api/billing/connect/onboard", {});
+      const j = await r.json();
+      if (!j.success || !j.url) throw new Error(j.message || "Could not start Stripe onboarding.");
+      return j.url as string;
+    },
+    onSuccess: (url: string) => { window.location.href = url; },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't connect Stripe", description: e.message }),
+  });
+  const connectDashboard = useMutation({
+    mutationFn: async () => {
+      const r = await apiRequest("POST", "/api/billing/connect/dashboard", {});
+      const j = await r.json();
+      if (!j.success || !j.url) throw new Error(j.message || "Could not open Stripe.");
+      return j.url as string;
+    },
+    onSuccess: (url: string) => { window.location.href = url; },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't open Stripe", description: e.message }),
+  });
+
   return (
     <div className="pt-20 px-4 md:px-8 max-w-5xl mx-auto pb-16">
       <Link href="/settings" className="inline-flex items-center text-sm text-muted-foreground mb-4">
@@ -162,6 +190,45 @@ export default function SettingsBilling() {
             {!native && (
               <Button variant="outline" onClick={() => portal.mutate()} disabled={portal.isPending}>
                 <CreditCard className="h-4 w-4 mr-2" /> Manage billing
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {!native && (
+        <Card className="mb-6 border-border">
+          <CardContent className="py-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium">Card payments</p>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  Connect your Stripe account so your customers can pay invoices by card —
+                  straight into your account. Until then, invoices show your bank-transfer details.
+                </p>
+              </div>
+              {connect?.connected && connect?.chargesEnabled && (
+                <span className="text-sm text-green-600 font-medium shrink-0 flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" /> Active
+                </span>
+              )}
+            </div>
+            {!connect?.connected ? (
+              <Button onClick={() => connectOnboard.mutate()} disabled={connectOnboard.isPending}>
+                {connectOnboard.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CreditCard className="h-4 w-4 mr-2" />
+                )}
+                Connect Stripe
+              </Button>
+            ) : !connect?.chargesEnabled ? (
+              <Button onClick={() => connectOnboard.mutate()} disabled={connectOnboard.isPending}>
+                Finish Stripe setup
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => connectDashboard.mutate()} disabled={connectDashboard.isPending}>
+                View payouts in Stripe
               </Button>
             )}
           </CardContent>

@@ -324,6 +324,61 @@ export async function createBillingPortalSession(customerId: string, returnUrl: 
   return { url: session.url };
 }
 
+// ── Stripe Connect (Express) — per-tenant card payments ─────────────────────
+// Lets a tenant accept card payments from THEIR customers into THEIR OWN Stripe
+// account. Direct-charge model: an invoice/deposit/job checkout is created ON the
+// tenant's connected account (Phase 2 passes { stripeAccount }), so funds land in
+// their account and they are the merchant of record. Onboarding is Stripe-hosted via
+// Account Links. NOTE: the platform Stripe account must have Connect enabled in the
+// dashboard for accounts.create to work.
+
+/** Create an Express connected account for a tenant. Returns the acct_… id. */
+export async function createConnectAccount(opts: { email?: string | null; businessName?: string | null }): Promise<string> {
+  const stripe = await getStripe();
+  const account = await stripe.accounts.create({
+    type: 'express',
+    country: 'NZ',
+    email: opts.email || undefined,
+    business_profile: opts.businessName ? { name: opts.businessName } : undefined,
+    capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+  });
+  return account.id;
+}
+
+/** A Stripe-hosted onboarding link for a connected account (or to resume onboarding). */
+export async function createConnectAccountLink(accountId: string, opts: { returnUrl: string; refreshUrl: string }): Promise<string> {
+  const stripe = await getStripe();
+  const link = await stripe.accountLinks.create({
+    account: accountId,
+    type: 'account_onboarding',
+    return_url: opts.returnUrl,
+    refresh_url: opts.refreshUrl,
+  });
+  return link.url;
+}
+
+/** Current onboarding/capability status of a connected account. */
+export async function retrieveConnectAccount(accountId: string): Promise<{
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+}> {
+  const stripe = await getStripe();
+  const acct = await stripe.accounts.retrieve(accountId);
+  return {
+    chargesEnabled: !!acct.charges_enabled,
+    payoutsEnabled: !!acct.payouts_enabled,
+    detailsSubmitted: !!acct.details_submitted,
+  };
+}
+
+/** A Stripe Express dashboard login link, so a connected tenant can view their payouts. */
+export async function createConnectLoginLink(accountId: string): Promise<string> {
+  const stripe = await getStripe();
+  const link = await stripe.accounts.createLoginLink(accountId);
+  return link.url;
+}
+
 // Verifies a Stripe webhook signature against the raw request body and
 // returns the parsed event. Throws on signature mismatch — caller should
 // 400 the response so Stripe will retry.
