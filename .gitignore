@@ -3,6 +3,10 @@ dist
 .DS_Store
 server/public
 vite.config.ts.*
+
+# Android native secrets (injected into BuildConfig — never commit)
+android-native/secrets.properties
+android/app/google-services.json
 *.tar.gz
 .cache
 .local

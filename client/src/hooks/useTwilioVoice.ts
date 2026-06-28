@@ -56,9 +56,13 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
   const fetchTokenAndRegister = useCallback(async () => {
     if (!isNative) return;
     try {
+      // Tell the server which platform we are so it can pick the right Twilio
+      // push credential (APNs for iOS, FCM for Android).
       const res = await fetch("/api/twilio/token", {
         method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: Capacitor.getPlatform() }),
       });
       const bodyText = await res.text();
       if (!res.ok) {

@@ -5,6 +5,7 @@ const config: CapacitorConfig = {
   appName: "Inflow",
   webDir: "dist/public",
   server: {
+    // Shared across iOS + Android — both shells load the live web app.
     url: "https://app.treemarkables.co.nz",
     cleartext: false,
   },
@@ -12,6 +13,11 @@ const config: CapacitorConfig = {
     contentInset: "automatic",
     backgroundColor: "#1a1a1a",
     scrollEnabled: false,
+  },
+  android: {
+    backgroundColor: "#1a1a1a",
+    // The web app is served over HTTPS from the remote URL; never allow cleartext.
+    allowMixedContent: false,
   },
 };
 

@@ -1,0 +1,45 @@
+{
+  "name": "inflow-desktop",
+  "productName": "Inflow",
+  "version": "1.0.0",
+  "description": "Inflow desktop app — Electron shell for app.treemarkables.co.nz",
+  "main": "main.js",
+  "author": "Treemarkables",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:all": "electron-builder -mw"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "co.nz.inflowapp.desktop",
+    "productName": "Inflow",
+    "files": ["main.js", "preload.js", "assets/**/*"],
+    "directories": { "output": "release" },
+    "mac": {
+      "category": "public.app-category.business",
+      "target": ["dmg", "zip"],
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

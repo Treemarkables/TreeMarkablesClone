@@ -1,0 +1,53 @@
+// ============================================================================
+// Merge into android/app/build.gradle after `npx cap add android`.
+// scripts/android-setup.sh applies these automatically; this documents the result.
+// ============================================================================
+
+// 1) At the VERY TOP of the file, apply the Google Services plugin (after the
+//    existing `apply plugin: 'com.android.application'`):
+//
+//      apply plugin: 'com.google.gms.google-services'
+//
+//    (or, if the file uses the plugins {} block:  id 'com.google.gms.google-services')
+
+// 2) In android { defaultConfig { ... } } — Twilio Voice 6.x requires API 24+, and
+//    inject the native-registration secret from a GITIGNORED properties file so it never
+//    lands in git (mirrors how iOS keeps it out of source). The setup script writes the
+//    snippet below into android/app/build.gradle:
+//
+//      android {
+//        buildFeatures { buildConfig true }
+//        defaultConfig {
+//          minSdkVersion 24
+//
+//          def secretsFile = rootProject.file("../android-native/secrets.properties")
+//          def secrets = new Properties()
+//          if (secretsFile.exists()) { secrets.load(new FileInputStream(secretsFile)) }
+//          buildConfigField "String", "INFLOW_WEBHOOK_SECRET",
+//              "\"${secrets.getProperty('INFLOW_WEBHOOK_SECRET', '')}\""
+//          buildConfigField "String", "INFLOW_OWNER_EMPLOYEE_ID",
+//              "\"${secrets.getProperty('INFLOW_OWNER_EMPLOYEE_ID', '')}\""
+//        }
+//      }
+//
+//    Create android-native/secrets.properties from secrets.properties.example and fill in
+//    the real values (HERO_WEBHOOK_SECRET + the owner employee id). It is gitignored.
+
+// 3) Add these to the dependencies { } block:
+
+dependencies {
+    // Firebase (BoM pins compatible versions)
+    implementation platform('com.google.firebase:firebase-bom:33.1.2')
+    implementation 'com.google.firebase:firebase-messaging-ktx'
+
+    // Twilio Voice Android SDK (inbound calls)
+    implementation 'com.twilio:voice-android:6.6.3'
+
+    // AndroidX (notifications + telecom helpers); usually already present
+    implementation 'androidx.core:core-ktx:1.13.1'
+}
+
+// 4) This module is Kotlin — ensure the Kotlin Android plugin is applied. The current
+//    Capacitor Android template already includes it; if not, add at the top:
+//
+//      apply plugin: 'org.jetbrains.kotlin.android'
