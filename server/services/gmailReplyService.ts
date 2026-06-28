@@ -606,7 +606,39 @@ class GmailReplyService {
         } catch (notifError) {
           console.error('Error creating email reply notification:', notifError);
         }
-        
+
+        // Optionally forward a copy of the reply to the subscriber's own inbox
+        // (business_settings.jobReplyForwardEmail). OFF when blank — the reply
+        // already lives on the job card above. The copy's Reply-To is the customer
+        // so the owner can answer directly, and its From name is the customer's so
+        // it reads like a forwarded reply. Never throws; never blocks the poll.
+        try {
+          const { storage } = await import('../storage.js');
+          const fwdSettings = await storage.getBusinessSettingsForBusiness(job.businessId);
+          const forwardTo = (fwdSettings?.jobReplyForwardEmail || '').trim();
+          const fromAddr = (email.from || '').trim();
+          if (forwardTo && forwardTo.toLowerCase() !== fromAddr.toLowerCase()) {
+            const { emailService } = await import('./emailService.js');
+            const senderLabel = customer?.name || fromAddr || 'Customer';
+            const intro = `${senderLabel} replied to Job #${job.jobNumber}. Reply to this email to respond to them directly — a copy is already on the job card in Inflow.`;
+            const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
+            await emailService.sendEmail({
+              to: forwardTo,
+              fromName: senderLabel,
+              replyTo: fromAddr || undefined,
+              subject: `[Job #${job.jobNumber}] ${email.subject || `Reply from ${senderLabel}`}`,
+              html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111;">`
+                + `<p style="margin:0 0 12px;color:#555;font-size:13px;">${esc(intro)}</p>`
+                + `<hr style="border:none;border-top:1px solid #eee;margin:0 0 12px;">`
+                + `<div style="white-space:pre-wrap;font-size:14px;line-height:1.5;">${esc(cleanedBody || '')}</div></div>`,
+              text: `${intro}\n\n----\n\n${cleanedBody || ''}`,
+            });
+            console.log(`📤 Forwarded job #${job.jobNumber} customer reply to owner inbox ${forwardTo}`);
+          }
+        } catch (fwdErr) {
+          console.error('Failed to forward customer reply to owner inbox:', fwdErr);
+        }
+
         // Job-matched replies live in the job diary only — never in the conversations page.
         // The diary entry + email_reply notification above is the complete record; creating a
         // conversation here would also fire a `new_conversation` notification that routes to

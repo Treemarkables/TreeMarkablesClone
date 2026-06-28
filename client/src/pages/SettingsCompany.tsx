@@ -83,6 +83,7 @@ export default function SettingsCompany() {
     bankAccountNumber: string;
     brandHeaderColor: string;
     brandAccentColor: string;
+    jobReplyForwardEmail: string;
   };
   const { data: bizData } = useQuery<{ success: boolean; data: Partial<BizFields> }>({
     queryKey: ["/api/business-settings"],
@@ -92,6 +93,7 @@ export default function SettingsCompany() {
     tradeVocabulary: "",
     bankAccountName: "", bankAccountNumber: "",
     brandHeaderColor: "#0b0b0b", brandAccentColor: "#39FF14",
+    jobReplyForwardEmail: "",
   });
   const [bizLoaded, setBizLoaded] = useState(false);
   if (bizData?.data && !bizLoaded) {
@@ -105,6 +107,7 @@ export default function SettingsCompany() {
       bankAccountNumber: bizData.data.bankAccountNumber ?? "",
       brandHeaderColor: bizData.data.brandHeaderColor || "#0b0b0b",
       brandAccentColor: bizData.data.brandAccentColor || "#39FF14",
+      jobReplyForwardEmail: bizData.data.jobReplyForwardEmail ?? "",
     });
     setBizLoaded(true);
   }
@@ -147,6 +150,7 @@ export default function SettingsCompany() {
         bankAccountNumber: biz.bankAccountNumber,
         brandHeaderColor: biz.brandHeaderColor,
         brandAccentColor: biz.brandAccentColor,
+        jobReplyForwardEmail: biz.jobReplyForwardEmail.trim(),
         businessGstNumber: values.gstNumber ?? "",
       });
     },
@@ -592,6 +596,24 @@ export default function SettingsCompany() {
             placeholder="e.g. Qualified Arborists"
           />
           <p className="text-xs text-muted-foreground">Appears under your brand name in the email header.</p>
+        </div>
+
+        {/* Forward customer replies to an inbox (business_settings.jobReplyForwardEmail).
+            Blank = off; replies still appear on the job card either way. */}
+        <div className="space-y-1">
+          <Label className="flex items-center gap-2">
+            <Mail className="w-4 h-4 text-muted-foreground" />
+            Forward customer replies to
+          </Label>
+          <Input
+            type="email"
+            value={biz.jobReplyForwardEmail}
+            onChange={(e) => setB("jobReplyForwardEmail", e.target.value)}
+            placeholder="you@yourbusiness.co.nz"
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. When a customer replies to a job email, send a copy to this inbox so you also get it in your normal email. Leave blank to keep replies on the job card only. Replies you send go straight back to the customer.
+          </p>
         </div>
 
         {/* Email brand colours (business_settings) — drive the header band, accent

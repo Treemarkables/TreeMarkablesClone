@@ -21188,7 +21188,44 @@ Transcription: ${transcriptText}`;
         }
         return h['message-id'] || h['Message-ID'] || h['messageId'] || null;
       })();
-      
+
+      // Optionally mirror a customer reply into the subscriber's own email inbox.
+      // OFF by default (column null/blank). When a tenant sets a forward address in
+      // Company Info, send a COPY so replies also land in their normal inbox — the
+      // reply still lives on the job card regardless. The copy's Reply-To is the
+      // customer, so the subscriber can answer them directly from their inbox, and
+      // its From name is the customer's so it reads like a normal forwarded reply.
+      // Never throws (the webhook must always 200) and guards against mail loops.
+      const forwardReplyToOwnerInbox = async (job: any): Promise<void> => {
+        try {
+          if (!job?.businessId) return;
+          const fwdSettings = await storage.getBusinessSettingsForBusiness(job.businessId);
+          const forwardTo = (fwdSettings?.jobReplyForwardEmail || '').trim();
+          if (!forwardTo) return; // feature off for this tenant
+          const senderEmail = (actualFromEmail || '').trim().toLowerCase();
+          if (senderEmail && senderEmail === forwardTo.toLowerCase()) return; // loop guard
+          const senderLabel = actualFromName || actualFromEmail || 'Customer';
+          const intro = `${senderLabel} replied to Job #${job.jobNumber}. Reply to this email to respond to them directly — a copy is already on the job card in Inflow.`;
+          const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
+          const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111;">`
+            + `<p style="margin:0 0 12px;color:#555;font-size:13px;">${esc(intro)}</p>`
+            + `<hr style="border:none;border-top:1px solid #eee;margin:0 0 12px;">`
+            + `<div style="white-space:pre-wrap;font-size:14px;line-height:1.5;">${esc(cleanedBody || '')}</div>`
+            + `</div>`;
+          await emailService.sendEmail({
+            to: forwardTo,
+            fromName: senderLabel, // reads like the customer in the owner's inbox
+            replyTo: actualFromEmail || undefined, // owner's reply goes straight to the customer
+            subject: `[Job #${job.jobNumber}] ${actualSubject || `Reply from ${senderLabel}`}`,
+            html,
+            text: `${intro}\n\n----\n\n${cleanedBody || ''}`,
+          });
+          console.log(`📤 Forwarded job #${job.jobNumber} customer reply to owner inbox ${forwardTo}`);
+        } catch (fwdErr) {
+          console.error('Failed to forward customer reply to owner inbox:', fwdErr);
+        }
+      };
+
       // Extract job/quote reference from TO address or subject line
       // Check TO address first for patterns like: job-3316@jobs.treemarkables.co.nz or job-UUID@jobs.treemarkables.co.nz
       const toAddressJobMatch = to?.match(/job-([\w-]+)@/i);
@@ -21234,6 +21271,7 @@ Transcription: ${transcriptText}`;
         await storage.updateJob(job.id, { lastActivityAt: new Date() });
         jobFound = true;
         console.log(`📝 Email logged to job ${job.jobNumber} diary (matched by UUID)`);
+        await forwardReplyToOwnerInbox(job);
         
         try {
           // NOTE: this used to call notificationHelper.createNotification(),
@@ -21350,6 +21388,7 @@ Transcription: ${transcriptText}`;
           await storage.updateJob(job.id, { lastActivityAt: new Date() });
           jobFound = true;
           console.log(`📝 Email logged to job ${job.jobNumber} diary`);
+          await forwardReplyToOwnerInbox(job);
           
           // Create notification for email reply
           try {
@@ -21469,6 +21508,7 @@ Transcription: ${transcriptText}`;
           await storage.updateJob(job.id, { lastActivityAt: new Date() });
           jobFound = true;
           console.log(`📝 Email logged to job ${job.jobNumber} diary (via quote ${quoteNumber})`);
+          await forwardReplyToOwnerInbox(job);
           
           // Create notification for email reply
           try {
