@@ -19,7 +19,8 @@ import { storage, invoiceRevenueExGst } from "./storage";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { resolveBusinessIdByChannel } from "./tenancy/channelMap";
-import { businessHasRoleChecklist } from "../shared/roleChecklistAccess";
+import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
+import { resolveEntitlements } from "./tenancy/entitlements";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
@@ -2008,6 +2009,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const permsSet = await getEmployeePermissions(employee);
       const tier = employee.roleTierId ? await storage.getRoleTier(employee.roleTierId) : null;
 
+      // Subscription entitlements for plan-based UI gating. Treemarkables (platform
+      // owner) is comped → full Business-tier access; otherwise resolve from the live
+      // subscription. Mirrors the server feature gates so the UI matches enforcement.
+      const __entBizId = req.session.businessId;
+      let planKey = 'freemium';
+      let entitlements: string[] = [];
+      if (__entBizId && TREEMARKABLES_BUSINESS_IDS.includes(__entBizId)) {
+        planKey = 'business';
+        entitlements = ['plan:crew', 'plan:business'];
+      } else if (__entBizId) {
+        try {
+          const ent = await resolveEntitlements(__entBizId);
+          planKey = ent.planKey;
+          entitlements = Array.from(ent.entitlements);
+        } catch { /* fail-open: empty entitlements */ }
+      }
+
       res.json({
         success: true,
         data: {
@@ -2023,6 +2041,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? { id: tier.id, key: tier.key, name: tier.name, description: tier.description }
             : null,
           permissions: Array.from(permsSet),
+          planKey,
+          entitlements,
         }
       });
     } catch (error) {

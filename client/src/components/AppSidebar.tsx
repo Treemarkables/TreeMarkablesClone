@@ -24,6 +24,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { PlanGate } from "@/components/PlanGate";
 
 interface AppSidebarProps {
   activeTab: string;
@@ -292,7 +293,8 @@ function SidebarNavContent({
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* Safety — collapsible group (JHA + Near Miss) */}
+              {/* Safety — collapsible group (JHA + Near Miss). Crew+ only — hidden on Freemium. */}
+              <PlanGate requires="plan:crew">
               <Collapsible open={safetyOpen} onOpenChange={setSafetyOpen} className="group/safety-collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
@@ -385,6 +387,7 @@ function SidebarNavContent({
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </Collapsible>
+              </PlanGate>
 
               {/* Mulch Drops */}
               <SidebarMenuItem>

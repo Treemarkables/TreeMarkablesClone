@@ -2,6 +2,7 @@ import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { UpgradeGate } from "@/components/PlanGate";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
@@ -1309,7 +1310,9 @@ function Router() {
       <Route path="/safety">
         <AuthenticatedRoute>
           <SidebarLayout>
-            <SafetyHub />
+            <UpgradeGate requires="plan:crew" feature="The safety suite">
+              <SafetyHub />
+            </UpgradeGate>
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>
