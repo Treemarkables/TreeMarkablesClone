@@ -75,6 +75,7 @@ export interface DepositCheckoutInput {
   successUrl: string;
   cancelUrl: string;
   businessName?: string;
+  connectedAccountId?: string; // Stripe Connect: when set, the charge is created ON this connected account (direct charge → funds go to the tenant).
 }
 
 // Creates a Stripe Checkout Session for a proposal deposit. Returns the
@@ -121,7 +122,7 @@ export async function createDepositCheckoutSession(input: DepositCheckoutInput):
         proposalNumber: input.proposalNumber,
       },
     },
-  });
+  }, input.connectedAccountId ? { stripeAccount: input.connectedAccountId } : undefined);
 
   if (!session.url) {
     throw new Error('Stripe checkout session did not return a redirect URL');
@@ -138,6 +139,7 @@ export interface InvoiceCheckoutInput {
   successUrl: string;
   cancelUrl: string;
   businessName?: string;
+  connectedAccountId?: string; // Stripe Connect: when set, the charge is created ON this connected account (direct charge → funds go to the tenant).
 }
 
 // Creates a Stripe Checkout Session for an invoice payment. Mirrors the
@@ -184,7 +186,7 @@ export async function createInvoiceCheckoutSession(input: InvoiceCheckoutInput):
         invoiceNumber: input.invoiceNumber,
       },
     },
-  });
+  }, input.connectedAccountId ? { stripeAccount: input.connectedAccountId } : undefined);
 
   if (!session.url) {
     throw new Error('Stripe checkout session did not return a redirect URL');
@@ -201,6 +203,7 @@ export interface JobCheckoutInput {
   successUrl: string;
   cancelUrl: string;
   businessName?: string;
+  connectedAccountId?: string; // Stripe Connect: when set, the charge is created ON this connected account (direct charge → funds go to the tenant).
 }
 
 // Creates a Stripe Checkout Session for an on-the-spot job payment (staff
@@ -247,7 +250,7 @@ export async function createJobCheckoutSession(input: JobCheckoutInput): Promise
         jobNumber: input.jobNumber || '',
       },
     },
-  });
+  }, input.connectedAccountId ? { stripeAccount: input.connectedAccountId } : undefined);
 
   if (!session.url) {
     throw new Error('Stripe checkout session did not return a redirect URL');
