@@ -5128,8 +5128,21 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       }
 
+      // Plan limit: monthly job-creation cap. Dark-launched behind USAGE_CAPS_ENFORCE
+      // (off = log only, never blocks). Runs only for genuinely-new jobs, i.e. after the
+      // dedupe early-returns above, so re-using an existing job never burns allowance.
+      // Treemarkables + comped businesses are exempt; fail-open when the tenant is unknown.
+      const __capBusinessId = currentBusinessId();
+      if (__capBusinessId && !(await usageMeter.guardJobCreation(__capBusinessId))) {
+        return res.status(403).json({
+          success: false,
+          code: 'job_cap_reached',
+          message: "You've reached your plan's monthly job limit. Upgrade your plan to create more jobs.",
+        });
+      }
+
       const job = await storage.createJob(validation.data);
-      
+
       // Always sync customer info from job card to customer record
       if (job.customerId) {
         try {
