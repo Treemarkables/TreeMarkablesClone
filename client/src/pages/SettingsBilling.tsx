@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -157,6 +157,15 @@ export default function SettingsBilling() {
     onSuccess: (url: string) => { window.location.href = url; },
     onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't open Stripe", description: e.message }),
   });
+  const connectDisconnect = useMutation({
+    mutationFn: async () => {
+      const r = await apiRequest("POST", "/api/billing/connect/disconnect", {});
+      const j = await r.json();
+      if (!j.success) throw new Error(j.message || "Could not disconnect.");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/billing/connect/status"] }),
+    onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't disconnect Stripe", description: e.message }),
+  });
 
   return (
     <div className="pt-20 px-4 md:px-8 max-w-5xl mx-auto pb-16">
@@ -222,14 +231,32 @@ export default function SettingsBilling() {
                 )}
                 Connect Stripe
               </Button>
-            ) : !connect?.chargesEnabled ? (
-              <Button onClick={() => connectOnboard.mutate()} disabled={connectOnboard.isPending}>
-                Finish Stripe setup
-              </Button>
             ) : (
-              <Button variant="outline" onClick={() => connectDashboard.mutate()} disabled={connectDashboard.isPending}>
-                View payouts in Stripe
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {!connect?.chargesEnabled ? (
+                  <Button onClick={() => connectOnboard.mutate()} disabled={connectOnboard.isPending}>
+                    Finish Stripe setup
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={() => connectDashboard.mutate()} disabled={connectDashboard.isPending}>
+                    View payouts in Stripe
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => {
+                    if (window.confirm("Disconnect Stripe? You'll stop accepting card payments and invoices will fall back to bank transfer.")) {
+                      connectDisconnect.mutate();
+                    }
+                  }}
+                  disabled={connectDisconnect.isPending}
+                >
+                  {connectDisconnect.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Disconnect
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
