@@ -31,7 +31,12 @@ dependencies {
     implementation 'androidx.core:core-ktx:1.13.1'
 }
 
-// 4) This module is Kotlin — ensure the Kotlin Android plugin is applied. The current
-//    Capacitor Android template already includes it; if not, add at the top:
+// 4) REQUIRED: the native code is Kotlin but the Capacitor Android template is Java-only,
+//    so you MUST apply the Kotlin Android plugin or the .kt files silently never compile
+//    (the build "succeeds" but the app crashes at launch with ClassNotFoundException for
+//    MainActivity). android-setup.sh does this for you; manually it's:
 //
+//    Top of android/app/build.gradle:
 //      apply plugin: 'org.jetbrains.kotlin.android'
+//    In android/build.gradle buildscript.dependencies:
+//      classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'

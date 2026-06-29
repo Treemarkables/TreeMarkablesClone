@@ -74,12 +74,25 @@ if ! grep -q "com.google.gms:google-services" "$PROJ_GRADLE"; then
 else
     echo "    google-services classpath already present"
 fi
+# Kotlin gradle plugin classpath — REQUIRED: the native code is Kotlin and the
+# Capacitor template is Java-only, so without this the .kt files silently never
+# compile (build "succeeds" but the app crashes with ClassNotFoundException).
+if ! grep -q "kotlin-gradle-plugin" "$PROJ_GRADLE"; then
+    perl -0pi -e 's/(buildscript\s*\{.*?dependencies\s*\{)/$1\n        classpath '"'"'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'"'"'/s' "$PROJ_GRADLE"
+    echo "    Added Kotlin gradle plugin classpath"
+fi
 
 # --- Step 6: Patch app build.gradle ---
 echo "[6/7] Patching app build.gradle..."
 if ! grep -q "com.google.gms.google-services" "$APP_GRADLE"; then
     printf "\napply plugin: 'com.google.gms.google-services'\n" >> "$APP_GRADLE"
     echo "    Applied google-services plugin"
+fi
+# Kotlin Android plugin — REQUIRED so the Kotlin native sources actually compile.
+# Inserted next to the application plugin so it's applied early.
+if ! grep -q "org.jetbrains.kotlin.android" "$APP_GRADLE"; then
+    perl -0pi -e "s/(apply plugin: 'com.android.application')/\$1\napply plugin: 'org.jetbrains.kotlin.android'/" "$APP_GRADLE"
+    echo "    Applied Kotlin Android plugin"
 fi
 if ! grep -q "com.twilio:voice-android" "$APP_GRADLE"; then
     cat >> "$APP_GRADLE" <<'EOF'
