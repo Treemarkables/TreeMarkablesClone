@@ -1,7 +1,7 @@
 // Inflow desktop — Electron shell.
 //
 // Like the iOS/Android Capacitor shells, this loads the live web app from
-// https://app.treemarkables.co.nz rather than bundling assets. It is essentially the
+// https://app.inflowapp.co.nz rather than bundling assets. It is essentially the
 // website in a dedicated, branded window with native menus and proper external-link
 // handling. There is NO Twilio Voice / FCM here — those are mobile-SDK features and
 // don't exist on desktop (see DESKTOP_BUILD_GUIDE.md).
@@ -11,7 +11,7 @@ const path = require("path");
 
 // MANAGED: app-shell container URL. Change via appShell.config.json +
 // `node scripts/sync-app-shell-url.mjs`, not by hand.
-const APP_URL = "https://app.treemarkables.co.nz";
+const APP_URL = "https://app.inflowapp.co.nz";
 const APP_ORIGIN = new URL(APP_URL).origin;
 
 // Single-instance: focus the existing window instead of opening a second one.
@@ -40,7 +40,11 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL(APP_URL);
+  // Open straight to the login screen. Electron is a plain browser (not Capacitor
+  // native), so loading the app root would show the public marketing home for a
+  // logged-out user. /login shows the sign-in screen; already-signed-in users are
+  // auto-forwarded to /dispatch.
+  mainWindow.loadURL(`${APP_URL}/login`);
 
   // Auto-grant the permissions the web app legitimately needs (camera/mic for
   // photos & WebRTC, notifications). Deny everything else.

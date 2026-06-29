@@ -37,7 +37,7 @@ class VoiceFirebaseMessagingService : FirebaseMessagingService() {
         private const val TAG = "InflowFCM"
         // MANAGED: app-shell container URL. Change via appShell.config.json +
         // `node scripts/sync-app-shell-url.mjs`, not by hand.
-        private const val SERVER_URL = "https://app.treemarkables.co.nz"
+        private const val SERVER_URL = "https://app.inflowapp.co.nz"
 
         // Injected at build time from android-native/secrets.properties (gitignored) via
         // BuildConfig — never hardcode the webhook secret in source/git. This mirrors the
