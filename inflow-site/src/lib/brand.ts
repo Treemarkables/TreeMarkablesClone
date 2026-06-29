@@ -3,10 +3,9 @@ export const BRAND = {
   tagline: "The operating system for trades businesses.",
   domain: "inflowapp.co.nz",
   contactEmail: "hello@inflowapp.co.nz",
-  appUrl: "https://app.treemarkables.co.nz",
-  // Direct entry to the app's login screen. Update this (and appUrl) when the
-  // app moves to app.inflowapp.co.nz.
-  loginUrl: "https://app.treemarkables.co.nz/login",
+  appUrl: "https://app.inflowapp.co.nz",
+  // Direct entry to the app's login screen.
+  loginUrl: "https://app.inflowapp.co.nz/login",
 } as const;
 
 export const NAV = [
