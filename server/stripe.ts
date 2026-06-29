@@ -382,6 +382,21 @@ export async function createConnectLoginLink(accountId: string): Promise<string>
   return link.url;
 }
 
+/**
+ * Best-effort delete of a connected Express account (the platform created it, so it may
+ * delete it). Fails if the account still holds a balance — the caller should clear the
+ * stored link regardless, so the app stops routing to it either way. Never throws.
+ */
+export async function deleteConnectAccount(accountId: string): Promise<boolean> {
+  try {
+    const stripe = await getStripe();
+    const deleted = await stripe.accounts.del(accountId);
+    return !!deleted?.deleted;
+  } catch {
+    return false; // e.g. account has a balance — leave it for the tenant to close in Stripe
+  }
+}
+
 // Verifies a Stripe webhook signature against the raw request body and
 // returns the parsed event. Throws on signature mismatch — caller should
 // 400 the response so Stripe will retry.

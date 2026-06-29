@@ -91,6 +91,7 @@ import {
   createConnectAccountLink,
   retrieveConnectAccount,
   createConnectLoginLink,
+  deleteConnectAccount,
 } from "./stripe";
 import * as billing from "./billing";
 import * as usageMeter from "./services/usageMeter";
@@ -25699,6 +25700,24 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       res.json({ success: true, url });
     } catch (e: any) {
       res.status(500).json({ success: false, message: e?.message || 'Could not open Stripe dashboard.' });
+    }
+  });
+
+  // Disconnect: stop taking card payments → fall back to bank transfer. Clears the stored
+  // link (so resolveCardPayment no longer routes to it) and best-effort deletes the empty
+  // Express account so it doesn't orphan. If the account holds a balance the delete is
+  // skipped — the tenant manages/closes it in Stripe; we still unlink either way.
+  app.post('/api/billing/connect/disconnect', requireAdmin, async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      const settings = await storage.getBusinessSettings();
+      const accountId = (settings?.stripeConnectAccountId ?? '').trim();
+      if (accountId) await deleteConnectAccount(accountId); // best-effort, never throws
+      await storage.updateBusinessSettings({ stripeConnectAccountId: '', stripeConnectChargesEnabled: false });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Could not disconnect Stripe.' });
     }
   });
 
