@@ -1891,7 +1891,7 @@ export function ProposalBuilderV2({
     const phone = (customer as { phone?: string } | null)?.phone || (job as { jobContactMobile?: string } | null)?.jobContactMobile || (job as { jobContactPhone?: string } | null)?.jobContactPhone || "";
     const name = (customer as { name?: string } | null)?.name || "Valued Customer";
     const first = name.split(" ")[0];
-    const link = draftId ? `https://app.treemarkables.co.nz/proposal/${draftId}` : "";
+    const link = draftId ? `${window.location.origin}/proposal/${draftId}` : "";
     setSmsForm({
       to: phone,
       message: link

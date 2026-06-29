@@ -39,7 +39,7 @@ These files are critical infrastructure or tooling-owned:
 ## Deployment
 
 - Production runs on Digital Ocean App Platform (app `plankton-app`, region SGP1). Every push to `main` triggers an autodeploy; for build/runtime logs check the DO dashboard.
-- Customer URL: `https://app.treemarkables.co.nz`. DNS lives at Cloudflare on grey-cloud (DNS-only) — never flip the customer-facing records to orange-cloud (proxied), it double-proxies through DO's own Cloudflare edge and breaks TLS / cache assumptions.
+- App URL: the SaaS app is moving to its own domain `https://app.inflowapp.co.nz` (Treemarkables is now a tenant, not the brand). Server links are built from the `APP_URL` env var (`server/config/appUrl.ts`), which falls back to `https://app.treemarkables.co.nz` until the env is set on DO. The legacy `app.treemarkables.co.nz` stays attached + Cloudflare 301-redirects customer-link paths (`/proposal,/invoice,/quote,/watch,/review,/customer-portal`) to the new host so already-sent links keep working. DNS lives at Cloudflare on grey-cloud (DNS-only) — never flip the app records to orange-cloud (proxied), it double-proxies through DO's own Cloudflare edge and breaks TLS / cache assumptions (the inflow apex on orange-cloud is why `app.inflowapp.co.nz` returned 525).
 - Database: Neon Postgres in `ap-southeast-2` (Sydney). Sessions via `connect-pg-simple` against the same DB.
 - Photo storage: GCS bucket `treemarkables-photos` (`australia-southeast1`). `PRIVATE_OBJECT_DIR=/treemarkables-photos/.private` — must not have a trailing space (env reads `.trim()` defensively at `photoStorage.ts` and the matching routes in `server/routes.ts`).
 - Cron + background workers: gated by `RUN_CRONS` (unset → enabled in production). Don't toggle without explicit user instruction.
@@ -69,7 +69,7 @@ These files are critical infrastructure or tooling-owned:
 | UI | No emoji in the UI |
 | Buttons | No manual `hover:bg-*` or `active:bg-*` classes — Shadcn handles this |
 | GPT calls | Do **not** pass `temperature` — GPT-5+ doesn't support it |
-| Customer URLs | Always hardcode `https://app.treemarkables.co.nz` for customer-facing links |
+| App/customer URLs | Build customer-facing app links from `APP_URL` (`server/config/appUrl.ts`) on the server, or `window.location.origin` on the client — never hardcode the host. (Exceptions that stay on treemarkables: tree-care **marketing** SEO in `client/src/pages/*` + `sitemap.xml`/`robots.txt`, and per-tenant document identity.) |
 
 ---
 
