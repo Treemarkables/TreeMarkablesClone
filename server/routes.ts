@@ -16,6 +16,7 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
+import { APP_URL } from "./config/appUrl";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { requireEntitlement } from "./tenancy/requireEntitlement";
@@ -1215,7 +1216,7 @@ async function generateProposalPDFBuffer(
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text('Acceptance', { width: pageW });
     doc.moveDown(0.4);
     if (isQuote) {
-      const acceptUrl = `https://app.treemarkables.co.nz/proposal/${proposalId}/accept?type=quote`;
+      const acceptUrl = `${APP_URL}/proposal/${proposalId}/accept?type=quote`;
       doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
         .text('To accept this quote, open the link below and tap "Accept Quote". No signature required.', 50, doc.y, { width: pageW });
       doc.moveDown(0.3);
@@ -1932,7 +1933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (plan?.stripePriceId) {
             const customerId = await getOrCreateStripeCustomer(businessId, { email, name: `${firstName} ${lastName}`.trim() });
             await billing.upsertSubscription(businessId, { stripeCustomerId: customerId, planId: plan.id, status: 'incomplete' });
-            const base = 'https://app.treemarkables.co.nz';
+            const base = APP_URL;
             const session = await createSubscriptionCheckoutSession({
               businessId, priceId: plan.stripePriceId, planKey, customerId,
               successUrl: `${base}/settings/billing?status=success`,
@@ -2312,7 +2313,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (fs.existsSync(pdfPath)) {
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'inline; filename="Treemarkables-SaaS-Onboarding-Guide.pdf"');
+        res.setHeader('Content-Disposition', 'inline; filename="Inflow-Onboarding-Guide.pdf"');
         res.sendFile(pdfPath);
       } else if (fs.existsSync(htmlPath)) {
         res.setHeader('Content-Type', 'text/html');
@@ -6199,7 +6200,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       const origin =
         process.env.NODE_ENV === 'production'
-          ? 'https://app.treemarkables.co.nz'
+          ? APP_URL
           : `${req.protocol}://${req.get('host')}`;
       const successUrl = `${origin}/payment-complete?status=success`;
       const cancelUrl = `${origin}/payment-complete?status=cancelled`;
@@ -7926,7 +7927,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // customer can click from their quote, regardless of which DO/Cloudflare
   // alias the staff session happens to be on.
   function getWatchUrl(videoId: string): string {
-    return `https://app.treemarkables.co.nz/watch/${videoId}`;
+    return `${APP_URL}/watch/${videoId}`;
   }
   function buildVideoLinkLine(videoId: string): string {
     return `Watch the on-site walkthrough: ${getWatchUrl(videoId)}`;
@@ -10232,7 +10233,7 @@ Draft the reply now.`;
 
       // Always use the production domain for customer-facing links
       // to prevent dev/preview URLs from leaking into customer emails/SMS
-      const baseUrl = `https://app.treemarkables.co.nz`;
+      const baseUrl = APP_URL;
       
       // Prepare email content
       const customerName = customer?.name || 'Valued Customer';
@@ -10490,7 +10491,7 @@ Draft the reply now.`;
       // ?type=quote hint labels it as a quote before data loads). Replies still
       // land in the job inbox via emailService's reply-to, so the
       // "I accept quote Q-*" webhook fallback keeps working.
-      const quoteAcceptUrl = `https://app.treemarkables.co.nz/proposal/${proposalId}/accept?type=quote`;
+      const quoteAcceptUrl = `${APP_URL}/proposal/${proposalId}/accept?type=quote`;
 
       const customerName = customer?.name || 'Valued Customer';
       const bodyLead = message && message.trim().length > 0
@@ -10852,8 +10853,8 @@ Draft the reply now.`;
 
         // Customer-facing link is always the app domain (CLAUDE.md), regardless of tenant.
         const onlineInvoiceUrl = invoiceDetails?.id
-          ? `https://app.treemarkables.co.nz/invoice/${invoiceDetails.id}/view`
-          : 'https://app.treemarkables.co.nz';
+          ? `${APP_URL}/invoice/${invoiceDetails.id}/view`
+          : APP_URL;
 
         const invCustomerName = job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'there';
 
@@ -12351,7 +12352,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const observedBaseUrl = `${protocol}://${host}`;
-    const expectedBaseUrl = 'https://app.treemarkables.co.nz';
+    const expectedBaseUrl = APP_URL;
 
     const expectedWebhooks = {
       answer: `${expectedBaseUrl}/api/webhooks/twilio-answer`,
@@ -13406,7 +13407,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       const origin =
         process.env.NODE_ENV === 'production'
-          ? 'https://app.treemarkables.co.nz'
+          ? APP_URL
           : `${req.protocol}://${req.get('host')}`;
       const successUrl = `${origin}/invoice/${invoice.id}/view?payment=success&session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = `${origin}/invoice/${invoice.id}/view?payment=cancelled`;
@@ -13452,7 +13453,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         invoice.jobId ? storage.getJob(invoice.jobId) : Promise.resolve(null),
       ]);
 
-      const baseUrl = `https://app.treemarkables.co.nz`;
+      const baseUrl = APP_URL;
       const customerName = customer?.name || 'Valued Customer';
       const invoiceViewUrl = `${baseUrl}/invoice/${invoiceId}/view`;
 
@@ -25521,7 +25522,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // request origin in dev/preview environments.
       const origin =
         process.env.NODE_ENV === 'production'
-          ? 'https://app.treemarkables.co.nz'
+          ? APP_URL
           : `${req.protocol}://${req.get('host')}`;
       const successUrl = `${origin}/proposal/${proposal.id}/accept?deposit=success&session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = `${origin}/proposal/${proposal.id}/accept?deposit=cancelled`;
@@ -25646,7 +25647,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         status: existing?.status ?? 'incomplete',
       });
 
-      const base = 'https://app.treemarkables.co.nz';
+      const base = APP_URL;
       const session = await createSubscriptionCheckoutSession({
         businessId,
         priceId: plan.stripePriceId,
@@ -25669,7 +25670,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     try {
       const sub = await billing.getSubscriptionByBusiness(businessId);
       if (!sub?.stripeCustomerId) return res.status(400).json({ success: false, message: 'No billing account yet — subscribe first.' });
-      const { url } = await createBillingPortalSession(sub.stripeCustomerId, 'https://app.treemarkables.co.nz/settings/billing');
+      const { url } = await createBillingPortalSession(sub.stripeCustomerId, `${APP_URL}/settings/billing`);
       res.json({ success: true, url });
     } catch (e: any) {
       res.status(500).json({ success: false, message: e?.message });
@@ -25677,8 +25678,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // ── Stripe Connect (Express) — per-tenant card payments, Phase 1: onboarding ──
-  const CONNECT_RETURN = 'https://app.treemarkables.co.nz/settings/billing?connect=done';
-  const CONNECT_REFRESH = 'https://app.treemarkables.co.nz/settings/billing?connect=refresh';
+  const CONNECT_RETURN = `${APP_URL}/settings/billing?connect=done`;
+  const CONNECT_REFRESH = `${APP_URL}/settings/billing?connect=refresh`;
 
   // Start (or resume) Stripe-hosted onboarding. Creates the tenant's Express account on
   // first call, stores the acct_… id, and returns a hosted onboarding URL to redirect to.
@@ -32984,7 +32985,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
   // Log the webhook URL and configuration status at startup so it's easy to
   // find in the server console when setting up the Resend dashboard.
   const resendEventsSecret = process.env.RESEND_EVENTS_WEBHOOK_SECRET;
-  const deployedBase = 'https://app.treemarkables.co.nz';
+  const deployedBase = APP_URL;
   console.log('');
   console.log('━━━ Resend Email Events Webhook ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  Endpoint : ${deployedBase}/api/webhooks/resend-events`);
