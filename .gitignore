@@ -7,6 +7,10 @@ vite.config.ts.*
 # Android native secrets (injected into BuildConfig — never commit)
 android-native/secrets.properties
 android/app/google-services.json
+# Android release signing — NEVER commit the keystore or its passwords
+android/keystore.properties
+android/*.jks
+android/*.keystore
 *.tar.gz
 .cache
 .local
