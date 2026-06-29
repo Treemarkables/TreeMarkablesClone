@@ -7,6 +7,11 @@
 //   STRIPE_SECRET_KEY        sk_live_... or sk_test_...
 //   STRIPE_PUBLISHABLE_KEY   pk_live_... or pk_test_... (only sent to client)
 //   STRIPE_WEBHOOK_SECRET    whsec_... — required for signature verification
+//   STRIPE_CONNECT_WEBHOOK_SECRET  whsec_... — optional; the signing secret of the SECOND
+//                            webhook endpoint that listens to "events on Connected accounts".
+//                            Needed so Connect direct-charge events (a tenant's customer paying
+//                            an invoice) verify. Each Stripe endpoint has its own secret, so we
+//                            try both. Unset = Connect payment events won't verify.
 //   STRIPE_GST_TAX_RATE_ID   txr_... — optional; a 15% tax-exclusive NZ GST rate added
 //                            to subscription checkouts (prices are GST-exclusive). Unset = no GST added.
 
@@ -401,18 +406,28 @@ export async function deleteConnectAccount(accountId: string): Promise<boolean> 
 // returns the parsed event. Throws on signature mismatch — caller should
 // 400 the response so Stripe will retry.
 export async function constructWebhookEvent(rawBody: Buffer, signature: string | undefined): Promise<any> {
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  // Two endpoints can deliver to this URL: the platform-account endpoint and (for Connect
+  // direct charges) a second endpoint that listens to Connected-account events. Each has its
+  // own signing secret, so try both — whichever verifies wins.
+  const secrets = [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_CONNECT_WEBHOOK_SECRET]
+    .map((s) => (s ?? '').trim())
+    .filter(Boolean);
+  if (secrets.length === 0) {
     throw new Error('Stripe webhook is not configured: missing STRIPE_WEBHOOK_SECRET env var');
   }
   if (!signature) {
     throw new Error('Missing Stripe signature header');
   }
   const stripe = await getStripe();
-  return stripe.webhooks.constructEvent(
-    rawBody,
-    signature,
-    process.env.STRIPE_WEBHOOK_SECRET,
-  );
+  let lastErr: any;
+  for (const secret of secrets) {
+    try {
+      return stripe.webhooks.constructEvent(rawBody, signature, secret);
+    } catch (err: any) {
+      lastErr = err;
+    }
+  }
+  throw lastErr ?? new Error('Webhook signature verification failed');
 }
 
 // Computes deposit amount (in dollars) from a proposal's deposit settings +
