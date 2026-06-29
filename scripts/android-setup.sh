@@ -97,21 +97,8 @@ else
     echo "    Native dependencies already present"
 fi
 echo "    ⚠️  Ensure android { defaultConfig { minSdkVersion 24 } } (Twilio Voice needs API 24+)."
-
-# Inject BuildConfig fields for the native-registration secret (from a gitignored
-# properties file — never hardcode the secret in source).
-if ! grep -q "INFLOW_WEBHOOK_SECRET" "$APP_GRADLE"; then
-    perl -0pi -e 's/(defaultConfig\s*\{)/$1\n            def inflowSecrets = new Properties()\n            def inflowSecretsFile = rootProject.file("..\/android-native\/secrets.properties")\n            if (inflowSecretsFile.exists()) { inflowSecrets.load(new FileInputStream(inflowSecretsFile)) }\n            buildConfigField "String", "INFLOW_WEBHOOK_SECRET", "\\"${inflowSecrets.getProperty('"'"'INFLOW_WEBHOOK_SECRET'"'"', '"'"''"'"')}\\""\n            buildConfigField "String", "INFLOW_OWNER_EMPLOYEE_ID", "\\"${inflowSecrets.getProperty('"'"'INFLOW_OWNER_EMPLOYEE_ID'"'"', '"'"''"'"')}\\""/s' "$APP_GRADLE"
-    echo "    Injected INFLOW_WEBHOOK_SECRET / INFLOW_OWNER_EMPLOYEE_ID BuildConfig fields"
-fi
-if ! grep -q "buildConfig true" "$APP_GRADLE"; then
-    perl -0pi -e 's/(android\s*\{)/$1\n        buildFeatures { buildConfig true }/s' "$APP_GRADLE"
-    echo "    Enabled buildFeatures.buildConfig"
-fi
-if [ ! -f "$NATIVE_DIR/secrets.properties" ]; then
-    echo "    ⚠️  android-native/secrets.properties MISSING — native FCM registration will"
-    echo "       be skipped. Copy secrets.properties.example → secrets.properties and fill it in."
-fi
+# Note: FCM tokens register per-user via the webview/session path (the web app POSTs the
+# token with the signed-in employee's cookie) — no build-time secret or owner id needed.
 
 # --- Step 7: Patch AndroidManifest.xml ---
 echo "[7/7] Patching AndroidManifest.xml..."

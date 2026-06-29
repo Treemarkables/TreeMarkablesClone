@@ -1,12 +1,9 @@
 package co.nz.inflowapp.voice
 
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.telecom.TelecomManager
 import android.util.Log
-import androidx.core.content.ContextCompat
-import co.nz.inflowapp.BuildConfig
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.twilio.voice.CallException
@@ -15,17 +12,17 @@ import com.twilio.voice.CancelledCallInvite
 import com.twilio.voice.MessageListener
 import com.twilio.voice.Voice
 import org.json.JSONObject
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * Single FCM entry point for the app. Mirrors the iOS `AppDelegate+Firebase.swift`
  * (regular push token registration) AND the iOS PushKit handler (Twilio call invites) —
  * on Android both arrive through the one FCM channel.
  *
- * - [onNewToken]: register the FCM token with the server (native, webhook-secret authed,
- *   no session required) — identical contract to iOS NativeTokenRegistration.
+ * - [onNewToken]: stash the token and bridge it into the webview. The web app POSTs it
+ *   to /api/notifications/register-token with the signed-in employee's SESSION cookie, so
+ *   it registers per-user (multi-staff safe) — same as iOS. (We must NOT POST natively with
+ *   a hardcoded owner id: that registered every device as the owner so staff never got
+ *   their own pushes — the bug iOS already removed.)
  * - [onMessageReceived]: hand the payload to [Voice.handleMessage]. If it is a Twilio
  *   call invite, present it via the Telecom framework ([VoiceConnectionService]); if not,
  *   it is a normal data notification (regular notification+data messages are auto-shown
@@ -35,16 +32,6 @@ class VoiceFirebaseMessagingService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "InflowFCM"
-        // MANAGED: app-shell container URL. Change via appShell.config.json +
-        // `node scripts/sync-app-shell-url.mjs`, not by hand.
-        private const val SERVER_URL = "https://app.inflowapp.co.nz"
-
-        // Injected at build time from android-native/secrets.properties (gitignored) via
-        // BuildConfig — never hardcode the webhook secret in source/git. This mirrors the
-        // iOS native registration path (AppDelegate+Firebase.swift) but keeps the secret
-        // out of the repo. See ANDROID_BUILD_GUIDE.md → "Native registration secret".
-        private val WEBHOOK_SECRET = BuildConfig.INFLOW_WEBHOOK_SECRET
-        private val OWNER_EMPLOYEE_ID = BuildConfig.INFLOW_OWNER_EMPLOYEE_ID
 
         /** Last FCM token seen — injected into the webview by MainActivity on resume. */
         @Volatile var lastToken: String? = null
@@ -53,10 +40,10 @@ class VoiceFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         Log.d(TAG, "FCM token: ${token.take(20)}…")
+        // Per-user registration: stash the token so MainActivity bridges it into the webview
+        // on resume; the web app then POSTs it to /api/notifications/register-token with the
+        // logged-in employee's session cookie. No native POST + no hardcoded owner id.
         lastToken = token
-        registerTokenWithServer(token)
-        // Best-effort: if the webview is alive, surface it for the session-based path too.
-        VoiceCallState.emit("nativeFcmToken", JSONObject().put("token", token))
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
@@ -137,43 +124,5 @@ class VoiceFirebaseMessagingService : FirebaseMessagingService() {
         IncomingCallNotifier.cancel(this)
         VoiceCallState.clear()
         VoiceCallState.emit(VoiceConstants.EVENT_CALL_CANCELLED)
-    }
-
-    // ── Native server registration (mirrors iOS NativeTokenRegistration) ───────
-
-    private fun registerTokenWithServer(token: String) {
-        if (WEBHOOK_SECRET.isBlank() || OWNER_EMPLOYEE_ID.isBlank()) {
-            Log.w(TAG, "INFLOW_WEBHOOK_SECRET / OWNER_EMPLOYEE_ID not set — skipping native FCM registration")
-            return
-        }
-        Thread {
-            try {
-                val url = URL("$SERVER_URL/api/notifications/register-native-fcm-token")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    connectTimeout = 15000
-                    readTimeout = 15000
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("x-webhook-secret", WEBHOOK_SECRET)
-                }
-                val body = JSONObject()
-                    .put("token", token)
-                    .put("employeeId", OWNER_EMPLOYEE_ID)
-                    .put("deviceInfo", "Android Native (${Build.VERSION.RELEASE})")
-                    .toString()
-                OutputStreamWriter(conn.outputStream).use { it.write(body) }
-
-                val code = conn.responseCode
-                if (code == 200) {
-                    Log.d(TAG, "FCM token registered with server")
-                } else {
-                    Log.w(TAG, "FCM registration failed HTTP $code")
-                }
-                conn.disconnect()
-            } catch (e: Exception) {
-                Log.w(TAG, "FCM registration error: ${e.message}")
-            }
-        }.start()
     }
 }

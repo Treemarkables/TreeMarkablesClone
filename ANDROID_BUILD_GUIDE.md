@@ -105,25 +105,11 @@ The Android app reuses the **same Firebase project** as iOS.
 
 No server change is needed for normal push — the server already sends Android-targeted
 FCM messages (`android.priority: 'high'`, notification+data) via Firebase Admin
-(`server/services/firebaseMessagingService.ts`). The Android device registers its FCM
-token through the same endpoint iOS uses: `POST /api/notifications/register-native-fcm-token`
-(authenticated by `x-webhook-secret`), implemented in `VoiceFirebaseMessagingService`.
-
-### Native registration secret (keep it out of git)
-
-The webhook secret for that endpoint is **not** hardcoded in the Kotlin (unlike the older
-iOS file). It is injected into `BuildConfig` at build time from a gitignored file:
-
-```bash
-cp android-native/secrets.properties.example android-native/secrets.properties
-# then edit android-native/secrets.properties:
-#   INFLOW_WEBHOOK_SECRET=<value of HERO_WEBHOOK_SECRET>
-#   INFLOW_OWNER_EMPLOYEE_ID=<the owner's employee UUID>
-```
-
-`android-native/secrets.properties` is gitignored. If it's missing/empty, native FCM
-registration is skipped (logged), and push won't bind for the owner. `scripts/android-setup.sh`
-wires the `buildConfigField` lines into `android/app/build.gradle` automatically.
+(`server/services/firebaseMessagingService.ts`). FCM tokens register **per-user**: the
+native layer (`VoiceFirebaseMessagingService` + `MainActivity`) bridges the token into the
+webview, and the web app POSTs it to `/api/notifications/register-token` with the signed-in
+employee's session cookie — same as iOS. No build-time secret or owner id is needed (the
+old hardcoded-owner native POST is gone; it registered every device as the owner).
 
 ---
 
