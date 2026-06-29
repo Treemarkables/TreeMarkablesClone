@@ -10,4 +10,7 @@
 // NOTE: this is the *app* container URL, distinct from per-tenant customer document
 // identity (which stays per-business) and from the tree-care marketing SEO URLs (which
 // stay on treemarkables this phase).
-export const APP_URL = (process.env.APP_URL || "https://app.treemarkables.co.nz").replace(/\/$/, "");
+// `.trim()` is defensive: env values frequently pick up a trailing newline/space
+// (same gotcha as PRIVATE_OBJECT_DIR) — without it the URL would contain a literal
+// "\n" (%0A) and break every generated link + redirect.
+export const APP_URL = (process.env.APP_URL || "https://app.treemarkables.co.nz").trim().replace(/\/$/, "");
