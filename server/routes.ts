@@ -916,6 +916,50 @@ async function requirePlatformAdmin(req: Request, res: Response, next: express.N
   }
 }
 
+// Dunning: when a subscriber's billing slips into a payment-problem state, the in-app
+// BillingBanner already warns them — but only once they open the app. This adds an
+// off-app nudge: a high-priority bell entry + an email to the business's own address,
+// so they fix their card before the grace period lapses and resolveEntitlements drops
+// them to freemium. Called only on the TRANSITION into a problem status (see the webhook),
+// so retries/resyncs don't re-spam. Runs from the Stripe webhook (owner connection, no
+// request tenant): the bell write is scoped via runWithBusiness so RLS stamps the owning
+// business; the email is a platform→tenant message (from "Inflow"), sent outside that
+// scope. Never throws — dunning is best-effort and must not 500 the webhook.
+async function notifyBillingProblem(businessId: string, status: string): Promise<void> {
+  const billingUrl = `${APP_URL}/settings/billing`;
+  const human = status.replace(/_/g, ' ');
+  try {
+    await runWithBusiness(businessId, async () => {
+      await storage.createNotification({
+        title: 'Payment problem — update your card',
+        message: "Your subscription payment didn't go through. Update your payment method to keep your plan.",
+        type: 'billing_problem',
+        priority: 'high',
+        isRead: false,
+        actionUrl: '/settings/billing',
+      });
+    });
+  } catch (e) {
+    console.error('[dunning] bell notification failed:', (e as Error).message);
+  }
+  try {
+    const settings = await storage.getBusinessSettingsForBusiness(businessId);
+    const to = (settings?.businessEmail || '').trim();
+    if (to) {
+      await emailService.sendEmail({
+        to,
+        fromName: 'Inflow',
+        subject: 'Action needed: update your payment method',
+        text: `Hi,\n\nYour latest subscription payment didn't go through, so your account is now ${human}. Update your payment method to avoid losing access:\n\n${billingUrl}\n\nAlready updated it? You can ignore this message.\n\nThanks,\nInflow`,
+        html: `<p>Hi,</p><p>Your latest subscription payment didn't go through, so your account is now <strong>${human}</strong>. Update your payment method to avoid losing access.</p><p><a href="${billingUrl}">Update payment method</a></p><p>Already updated it? You can ignore this message.</p><p>Thanks,<br>Inflow</p>`,
+      });
+      console.log(`[dunning] emailed ${businessId} (${status}) -> ${to}`);
+    }
+  } catch (e) {
+    console.error('[dunning] email failed:', (e as Error).message);
+  }
+}
+
 // Shared builder for the onboarding setup checklist (used by the per-tenant
 // /api/onboarding/checklist and the concierge subscriber views). Aggregates the
 // bring-your-own setup fields for ONE business into a progress list. Reads via
@@ -25830,6 +25874,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           // store the CURRENT status regardless of event order (the Stripe-
           // recommended pattern). subscription.deleted → the fetch returns
           // status=canceled. Fall back to the event snapshot if the fetch fails.
+          // Capture the status we had BEFORE this sync, so dunning fires only on the
+          // transition into a payment problem — not on every resync/retry of the same state.
+          const prevStatus = (await storage.getSubscriptionForBusiness(businessId).catch(() => undefined))?.status;
           let fresh = sub;
           try {
             fresh = await retrieveStripeSubscription(sub.id);
@@ -25838,6 +25885,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           }
           await billing.syncFromStripeSubscription(businessId, fresh);
           console.log(`Stripe webhook: synced subscription ${sub.id} for business ${businessId} -> ${fresh.status}`);
+          // Dunning: payment slipped into a problem state — nudge the owner off-app (bell +
+          // email) to fix their card. Only on the transition, so retries don't re-spam.
+          const PAYMENT_PROBLEM = new Set(['past_due', 'unpaid', 'incomplete_expired']);
+          if (PAYMENT_PROBLEM.has(fresh.status) && fresh.status !== prevStatus) {
+            await notifyBillingProblem(businessId, fresh.status);
+          }
         }
         return res.json({ received: true });
       }
