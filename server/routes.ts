@@ -11315,8 +11315,19 @@ Draft the reply now.`;
       const normalizedFrom = normalizePhone(From);
       console.log(`📱 Normalized incoming phone: ${From} -> ${normalizedFrom}`);
       
-      // Find customer by phone number
-      const customers = await storage.getAllCustomers();
+      // Resolve which tenant owns the number that RECEIVED this SMS (To). Without it
+      // the lookup below scans EVERY tenant's customers and would attach an inbound SMS
+      // to another business's job whenever two tenants have a customer sharing a phone
+      // number. Unmapped number → undefined → unchanged single-tenant behaviour.
+      // Mirrors the twilio-voice webhook + smsReplyPoller tenant scoping.
+      const inboundBizId = await resolveBusinessIdByChannel('phone', String(To || ''));
+      if (inboundBizId) console.log(`🏢 Inbound SMS line ${To} resolved to business ${inboundBizId}`);
+
+      // Find customer by phone number — scoped to the receiving tenant when known.
+      const allCustomers = await storage.getAllCustomers();
+      const customers = inboundBizId
+        ? allCustomers.filter(c => c.businessId === inboundBizId)
+        : allCustomers;
       const customer = customers.find(c => {
         if (!c.phone) return false;
         const normalizedCustomerPhone = normalizePhone(c.phone);
@@ -11330,7 +11341,12 @@ Draft the reply now.`;
         // Get most recent job for this customer
         const jobs = await storage.getJobsByCustomer(customer.id);
         const recentJob = jobs[0]; // Most recent job
-        
+
+        // Stamp every write below (diary, job/customer updates, notifications) to the
+        // resolved tenant. runWithBusiness doesn't scope READS (the customer match above
+        // is already tenant-filtered) — it pins the write-path businessId so these rows
+        // land under the right tenant instead of the column default (Treemarkables).
+        await runWithBusiness(inboundBizId ?? customer.businessId ?? undefined, async () => {
         // Log to job diary if job exists
         if (recentJob) {
           console.log(`📝 Logging to job #${recentJob.jobNumber} diary...`);
@@ -11477,6 +11493,7 @@ Draft the reply now.`;
         } else {
           console.log(`⚠️ No jobs found for customer ${customer.name}`);
         }
+        }); // runWithBusiness(inboundBizId)
       } else {
         console.warn(`📱 Received SMS from unknown number: ${From}`);
       }
