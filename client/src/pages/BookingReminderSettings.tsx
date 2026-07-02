@@ -71,12 +71,16 @@ export default function BookingReminderSettings() {
     queryKey: ["/api/business-settings"],
   });
 
+  // These endpoints return an envelope ({ success, data: [...] }) but the same
+  // query keys are cached as bare arrays by other pages — coerce both shapes.
   const { data: emailTemplates } = useQuery<EmailTemplate[]>({
     queryKey: ["/api/email-templates"],
+    select: (r: any) => (Array.isArray(r) ? r : r?.data ?? []),
   });
 
   const { data: smsTemplates } = useQuery<SmsTemplate[]>({
     queryKey: ["/api/sms-templates"],
+    select: (r: any) => (Array.isArray(r) ? r : r?.data ?? []),
   });
 
   useEffect(() => {

@@ -6747,7 +6747,7 @@ class DatabaseStorage implements IStorage {
       id: schema.jobs.id,
       jobNumber: schema.jobs.jobNumber,
       customerId: schema.jobs.customerId,
-      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerName: sql<string>`COALESCE(${schema.customers.name}, '')`,
       customerEmail: schema.customers.email,
       customerPhone: schema.customers.phone,
       address: schema.jobs.address,
@@ -6842,7 +6842,7 @@ class DatabaseStorage implements IStorage {
       internalStatus: schema.reviewSubmissions.internalStatus,
       submittedAt: schema.reviewSubmissions.submittedAt,
       jobNumber: schema.jobs.jobNumber,
-      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerName: sql<string>`COALESCE(${schema.customers.name}, '')`,
       jobAddress: schema.jobs.address
     })
       .from(schema.reviewSubmissions)
