@@ -4,7 +4,7 @@ import { Webhook as SvixWebhook } from 'svix';
 import { addClient, removeClient, broadcast } from "./sseManager";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
-import { randomUUID, randomBytes, createHash } from 'crypto';
+import { randomUUID, randomBytes, createHash, createHmac, timingSafeEqual } from 'crypto';
 import { z } from "zod";
 import { fromZonedTime } from 'date-fns-tz';
 
@@ -198,7 +198,18 @@ const imageUpload = multer({
     files: 100 // Maximum 100 files at once
   },
   fileFilter: (req, file, cb) => {
-    // Accept all file types - no restrictions
+    // Accept images/PDFs/documents/audio/video, but reject script-capable types
+    // (defence-in-depth against stored XSS; the serve layer also neutralises
+    // these). HTML/SVG/XML/JS have no legitimate use as a job photo/document.
+    const mt = (file.mimetype || '').toLowerCase();
+    const blocked = [
+      'text/html', 'application/xhtml+xml', 'image/svg+xml',
+      'application/xml', 'text/xml', 'text/javascript', 'application/javascript',
+    ];
+    if (blocked.some((t) => mt.startsWith(t))) {
+      cb(new Error('Unsupported file type'));
+      return;
+    }
     cb(null, true);
   }
 });
@@ -641,8 +652,14 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
 function validateTwilioSignature(req: Request): boolean {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!authToken) {
-    console.warn('⚠️ TWILIO_AUTH_TOKEN not set - skipping signature validation');
-    return true; // Allow in development if not configured
+    // Fail CLOSED in production — an unset token must never mean "accept any
+    // forged callback". Only allow the skip in non-production for local dev.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ TWILIO_AUTH_TOKEN not set in production - rejecting webhook');
+      return false;
+    }
+    console.warn('⚠️ TWILIO_AUTH_TOKEN not set - skipping signature validation (dev only)');
+    return true;
   }
 
   const signature = req.headers['x-twilio-signature'] as string;
@@ -669,6 +686,35 @@ function validateTwilioSignature(req: Request): boolean {
   }
 
   return validator;
+}
+
+// Verify Meta/Facebook's X-Hub-Signature-256 header: HMAC-SHA256 of the RAW
+// request body keyed with the app secret. Fails closed when FACEBOOK_APP_SECRET
+// is unset (Facebook inbound is otherwise dropped, so rejecting is correct).
+function verifyFacebookSignature(req: Request): boolean {
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
+  if (!appSecret) {
+    console.warn('⚠️ FACEBOOK_APP_SECRET not set - rejecting Messenger webhook');
+    return false;
+  }
+  const header = (req.headers['x-hub-signature-256'] || req.headers['x-hub-signature']) as string | undefined;
+  if (!header || !header.startsWith('sha256=')) {
+    console.error('❌ Missing/invalid X-Hub-Signature-256 header');
+    return false;
+  }
+  const rawBody = (req as any).rawBody as Buffer | undefined;
+  if (!rawBody) {
+    console.error('❌ Raw body unavailable for Facebook signature check');
+    return false;
+  }
+  const expected = 'sha256=' + createHmac('sha256', appSecret).update(rawBody).digest('hex');
+  try {
+    const a = Buffer.from(header);
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
 
 // ========================================
@@ -11695,7 +11741,13 @@ Draft the reply now.`;
           // Indexed/DB-side lookup rather than loading the entire customer
           // table on every inbound call — keeps the answer webhook fast so
           // the caller reaches the greeting sooner (less pre-answer ringback).
-          const match = await storage.findCustomerByPhoneLast8(key);
+          // Owner-context path: scope the lookup to the tenant that owns the
+          // dialled line, so a last-8 collision can't surface another tenant's
+          // customer NAME on the caller ID. Unmapped line → undefined → prior
+          // single-tenant behaviour. findCustomerByPhoneLast8 self-scopes to
+          // the ambient businessId set here.
+          const inboundBizId = await resolveBusinessIdByChannel('phone', inboundTo);
+          const match = await runWithBusiness(inboundBizId, () => storage.findCustomerByPhoneLast8(key));
           if (match?.name) callerName = String(match.name);
         }
       } catch (lookupErr) {
@@ -12778,7 +12830,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
       
       const updateData = validationResult.data;
-      
+      // Never let an update move the invoice to another tenant. (Marking paid /
+      // setting paidAt stays allowed — it's the legitimate manual-payment flow.)
+      delete (updateData as any).businessId;
+
       const invoice = await storage.getInvoice(id);
       if (!invoice) {
         return res.status(404).json({ success: false, message: 'Invoice not found' });
@@ -13047,7 +13102,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       const customer = invoice.customerId ? await storage.getCustomer(invoice.customerId) : null;
-      const settings = await storage.getBusinessSettings().catch(() => null);
+      // Owner-context (public) path — scope settings to the invoice's tenant so
+      // the Stripe page shows the right business name (unscoped getBusinessSettings()
+      // returns an arbitrary tenant's row across all businesses).
+      const settings = invoice.businessId
+        ? await storage.getBusinessSettingsForBusiness(invoice.businessId).catch(() => null)
+        : await storage.getBusinessSettings().catch(() => null);
 
       const origin =
         process.env.NODE_ENV === 'production'
@@ -16461,28 +16521,37 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Create new employee
-  app.post('/api/employees', async (req: Request, res: Response) => {
+  // Create new employee (admin only — creates staff incl. role/permissions)
+  app.post('/api/employees', requireAdmin, async (req: Request, res: Response) => {
     try {
       // Convert hourlyRate to string if it's a number
       const bodyData = { ...req.body };
       if (typeof bodyData.hourlyRate === 'number') {
         bodyData.hourlyRate = bodyData.hourlyRate.toString();
       }
-      
+
+      // Never trust a client-supplied businessId — withTenant() stamps the
+      // session's tenant on create. Strip defensively.
+      delete bodyData.businessId;
+
       // Convert empty strings to undefined for all fields
       Object.keys(bodyData).forEach(key => {
         if (bodyData[key] === '' || bodyData[key] === 'dd/mm/yyyy') {
           bodyData[key] = undefined;
         }
       });
-      
+
       // Convert hireDate if it's a string (and not empty/undefined)
       if (bodyData.hireDate && typeof bodyData.hireDate === 'string') {
         bodyData.hireDate = new Date(bodyData.hireDate);
       }
-      
+
       const validatedData = insertEmployeeSchema.parse(bodyData);
+      // Never store a plaintext password — hash if one was supplied. (The
+      // dedicated PATCH /:id/password route is the normal path.)
+      if (validatedData.password) {
+        validatedData.password = await bcrypt.hash(validatedData.password, 10);
+      }
       const employee = await storage.createEmployee(validatedData);
       res.json({
         success: true,
@@ -16498,30 +16567,60 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Update employee
+  // Update employee. Admins may edit anyone in their tenant; a non-admin may
+  // edit ONLY their own record and may NOT change privileged fields (role,
+  // permissions, active-state, tenant, password). Prevents crew->admin
+  // self-escalation and cross-tenant record moves via mass assignment.
   app.put('/api/employees/:id', async (req: Request, res: Response) => {
     try {
+      const callerId = req.session.employeeId;
+      if (!callerId) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      const caller = await storage.getEmployee(callerId);
+      if (!caller) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      const isAdmin = caller.role === 'admin';
+      if (!isAdmin && req.params.id !== callerId) {
+        return res.status(403).json({ success: false, message: 'You can only edit your own profile' });
+      }
+
       const validatedData = updateEmployeeSchema.parse(req.body);
-      
+
       // Convert all timestamp fields from strings to Date objects
       const dataToUpdate: any = { ...validatedData };
-      
+
+      // Never accept a client businessId (would move the record cross-tenant),
+      // and never take a password here (use PATCH /:id/password, which hashes).
+      delete dataToUpdate.businessId;
+      delete dataToUpdate.password;
+
+      // Privileged fields are admin-only. A non-admin editing their own profile
+      // cannot promote themselves or flip their active/tenant state.
+      if (!isAdmin) {
+        delete dataToUpdate.role;
+        delete dataToUpdate.roleTierId;
+        delete dataToUpdate.permissionOverrides;
+        delete dataToUpdate.isActive;
+      }
+
       // Convert empty strings to undefined for all fields
       Object.keys(dataToUpdate).forEach(key => {
         if (dataToUpdate[key] === '') {
           dataToUpdate[key] = undefined;
         }
       });
-      
+
       // Convert hireDate if it's a string (and not empty)
       if (dataToUpdate.hireDate && typeof dataToUpdate.hireDate === 'string') {
         dataToUpdate.hireDate = new Date(dataToUpdate.hireDate);
       }
-      
+
       // Remove auto-managed timestamp fields - they should not be updated manually
       delete dataToUpdate.createdAt;
       delete dataToUpdate.updatedAt;
-      
+
       const employee = await storage.updateEmployee(req.params.id, dataToUpdate);
       res.json({
         success: true,
@@ -16537,8 +16636,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Delete employee
-  app.delete('/api/employees/:id', async (req: Request, res: Response) => {
+  // Delete employee (admin only)
+  app.delete('/api/employees/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
       await storage.deleteEmployee(req.params.id);
       res.json({
@@ -16554,11 +16653,25 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Set employee password
+  // Set employee password. A user may set their own; an admin may set anyone's
+  // in the tenant. Prevents any authenticated user resetting a colleague's
+  // (incl. the admin's) password.
   app.patch('/api/employees/:id/password', async (req: Request, res: Response) => {
     try {
+      const callerId = req.session.employeeId;
+      if (!callerId) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      const caller = await storage.getEmployee(callerId);
+      if (!caller) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      if (caller.role !== 'admin' && req.params.id !== callerId) {
+        return res.status(403).json({ success: false, message: 'You can only change your own password' });
+      }
+
       const { password } = req.body;
-      
+
       // Validate password
       const passwordSchema = z.object({
         password: z.string().min(8, 'Password must be at least 8 characters')
@@ -16828,7 +16941,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Emergency password reset (for recovery purposes)
-  app.post('/api/employees/emergency-password-reset', async (req: Request, res: Response) => {
+  app.post('/api/employees/emergency-password-reset', requireAdmin, async (req: Request, res: Response) => {
     try {
       const { email, newPassword } = req.body;
       
@@ -16871,7 +16984,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Admin-only: Clean up duplicate employee emails (prioritize admin role)
-  app.post('/api/employees/cleanup-duplicates', async (req: Request, res: Response) => {
+  app.post('/api/employees/cleanup-duplicates', requireAdmin, async (req: Request, res: Response) => {
     try {
       // Get all employees
       const allEmployees = await storage.getAllEmployees();
@@ -18668,7 +18781,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Update business settings
-  app.put('/api/business-settings', async (req: Request, res: Response) => {
+  app.put('/api/business-settings', requireAdmin, async (req: Request, res: Response) => {
     try {
       // Pre-process values to match Zod schema expectations before validation
       const rawBody = { ...req.body };
@@ -18739,7 +18852,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Reset business settings to defaults
-  app.post('/api/business-settings/reset', async (req: Request, res: Response) => {
+  app.post('/api/business-settings/reset', requireAdmin, async (req: Request, res: Response) => {
     try {
       const settings = await storage.resetBusinessSettings();
       
@@ -21055,24 +21168,38 @@ Transcription: ${transcriptText}`;
       if (isResendWebhook) {
         console.log(`📧 Resend webhook received: ${req.body.type}`);
         
-        // Verify Resend webhook signature (Svix) if secret is configured
-        const signature = req.headers['svix-signature'] as string;
+        // Verify the Resend/Svix signature. Inbound email drives lead creation,
+        // conversation threading and the "I accept quote Q-*" reply flow, so an
+        // unverified payload lets an attacker forge inbound customer emails.
+        // Verify with the Svix SDK (same as /api/webhooks/resend-events).
         const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
-        
         if (webhookSecret) {
-          if (!signature) {
-            console.error(`🔐 Missing webhook signature - rejecting unauthenticated request`);
-            return res.status(401).json({ 
-              success: false, 
-              message: 'Missing webhook signature' 
-            });
+          const svixId        = req.headers['svix-id'] as string;
+          const svixTimestamp = req.headers['svix-timestamp'] as string;
+          const svixSignature = req.headers['svix-signature'] as string;
+          if (!svixId || !svixTimestamp || !svixSignature) {
+            console.error(`🔐 Inbound email webhook: missing Svix headers — rejecting`);
+            return res.status(401).json({ success: false, message: 'Missing webhook signature headers' });
           }
-          
-          // TODO: Implement Svix signature verification using svix SDK
-          // For now, require the signature header to be present
-          console.log(`🔐 Webhook signature present (verification pending Svix SDK integration)`);
+          try {
+            const wh = new SvixWebhook(webhookSecret);
+            const rawBody = (req as any).rawBody as Buffer | undefined;
+            const payloadStr = rawBody ? rawBody.toString('utf-8') : JSON.stringify(req.body);
+            wh.verify(payloadStr, {
+              'svix-id':        svixId,
+              'svix-timestamp': svixTimestamp,
+              'svix-signature': svixSignature,
+            });
+          } catch (verifyErr) {
+            console.error(`🔐 Inbound email webhook: invalid Svix signature — rejecting`);
+            return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
+          }
+        } else if (process.env.NODE_ENV === 'production') {
+          // Fail closed in production rather than process an unverified payload.
+          console.error(`⚠️ RESEND_WEBHOOK_SECRET not set in production — rejecting inbound email webhook`);
+          return res.status(401).json({ success: false, message: 'Webhook verification not configured' });
         } else {
-          console.warn(`⚠️ RESEND_WEBHOOK_SECRET not set - webhook signatures not verified (security risk)`);
+          console.warn(`⚠️ RESEND_WEBHOOK_SECRET not set - inbound email signature not verified (dev only)`);
         }
         
         // Extract email metadata from Resend webhook
@@ -22072,6 +22199,10 @@ Transcription: ${transcriptText}`;
       console.log('💬 Facebook Messenger inbound disabled — acked and skipped');
       res.sendStatus(200);
       return;
+    }
+    // When re-enabled, still require a valid Meta signature before processing.
+    if (!verifyFacebookSignature(req)) {
+      return res.status(403).json({ error: 'Invalid webhook signature' });
     }
     try {
       const { entry } = req.body;
@@ -26596,7 +26727,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // POST /api/admin/clear-data - Clear all jobs and customers (for fresh imports)
-  app.post('/api/admin/clear-data', async (req: Request, res: Response) => {
+  app.post('/api/admin/clear-data', requirePlatformAdmin, async (req: Request, res: Response) => {
     try {
       // Delete all jobs first (due to foreign key constraints)
       const deletedJobs = await storage.clearAllJobs();
@@ -29843,7 +29974,7 @@ Transcription: ${transcriptText}`;
   // ========================================
 
   // One-time sync: Update all jobs' totalAmount from their invoices
-  app.post("/api/admin/sync-invoice-amounts", async (req, res) => {
+  app.post("/api/admin/sync-invoice-amounts", requirePlatformAdmin, async (req, res) => {
     try {
       console.log('🔄 Starting invoice-to-job amount sync...');
       
@@ -30344,6 +30475,14 @@ Transcription: ${transcriptText}`;
 
   // POST: Facebook sends message events here (both paths — /facebook/messenger is canonical, /messenger is alias)
   app.post(['/api/webhooks/facebook/messenger', '/api/webhooks/messenger'], async (req: Request, res: Response) => {
+    // Verify Meta's X-Hub-Signature-256 (HMAC-SHA256 of the raw body with the
+    // app secret) BEFORE doing anything. Without this, anyone can forge a
+    // payload to inject leads, burn a GPT call per request, and trigger an
+    // outbound Graph API reply. Fail closed when the secret is unset.
+    if (!verifyFacebookSignature(req)) {
+      return res.status(403).json({ error: 'Invalid webhook signature' });
+    }
+
     // Acknowledge immediately so Facebook doesn't retry
     res.sendStatus(200);
 
