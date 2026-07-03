@@ -689,15 +689,41 @@ export default function ConversationDetail() {
             </p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="flex-shrink-0 mt-1"
-          onClick={() => setShowManageMenu(true)}
-          data-testid="button-more"
-        >
-          <MoreVertical className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-1.5 flex-shrink-0 mt-1">
+          {conversation.status !== "converted" &&
+            !conversation.conversionDate && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  const extracted = extractContactDetails();
+                  setLeadForm({
+                    name: extracted.name || conversation?.title || "New Lead",
+                    email: extracted.email || "",
+                    phone: extracted.phone || "",
+                    address: extracted.address || "",
+                    serviceRequested: extracted.description || "",
+                    urgency: "medium",
+                    status: "new_lead",
+                    notes: `Lead from conversation: ${conversation?.title || ""}`,
+                  });
+                  setShowCreateJob(true);
+                }}
+                data-testid="button-create-job-header"
+              >
+                <Briefcase className="h-4 w-4 mr-1.5" />
+                <span className="hidden sm:inline">Create job card</span>
+                <span className="sm:hidden">Job card</span>
+              </Button>
+            )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowManageMenu(true)}
+            data-testid="button-more"
+          >
+            <MoreVertical className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       {/* Linked jobs banner — shown when the sender's email matches a job contact */}
