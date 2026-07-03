@@ -10930,6 +10930,13 @@ The Treemarkables Team`;
             setCreatedJobId(newJobId);
           }}
           actions={sharedActions}
+          // Diary doc-click handlers — without these the diary's "View
+          // Invoice" / "View Quote" buttons fall back to a toast instead of
+          // opening the modal. Desktop has always passed them; mobile lost
+          // them in the JobCardMobile split.
+          onQuoteClick={handleDiaryQuoteClick}
+          onInvoiceClick={handleDiaryInvoiceClick}
+          onProposalClick={handleDiaryProposalClick}
           // queueJob: handled internally by JobCardMobile (opens its own
           // queue-reason dialog and PUTs inQueue/queueReason directly).
           // GlobalJobCard doesn't need to wire it. Desktop defers Queue
