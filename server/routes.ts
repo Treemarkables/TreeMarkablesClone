@@ -3003,10 +3003,29 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
   });
 
 
+  // Public captcha config — tells the marketing-site forms whether to render the
+  // Cloudflare Turnstile widget. Enabled by setting BOTH TURNSTILE_SITE_KEY and
+  // TURNSTILE_SECRET_KEY (via the DO dashboard); unset = widget hidden and no
+  // server-side check, so the forms keep working with zero config.
+  app.get('/api/captcha/config', (_req: Request, res: Response) => {
+    const siteKey = process.env.TURNSTILE_SITE_KEY?.trim();
+    const secretKey = process.env.TURNSTILE_SECRET_KEY?.trim();
+    if (siteKey && secretKey) {
+      res.json({ provider: 'turnstile', siteKey });
+    } else {
+      res.json({ provider: null });
+    }
+  });
+
+  // Per-IP rate limit for the public contact form (in-memory, resets on deploy).
+  const contactFormRateLimit = new Map<string, { count: number; resetTime: number }>();
+  const CONTACT_FORM_MAX_PER_WINDOW = 5;
+  const CONTACT_FORM_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
   // Contact form submission endpoint
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
-      const { name, email, phone, hearAbout, message, captchaToken, leadSource } = req.body;
+      const { name, email, phone, hearAbout, message, captchaToken, leadSource, website } = req.body;
 
       // Validate contact form data
       const contactValidation = contactFormSchema.safeParse({
@@ -3034,6 +3053,70 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       // Capture server-side data
       const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
       const userAgent = req.get('User-Agent') || 'unknown';
+
+      // Honeypot: hidden "website" field real users never see. Bots that fill it
+      // get a fake success (so they don't learn to adapt) and nothing is created.
+      if (typeof website === 'string' && website.trim() !== '') {
+        console.log(`[contact-spam] Honeypot tripped by ${clientIp}`);
+        return res.json({
+          success: true,
+          message: 'Thank you! We will contact you within 24 hours for your free quote.'
+        });
+      }
+
+      // Per-IP rate limit — a real customer never needs more than a few
+      // submissions; a spam blast from one IP gets cut off.
+      const rlNow = Date.now();
+      const rlEntry = contactFormRateLimit.get(clientIp);
+      if (rlEntry && rlNow < rlEntry.resetTime) {
+        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
+          console.log(`[contact-spam] Rate limit hit by ${clientIp}`);
+          return res.status(429).json({
+            success: false,
+            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
+          });
+        }
+        rlEntry.count++;
+      } else {
+        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
+      }
+      if (contactFormRateLimit.size > 10000) contactFormRateLimit.clear(); // memory backstop
+
+      // Cloudflare Turnstile — enforced only when BOTH keys are configured, matching
+      // /api/captcha/config so the widget and the server check turn on together
+      // (secret-only would 400 every submission while the widget stays hidden).
+      const turnstileSecret = process.env.TURNSTILE_SECRET_KEY?.trim();
+      const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY?.trim();
+      if (turnstileSecret && turnstileSiteKey) {
+        if (!captchaToken) {
+          return res.status(400).json({
+            success: false,
+            message: 'Please complete the security check.'
+          });
+        }
+        try {
+          const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              secret: turnstileSecret,
+              response: String(captchaToken),
+              remoteip: clientIp,
+            }).toString(),
+          });
+          const verifyData = await verifyResponse.json();
+          if (!verifyData.success) {
+            console.log(`[contact-spam] Turnstile rejected ${clientIp}:`, verifyData['error-codes']);
+            return res.status(400).json({
+              success: false,
+              message: 'Security check failed. Please try again.'
+            });
+          }
+        } catch (verifyErr) {
+          // A siteverify outage must not cost a genuine lead — allow and log loud.
+          console.error('[contact-spam] Turnstile siteverify unreachable — allowing submission:', verifyErr);
+        }
+      }
 
       // CAPTCHA validation — opt-in. Set REQUIRE_CAPTCHA=1 to enable once
       // the frontend reCAPTCHA integration is wired up. Default is off.
