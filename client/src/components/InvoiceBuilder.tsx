@@ -264,6 +264,31 @@ export function InvoiceBuilder({
       });
     });
 
+    // Carry the proposal-level discount onto the invoice as a negative line
+    // item. Proposals store discountAmount as ex-GST dollars against the
+    // pre-discount `subtotal`; invoices have no discount column, so without
+    // this row an invoice built from a discounted proposal (e.g. a VIP
+    // percentage discount) reverts to the full pre-discount price.
+    if (items.length > 0) {
+      const discountDollars =
+        parseFloat(proposal?.discountAmount?.toString() || "0") || 0;
+      if (discountDollars > 0) {
+        const preDiscountSubtotal =
+          parseFloat(proposal?.subtotal?.toString() || "0") || 0;
+        const percent =
+          proposal?.discountType === "percentage" && preDiscountSubtotal > 0
+            ? Math.round((discountDollars / preDiscountSubtotal) * 10000) / 100
+            : null;
+        items.push({
+          id: Math.random().toString(),
+          description: percent ? `Discount (${percent}%)` : "Discount",
+          quantity: 1,
+          unitPrice: -discountDollars,
+          total: -discountDollars,
+        });
+      }
+    }
+
     // Fall back to the quote's line items.
     if (items.length === 0 && Array.isArray(quote?.lineItems)) {
       quote.lineItems.forEach((item: any) => {
