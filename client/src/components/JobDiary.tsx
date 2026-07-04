@@ -330,7 +330,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Entry Type</label>
                   <Select name="entryType" required>
@@ -376,7 +376,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Author Role (Optional)</label>
                   <Select name="authorRole">
@@ -408,7 +408,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Equipment Used (Optional)</label>
                   <Input 
@@ -428,7 +428,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Progress (%)</label>
                   <Input 
@@ -536,7 +536,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Entry Type</label>
                     <Select name="entryType" required>
@@ -582,7 +582,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Author Role</label>
                     <Select name="authorRole">
@@ -608,7 +608,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Time Spent (minutes)</label>
                     <Input 
@@ -632,7 +632,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Weather Conditions</label>
                     <Select name="weatherConditions">
