@@ -736,7 +736,7 @@ function TemplateFormDialog({
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Template Name *</Label>
                 <Input
@@ -839,7 +839,7 @@ function TemplateFormDialog({
           <div className="space-y-4">
             <h3 className="font-medium">Pricing & Resources</h3>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="basePrice">Base Price ($)</Label>
                 <Input
