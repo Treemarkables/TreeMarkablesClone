@@ -759,7 +759,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             if ((job?.description ?? "") !== description) saveField.mutate({ description });
           }}
           placeholder="Add a job description..."
-          rows={4}
+          rows={12}
           className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 resize-none"
           data-testid="job-description"
         />
