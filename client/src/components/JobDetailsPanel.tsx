@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, ChevronDown, Mic, MicOff, Lock, UserPlus, Pencil, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { getJobStatusChip } from "@/lib/jobStatusColors";
 import { useToast } from "@/hooks/use-toast";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { SpeechToQuote } from "@/components/SpeechToQuote";
@@ -137,31 +138,6 @@ function composeCustomerAddress(
   return "";
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  lead: "Lead",
-  quote: "Quote",
-  work_order: "Work Order",
-  scheduled: "Scheduled",
-  completed: "Completed",
-  unsuccessful: "Unsuccessful",
-};
-
-const STATUS_BG: Record<string, string> = {
-  lead: "#fef3c7",
-  quote: "#fef3c7",
-  work_order: "#eff6ff",
-  scheduled: "#f3e8ff",
-  completed: "#dcfce7",
-  unsuccessful: "#fee2e2",
-};
-const STATUS_FG: Record<string, string> = {
-  lead: "#9a3412",
-  quote: "#9a3412",
-  work_order: "#1d4ed8",
-  scheduled: "#6b21a8",
-  completed: "#15803d",
-  unsuccessful: "#b91c1c",
-};
 
 export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   const queryClient = useQueryClient();
@@ -397,7 +373,8 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   });
 
   const status = job?.status ?? "lead";
-  const statusLabel = STATUS_LABEL[status] ?? status;
+  const statusChip = getJobStatusChip(status);
+  const statusLabel = statusChip.label;
 
   // Link a customer to this job. On first link (no existing job.address),
   // also patch the job's address from the customer so it surfaces in
@@ -454,7 +431,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             </button>
             <span
               className="text-[11px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0"
-              style={{ background: STATUS_BG[status] ?? "#f1f5f9", color: STATUS_FG[status] ?? "#475569" }}
+              style={{ background: statusChip.bg, color: statusChip.fg }}
             >
               {statusLabel}
             </span>
@@ -578,7 +555,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             </div>
             <span
               className="text-[11px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0"
-              style={{ background: STATUS_BG[status] ?? "#f1f5f9", color: STATUS_FG[status] ?? "#475569" }}
+              style={{ background: statusChip.bg, color: statusChip.fg }}
             >
               {statusLabel}
             </span>

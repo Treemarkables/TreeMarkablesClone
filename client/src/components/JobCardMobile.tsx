@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useJobActions } from "@/hooks/useJobActions";
 import { useToast } from "@/hooks/use-toast";
+import { getJobStatusBadge } from "@/lib/jobStatusColors";
 import {
   X as XIcon,
   Camera,
@@ -125,16 +126,6 @@ export interface JobCardMobileProps {
   };
 }
 
-// Map job status → badge colour. Mirrors the colour scheme used by
-// GlobalJobCard so the badge looks consistent across mobile/desktop.
-const STATUS_BADGE: Record<string, { label: string; bg: string }> = {
-  lead: { label: "Lead", bg: "#f59e0b" },
-  quote: { label: "Quote", bg: "#f59e0b" },
-  work_order: { label: "Work Order", bg: "#2563eb" },
-  completed: { label: "Completed", bg: "#16a34a" },
-  unsuccessful: { label: "Unsuccessful", bg: "#ef4444" },
-};
-
 const TABS: { id: JobCardMobileTab; label: string }[] = [
   { id: "details", label: "Details" },
   { id: "billing", label: "Billing" },
@@ -219,7 +210,7 @@ export function JobCardMobile({
 
   const jobNumber = (job?.jobNumber as number | undefined) ?? undefined;
   const status = (job?.status as string | undefined) ?? "lead";
-  const badge = STATUS_BADGE[status] ?? { label: status, bg: "#64748b" };
+  const badge = getJobStatusBadge(status);
   // Header price — mirrors the desktop GlobalJobCard header (lines 4582-4613)
   // so the same number appears in both UIs. Previously read three made-up
   // field names (jobPrice / totalValue / estimatedValue) that don't exist

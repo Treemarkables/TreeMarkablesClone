@@ -308,7 +308,7 @@ export default function Library() {
                   <Popup>
                     <div className="min-w-[200px]">
                       {item.kind === "photo" ? (
-                        <img src={item.thumbnailUrl || item.url} alt="" className="w-full h-24 object-cover rounded mb-2" />
+                        <img src={item.thumbnailUrl || item.url} alt="" loading="lazy" className="w-full h-24 object-cover rounded mb-2" />
                       ) : (
                         <div className="w-full h-24 bg-muted rounded mb-2 flex items-center justify-center">
                           <VideoIcon className="h-6 w-6 text-muted-foreground" />

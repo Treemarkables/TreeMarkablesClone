@@ -165,8 +165,8 @@ export function JobQuotingPanel({ jobId }: { jobId: string }) {
         </div>
         <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
           <div
-            className="h-full transition-all duration-300"
-            style={{ width: `${percent}%`, backgroundColor: "#39FF14" }}
+            className="h-full bg-green transition-all duration-300"
+            style={{ width: `${percent}%` }}
           />
         </div>
         <span className="text-sm font-semibold text-muted-foreground shrink-0 min-w-[40px] text-right">
@@ -358,15 +358,8 @@ function QuotingStepRow({
           data-testid={`quoting-step-toggle-${step.itemId}`}
         >
           {completed ? (
-            <div
-              className="w-[22px] h-[22px] rounded-full flex items-center justify-center"
-              style={{ backgroundColor: "#39FF14" }}
-            >
-              <Check
-                className="w-3 h-3"
-                strokeWidth={3.5}
-                style={{ color: "#000" }}
-              />
+            <div className="w-[22px] h-[22px] rounded-full flex items-center justify-center bg-green">
+              <Check className="w-3 h-3 text-green-foreground" strokeWidth={3.5} />
             </div>
           ) : (
             <div className="w-[22px] h-[22px] rounded-full border-[1.5px] border-muted-foreground/40" />

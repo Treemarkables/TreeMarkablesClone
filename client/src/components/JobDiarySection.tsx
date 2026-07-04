@@ -2835,6 +2835,7 @@ export function JobDiarySection({
                               <img
                                 src={resolveDisplayUrl(photo.photoUrl)}
                                 alt="Job photo"
+                                loading="lazy"
                                 className={
                                   photos.length === 1
                                     ? "w-full h-auto max-h-48 object-contain"
@@ -3475,6 +3476,7 @@ export function JobDiarySection({
                                     <img
                                       src={url}
                                       alt="Job photo"
+                                      loading="lazy"
                                       className="max-w-[64px] h-auto max-h-[64px] rounded-lg cursor-pointer hover-elevate object-contain"
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -3507,6 +3509,7 @@ export function JobDiarySection({
                                       key={`${entry.id}-${i}`}
                                       src={url}
                                       alt={`Job photo ${i + 1}`}
+                                      loading="lazy"
                                       className="w-full aspect-square object-contain rounded-lg cursor-pointer hover-elevate bg-gray-100 dark:bg-gray-800"
                                       onClick={(e) => {
                                         e.stopPropagation();

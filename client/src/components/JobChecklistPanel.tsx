@@ -295,8 +295,8 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
         </div>
         <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
           <div
-            className="h-full transition-all duration-300"
-            style={{ width: `${percent}%`, backgroundColor: "#39FF14" }}
+            className="h-full bg-green transition-all duration-300"
+            style={{ width: `${percent}%` }}
           />
         </div>
         <span className="text-sm font-semibold text-muted-foreground shrink-0 min-w-[40px] text-right">
@@ -430,8 +430,7 @@ function RoleSection({
             <span
               key={name}
               data-testid={`role-owner-${roleKey}-${name}`}
-              className="text-xs font-semibold px-2 py-0.5 rounded-full border border-foreground/15 text-foreground"
-              style={{ backgroundColor: "rgba(57,255,20,0.18)" }}
+              className="text-xs font-semibold px-2 py-0.5 rounded-full border border-foreground/15 text-foreground bg-green/15"
             >
               {name}
             </span>
@@ -492,11 +491,8 @@ function ChecklistRow({
     >
       <div className="shrink-0 mt-0.5">
         {completed ? (
-          <div
-            className="w-[22px] h-[22px] rounded-full flex items-center justify-center"
-            style={{ backgroundColor: "#39FF14" }}
-          >
-            <Check className="w-3 h-3" strokeWidth={3.5} style={{ color: "#000" }} />
+          <div className="w-[22px] h-[22px] rounded-full flex items-center justify-center bg-green">
+            <Check className="w-3 h-3 text-green-foreground" strokeWidth={3.5} />
           </div>
         ) : (
           <div className="w-[22px] h-[22px] rounded-full border-[1.5px] border-muted-foreground/40" />
