@@ -1385,7 +1385,7 @@ export function InvoiceBuilder({
                     value={editableDescription}
                     onChange={(e) => setEditableDescription(e.target.value)}
                     placeholder="Enter a general description for this invoice (optional)"
-                    className="min-h-[80px]"
+                    className="min-h-[240px]"
                     data-testid="input-invoice-description"
                   />
                 </div>
@@ -1893,7 +1893,7 @@ export function InvoiceBuilder({
                         handleUpdateSection(idx, { content: e.target.value })
                       }
                       placeholder="Optional description shown above the photos"
-                      className="bg-white min-h-[60px]"
+                      className="bg-white min-h-[240px]"
                       data-testid={`textarea-section-content-${idx}`}
                     />
 
