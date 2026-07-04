@@ -51,6 +51,7 @@ export default function PhotoSlider({ photos }: PhotoSliderProps) {
                   <img
                     src={photo.src}
                     alt={photo.alt}
+                    loading="lazy"
                     className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                   />
                 </div>
