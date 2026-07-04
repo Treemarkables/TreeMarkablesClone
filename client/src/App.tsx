@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { UpgradeGate } from "@/components/PlanGate";
 import { BillingBanner } from "@/components/BillingBanner";
 import { GettingStarted } from "@/components/GettingStarted";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
@@ -449,8 +450,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                 </>
               )}
 
-              {/* Search toggle (dispatch page) or Refresh (other pages) — Mobile */}
-              {isDispatchPage ? (
+              {/* Search toggle (dispatch page) — Mobile. Other pages refresh
+                  via the global pull-to-refresh gesture, no header button. */}
+              {isDispatchPage && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -463,23 +465,6 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                 >
                   {dispatchSearchOpen ? <X className="h-7 w-7" /> : <Search className="h-7 w-7" />}
                 </Button>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={handleRefresh}
-                      disabled={isRefreshing}
-                      data-testid="button-mobile-refresh"
-                    >
-                      <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Refresh all data</p>
-                  </TooltipContent>
-                </Tooltip>
               )}
               
               {/* Logout Button - Crew Only */}
@@ -813,17 +798,22 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               )}
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col md:pt-6" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-            <BillingBanner />
-            <div className="h-full flex flex-col md:pb-0">
-              <GettingStarted />
-              {/* Closest Suspense boundary to sidebar pages — keeps the sidebar
-                  + header mounted while the next page's chunk loads, showing the
-                  spinner only in the content area instead of full-screen. */}
-              <Suspense fallback={<PageSpinner />}>
-                {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
-              </Suspense>
-            </div>
+          <main className="flex-1 w-full max-w-full min-w-0 min-h-0 relative md:pt-6" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            {/* Global pull-to-refresh: swipe down from the top of any page to
+                refetch. Dispatch has its own (wired to its queries), so the
+                global one stands down there. Touch-only — desktop unaffected. */}
+            <PullToRefresh onRefresh={handleRefresh} enabled={!isDispatchPage} contentClassName="flex flex-col">
+              <BillingBanner />
+              <div className="h-full flex flex-col md:pb-0">
+                <GettingStarted />
+                {/* Closest Suspense boundary to sidebar pages — keeps the sidebar
+                    + header mounted while the next page's chunk loads, showing the
+                    spinner only in the content area instead of full-screen. */}
+                <Suspense fallback={<PageSpinner />}>
+                  {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
+                </Suspense>
+              </div>
+            </PullToRefresh>
           </main>
         </div>
         

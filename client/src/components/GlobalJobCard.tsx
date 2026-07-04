@@ -186,7 +186,7 @@ import {
 } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, ApiError } from "@/lib/queryClient";
-import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import {
   insertJobSchema,
   type ChecklistItem,
@@ -963,16 +963,6 @@ export function GlobalJobCard({
       await refetchJob();
     }
   }, [jobId, createdJobId, queryClient, refetchJob]);
-
-  const {
-    pullDistance: jobCardPullDistance,
-    isRefreshing: jobCardIsRefreshing,
-    shouldTrigger: jobCardShouldTrigger,
-    handlers: jobCardPullHandlers,
-  } = usePullToRefresh({
-    onRefresh: handlePullRefresh,
-    enabled: isMobile && mode === "edit",
-  });
 
   // Lazy load templates - only when billing tab is active or invoice modal is open
   const { data: invoiceTemplateData } = useQuery({
@@ -5481,33 +5471,14 @@ The Treemarkables Team`;
               data-form="job-form"
             >
               <div className="flex flex-col sm:flex-row h-full w-full min-w-0">
-                {/* Pull-to-refresh wrapper: relative+overflow-hidden so indicator is clipped above until pulled */}
+                {/* Pull-to-refresh wrapper: relative+overflow-hidden so the spinner is clipped above until pulled */}
                 <div
                   className="flex-1 relative overflow-hidden sm:border-r border-gray-300 sm:rounded-l-lg min-w-0"
                 >
-                  {/* Pull indicator — lives outside the scrollable div so it's not clipped by overflow-y-auto */}
-                  {(jobCardPullDistance > 0 || jobCardIsRefreshing) && (
-                    <div
-                      className="absolute top-0 left-0 right-0 flex items-center justify-center pointer-events-none z-50"
-                      style={{ transform: `translateY(${Math.min(jobCardPullDistance, 64) - 44}px)`, transition: jobCardIsRefreshing ? 'transform 0.2s ease' : 'none' }}
-                    >
-                      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-white shadow-md border border-gray-200 text-xs font-medium ${jobCardShouldTrigger ? 'text-primary' : 'text-gray-500'}`}>
-                        <RotateCcw
-                          className={`w-3.5 h-3.5 ${jobCardIsRefreshing ? 'animate-spin' : ''}`}
-                          style={{ transform: !jobCardIsRefreshing ? `rotate(${Math.min(jobCardPullDistance * 4, 360)}deg)` : undefined }}
-                        />
-                        {jobCardIsRefreshing ? 'Refreshing…' : jobCardShouldTrigger ? 'Release to refresh' : 'Pull to refresh'}
-                      </div>
-                    </div>
-                  )}
-                  {/* Scrollable content — receives transform so it pushes down revealing the indicator */}
-                  <div
-                    className="bg-white h-full p-3 sm:p-4 overflow-y-auto overflow-x-hidden"
-                    style={{
-                      transform: jobCardIsRefreshing ? 'translateY(52px)' : jobCardPullDistance > 0 ? `translateY(${Math.min(jobCardPullDistance, 64)}px)` : undefined,
-                      transition: jobCardIsRefreshing || jobCardPullDistance === 0 ? 'transform 0.25s ease' : 'none',
-                    }}
-                    {...jobCardPullHandlers}
+                  <PullToRefresh
+                    onRefresh={handlePullRefresh}
+                    enabled={isMobile && mode === "edit"}
+                    contentClassName="bg-white p-3 sm:p-4"
                   >
                   {sidebarTab === "details" && (
                     <div className="space-y-3 md:space-y-4">
@@ -10116,7 +10087,7 @@ The Treemarkables Team`;
                       )}
                     </div>
                   )}
-                  </div>
+                  </PullToRefresh>
                 </div>
 
                 {/* Right-hand diary panel — always visible alongside the
