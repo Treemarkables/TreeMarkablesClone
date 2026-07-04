@@ -31,7 +31,10 @@ import {
   User,
   Camera,
   Image as ImageIcon,
+  ArrowLeft,
+  Mail,
 } from "lucide-react";
+import { BuilderToolbarButton } from "@/components/BuilderToolbarButton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { InvoiceTemplate } from "@/components/InvoiceTemplate";
@@ -1249,31 +1252,70 @@ export function InvoiceBuilder({
     <>
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
         <DialogContent
-          className="max-w-[min(calc(100vw-1rem),56rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6"
+          className="max-w-[min(calc(100vw-1rem),56rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden w-full px-4 pb-4 pt-0 sm:px-6 sm:pb-6 sm:pt-0"
           onEscapeKeyDown={(e) => e.stopPropagation()}
         >
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {existingInvoiceId && createdInvoice ? (
-                  <>
-                    <span>Edit Invoice</span>
-                    <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-md text-sm font-semibold border border-amber-300">
-                      #{createdInvoice.invoiceNumber}
-                    </span>
-                  </>
-                ) : (
-                  <span>Create New Invoice</span>
-                )}
+          <DialogHeader className="sticky top-0 z-20 bg-background -mx-4 px-1.5 pt-2 pb-2 sm:-mx-6 sm:px-6 sm:pt-4 sm:pb-3 border-b space-y-2">
+            {/* ── Toolbar — mirrors the proposal/quote builder ── */}
+            <div className="flex items-stretch sm:items-center justify-between gap-1.5 sm:gap-2">
+              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-none">
+                <BuilderToolbarButton
+                  icon={ArrowLeft}
+                  label="Back"
+                  onClick={handleClose}
+                  aria-label="Back to job card"
+                  className="bg-gray-700 hover:bg-gray-800"
+                />
+                <BuilderToolbarButton
+                  icon={Mail}
+                  label="Email"
+                  onClick={handleSendInvoice}
+                  disabled={isCreating}
+                  aria-label="Email invoice"
+                  data-testid="button-email-invoice-toolbar"
+                  className="bg-blue-600 hover:bg-blue-700"
+                />
+                <BuilderToolbarButton
+                  icon={MessageSquare}
+                  label="SMS"
+                  onClick={handleSmsInvoice}
+                  disabled={isCreating}
+                  aria-label="SMS invoice"
+                  data-testid="button-sms-invoice-toolbar"
+                  className="bg-green-600 hover:bg-green-700"
+                />
+                <BuilderToolbarButton
+                  icon={Save}
+                  label="Save"
+                  onClick={handleSaveInvoice}
+                  loading={isCreating}
+                  aria-label="Save invoice"
+                  data-testid="button-save-invoice-toolbar"
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                />
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleClose}
-                data-testid="button-close-invoice"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 flex-1 sm:flex-none">
+                <BuilderToolbarButton
+                  icon={X}
+                  label="Close"
+                  onClick={handleClose}
+                  aria-label="Close invoice"
+                  data-testid="button-close-invoice"
+                  className="bg-red-500 hover:bg-red-600"
+                />
+              </div>
+            </div>
+            <DialogTitle className="flex items-center gap-3 px-0.5 text-base sm:text-lg">
+              {existingInvoiceId && createdInvoice ? (
+                <>
+                  <span>Edit Invoice</span>
+                  <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-md text-sm font-semibold border border-amber-300">
+                    #{createdInvoice.invoiceNumber}
+                  </span>
+                </>
+              ) : (
+                <span>Create New Invoice</span>
+              )}
             </DialogTitle>
           </DialogHeader>
 
