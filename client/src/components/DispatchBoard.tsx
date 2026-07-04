@@ -836,6 +836,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     error: jobsError,
   } = useQuery({
     queryKey: [JOBS_QUERY_KEY],
+    // Live board: poll explicitly. SSE broadcasts invalidate ['/api/jobs'],
+    // which does not match this parameterized key, so without an interval the
+    // board would only refresh on focus/navigation.
+    refetchInterval: 30_000,
   });
 
   // Check for pending job data from conversations on mount

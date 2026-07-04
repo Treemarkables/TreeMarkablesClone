@@ -221,10 +221,9 @@ export function useBellPreferences() {
       }
       return serverPrefs;
     },
-    // The global queryClient defaults set refetchInterval: 30000, which would
-    // race against in-flight mutations and could clobber a freshly-saved
-    // toggle with the pre-mutation server state. Bell prefs only change from
-    // user input on this device, so no background polling is needed.
+    // Bell prefs only change from user input on this device — background
+    // refetches (polling or focus) would race in-flight mutations and could
+    // clobber a freshly-saved toggle with the pre-mutation server state.
     refetchInterval: false,
     refetchOnWindowFocus: false,
     staleTime: 30_000,
