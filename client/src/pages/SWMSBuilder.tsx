@@ -175,6 +175,7 @@ function StepsEditor({
                 size="icon"
                 onClick={() => move(index, -1)}
                 disabled={index === 0}
+                aria-label="Move step up"
                 data-testid={`button-step-up-${index}`}
               >
                 <ChevronUp className="h-4 w-4" />
@@ -185,6 +186,7 @@ function StepsEditor({
                 size="icon"
                 onClick={() => move(index, 1)}
                 disabled={index === steps.length - 1}
+                aria-label="Move step down"
                 data-testid={`button-step-down-${index}`}
               >
                 <ChevronDown className="h-4 w-4" />
@@ -195,6 +197,7 @@ function StepsEditor({
                 size="icon"
                 onClick={() => removeStep(index)}
                 disabled={steps.length === 1}
+                aria-label="Remove step"
                 data-testid={`button-step-remove-${index}`}
               >
                 <Trash2 className="h-4 w-4" />

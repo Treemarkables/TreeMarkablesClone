@@ -13,10 +13,10 @@ import {
   CheckCircle2,
   TrendingUp,
 } from "lucide-react";
+import { RecordedTimeEntries } from "./RecordedTimeEntries";
 
 interface BackCostingPanelProps {
   jobId: string;
-  onOpenTimeEntries?: () => void;
 }
 
 type CostField =
@@ -55,7 +55,14 @@ interface BackCostingResponse {
       hasOverride: boolean;
       entryCount: number;
     };
-    costs: Record<CostField | "total", number>;
+    costs: Record<CostField | "total" | "manualTotal", number>;
+    supplierInvoices: {
+      total: number;
+      byField: Partial<Record<CostField, number>>;
+      countByField: Partial<Record<CostField, number>>;
+      count: number;
+      pendingReview: number;
+    };
     completion: {
       labor: boolean;
       materials: boolean;
@@ -100,7 +107,7 @@ const COMPLETION_ROWS: Array<{
   { field: "otherExpensesComplete", key: "other", label: "Other costs finalised (permits / travel / disposal / misc)" },
 ];
 
-export function BackCostingPanel({ jobId, onOpenTimeEntries }: BackCostingPanelProps) {
+export function BackCostingPanel({ jobId }: BackCostingPanelProps) {
   const queryClient = useQueryClient();
   const queryKey = ["/api/jobs", jobId, "back-costing"];
 
@@ -180,7 +187,7 @@ export function BackCostingPanel({ jobId, onOpenTimeEntries }: BackCostingPanelP
     );
   }
 
-  const { revenue, labor, costs, completion, margin } = rollup;
+  const { revenue, labor, costs, supplierInvoices, completion, margin } = rollup;
 
   return (
     <div className="space-y-4 p-2 md:p-4" data-testid="back-costing-panel">
@@ -208,22 +215,12 @@ export function BackCostingPanel({ jobId, onOpenTimeEntries }: BackCostingPanelP
       </Card>
 
       <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+        <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Clock className="h-4 w-4" /> Labor
           </CardTitle>
-          {onOpenTimeEntries && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onOpenTimeEntries}
-              data-testid="back-costing-view-time-entries"
-            >
-              View time entries
-            </Button>
-          )}
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {labor.entryCount === 0 ? (
             <div className="text-sm text-muted-foreground">No time logged yet.</div>
           ) : (
@@ -238,13 +235,24 @@ export function BackCostingPanel({ jobId, onOpenTimeEntries }: BackCostingPanelP
                 </div>
               </div>
               {labor.hasOverride && (
-                <div className="mt-2 text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   Manual override — calculated from time entries would be{" "}
                   {fmt(labor.calculatedCost)}.
                 </div>
               )}
             </>
           )}
+
+          {/* Time tracking lives inline here so logging staff time and
+              reviewing job cost stay in one place. Saving invalidates
+              ["/api/jobs", jobId] which (by prefix match) also refreshes the
+              back-costing rollup above, so the labour total updates in place. */}
+          <div className="pt-2 border-t">
+            <RecordedTimeEntries
+              jobId={jobId}
+              jobNumber={rollup.job.jobNumber ?? ""}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -252,17 +260,30 @@ export function BackCostingPanel({ jobId, onOpenTimeEntries }: BackCostingPanelP
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Cost breakdown</CardTitle>
         </CardHeader>
+        {supplierInvoices.pendingReview > 0 && (
+          <div
+            className="mx-4 mb-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+            data-testid="back-costing-pending-bills"
+          >
+            {supplierInvoices.pendingReview} emailed supplier{" "}
+            {supplierInvoices.pendingReview === 1 ? "bill is" : "bills are"} awaiting
+            review on the Billing tab — confirm to include in these costs.
+          </div>
+        )}
         <CardContent className="p-0">
           <div className="divide-y">
             {COST_ROWS.map((row) => {
               const value = costs[row.field];
+              const supplierPortion = supplierInvoices.byField[row.field] || 0;
+              const supplierCount = supplierInvoices.countByField[row.field] || 0;
               const isEditing = editingField === row.field;
               return (
                 <div
                   key={row.field}
-                  className="flex items-center justify-between px-4 py-3"
+                  className="px-4 py-3"
                   data-testid={`back-costing-row-${row.field}`}
                 >
+                  <div className="flex items-center justify-between">
                   <div className="text-sm">{row.label}</div>
                   <div className="flex items-center gap-2">
                     {isEditing ? (
@@ -315,9 +336,30 @@ export function BackCostingPanel({ jobId, onOpenTimeEntries }: BackCostingPanelP
                       </>
                     )}
                   </div>
+                  </div>
+                  {supplierPortion > 0 && (
+                    <div
+                      className="mt-1 flex items-center justify-between text-xs text-muted-foreground"
+                      data-testid={`back-costing-supplier-${row.field}`}
+                    >
+                      <span>
+                        incl. {fmt(supplierPortion)} from {supplierCount}{" "}
+                        supplier {supplierCount === 1 ? "invoice" : "invoices"}{" "}
+                        (ex GST)
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             })}
+            {supplierInvoices.total > 0 && (
+              <div className="flex items-center justify-between px-4 py-2 text-xs text-muted-foreground">
+                <div>Supplier invoices included (ex GST)</div>
+                <div className="font-mono tabular-nums">
+                  {fmt(supplierInvoices.total)}
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
               <div className="text-sm font-medium">Total cost</div>
               <div className="font-mono text-sm font-semibold tabular-nums">

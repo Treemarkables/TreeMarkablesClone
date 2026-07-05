@@ -95,7 +95,7 @@ final class NotificationHandler: NSObject {
             // listener will receive it, even across page reloads.
             let js = """
             (function() {
-              if (location.origin.indexOf('app.treemarkables.co.nz') === -1) return 'wrong-origin';
+              if (location.origin.indexOf('app.inflowapp.co.nz') === -1 && location.origin.indexOf('app.treemarkables.co.nz') === -1) return 'wrong-origin';
               try { localStorage.setItem('__nativeFcmToken', '\(token)'); } catch(e) {}
               window.__pendingNativeFcmToken = '\(token)';
               window.dispatchEvent(new CustomEvent('nativeFcmToken', { detail: '\(token)' }));
@@ -249,7 +249,7 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
         // Up to ~6s of retries (20 × 0.3s). A cold launch from a notification tap
         // fires this before the WebView has even loaded the app origin, so we
         // can't just deliver once — we retry until the document is actually on
-        // app.treemarkables.co.nz, otherwise the localStorage write below would
+        // the app origin (app.inflowapp.co.nz), otherwise the localStorage write below would
         // land on about:blank and be lost.
         guard attempt < 20 else {
             print("⚠️ Navigation: gave up delivering deep link after 20 attempts: \(path)")
@@ -280,7 +280,7 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
             // race is exactly what used to dump every tap onto the dashboard.
             let js = """
             (function() {
-              if (location.origin.indexOf('app.treemarkables.co.nz') === -1) return 'wrong-origin';
+              if (location.origin.indexOf('app.inflowapp.co.nz') === -1 && location.origin.indexOf('app.treemarkables.co.nz') === -1) return 'wrong-origin';
               var path = '\(escaped)';
               try {
                 localStorage.setItem('pendingNotificationNav', JSON.stringify({ path: path, ts: Date.now() }));

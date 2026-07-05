@@ -43,7 +43,7 @@ export default function Contact() {
                 }
               />
               <Block
-                title="Already using Treemarkables / Inflow?"
+                title="Already using Inflow?"
                 body={
                   <a className="underline decoration-lime-deep" href={BRAND.appUrl}>
                     Sign in to your account →

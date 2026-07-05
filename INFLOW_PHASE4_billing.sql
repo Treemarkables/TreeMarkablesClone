@@ -45,10 +45,17 @@ CREATE POLICY tenant_isolation ON business_add_ons
   USING (business_id = nullif(current_setting('app.current_business', true),''))
   WITH CHECK (business_id = nullif(current_setting('app.current_business', true),''));
 
+-- Prices revised 2026-06-22 (user): Crew $89→$85, Business $189→$130.
+-- New LIVE Stripe Price objects created + swapped into prod 2026-06-22 (NZD, monthly,
+-- tax_behavior=exclusive — i.e. ex-GST, 15% GST added at checkout). The old $89/$189
+-- prices are superseded (archive them in Stripe). IDs below are the live ones now in prod.
+-- NOTE: SMS/AI bundled allowances (200/600 SMS, 75/250 AI actions per INFLOW_SAAS_PLAN.md)
+-- are NOT represented in this schema — there are no sms_cap / ai_action_cap columns and
+-- no metering yet. Enforcing the caps is unbuilt work, not just a seed value.
 INSERT INTO subscription_plans (key, name, stripe_price_id, price_nzd, active_job_cap, sort_order) VALUES
   ('freemium','Freemium', NULL, 0, 15, 0),
-  ('crew','Crew', 'price_1Tf0Z6LboGXT31TYwrPjNonb', 89, 75, 1),
-  ('business','Business', 'price_1Tf0Z7LboGXT31TYR2GirPLw', 189, NULL, 2)
+  ('crew','Crew', 'price_1Tkxy2LboGXT31TYbUJj9KVR', 85, 75, 1),
+  ('business','Business', 'price_1TkxzQLboGXT31TY2YMxr4tA', 130, NULL, 2)
 ON CONFLICT (key) DO NOTHING;
 
 COMMIT;

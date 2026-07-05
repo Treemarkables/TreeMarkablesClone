@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import ExpiryReminderSettings from "@/components/ExpiryReminderSettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import {
   GripVertical,
   Check,
   X,
+  Truck,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -384,17 +386,28 @@ export default function VehicleInspectionSettings() {
             Manage pre-start inspection checklists
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditingTemplate({});
-            setTemplateDialogOpen(true);
-          }}
-          data-testid="button-add-template"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" asChild data-testid="button-manage-equipment">
+            <Link href="/equipment" className="flex items-center gap-2">
+              <Truck className="w-4 h-4" />
+              Vehicles &amp; equipment
+            </Link>
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingTemplate({});
+              setTemplateDialogOpen(true);
+            }}
+            data-testid="button-add-template"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New Template
+          </Button>
+        </div>
       </div>
+
+      {/* Expiry reminders — rego / CoF / service lead-time alerts */}
+      <ExpiryReminderSettings />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Templates List */}
@@ -560,7 +573,7 @@ export default function VehicleInspectionSettings() {
 
       {/* Template Dialog */}
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingTemplate.id ? "Edit Template" : "New Template"}
@@ -622,7 +635,7 @@ export default function VehicleInspectionSettings() {
 
       {/* Checklist Item Dialog */}
       <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingItem.id ? "Edit Checklist Item" : "New Checklist Item"}

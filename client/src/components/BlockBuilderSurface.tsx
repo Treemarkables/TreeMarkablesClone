@@ -660,7 +660,7 @@ function InlineAddZone({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search blocks…"
-              className="flex-1 text-xs outline-none bg-transparent"
+              className="flex-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring bg-transparent"
             />
           </div>
           <div className="max-h-72 overflow-y-auto">
@@ -770,6 +770,7 @@ function SortableCanvasBlock({
           type="button"
           onClick={() => onToggleVisible(block.id)}
           title={block.visible ? 'Hide block' : 'Show block'}
+          aria-label={block.visible ? 'Hide block' : 'Show block'}
           data-testid={`btn-toggle-${block.id}`}
           className="w-6 h-6 rounded flex items-center justify-center text-slate-300 hover:bg-slate-800 hover:text-white"
         >
@@ -779,6 +780,7 @@ function SortableCanvasBlock({
           type="button"
           onClick={() => onRemove(block.id)}
           title="Remove block"
+          aria-label="Remove block"
           data-testid={`btn-remove-${block.id}`}
           className="w-6 h-6 rounded flex items-center justify-center text-red-300 hover:bg-slate-800 hover:text-red-200"
         >
@@ -850,6 +852,7 @@ function PaletteCard({
           onClick={(e) => { e.stopPropagation(); onAdd(item); }}
           className="ml-auto flex-shrink-0 p-0.5"
           title={`Add ${item.label}`}
+          aria-label={`Add ${item.label}`}
           data-testid={`palette-add-${item.type}`}
         >
           <Plus className="w-3.5 h-3.5 text-gray-400" />
@@ -1008,7 +1011,7 @@ export function BlockBuilderSurface({
                 value={paletteQuery}
                 onChange={(e) => setPaletteQuery(e.target.value)}
                 placeholder="Search blocks…"
-                className="flex-1 text-xs outline-none bg-transparent"
+                className="flex-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring bg-transparent"
                 data-testid="palette-search"
               />
             </div>
@@ -1137,7 +1140,7 @@ export function BlockBuilderSurface({
               <div className="flex items-center gap-2 mb-4">
                 {(() => { const Icon = BLOCK_ICONS[selectedBlock.type]; return <Icon className="w-4 h-4 text-orange-500" />; })()}
                 <h3 className="font-semibold text-sm text-gray-900">{BLOCK_LABELS[selectedBlock.type]}</h3>
-                <Button size="icon" variant="ghost" className="ml-auto" onClick={() => setSelectedId(null)}>
+                <Button size="icon" variant="ghost" className="ml-auto" onClick={() => setSelectedId(null)} aria-label="Close inspector">
                   <X className="w-3.5 h-3.5" />
                 </Button>
               </div>

@@ -22,20 +22,19 @@ import {
   Send,
   X,
   Loader2,
-  MapPin,
-  Mail,
   FileText,
   Plus,
   Trash2,
-  DollarSign,
   MessageSquare,
   FileDown,
   Package,
   User,
-  Calendar,
   Camera,
   Image as ImageIcon,
+  ArrowLeft,
+  Mail,
 } from "lucide-react";
+import { BuilderToolbarButton } from "@/components/BuilderToolbarButton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { InvoiceTemplate } from "@/components/InvoiceTemplate";
@@ -267,6 +266,31 @@ export function InvoiceBuilder({
         });
       });
     });
+
+    // Carry the proposal-level discount onto the invoice as a negative line
+    // item. Proposals store discountAmount as ex-GST dollars against the
+    // pre-discount `subtotal`; invoices have no discount column, so without
+    // this row an invoice built from a discounted proposal (e.g. a VIP
+    // percentage discount) reverts to the full pre-discount price.
+    if (items.length > 0) {
+      const discountDollars =
+        parseFloat(proposal?.discountAmount?.toString() || "0") || 0;
+      if (discountDollars > 0) {
+        const preDiscountSubtotal =
+          parseFloat(proposal?.subtotal?.toString() || "0") || 0;
+        const percent =
+          proposal?.discountType === "percentage" && preDiscountSubtotal > 0
+            ? Math.round((discountDollars / preDiscountSubtotal) * 10000) / 100
+            : null;
+        items.push({
+          id: Math.random().toString(),
+          description: percent ? `Discount (${percent}%)` : "Discount",
+          quantity: 1,
+          unitPrice: -discountDollars,
+          total: -discountDollars,
+        });
+      }
+    }
 
     // Fall back to the quote's line items.
     if (items.length === 0 && Array.isArray(quote?.lineItems)) {
@@ -1228,31 +1252,70 @@ export function InvoiceBuilder({
     <>
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
         <DialogContent
-          className="max-w-[min(calc(100vw-1rem),56rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6"
+          className="max-w-[min(calc(100vw-1rem),56rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden w-full px-4 pb-4 pt-0 sm:px-6 sm:pb-6 sm:pt-0"
           onEscapeKeyDown={(e) => e.stopPropagation()}
         >
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {existingInvoiceId && createdInvoice ? (
-                  <>
-                    <span>Edit Invoice</span>
-                    <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-md text-sm font-semibold border border-amber-300">
-                      #{createdInvoice.invoiceNumber}
-                    </span>
-                  </>
-                ) : (
-                  <span>Create New Invoice</span>
-                )}
+          <DialogHeader className="sticky top-0 z-20 bg-background -mx-4 px-1.5 pt-2 pb-2 sm:-mx-6 sm:px-6 sm:pt-4 sm:pb-3 border-b space-y-2">
+            {/* ── Toolbar — mirrors the proposal/quote builder ── */}
+            <div className="flex items-stretch sm:items-center justify-between gap-1.5 sm:gap-2">
+              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-none">
+                <BuilderToolbarButton
+                  icon={ArrowLeft}
+                  label="Back"
+                  onClick={handleClose}
+                  aria-label="Back to job card"
+                  className="bg-gray-700 hover:bg-gray-800"
+                />
+                <BuilderToolbarButton
+                  icon={Mail}
+                  label="Email"
+                  onClick={handleSendInvoice}
+                  disabled={isCreating}
+                  aria-label="Email invoice"
+                  data-testid="button-email-invoice-toolbar"
+                  className="bg-blue-600 hover:bg-blue-700"
+                />
+                <BuilderToolbarButton
+                  icon={MessageSquare}
+                  label="SMS"
+                  onClick={handleSmsInvoice}
+                  disabled={isCreating}
+                  aria-label="SMS invoice"
+                  data-testid="button-sms-invoice-toolbar"
+                  className="bg-green-600 hover:bg-green-700"
+                />
+                <BuilderToolbarButton
+                  icon={Save}
+                  label="Save"
+                  onClick={handleSaveInvoice}
+                  loading={isCreating}
+                  aria-label="Save invoice"
+                  data-testid="button-save-invoice-toolbar"
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                />
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleClose}
-                data-testid="button-close-invoice"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 flex-1 sm:flex-none">
+                <BuilderToolbarButton
+                  icon={X}
+                  label="Close"
+                  onClick={handleClose}
+                  aria-label="Close invoice"
+                  data-testid="button-close-invoice"
+                  className="bg-red-500 hover:bg-red-600"
+                />
+              </div>
+            </div>
+            <DialogTitle className="flex items-center gap-3 px-0.5 text-base sm:text-lg">
+              {existingInvoiceId && createdInvoice ? (
+                <>
+                  <span>Edit Invoice</span>
+                  <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-md text-sm font-semibold border border-amber-300">
+                    #{createdInvoice.invoiceNumber}
+                  </span>
+                </>
+              ) : (
+                <span>Create New Invoice</span>
+              )}
             </DialogTitle>
           </DialogHeader>
 
@@ -1264,136 +1327,107 @@ export function InvoiceBuilder({
               </span>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Existing Invoice Warning Banner */}
-              {existingInvoiceId && createdInvoice && (
-                <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0">
-                      <FileText className="h-5 w-5 text-amber-600" />
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-semibold text-amber-800">
-                        Editing Existing Invoice
-                      </h3>
-                      <div className="mt-2 text-sm text-amber-700">
-                        <p>
-                          You are editing invoice{" "}
-                          <strong>#{createdInvoice.invoiceNumber}</strong>. Any
-                          changes you make will update this existing invoice.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+            <div className="space-y-5">
+              {/* Status strip — one compact line instead of a banner */}
+              {existingInvoiceId && createdInvoice ? (
+                <div className="flex items-center gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  <FileText className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                  <span>
+                    Editing invoice{" "}
+                    <strong>#{createdInvoice.invoiceNumber}</strong> — changes
+                    update the existing invoice.
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
+                  <Plus className="h-4 w-4 flex-shrink-0 text-blue-600" />
+                  <span>
+                    New invoice{" "}
+                    <strong>#{job.jobNumber || "auto-generated"}</strong> will
+                    be created when you save.
+                  </span>
                 </div>
               )}
 
-              {/* New Invoice Info Banner */}
-              {!existingInvoiceId && (
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0">
-                      <Plus className="h-5 w-5 text-blue-600" />
+              {/* Billing details card */}
+              <div className="bg-card border border-border rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-border bg-muted/40">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    Billing details
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Pre-filled from the Billing tab — edits here apply to this
+                    invoice only.
+                  </p>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-medium">
+                        Billing name
+                      </Label>
+                      <Input
+                        value={editableContactName}
+                        onChange={(e) => setEditableContactName(e.target.value)}
+                        placeholder="e.g., Gisborne District Council"
+                        data-testid="input-invoice-contact-name"
+                      />
                     </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-semibold text-blue-800">
-                        Creating New Invoice
-                      </h3>
-                      <div className="mt-2 text-sm text-blue-700">
-                        <p>
-                          A new invoice will be created with invoice number{" "}
-                          <strong>#{job.jobNumber || "auto-generated"}</strong>
-                        </p>
-                      </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-medium">
+                        Billing email
+                      </Label>
+                      <Input
+                        type="email"
+                        value={editableEmail}
+                        onChange={(e) => setEditableEmail(e.target.value)}
+                        placeholder="Enter billing email address"
+                        data-testid="input-invoice-email"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-medium">
+                        Billing address
+                      </Label>
+                      <Input
+                        value={editableAddress}
+                        onChange={(e) => setEditableAddress(e.target.value)}
+                        placeholder="Enter billing address"
+                        data-testid="input-invoice-address"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-medium">Due date</Label>
+                      <Input
+                        type="date"
+                        value={customDueDate}
+                        onChange={(e) => setCustomDueDate(e.target.value)}
+                        data-testid="input-invoice-due-date"
+                      />
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* Editable Fields Section */}
-              <div className="space-y-4 bg-blue-50 p-6 rounded-lg border border-blue-200">
-                <h3 className="font-semibold text-blue-900 flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Invoice Details (Editable)
-                </h3>
-
-                {/* Billing Address */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-sm font-medium">
-                    <MapPin className="h-4 w-4 text-blue-600" />
-                    Billing Address
-                  </Label>
-                  <Input
-                    value={editableAddress}
-                    onChange={(e) => setEditableAddress(e.target.value)}
-                    placeholder="Enter billing address"
-                    className="bg-white"
-                    data-testid="input-invoice-address"
-                  />
+              {/* Invoice items card: description + line items + totals */}
+              <div className="bg-card border border-border rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-border bg-muted/40">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    Invoice items
+                  </h3>
                 </div>
 
-                {/* Contact Name */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-sm font-medium">
-                    <User className="h-4 w-4 text-blue-600" />
-                    Billing Name
-                  </Label>
-                  <Input
-                    value={editableContactName}
-                    onChange={(e) => setEditableContactName(e.target.value)}
-                    placeholder="e.g., Gisborne District Council"
-                    className="bg-white"
-                    data-testid="input-invoice-contact-name"
-                  />
-                  <p className="text-xs text-gray-500">
-                    Pre-filled from the Billing Name Override on the Billing tab. Edit here for this invoice only.
-                  </p>
-                </div>
-
-                {/* Email */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-sm font-medium">
-                    <Mail className="h-4 w-4 text-blue-600" />
-                    Billing Email
-                  </Label>
-                  <Input
-                    type="email"
-                    value={editableEmail}
-                    onChange={(e) => setEditableEmail(e.target.value)}
-                    placeholder="Enter billing email address"
-                    className="bg-white"
-                    data-testid="input-invoice-email"
-                  />
-                  <p className="text-xs text-gray-500">
-                    Pre-filled from the Billing Email override on the Billing tab. Edit here for this invoice only.
-                  </p>
-                </div>
-
-                {/* Due Date */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-sm font-medium">
-                    <Calendar className="h-4 w-4 text-blue-600" />
-                    Due Date
-                  </Label>
-                  <Input
-                    type="date"
-                    value={customDueDate}
-                    onChange={(e) => setCustomDueDate(e.target.value)}
-                    className="bg-white"
-                    data-testid="input-invoice-due-date"
-                  />
-                </div>
-
-                {/* Description */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">
-                    Invoice Description
-                  </Label>
+                <div className="p-4 space-y-1.5 border-b border-border">
+                  <Label className="text-sm font-medium">Description</Label>
                   <Textarea
                     value={editableDescription}
                     onChange={(e) => setEditableDescription(e.target.value)}
                     placeholder="Enter a general description for this invoice (optional)"
-                    className="bg-white min-h-[80px]"
+                    className="min-h-[240px]"
                     data-testid="input-invoice-description"
                   />
                 </div>
@@ -1402,9 +1436,9 @@ export function InvoiceBuilder({
                     description + total. Click a row to expand its full editor
                     (category, qty, unit price). The "Search or add new..." row
                     at the bottom expands the editor for a brand-new item. */}
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
-                    <Label className="text-sm font-semibold">Line items</Label>
+                <div>
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+                    <Label className="text-sm font-medium">Line items</Label>
                     <Button
                       type="button"
                       variant="outline"
@@ -1415,8 +1449,7 @@ export function InvoiceBuilder({
                       className="h-7 text-xs"
                     >
                       <FileDown className="h-3.5 w-3.5 mr-1" />
-                      <span className="hidden sm:inline">Import</span>
-                      <span className="sm:hidden">Import</span>
+                      Import from quote
                     </Button>
                   </div>
 
@@ -1816,41 +1849,35 @@ export function InvoiceBuilder({
                       Search or add new...
                     </button>
 
-                    {/* Section subtotal footer */}
-                    <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
-                      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Subtotal</span>
-                      <span className="text-sm font-bold text-gray-900 tabular-nums">${subtotal.toFixed(2)}</span>
+                    {/* Totals footer — single source of truth for totals */}
+                    <div className="border-t border-border bg-muted/40 px-4 py-3 space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span className="font-medium tabular-nums">${subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">GST (15%)</span>
+                        <span className="font-medium tabular-nums">${gst.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-base font-bold border-t border-border pt-2 mt-2">
+                        <span>Total</span>
+                        <span className="tabular-nums">${total.toFixed(2)}</span>
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                {/* Totals — shown below the line-items card */}
-                <div className="space-y-1.5 pt-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal</span>
-                    <span className="font-medium tabular-nums">${subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">GST (15%)</span>
-                    <span className="font-medium tabular-nums">${gst.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-lg font-bold border-t pt-2">
-                    <span>Total</span>
-                    <span className="tabular-nums">${total.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
 
               {/* Sections (photos + narrative) — shown on the customer-facing invoice page */}
-              <div className="border-t pt-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                      <ImageIcon className="h-4 w-4 text-blue-600" />
-                      Sections & Photos
+              <div className="bg-card border border-border rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-muted/40">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                      Sections & photos
                     </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Optional. Each section appears on the customer-facing invoice link.
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Optional — shown on the customer-facing invoice link.
                     </p>
                   </div>
                   <Button
@@ -1858,12 +1885,14 @@ export function InvoiceBuilder({
                     variant="outline"
                     size="sm"
                     onClick={handleAddSection}
+                    className="flex-shrink-0"
                     data-testid="button-add-invoice-section"
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Add Section
                   </Button>
                 </div>
+                <div className="p-4 space-y-3">
 
                 {sections.length === 0 && (
                   <div className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">
@@ -1895,6 +1924,7 @@ export function InvoiceBuilder({
                         onClick={() => handleRemoveSection(idx)}
                         className="text-red-600 hover:text-red-700 flex-shrink-0"
                         data-testid={`button-remove-section-${idx}`}
+                        aria-label="Remove section"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -1906,7 +1936,7 @@ export function InvoiceBuilder({
                         handleUpdateSection(idx, { content: e.target.value })
                       }
                       placeholder="Optional description shown above the photos"
-                      className="bg-white min-h-[60px]"
+                      className="bg-white min-h-[240px]"
                       data-testid={`textarea-section-content-${idx}`}
                     />
 
@@ -1966,6 +1996,7 @@ export function InvoiceBuilder({
                                 }
                                 className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                 data-testid={`button-remove-section-photo-${idx}`}
+                                aria-label="Remove photo"
                               >
                                 <X className="h-3 w-3" />
                               </button>
@@ -1976,10 +2007,11 @@ export function InvoiceBuilder({
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 justify-between">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2.5 justify-between border-t border-border pt-4">
                 {/* Delete button - only show when editing existing invoice */}
                 {existingInvoiceId && createdInvoice && (
                   <Button
@@ -1987,14 +2019,14 @@ export function InvoiceBuilder({
                     variant="destructive"
                     onClick={handleDeleteInvoice}
                     data-testid="button-delete-invoice"
-                    className="w-full sm:w-auto"
+                    className="w-full sm:w-auto order-last sm:order-none"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Invoice
                   </Button>
                 )}
 
-                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:ml-auto w-full sm:w-auto sm:justify-end">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2.5 sm:ml-auto w-full sm:w-auto sm:justify-end">
                   <Button
                     type="button"
                     variant="outline"
@@ -2111,9 +2143,11 @@ export function InvoiceBuilder({
               </div>
 
               {/* Preview Section */}
-              <div className="border-t pt-6">
-                <h3 className="font-semibold text-gray-900 mb-4">Preview</h3>
-                <div className="border rounded-lg p-0 sm:p-4 bg-white">
+              <div className="border-t border-border pt-5">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                  Preview
+                </h3>
+                <div className="border border-border rounded-lg p-0 sm:p-4 bg-white overflow-hidden">
                   <InvoiceTemplate
                     invoice={{
                       id: job.id,

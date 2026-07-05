@@ -1726,6 +1726,7 @@ export function ProposalBuilder({
                     onClick={onClose}
                     className="h-9 w-9 rounded-lg hover:bg-muted"
                     data-testid="button-close-proposal"
+                    aria-label="Close proposal builder"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -1829,6 +1830,7 @@ export function ProposalBuilder({
                                 onClick={() => removeSection(section.id)}
                                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                 data-testid={`button-remove-section-${section.id}`}
+                                aria-label="Remove section"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -1991,6 +1993,7 @@ export function ProposalBuilder({
                                         removePhoto(section.id, photo.id);
                                       }}
                                       data-testid={`button-remove-photo-${photo.id}`}
+                                      aria-label="Remove photo"
                                     >
                                       <X className="h-3 w-3" />
                                     </Button>
@@ -3035,6 +3038,7 @@ export function ProposalBuilder({
                     onClick={() => setShowPreview(false)}
                     className="min-h-[44px] min-w-[44px] sm:h-9 sm:w-9"
                     data-testid="button-close-preview"
+                    aria-label="Close preview"
                   >
                     <X className="h-5 w-5 sm:h-4 sm:w-4" />
                   </Button>
@@ -3416,6 +3420,7 @@ export function ProposalBuilder({
               className="absolute top-2 right-2 z-50 text-white hover:bg-white/20"
               onClick={() => setEnlargedPhotoUrl(null)}
               data-testid="button-close-photo-lightbox"
+              aria-label="Close photo"
             >
               <X className="h-6 w-6" />
             </Button>

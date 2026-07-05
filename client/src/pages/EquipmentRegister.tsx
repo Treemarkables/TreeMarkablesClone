@@ -108,7 +108,7 @@ export default function EquipmentRegister() {
     <div className="flex flex-col min-h-full overflow-y-auto p-6 space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/settings">
-          <Button variant="ghost" size="icon" data-testid="button-back-settings">
+          <Button variant="ghost" size="icon" aria-label="Back to settings" data-testid="button-back-settings">
             <ChevronLeft className="w-5 h-5" />
           </Button>
         </Link>
@@ -177,7 +177,7 @@ export default function EquipmentRegister() {
       </Card>
 
       <Dialog open={!!editingEquip} onOpenChange={open => { if (!open) { setEditingEquip(null); setLicenceValue(""); setCustomLicence(""); setUseCustom(false); } }}>
-        <DialogContent data-testid="dialog-edit-licence">
+        <DialogContent data-testid="dialog-edit-licence" className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Licence Requirement — {editingEquip?.name}</DialogTitle>
           </DialogHeader>

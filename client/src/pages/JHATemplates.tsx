@@ -422,6 +422,7 @@ export default function JHATemplates() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label="Edit hazard"
                           data-testid={`button-edit-hazard-${hazard.id}`}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -439,6 +440,7 @@ export default function JHATemplates() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label="Delete hazard"
                           data-testid={`button-delete-hazard-${hazard.id}`}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -612,6 +614,7 @@ export default function JHATemplates() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label="Edit control measure"
                           data-testid={`button-edit-control-${control.id}`}
                           onClick={() => {
                             setSelectedControl(control);
@@ -628,6 +631,7 @@ export default function JHATemplates() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label="Delete control measure"
                           data-testid={`button-delete-control-${control.id}`}
                           onClick={() => {
                             if (confirm("Delete this control measure?")) {

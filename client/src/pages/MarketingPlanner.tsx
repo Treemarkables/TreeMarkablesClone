@@ -551,6 +551,7 @@ export default function MarketingPlanner() {
                     variant="outline" 
                     size="icon"
                     onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                    aria-label="Previous month"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
@@ -561,6 +562,7 @@ export default function MarketingPlanner() {
                     variant="outline" 
                     size="icon"
                     onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                    aria-label="Next month"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -1053,10 +1055,10 @@ export default function MarketingPlanner() {
                   <div key={i} className="aspect-square bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center relative group">
                     <TreeDeciduous className="w-12 h-12 text-white/50" />
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
-                      <Button size="icon" variant="ghost" className="text-white hover:bg-white/20">
+                      <Button size="icon" variant="ghost" className="text-white hover:bg-white/20" aria-label="Copy image">
                         <Copy className="w-4 h-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="text-white hover:bg-white/20">
+                      <Button size="icon" variant="ghost" className="text-white hover:bg-white/20" aria-label="Delete image">
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>

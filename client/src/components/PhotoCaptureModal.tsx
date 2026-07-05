@@ -223,6 +223,7 @@ export function PhotoCaptureModal({
                       className="absolute top-1 right-1 h-6 w-6 opacity-90 hover:opacity-100"
                       onClick={() => removePhoto(index)}
                       data-testid={`button-remove-photo-${index}`}
+                      aria-label="Remove photo"
                     >
                       <X className="w-3 h-3" />
                     </Button>
@@ -232,12 +233,17 @@ export function PhotoCaptureModal({
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Take Photo - on mobile opens camera, on desktop opens file picker */}
+              {/* Take Photo - on mobile opens camera, on desktop opens file picker.
+                  When `capture` forces the camera (mobile/iPad), the accept list MUST be
+                  camera-capturable types only. Mixing `capture` with document types
+                  (pdf/doc/xls) crashes WKWebView on iPad — the App Store 2.1(a) rejection.
+                  So restrict to image/* whenever capture is applied; the broad accept stays
+                  on the desktop "Select File" path and the "Choose from Library" input below. */}
               <div>
                 <input
                   id="camera-input"
                   type="file"
-                  accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  accept={isMobile ? "image/*" : "image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"}
                   {...(isMobile ? { capture: "environment" } : {})}
                   onChange={handleFileSelect}
                   className="sr-only"

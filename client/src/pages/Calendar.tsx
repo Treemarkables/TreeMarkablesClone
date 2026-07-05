@@ -318,6 +318,7 @@ export default function Calendar() {
           variant="ghost"
           size="icon"
           onClick={goToPreviousMonth}
+          aria-label="Previous month"
           data-testid="button-previous-month"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -334,6 +335,7 @@ export default function Calendar() {
           variant="ghost"
           size="icon"
           onClick={goToNextMonth}
+          aria-label="Next month"
           data-testid="button-next-month"
         >
           <ChevronRight className="h-5 w-5" />

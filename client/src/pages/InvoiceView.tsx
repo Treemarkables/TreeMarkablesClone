@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { composeCustomerAddress } from "@shared/customerAddress";
 import {
   AlertCircle,
   ChevronLeft,
@@ -35,6 +36,7 @@ interface PublicInvoiceData {
   dueDate: string;
   amount: string;
   status: string;
+  onlinePaymentEnabled?: boolean;
   items: any;
   description: string | null;
   notes: string | null;
@@ -44,8 +46,10 @@ interface PublicInvoiceData {
     email: string | null;
     phone: string | null;
     address: string | null;
+    city: string | null;
+    region: string | null;
   } | null;
-  job: { description: string | null } | null;
+  job: { description: string | null; billingNameOverride: string | null } | null;
   sections: InvoiceSection[];
 }
 
@@ -173,6 +177,15 @@ export default function InvoiceView() {
 
   const customer = invoice.customer;
   const job = invoice.job;
+  // Per-tenant identity from the server payload (scoped to the invoice's business).
+  // All fields are blank for a business that hasn't configured them — we never
+  // fall back to another business's contact or bank details.
+  const company = (invoice as any).company ?? {};
+  // Mirror the PDF/email precedence (server/routes.ts): the per-invoice billing
+  // name override on the job wins over the invoice contact name and the linked
+  // customer's name.
+  const billingName =
+    job?.billingNameOverride || invoice.contactName || customer?.name || null;
 
   const lineItems: any[] = Array.isArray(invoice.items) ? invoice.items : [];
   const lineItemTotal = lineItems.reduce((sum, item) => {
@@ -227,7 +240,7 @@ export default function InvoiceView() {
           <div className="flex items-center gap-3 min-w-0">
             <img
               src={logoUrl}
-              alt="Treemarkables"
+              alt={company.name || "Logo"}
               className="h-10 sm:h-12 object-contain flex-shrink-0"
             />
             <div className="min-w-0">
@@ -235,7 +248,7 @@ export default function InvoiceView() {
                 Invoice #{invoice.invoiceNumber}
               </h1>
               <p className="text-xs sm:text-sm text-gray-600 truncate">
-                {customer?.name || "Customer"}
+                {billingName || "Customer"}
               </p>
             </div>
           </div>
@@ -276,8 +289,10 @@ export default function InvoiceView() {
           </div>
         )}
 
-        {/* Pay online */}
+        {/* Pay online — only when this business can take card payments (single
+            Stripe account = Treemarkables until Connect); others pay by bank transfer. */}
         {stripeConfigured &&
+          invoice.onlinePaymentEnabled &&
           !justPaid &&
           invoice.status !== "paid" &&
           invoice.status !== "cancelled" &&
@@ -344,7 +359,7 @@ export default function InvoiceView() {
                 <div>
                   <span className="text-gray-600">Name:</span>{" "}
                   <span className="font-medium">
-                    {customer?.name || "N/A"}
+                    {billingName || "N/A"}
                   </span>
                 </div>
                 {customer?.email && (
@@ -359,12 +374,11 @@ export default function InvoiceView() {
                     <span className="font-medium">{customer.phone}</span>
                   </div>
                 )}
-                {(invoice.address ||
-                  customer?.address) && (
+                {(composeCustomerAddress(customer) || invoice.address) && (
                   <div>
                     <span className="text-gray-600">Address:</span>{" "}
                     <span className="font-medium">
-                      {invoice.address || customer?.address}
+                      {composeCustomerAddress(customer) || invoice.address}
                     </span>
                   </div>
                 )}
@@ -496,27 +510,32 @@ export default function InvoiceView() {
           </CardContent>
         </Card>
 
-        {/* Payment info */}
-        <Card className="bg-white shadow-sm">
-          <CardContent className="p-4 sm:p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">
-              Payment Information
-            </h3>
-            <div className="text-sm text-gray-700 space-y-1">
-              <p>
-                <span className="text-gray-600">Account Name:</span>{" "}
-                Treemarkables Ltd
-              </p>
-              <p>
-                <span className="text-gray-600">Account:</span>{" "}
-                06-0637-0768850-00
-              </p>
-              <p className="pt-2">
-                Please use Invoice #{invoice.invoiceNumber} as the reference.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Payment info — only shown when the business has set its bank details,
+            so a customer is never told to pay into another business's account. */}
+        {company.bankAccountNumber ? (
+          <Card className="bg-white shadow-sm">
+            <CardContent className="p-4 sm:p-6">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                Payment Information
+              </h3>
+              <div className="text-sm text-gray-700 space-y-1">
+                {company.bankAccountName ? (
+                  <p>
+                    <span className="text-gray-600">Account Name:</span>{" "}
+                    {company.bankAccountName}
+                  </p>
+                ) : null}
+                <p>
+                  <span className="text-gray-600">Account:</span>{" "}
+                  {company.bankAccountNumber}
+                </p>
+                <p className="pt-2">
+                  Please use Invoice #{invoice.invoiceNumber} as the reference.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* PDF link */}
         <div className="flex justify-center pt-2 pb-8">
@@ -532,10 +551,12 @@ export default function InvoiceView() {
         </div>
 
         <div className="text-center text-xs text-gray-500 pb-8">
-          <p>Thank you for choosing Treemarkables.</p>
-          <p className="mt-1">
-            Questions? Contact quotes@treemarkables.nz or 027 216 6882.
-          </p>
+          <p>{company.name ? `Thank you for choosing ${company.name}.` : "Thank you."}</p>
+          {company.email || company.phone ? (
+            <p className="mt-1">
+              Questions? Contact {[company.email, company.phone].filter(Boolean).join(" or ")}.
+            </p>
+          ) : null}
         </div>
       </div>
 

@@ -394,6 +394,7 @@ export function SpeechToQuote({
                           ? "button-stop-recording"
                           : "button-start-recording"
                       }
+                      aria-label={isRecording ? "Stop recording" : "Start recording"}
                     >
                       {isRecording ? (
                         <Square className="h-12 w-12" />
