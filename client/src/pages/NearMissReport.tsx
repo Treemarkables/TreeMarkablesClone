@@ -332,7 +332,6 @@ export default function NearMissReportPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/near-miss-reports"] });
-      toast({ title: "Report submitted", description: "Your near miss report has been submitted for review." });
       navigate("/near-miss-history");
     },
   });
@@ -363,7 +362,6 @@ export default function NearMissReportPage() {
       apiRequest("POST", `/api/near-miss-witnesses/${witnessId}/sign`, { signatureSvg: svg }),
     onSuccess: async (_res, { witnessId }) => {
       setWitnesses(prev => prev.map(w => w.id === witnessId ? { ...w, status: "signed" } : w));
-      toast({ title: "Signature captured" });
     },
   });
 
@@ -409,7 +407,6 @@ export default function NearMissReportPage() {
     if (!valid1) { setStep(0); return; }
     try {
       await saveMutation.mutateAsync(buildPayload());
-      toast({ title: "Draft saved" });
     } catch {
       toast({ title: "Save failed", variant: "destructive" });
     }

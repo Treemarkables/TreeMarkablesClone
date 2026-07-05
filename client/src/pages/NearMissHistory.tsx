@@ -90,7 +90,6 @@ export default function NearMissHistory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/near-miss-reports"] });
       queryClient.invalidateQueries({ queryKey: [`/api/near-miss-reports/${selectedId}`] });
-      toast({ title: "Report closed" });
     },
   });
 
