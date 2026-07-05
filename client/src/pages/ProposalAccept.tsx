@@ -131,16 +131,19 @@ export default function ProposalAccept() {
   const isQuote = proposal ? proposal.templateUsed === 'quote' : quoteTypeHint;
   const docLabel = isQuote ? 'Quote' : 'Proposal';
   const docLower = isQuote ? 'quote' : 'proposal';
+  // Company fields come from the server payload (scoped to the proposal's tenant).
+  // The fallback is intentionally BLANK — never another business's details — for
+  // the rare case the server returns no template.
   const template = proposalDataResponse?.data?.template || {
     id: 'default',
     name: 'Default Template',
     type: 'proposal',
-    companyName: 'Treemarkables',
-    companyPhone: '+64 6 867 1234',
-    companyEmail: 'info@treemarkables.co.nz',
-    companyAddress: 'Gisborne, New Zealand',
+    companyName: '',
+    companyPhone: '',
+    companyEmail: '',
+    companyAddress: '',
     paymentTerms: 'This proposal is valid for 30 days from the date above. Payment due within 7 days of acceptance.',
-    gstNumber: '123-456-789'
+    gstNumber: ''
   };
 
   // If we already loaded the proposal and it's pending deposit (e.g. customer
@@ -374,7 +377,7 @@ export default function ProposalAccept() {
                 </p>
                 <p className="flex items-start gap-2">
                   <Check className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                  <span>If you have any questions, please contact us at {template.companyPhone}</span>
+                  <span>If you have any questions, please contact us{template.companyPhone ? ` at ${template.companyPhone}` : ""}</span>
                 </p>
               </div>
             </CardContent>

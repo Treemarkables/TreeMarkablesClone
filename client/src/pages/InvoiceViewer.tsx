@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Receipt, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
+import { composeCustomerAddress } from "@shared/customerAddress";
 
 interface InvoiceViewerProps {}
 
@@ -58,6 +59,9 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
   const invoice = invoiceResponse.data;
   const customer = invoice.customer;
   const job = invoice.job;
+  // Per-tenant identity from the server payload (scoped to the invoice's business).
+  // Blank for an unconfigured business — never another business's contact/bank.
+  const company = (invoice as any).company ?? {};
 
   // Calculate totals from line items (invoices use 'items', jobs use 'lineItems')
   const lineItems = invoice.items || invoice.lineItems || [];
@@ -167,7 +171,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               <div className="flex justify-center mb-2">
                 <img
                   src={logoUrl}
-                  alt="Treemarkables"
+                  alt={company.name || "Invoice"}
                   className="h-20 object-contain"
                   onError={(e) => {
                     // If the company logo URL is dead (e.g. an older upload that
@@ -180,8 +184,14 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                   }}
                 />
               </div>
-              <p className="text-sm text-gray-600">Professional Tree Care Services</p>
-              <p className="text-xs text-gray-500">Gisborne, New Zealand | Phone: 0272166882 | Email: quotes@treemarkables.nz</p>
+              {company.name ? (
+                <p className="text-sm text-gray-600">{company.name}</p>
+              ) : null}
+              {[company.address, company.phone ? `Phone: ${company.phone}` : "", company.email ? `Email: ${company.email}` : ""].filter(Boolean).length ? (
+                <p className="text-xs text-gray-500">
+                  {[company.address, company.phone ? `Phone: ${company.phone}` : "", company.email ? `Email: ${company.email}` : ""].filter(Boolean).join(" | ")}
+                </p>
+              ) : null}
             </div>
 
             {/* Status Banner */}
@@ -248,7 +258,7 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                   </div>
                   <div>
                     <span className="text-gray-600">Address:</span>
-                    <span className="font-medium ml-2">{invoice.address || job?.address || customer?.address || 'N/A'}</span>
+                    <span className="font-medium ml-2">{composeCustomerAddress(customer) || invoice.address || job?.address || 'N/A'}</span>
                   </div>
                 </div>
               </div>
@@ -371,17 +381,22 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               </div>
             </div>
 
-            {/* Payment Information */}
-            <div className="border-t pt-3 mb-3">
-              <h3 className="text-base font-semibold text-gray-900 mb-2">Payment Information</h3>
-              <div className="bg-gray-50 rounded-lg p-2">
-                <div className="text-sm">
-                  <p className="font-medium text-gray-900 mb-1">Bank Transfer Details:</p>
-                  <p className="text-gray-700">Account Name: Treemarkables Ltd</p>
-                  <p className="text-gray-700">Account: 06-0637-0768850-00</p>
+            {/* Payment Information — only when the business has set its bank details,
+                so a customer is never told to pay into another business's account. */}
+            {company.bankAccountNumber ? (
+              <div className="border-t pt-3 mb-3">
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Payment Information</h3>
+                <div className="bg-gray-50 rounded-lg p-2">
+                  <div className="text-sm">
+                    <p className="font-medium text-gray-900 mb-1">Bank Transfer Details:</p>
+                    {company.bankAccountName ? (
+                      <p className="text-gray-700">Account Name: {company.bankAccountName}</p>
+                    ) : null}
+                    <p className="text-gray-700">Account: {company.bankAccountNumber}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : null}
 
             {/* Terms */}
             <div className="border-t pt-3">
@@ -395,10 +410,12 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
 
             {/* Footer */}
             <div className="text-center text-xs text-gray-600 mt-3 pt-3 border-t">
-              <p>Thank you for choosing Treemarkables!</p>
-              <p className="mt-1">
-                For any questions about this invoice, please contact us at quotes@treemarkables.nz or 0272166882.
-              </p>
+              <p>{company.name ? `Thank you for choosing ${company.name}!` : "Thank you!"}</p>
+              {company.email || company.phone ? (
+                <p className="mt-1">
+                  For any questions about this invoice, please contact us at {[company.email, company.phone].filter(Boolean).join(" or ")}.
+                </p>
+              ) : null}
             </div>
           </CardContent>
         </Card>

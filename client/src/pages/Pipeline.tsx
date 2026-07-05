@@ -222,7 +222,8 @@ function DraggableOpportunityCard({
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-4 w-4 p-0" 
+                className="h-4 w-4 p-0"
+                aria-label="Opportunity actions"
                 data-testid={`menu-${opportunity.id}`}
                 onClick={(e) => e.stopPropagation()}
               >

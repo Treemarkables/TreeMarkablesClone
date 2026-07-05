@@ -1,4 +1,4 @@
-import { useJobFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
+import { useJobFilter, useLaneFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -183,6 +183,7 @@ interface JobAssignment {
   scheduledDates?: string[] | null; // Explicit NZ day set for multi-day jobs that skip days (e.g. weekends)
   inQueue?: boolean; // Whether job is parked in the dispatch queue
   queueReason?: string | null; // Reason for being in queue
+  laneId?: string | null; // Custom lane the job sits in (orthogonal to status)
   customerConfirmed?: boolean; // Whether the customer has confirmed the booking
   confirmationReplySentAt?: string | null; // Timestamp of our acknowledgement reply to the customer's confirmation
   customerReplyReceivedAt?: string | null; // Timestamp of most-recent inbound customer reply (any email/SMS reply tagged customer-reply)
@@ -685,7 +686,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [assignmentMode, setAssignmentMode] =
     useState<AssignmentMode>("individual");
   const [jobFilter, setJobFilter] = useJobFilter();
+  const [laneFilter] = useLaneFilter();
   const [onlyUnconfirmed, setOnlyUnconfirmed] = useOnlyUnconfirmed();
+
+  // Lanes — custom buckets a job can sit in (orthogonal to status). Used for the optional lane
+  // filter and the coloured chip on each card. Keyed map for quick lookup by id.
+  const { data: lanesResp } = useQuery<{ data: { id: string; name: string; color: string }[] }>({
+    queryKey: ["/api/lanes"],
+  });
+  const laneMap = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; color: string }>();
+    (lanesResp?.data || []).forEach((l) => m.set(l.id, l));
+    return m;
+  }, [lanesResp]);
 
   const countUnconfirmed = (jobs: { status: string; customerConfirmed?: boolean }[]) =>
     jobs.filter(
@@ -823,6 +836,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     error: jobsError,
   } = useQuery({
     queryKey: [JOBS_QUERY_KEY],
+    // Live board: poll explicitly. SSE broadcasts invalidate ['/api/jobs'],
+    // which does not match this parameterized key, so without an interval the
+    // board would only refresh on focus/navigation.
+    refetchInterval: 30_000,
   });
 
   // Check for pending job data from conversations on mount
@@ -1222,6 +1239,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           scheduledDates: apiJob.scheduledDates || null,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
+          laneId: apiJob.laneId || null,
           customerConfirmed: apiJob.customerConfirmed || false,
           confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
@@ -1318,6 +1336,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           scheduledDates: apiJob.scheduledDates || null,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
+          laneId: apiJob.laneId || null,
           customerConfirmed: apiJob.customerConfirmed || false,
           confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
@@ -1657,7 +1676,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, jobs, jobsLoading, isDeepSearchActive, isDeepSearchLoading]);
 
-  const getTodaysJobs = () => {
+  // Memoized: this runs a 4-pass filter + dedup + sort over up to 500 jobs
+  // (with per-job date parsing). Unmemoized it re-ran on every render of this
+  // component — including every search keystroke — twice the work when both
+  // call sites hit. Deps cover every input the pipeline reads; `jobs` gets a
+  // fresh identity from the 30s poll, so the "today" date window stays fresh.
+  const todaysJobs = useMemo(() => {
     // If deep search is active, return deep search results
     if (isDeepSearchActive) {
       return deepSearchResults;
@@ -1676,6 +1700,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // covers those.
         if (isSearching) {
           return job.status !== "completed" && job.status !== "invoiced";
+        }
+
+        // Lane filter takes precedence: when a lane is selected, show every active job in that
+        // lane regardless of the status tab (completed/invoiced already excluded by the query).
+        if (laneFilter !== "all") {
+          return job.laneId === laneFilter;
         }
 
         // Queued jobs belong exclusively to the Queue tab
@@ -1715,8 +1745,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return job.status === "work_order" && !job.customerConfirmed;
       })
       .filter((job) => {
-        // When searching or a specific status filter is active, skip the date window
-        if (isSearching || jobFilter !== "all") return true;
+        // When searching, a specific status filter, or a lane filter is active, skip the date window
+        if (isSearching || jobFilter !== "all" || laneFilter !== "all") return true;
 
         // Always include work_order jobs — these are active jobs that need
         // dispatching. ('scheduled' status retired 2026-05.)
@@ -1833,23 +1863,27 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     });
 
     return sorted;
-  };
+  }, [
+    jobs,
+    isDeepSearchActive,
+    deepSearchResults,
+    searchQuery,
+    laneFilter,
+    jobFilter,
+    onlyUnconfirmed,
+  ]);
 
-  const getUnscheduledJobs = () => {
-    return jobs
-      .filter(
-        (job) =>
-          job.status === "quote" ||
-          job.status === "lead" ||
-          !job.startTime ||
-          job.startTime.includes("0000-00-00"),
-      )
-      .sort((a, b) => {
-        const jobNumberA = parseInt(a.jobNumber || "0", 10);
-        const jobNumberB = parseInt(b.jobNumber || "0", 10);
-        return jobNumberB - jobNumberA;
-      });
-  };
+  // Shim so the six existing call sites keep working unchanged.
+  const getTodaysJobs = () => todaysJobs;
+
+  // Per-day price share per job — calculateDailyTotal parses the job's NZ
+  // scheduled-date set on every call, so compute once per jobs refresh
+  // instead of per row per render.
+  const dailyTotalByJobId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const job of todaysJobs) m.set(job.id, calculateDailyTotal(job));
+    return m;
+  }, [todaysJobs]);
 
   // Job Mutations
   const createJobMutation = useMutation({
@@ -2585,7 +2619,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     );
   }
 
-  const todaysJobs = getTodaysJobs();
   const unconfirmedCount = countUnconfirmed(todaysJobs);
 
   return (
@@ -2751,7 +2784,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           {getTodaysJobs().map((job) => {
                             const customerName =
                               job.customerName || "Unknown Customer";
-                            const total = calculateDailyTotal(job);
+                            const total = dailyTotalByJobId.get(job.id) ?? calculateDailyTotal(job);
                             const fullAddress = job.address?.trim() || "";
 
                             // Get status badge styling - same as mobile
@@ -2815,7 +2848,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             return (
                               <div
                                 key={job.id}
-                                className="bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+                                className="bg-white hover:bg-gray-50 cursor-pointer transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_120px]"
                                 style={(() => {
                                   const firstId = job.assignedTeam?.[0];
                                   const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
@@ -2858,6 +2891,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   )
                                     return;
                                   handleEditJob(job);
+                                }}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.target !== e.currentTarget) return;
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    handleEditJob(job);
+                                  }
                                 }}
                                 data-testid={`desktop-job-card-${job.id}`}
                               >
@@ -2933,6 +2975,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                       <div className="mb-1">
                                         <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
                                           {job.queueReason || "Queued"}
+                                        </Badge>
+                                      </div>
+                                    )}
+
+                                    {/* Row 2d: Lane chip (when the job sits in a custom lane) */}
+                                    {job.laneId && laneMap.get(job.laneId) && (
+                                      <div className="mb-1">
+                                        <Badge className="bg-slate-50 text-slate-700 border-0 text-xs rounded-lg">
+                                          <span
+                                            className="w-2 h-2 rounded-full mr-1.5"
+                                            style={{ backgroundColor: laneMap.get(job.laneId)!.color }}
+                                          />
+                                          {laneMap.get(job.laneId)!.name}
                                         </Badge>
                                       </div>
                                     )}
@@ -3093,6 +3148,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           setDeepSearchResults([]);
                         }}
                         data-testid="btn-clear-search-mobile"
+                        aria-label="Clear search"
                       >
                         <X className="h-3.5 w-3.5" />
                       </Button>
@@ -3165,7 +3221,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <div className="divide-y divide-gray-100 w-full">
               {getTodaysJobs().map((job: any) => {
                 const customerName = job.customerName || "Unknown Customer";
-                const total = calculateDailyTotal(job);
+                const total = dailyTotalByJobId.get(job.id) ?? calculateDailyTotal(job);
                 const suburb = job.address?.split(",")[0]?.trim() || "";
 
                 // Get status badge styling
@@ -3268,13 +3324,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 return (
                   <div
                     key={job.id}
-                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
+                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_130px]"
                     style={(() => {
                       const firstId = job.assignedTeam?.[0];
                       const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
                       return pal ? { borderLeft: `3px solid ${pal.dot}` } : {};
                     })()}
                     onClick={() => handleEditJob(job)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleEditJob(job);
+                      }
+                    }}
                     data-testid={`job-card-${job.id}`}
                   >
                     <div className="flex items-start gap-3 p-4 min-w-0 overflow-hidden">

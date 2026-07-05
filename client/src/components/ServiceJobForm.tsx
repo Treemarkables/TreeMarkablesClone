@@ -283,6 +283,7 @@ export function ServiceJobForm({
                 onClick={onClose}
                 className="text-white hover:bg-amber-600"
                 data-testid="button-close-job-form"
+                aria-label="Close job form"
               >
                 <X className="h-4 w-4" />
               </Button>

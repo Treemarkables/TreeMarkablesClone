@@ -5,8 +5,7 @@ import {
   useState,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTwilioVoice, CallEvent, AudioRouteEvent } from "@/hooks/useTwilioVoice";
-import { useAuth } from "@/contexts/AuthContext";
+import { useTwilioVoice, CallEvent } from "@/hooks/useTwilioVoice";
 import { useToast } from "@/hooks/use-toast";
 import { Mic, MicOff, Volume2, Phone } from "lucide-react";
 
@@ -36,23 +35,10 @@ interface CallInfo {
 export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { currentUser } = useAuth();
-  const showAudioDiag = true;
-  // EXPERIMENT (owner-gated): the full-screen in-app call overlay keeps the
-  // WKWebView foreground/active, which holds the AVAudioSession and blocks the
-  // in-app speaker. Suppress the overlay for the owner so the call stays in the
-  // native Dynamic Island / CallKit UI (whose speaker works) — to confirm
-  // dropping the overlay frees the speaker before changing it for everyone.
-  const suppressOverlay =
-    (currentUser?.email ?? "").toLowerCase() === "jullianhalley@hotmail.com";
   const [callState, setCallState] = useState<CallState>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
-  // Live audio route pushed from native — the on-device diagnostic that stands
-  // in for unreadable os_log. Shown on the call screen so the actual output
-  // route can be read off the phone during a call.
-  const [audioRoute, setAudioRoute] = useState<AudioRouteEvent | null>(null);
 
   const refreshCallHistory = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
@@ -63,12 +49,6 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setCallInfo(null);
     setIsMuted(false);
     setIsSpeaker(false);
-    setAudioRoute(null);
-  }, []);
-
-  const handleAudioRoute = useCallback((data: AudioRouteEvent) => {
-    console.log("[TwilioCall] audioRoute", data);
-    setAudioRoute(data);
   }, []);
 
   const handleIncomingCall = useCallback((data: CallEvent) => {
@@ -131,7 +111,6 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     onCallFailed: reset,
     onRegistered: handleRegistered,
     onRegistrationError: handleRegistrationError,
-    onAudioRoute: handleAudioRoute,
   });
 
   const onHangup = useCallback(() => {
@@ -162,9 +141,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   // already consumed; show the screen anyway with a generic caller label so
   // the user always has mute/speaker/hang-up controls.
   const showOverlay =
-    isNative &&
-    (callState === "connecting" || callState === "active") &&
-    !suppressOverlay;
+    isNative && (callState === "connecting" || callState === "active");
 
   // Diagnostic: surfaces in Safari Web Inspector why the overlay did/didn't show
   // during a live call. Gated on callState so it doesn't spam on idle renders.
@@ -186,8 +163,6 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
           callInfo={callInfo ?? { foreground: false }}
           isMuted={isMuted}
           isSpeaker={isSpeaker}
-          audioRoute={audioRoute}
-          showAudioDiag={showAudioDiag}
           onHangup={onHangup}
           onToggleMute={onToggleMute}
           onToggleSpeaker={onToggleSpeaker}
@@ -202,8 +177,6 @@ function CallScreen({
   callInfo,
   isMuted,
   isSpeaker,
-  audioRoute,
-  showAudioDiag,
   onHangup,
   onToggleMute,
   onToggleSpeaker,
@@ -212,8 +185,6 @@ function CallScreen({
   callInfo: CallInfo;
   isMuted: boolean;
   isSpeaker: boolean;
-  audioRoute: AudioRouteEvent | null;
-  showAudioDiag: boolean;
   onHangup: () => void;
   onToggleMute: () => void;
   onToggleSpeaker: () => void;
@@ -247,30 +218,6 @@ function CallScreen({
           <p className="text-white/60 text-base mt-1">{callInfo.from}</p>
         )}
         <p className="text-white/60 text-lg mt-3 tabular-nums">{status}</p>
-        {/* Audio-route diagnostic for the iOS speaker bug. Always renders (when
-            enabled) so a silent screen can't hide whether the new JS is loaded:
-            seeing "diag v2" confirms this build; "actual" vs "selected" is the
-            route truth (actual≠selected is the bug); a stuck "waiting" line means
-            the native audioRoute event isn't reaching the webview. */}
-        {showAudioDiag && (
-          <div className="mt-3 text-center text-xs text-white/45 tabular-nums leading-relaxed">
-            {audioRoute ? (
-              <>
-                <p>
-                  selected: {audioRoute.speakerSelected === "true" ? "speaker" : "receiver"}
-                  {"  ·  "}
-                  actual: {audioRoute.onSpeaker === "true" ? "speaker" : "receiver"}
-                </p>
-                <p>route [{audioRoute.outputs || "?"}]</p>
-                {audioRoute.attempts && audioRoute.attempts !== "0" && (
-                  <p>reasserts: {audioRoute.attempts}</p>
-                )}
-              </>
-            ) : (
-              <p>diag v2 · waiting for native audioRoute event…</p>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Controls */}

@@ -7,6 +7,7 @@
 // diary entry. Optionally records a deposit payment against the new job.
 
 import { storage } from '../storage';
+import { onLaneJobEvent } from './laneAutomationService';
 import type { Proposal } from '@shared/schema';
 
 export interface FinalizeProposalAcceptanceInput {
@@ -192,6 +193,12 @@ export async function finalizeProposalAcceptance(
     } catch (diaryErr) {
       console.error('Failed to log proposal-accepted diary entry:', diaryErr);
     }
+  }
+
+  // Lanes: a lane can auto-remove the job from a follow-up bucket (or move it into a "Won" lane)
+  // when the quote is accepted. Best-effort; never block acceptance.
+  if (job?.id) {
+    onLaneJobEvent(job.id, 'quote_accepted').catch(err => console.error('[Lanes] quote-accepted trigger error:', err));
   }
 
   return { job, jobNumber, pendingMessageId };

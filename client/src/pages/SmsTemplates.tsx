@@ -294,6 +294,7 @@ export default function SmsTemplates() {
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Back to settings"
             data-testid="button-back-to-settings"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -391,6 +392,7 @@ export default function SmsTemplates() {
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => duplicateTemplate(template)}
+                      aria-label="Duplicate template"
                       data-testid={`button-duplicate-${template.id}`}
                     >
                       <Copy className="h-4 w-4" />
@@ -400,6 +402,7 @@ export default function SmsTemplates() {
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => handleOpenEditor(template)}
+                      aria-label="Edit template"
                       data-testid={`button-edit-${template.id}`}
                     >
                       <Edit2 className="h-4 w-4" />
@@ -410,6 +413,7 @@ export default function SmsTemplates() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive"
+                          aria-label="Delete template"
                           data-testid={`button-delete-${template.id}`}
                         >
                           <Trash2 className="h-4 w-4" />

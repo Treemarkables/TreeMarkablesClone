@@ -521,6 +521,7 @@ export default function Opportunities() {
             variant="ghost"
             size="icon"
             className="flex-shrink-0"
+            aria-label="Open menu"
             data-testid="button-menu"
           >
             <Menu className="h-5 w-5" />
@@ -743,8 +744,17 @@ export default function Opportunities() {
 
                   {/* Conversation Info */}
                   <div
-                    className="flex-1 min-w-0 overflow-hidden cursor-pointer"
+                    className="flex-1 min-w-0 overflow-hidden cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
                     onClick={() => handleConversationClick(conversation)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleConversationClick(conversation);
+                      }
+                    }}
                   >
                     <div className="flex items-baseline gap-1 sm:gap-2">
                       <h3
@@ -806,6 +816,7 @@ export default function Opportunities() {
                           size="icon"
                           className="flex-shrink-0 h-8 w-8 border-2 border-black bg-yellow-300"
                           onClick={(e) => e.stopPropagation()}
+                          aria-label="Conversation actions"
                           data-testid={`button-actions-${conversation.id}`}
                         >
                           <MoreVertical className="h-5 w-5" />

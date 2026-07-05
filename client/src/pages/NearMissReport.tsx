@@ -332,7 +332,6 @@ export default function NearMissReportPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/near-miss-reports"] });
-      toast({ title: "Report submitted", description: "Your near miss report has been submitted for review." });
       navigate("/near-miss-history");
     },
   });
@@ -363,7 +362,6 @@ export default function NearMissReportPage() {
       apiRequest("POST", `/api/near-miss-witnesses/${witnessId}/sign`, { signatureSvg: svg }),
     onSuccess: async (_res, { witnessId }) => {
       setWitnesses(prev => prev.map(w => w.id === witnessId ? { ...w, status: "signed" } : w));
-      toast({ title: "Signature captured" });
     },
   });
 
@@ -409,7 +407,6 @@ export default function NearMissReportPage() {
     if (!valid1) { setStep(0); return; }
     try {
       await saveMutation.mutateAsync(buildPayload());
-      toast({ title: "Draft saved" });
     } catch {
       toast({ title: "Save failed", variant: "destructive" });
     }
@@ -460,6 +457,7 @@ export default function NearMissReportPage() {
           <div key={i} className="flex items-center gap-1 flex-1">
             <button
               type="button"
+              aria-label={`Step ${i + 1}: ${label}`}
               onClick={() => { if (i < step || reportId) setStep(i); }}
               className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium border transition-colors ${
                 i === step
@@ -585,7 +583,7 @@ export default function NearMissReportPage() {
                   onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addEquipment(); } }}
                   placeholder="e.g. chainsaw, chipper, truck…"
                 />
-                <Button type="button" variant="outline" size="icon" onClick={addEquipment}>
+                <Button type="button" variant="outline" size="icon" onClick={addEquipment} aria-label="Add equipment">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>

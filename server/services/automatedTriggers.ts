@@ -2,6 +2,7 @@ import { notificationService } from './notificationService';
 import { storage } from '../storage';
 import { workflowAutomationService } from './workflowAutomation';
 import { runAllReminderChecks } from './reminderChecker';
+import { runLaneAutomationChecks, runLaneInvoiceChecks, runLaneStatusChangeAutomations, runLaneEntryForEvent, runLaneExitForEvent, onLaneJobEvent } from './laneAutomationService';
 import type { Job, Customer, InsertJob } from '@shared/schema';
 
 // Hook into job status changes to trigger automated notifications
@@ -41,8 +42,23 @@ export class AutomatedTriggers {
       if (newStatus === 'completed' && oldStatus !== 'completed') {
         await this.onJobCompleted(job);
       }
+
+      // Lanes: run status_changed automations for the job's current lane, then evaluate
+      // status-driven auto-exit and auto-entry (a lane can pin a target status).
+      await runLaneStatusChangeAutomations(job);
+      await runLaneExitForEvent(job, 'status_changed');
+      await runLaneEntryForEvent(job, 'status_changed');
     } catch (error) {
       console.error('Error in job status change trigger:', error);
+    }
+  }
+
+  // Called when a customer replies (from the SMS / email reply pollers).
+  static async onCustomerReplyReceived(jobId: string): Promise<void> {
+    try {
+      await onLaneJobEvent(jobId, 'customer_replied');
+    } catch (error) {
+      console.error('Error in customer-reply lane trigger:', error);
     }
   }
 
@@ -173,6 +189,9 @@ export class AutomatedTriggers {
         jobId: job.id,
         job
       });
+
+      // Lanes: auto-enter a lane configured for new jobs.
+      await runLaneEntryForEvent(job, 'job_created');
       
       // If the job is created already on the calendar, trigger scheduling
       // notifications. ('scheduled' status retired 2026-05 — the signal is
@@ -257,9 +276,20 @@ export class AutomatedTriggers {
       runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Reminder check error:', err));
     }, 60 * 60 * 1000); // 1 hour
 
+    // Run lane checks every hour: settle late-payment entry/exit FIRST (so a paid job leaves the
+    // chase lane before reminders run), then the "days in lane" automations.
+    setInterval(() => {
+      runLaneInvoiceChecks()
+        .catch(err => console.error('[AutomatedTriggers] Lane invoice check error:', err))
+        .finally(() => runLaneAutomationChecks().catch(err => console.error('[AutomatedTriggers] Lane automation check error:', err)));
+    }, 60 * 60 * 1000); // 1 hour
+
     // Run once shortly after startup (90 second delay to let DB connect)
     setTimeout(() => {
       runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Initial reminder check error:', err));
+      runLaneInvoiceChecks()
+        .catch(err => console.error('[AutomatedTriggers] Initial lane invoice check error:', err))
+        .finally(() => runLaneAutomationChecks().catch(err => console.error('[AutomatedTriggers] Initial lane automation check error:', err)));
     }, 90 * 1000);
 
     console.log('✅ Automated communication system initialized');

@@ -889,6 +889,7 @@ export function CalendarGrid({
             size="icon"
             onClick={goToPrevious}
             data-testid="button-previous"
+            aria-label="Previous period"
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
@@ -900,6 +901,7 @@ export function CalendarGrid({
             size="icon"
             onClick={goToNext}
             data-testid="button-next"
+            aria-label="Next period"
           >
             <ChevronRight className="h-5 w-5" />
           </Button>

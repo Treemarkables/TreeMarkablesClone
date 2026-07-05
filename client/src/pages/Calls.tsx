@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -57,6 +58,8 @@ export default function Calls() {
   const [playingCallId, setPlayingCallId] = useState<string | null>(null);
   const [expandedTranscript, setExpandedTranscript] = useState<string | null>(null);
   const [callToDelete, setCallToDelete] = useState<Call | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   const { data: callsResponse, isLoading } = useQuery<{
     success: boolean;
@@ -131,6 +134,12 @@ export default function Calls() {
       if (playingCallId === callId) setPlayingCallId(null);
       if (expandedTranscript === callId) setExpandedTranscript(null);
       setCallToDelete(null);
+      setSelectedIds((prev) => {
+        if (!prev.has(callId)) return prev;
+        const next = new Set(prev);
+        next.delete(callId);
+        return next;
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
     },
     onError: (err: Error) => {
@@ -142,6 +151,48 @@ export default function Calls() {
       });
     },
   });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const res = await apiRequest("POST", "/api/calls/bulk-delete", { ids });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Failed to delete calls");
+      return json as { deleted: number; failed: string[] };
+    },
+    onSuccess: (data) => {
+      setBulkDeleteOpen(false);
+      setSelectedIds(new Set(data.failed ?? []));
+      setPlayingCallId(null);
+      setExpandedTranscript(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
+      if (data.failed?.length) {
+        toast({
+          title: "Some calls weren't deleted",
+          description: `${data.failed.length} of ${
+            data.deleted + data.failed.length
+          } calls couldn't be deleted. They're still selected — try again.`,
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (err: Error) => {
+      setBulkDeleteOpen(false);
+      toast({
+        title: "Couldn't delete calls",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleSelected = (callId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(callId)) next.delete(callId);
+      else next.add(callId);
+      return next;
+    });
+  };
 
   const filteredCalls = calls.filter((call) => {
     const customerName = resolveCustomerName(call);
@@ -239,6 +290,43 @@ export default function Calls() {
             </div>
           ) : (
             <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2 px-1">
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                  <Checkbox
+                    checked={
+                      filteredCalls.length > 0 &&
+                      filteredCalls.every((c) => selectedIds.has(c.id))
+                    }
+                    onCheckedChange={(checked) =>
+                      setSelectedIds(
+                        checked
+                          ? new Set(filteredCalls.map((c) => c.id))
+                          : new Set(),
+                      )
+                    }
+                    data-testid="checkbox-select-all-calls"
+                  />
+                  {selectedIds.size > 0
+                    ? `${selectedIds.size} selected`
+                    : "Select all"}
+                </label>
+                {selectedIds.size > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setBulkDeleteOpen(true)}
+                    disabled={bulkDeleteMutation.isPending}
+                    data-testid="button-bulk-delete-calls"
+                  >
+                    {bulkDeleteMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4 mr-1" />
+                    )}
+                    Delete {selectedIds.size}
+                  </Button>
+                )}
+              </div>
               {filteredCalls.map((call) => {
                 const customerName = resolveCustomerName(call);
                 const isPlaying = playingCallId === call.id;
@@ -250,7 +338,12 @@ export default function Calls() {
                     data-testid={`call-row-${call.id}`}
                   >
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                      <div className="flex-shrink-0">
+                      <div className="flex-shrink-0 flex items-center gap-3">
+                        <Checkbox
+                          checked={selectedIds.has(call.id)}
+                          onCheckedChange={() => toggleSelected(call.id)}
+                          data-testid={`checkbox-select-call-${call.id}`}
+                        />
                         {call.direction === "inbound" ? (
                           <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
                             <PhoneIncoming className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -420,6 +513,30 @@ export default function Calls() {
                 if (callToDelete) deleteCallMutation.mutate(callToDelete.id);
               }}
               data-testid="button-confirm-delete-call"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedIds.size}{" "}
+              {selectedIds.size === 1 ? "call" : "calls"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The selected calls will be permanently removed, including their
+              recordings and transcripts. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+              data-testid="button-confirm-bulk-delete-calls"
             >
               Delete
             </AlertDialogAction>

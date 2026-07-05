@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import Wordmark from "./Wordmark";
 import { LinkButton } from "./Button";
-import { NAV } from "@/lib/brand";
+import { BRAND, NAV } from "@/lib/brand";
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -51,8 +51,8 @@ export default function Header() {
         </nav>
 
         <div className="hidden md:flex items-center gap-2">
-          <LinkButton href="/contact" variant="ghost" size="md">
-            Sign in
+          <LinkButton href={BRAND.loginUrl} external variant="ghost" size="md">
+            Log in
           </LinkButton>
           <LinkButton href="/contact" variant="primary" size="md">
             Request access
@@ -95,8 +95,8 @@ export default function Header() {
               </Link>
             ))}
             <div className="mt-2 grid grid-cols-2 gap-2">
-              <LinkButton href="/contact" variant="ghost" size="md" className="border border-ink-200">
-                Sign in
+              <LinkButton href={BRAND.loginUrl} external variant="ghost" size="md" className="border border-ink-200">
+                Log in
               </LinkButton>
               <LinkButton href="/contact" variant="primary" size="md">
                 Request access

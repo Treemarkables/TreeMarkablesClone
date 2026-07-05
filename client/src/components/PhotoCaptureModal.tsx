@@ -223,6 +223,7 @@ export function PhotoCaptureModal({
                       className="absolute top-1 right-1 h-6 w-6 opacity-90 hover:opacity-100"
                       onClick={() => removePhoto(index)}
                       data-testid={`button-remove-photo-${index}`}
+                      aria-label="Remove photo"
                     >
                       <X className="w-3 h-3" />
                     </Button>

@@ -11,7 +11,8 @@ export function parseRecipients(to: string | string[]): string[] {
 
 interface EmailParams {
   to: string | string[];
-  from?: string;
+  from?: string; // Full "Name <addr>" override — wins over fromName
+  fromName?: string; // Per-tenant display name shown over the shared verified sending address (e.g. "Bob's Plumbing"). Falsy → platform default.
   subject: string;
   text?: string;
   html?: string;
@@ -65,6 +66,30 @@ class EmailService {
     return `job-${jobNumber}@jobs.treemarkables.co.nz`;
   }
 
+  /**
+   * Pull the bare email address out of a From header that may be either
+   * "Name <addr@x.com>" or just "addr@x.com".
+   */
+  private extractEmailAddress(from: string): string {
+    const match = from.match(/<([^>]+)>/);
+    return (match ? match[1] : from).trim();
+  }
+
+  /**
+   * Build a per-tenant From header: a tenant's display name over the shared,
+   * already-verified sending address. The address (domain) stays on the
+   * platform's verified Resend domain — subscribers do nothing — only the
+   * visible name changes, so the customer perceives the email as the tenant's.
+   * Strips characters that would break the header and quotes names with commas.
+   */
+  private composeFrom(fromName: string, baseFrom: string): string {
+    const address = this.extractEmailAddress(baseFrom);
+    const safeName = fromName.replace(/["<>\r\n]/g, '').trim();
+    if (!safeName) return baseFrom;
+    const display = safeName.includes(',') ? `"${safeName}"` : safeName;
+    return `${display} <${address}>`;
+  }
+
   async sendEmail(params: EmailParams): Promise<EmailResult> {
     try {
       // Get fresh Resend client for each send (uncacheable)
@@ -101,8 +126,14 @@ class EmailService {
         return { success: true, messageId: `mock-${Date.now()}` };
       }
 
-      // Use provided from email, or fall back to configured from email, or default
-      const fromEmail = params.from || configuredFromEmail || this.defaultFromEmail;
+      // Resolve the From header. Priority:
+      //   1. params.from — full "Name <addr>" override
+      //   2. params.fromName — per-tenant display name over the shared verified sending address
+      //   3. the platform default ("Treemarkables <info@updates.treemarkables.co.nz>")
+      const baseFrom = configuredFromEmail || this.defaultFromEmail;
+      const fromEmail = params.from
+        ? params.from
+        : (params.fromName ? this.composeFrom(params.fromName, baseFrom) : baseFrom);
       
       // Map attachments to Resend format
       // Resend SDK Attachment$1 interface uses camelCase: contentType, contentId
@@ -232,7 +263,7 @@ class EmailService {
 
     return this.sendEmail({
       to: customerEmail,
-      from: this.fromEmail,
+      fromName: businessName, // From header matches the "{businessName} Team" sign-off
       subject: template.subject,
       text: template.text,
       html: template.html,
@@ -310,7 +341,8 @@ class EmailService {
     customerName: string,
     quoteNumber: string,
     amount: number,
-    quoteData: any
+    quoteData: any,
+    businessName: string = 'Treemarkables' // de-hardcoded — caller passes the business name; default keeps Treemarkables unchanged
   ): Promise<EmailResult> {
     const subject = `Your Quote #${quoteNumber} - Treemarkables`;
     const text = `Hi ${customerName},\n\nThank you for your interest in our tree services. Please find your quote #${quoteNumber} attached.\n\nQuote Amount: $${amount.toFixed(2)} NZD\n\nThis quote is valid for 30 days. Please contact us if you have any questions.\n\nBest regards,\n${businessName} Team`;
@@ -359,7 +391,7 @@ class EmailService {
 
     return this.sendEmail({
       to: customerEmail,
-      from: this.fromEmail,
+      fromName: businessName, // From header matches the "{businessName} Team" sign-off
       subject,
       text,
       html
