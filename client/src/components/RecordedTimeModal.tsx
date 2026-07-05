@@ -32,6 +32,7 @@ export function RecordedTimeModal({
           onClick={onClose}
           className="absolute left-2 top-14 sm:top-2 h-10 w-10 z-10"
           data-testid="button-close-modal"
+          aria-label="Close"
         >
           <X className="h-5 w-5" />
         </Button>

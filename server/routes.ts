@@ -1939,8 +1939,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!employee) {
         return res.status(404).json({ success: false, message: 'Test user not found' });
       }
-      (req.session as any).userId = employee.id;
-      (req.session as any).userRole = employee.role;
+      req.session.employeeId = employee.id;
+      req.session.businessId = employee.businessId ?? undefined;
       req.session.save(() => {
         res.json({ success: true, data: { id: employee.id, role: employee.role } });
       });
@@ -3049,10 +3049,29 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
   });
 
 
+  // Public captcha config — tells the marketing-site forms whether to render the
+  // Cloudflare Turnstile widget. Enabled by setting BOTH TURNSTILE_SITE_KEY and
+  // TURNSTILE_SECRET_KEY (via the DO dashboard); unset = widget hidden and no
+  // server-side check, so the forms keep working with zero config.
+  app.get('/api/captcha/config', (_req: Request, res: Response) => {
+    const siteKey = process.env.TURNSTILE_SITE_KEY?.trim();
+    const secretKey = process.env.TURNSTILE_SECRET_KEY?.trim();
+    if (siteKey && secretKey) {
+      res.json({ provider: 'turnstile', siteKey });
+    } else {
+      res.json({ provider: null });
+    }
+  });
+
+  // Per-IP rate limit for the public contact form (in-memory, resets on deploy).
+  const contactFormRateLimit = new Map<string, { count: number; resetTime: number }>();
+  const CONTACT_FORM_MAX_PER_WINDOW = 5;
+  const CONTACT_FORM_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
   // Contact form submission endpoint
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
-      const { name, email, phone, hearAbout, message, captchaToken, leadSource } = req.body;
+      const { name, email, phone, hearAbout, message, captchaToken, leadSource, website } = req.body;
 
       // Validate contact form data
       const contactValidation = contactFormSchema.safeParse({
@@ -3080,6 +3099,70 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       // Capture server-side data
       const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
       const userAgent = req.get('User-Agent') || 'unknown';
+
+      // Honeypot: hidden "website" field real users never see. Bots that fill it
+      // get a fake success (so they don't learn to adapt) and nothing is created.
+      if (typeof website === 'string' && website.trim() !== '') {
+        console.log(`[contact-spam] Honeypot tripped by ${clientIp}`);
+        return res.json({
+          success: true,
+          message: 'Thank you! We will contact you within 24 hours for your free quote.'
+        });
+      }
+
+      // Per-IP rate limit — a real customer never needs more than a few
+      // submissions; a spam blast from one IP gets cut off.
+      const rlNow = Date.now();
+      const rlEntry = contactFormRateLimit.get(clientIp);
+      if (rlEntry && rlNow < rlEntry.resetTime) {
+        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
+          console.log(`[contact-spam] Rate limit hit by ${clientIp}`);
+          return res.status(429).json({
+            success: false,
+            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
+          });
+        }
+        rlEntry.count++;
+      } else {
+        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
+      }
+      if (contactFormRateLimit.size > 10000) contactFormRateLimit.clear(); // memory backstop
+
+      // Cloudflare Turnstile — enforced only when BOTH keys are configured, matching
+      // /api/captcha/config so the widget and the server check turn on together
+      // (secret-only would 400 every submission while the widget stays hidden).
+      const turnstileSecret = process.env.TURNSTILE_SECRET_KEY?.trim();
+      const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY?.trim();
+      if (turnstileSecret && turnstileSiteKey) {
+        if (!captchaToken) {
+          return res.status(400).json({
+            success: false,
+            message: 'Please complete the security check.'
+          });
+        }
+        try {
+          const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              secret: turnstileSecret,
+              response: String(captchaToken),
+              remoteip: clientIp,
+            }).toString(),
+          });
+          const verifyData = await verifyResponse.json();
+          if (!verifyData.success) {
+            console.log(`[contact-spam] Turnstile rejected ${clientIp}:`, verifyData['error-codes']);
+            return res.status(400).json({
+              success: false,
+              message: 'Security check failed. Please try again.'
+            });
+          }
+        } catch (verifyErr) {
+          // A siteverify outage must not cost a genuine lead — allow and log loud.
+          console.error('[contact-spam] Turnstile siteverify unreachable — allowing submission:', verifyErr);
+        }
+      }
 
       // CAPTCHA validation — opt-in. Set REQUIRE_CAPTCHA=1 to enable once
       // the frontend reCAPTCHA integration is wired up. Default is off.
@@ -3137,18 +3220,18 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         userAgent
       };
 
-      // Auto-create a job/lead directly from the contact form. The customer
-      // explicitly asked for a quote, so we skip the manual "convert conversation
-      // to lead" step and notify the operator about the new lead immediately.
+      // Conversation-first: the inquiry lands in the Inbox/Opportunities pages as an
+      // open conversation only — NO auto-created job card or customer record. Too much
+      // form spam was polluting the jobs pipeline, so the operator now triages in the
+      // conversation view and clicks "Create Job from Lead" (ConversationDetail) to
+      // convert a real inquiry; that flow find-or-creates the customer itself.
       const trimmedName = name.trim();
       const lowerEmail = email.trim().toLowerCase();
       const cleanPhone = (phone || '').trim().replace(/-/g, '').replace(/\s/g, '');
       const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
 
-      // Step 1: find or create the customer up front so the conversation, job,
-      // and notification can all be linked to the same record. Try phone first
-      // (indexed), then fall back to email so an existing client emailing in
-      // (or with a slightly different phone) doesn't get a duplicate record.
+      // Step 1: look up an existing customer so a repeat inquiry threads onto their
+      // record. Try phone first (indexed), then fall back to email.
       // Resolve the owning business for this public, session-less submission so every
       // write below is tenant-stamped. Inbound contact forms run on the owner
       // (BYPASSRLS) connection with no tenant context; without this stamp the
@@ -3164,9 +3247,9 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         console.error('[contact] Failed to resolve business for tenant stamping:', bizErr);
       }
 
-      // Hoisted above runWithBusiness so the auto-reply block can attach a receipt to
-      // the created job once the confirmation email/SMS is sent.
-      let createdJob: any = undefined;
+      // Hoisted above runWithBusiness so the auto-reply block can log its receipt
+      // onto the conversation thread once the confirmation email/SMS is sent.
+      let contactConversation: any = undefined;
 
       // Reuse an existing customer to de-duplicate, but ONLY when the submitted name
       // plausibly belongs to the matched record. The business's own advertised number
@@ -3198,25 +3281,13 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         } else if (matched) {
           console.log(`[contact] phone/email matched existing customer "${matched.name}" but submitted name "${trimmedName}" differs — creating a new lead instead of reusing it`);
         }
-        if (!customer) {
-          customer = await storage.createCustomer({
-            name: trimmedName || 'Unknown',
-            email: lowerEmail,
-            phone: cleanPhone,
-            address: '',
-            contactPreference: 'email' as const,
-            notes: '',
-          });
-        }
-        if (isMobileNumber && cleanPhone && customer?.id) {
-          try {
-            await storage.updateCustomer(customer.id, { mobile: cleanPhone });
-          } catch {
-            // non-critical
-          }
-        }
+        // Conversation-first: do NOT create a customer record for unknown senders —
+        // spam submissions were polluting the Clients list alongside the jobs
+        // pipeline. A matched existing customer is still linked so repeat inquiries
+        // thread onto their record; for new leads the "Create Job from Lead" convert
+        // flow find-or-creates the customer (POST /api/customers dedupes by name).
       } catch (customerErr) {
-        console.error('Error finding/creating customer for contact form:', customerErr);
+        console.error('Error matching existing customer for contact form:', customerErr);
       }
 
       try {
@@ -3256,77 +3327,14 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
           platform: 'web_form'
         });
 
-        // Step 4: auto-create a job with 'lead' status (the canonical first
-        // state in the jobs.status enum). If the customer already has an open
-        // lead-status job, reuse it instead of creating a duplicate — repeat
-        // form submissions should refresh the existing lead, not pile up.
-        let reusedExistingJob = false;
-        if (customer?.id) {
-          try {
-            const existingJobs = await storage.getJobsByCustomer(customer.id);
-            const existingLeadJob = existingJobs.find(j => j.status === 'lead');
-            if (existingLeadJob) {
-              createdJob = existingLeadJob;
-              reusedExistingJob = true;
-              console.log(`✅ Reusing existing lead-status job #${existingLeadJob.jobNumber} (${existingLeadJob.id}) for customer ${customer.id} — repeat contact form submission`);
-            } else {
-              const jobNumber = await storage.getNextJobNumber();
-              createdJob = await storage.createJob({
-                customerId: customer.id,
-                jobNumber,
-                title: `Lead from ${trimmedName || 'website'}`,
-                description: message.trim(),
-                address: 'Address not specified',
-                status: 'lead',
-                priority: 'medium' as const,
-                leadSource: 'website' as const,
-                totalAmount: '0.00',
-                metricsEligible: true,
-                metricsStartDate: new Date(),
-                jobContactPhone: isMobileNumber ? '' : cleanPhone,
-                jobContactMobile: isMobileNumber ? cleanPhone : '',
-              });
-              console.log(`✅ Auto-created job #${jobNumber} (${createdJob.id}) from contact form for customer ${customer.id}`);
+        contactConversation = conversation;
 
-              if (isNewConversation) {
-                try {
-                  await storage.updateConversation(conversation.id, {
-                    status: 'converted',
-                    conversionDate: new Date(),
-                  });
-                } catch {
-                  // non-critical
-                }
-              }
-            }
-          } catch (autoJobErr) {
-            console.error('Error auto-creating job lead from contact form:', autoJobErr);
-          }
-        }
-
-        // Step 5: notify operators. Brand new lead → new-lead notification
-        // (deep-links to the job's diary). Repeat submission on an existing
-        // open lead → follow-up notification so it reads as "they pinged us
-        // again" rather than a duplicate lead. Fallbacks cover the rare case
-        // where job creation failed entirely.
-        if (createdJob && customer?.id && !reusedExistingJob) {
-          await notificationHelper.createNewLeadNotification({
-            jobId: createdJob.id,
-            jobNumber: createdJob.jobNumber,
-            customerId: customer.id,
-            customerName: trimmedName || 'Website visitor',
-            customerEmail: lowerEmail,
-            customerPhone: cleanPhone,
-            sourceLabel: 'website',
-            messagePreview: message.trim(),
-            conversationId: conversation.id,
-          });
-        } else if (createdJob && customer?.id && reusedExistingJob) {
-          await notificationHelper.notifyConversationReply(
-            { id: conversation.id, title: conversation.title, source: 'web_form', customerName: trimmedName },
-            message.trim()
-          );
-        } else if (isNewConversation) {
+        // Step 4: notify operators. Brand new conversation → new-inquiry
+        // notification (deep-links to /conversation/:id where the operator can
+        // triage and hit "Create Job from Lead"). Repeat submission on an open
+        // conversation → follow-up notification so it reads as "they pinged us
+        // again" rather than a duplicate inquiry. No job is auto-created here.
+        if (isNewConversation) {
           await notificationHelper.createConversationNotification(conversation);
         } else {
           await notificationHelper.notifyConversationReply(
@@ -3441,21 +3449,21 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
               html: emailBodyHtml,
             })
               .then(async () => {
-                if (createdJob?.id) {
+                if (contactConversation?.id) {
                   try {
-                    await storage.createJobDiaryEntry({
-                      jobId: createdJob.id,
-                      entryType: 'email',
-                      title: `Auto-reply sent: ${emailSubject}`,
-                      description: `Auto-reply email sent to ${lowerEmail}\n\nSubject: ${emailSubject}\n\nMessage:\n${emailBodyText}`,
-                      authorName: 'System',
-                      authorRole: 'system',
-                      tags: ['communication', 'email', 'auto-reply'],
-                      metadata: { emailAddress: lowerEmail },
+                    await storage.createConversationMessage({
+                      conversationId: contactConversation.id,
+                      type: 'email',
+                      content: `Auto-reply email sent to ${lowerEmail}\n\nSubject: ${emailSubject}\n\n${emailBodyText}`,
+                      direction: 'outbound',
+                      fromName: 'System',
+                      toContact: lowerEmail,
+                      subject: emailSubject,
+                      platform: 'email',
+                      metadata: { autoReply: true },
                     });
-                    await storage.updateJob(createdJob.id, { lastActivityAt: new Date() });
-                  } catch (diaryErr) {
-                    console.error('[contact] Failed to record auto-reply email receipt:', diaryErr);
+                  } catch (receiptErr) {
+                    console.error('[contact] Failed to record auto-reply email receipt:', receiptErr);
                   }
                 }
               })
@@ -3467,21 +3475,20 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
             if (smsBody.trim()) {
               smsService.sendSMS({ to: cleanPhone, message: smsBody })
                 .then(async () => {
-                  if (createdJob?.id) {
+                  if (contactConversation?.id) {
                     try {
-                      await storage.createJobDiaryEntry({
-                        jobId: createdJob.id,
-                        entryType: 'sms',
-                        title: 'Auto-reply SMS sent',
-                        description: `Auto-reply SMS sent to ${cleanPhone}\n\nMessage:\n${smsBody}`,
-                        authorName: 'System',
-                        authorRole: 'system',
-                        tags: ['communication', 'sms', 'auto-reply'],
-                        metadata: { phoneNumber: cleanPhone },
+                      await storage.createConversationMessage({
+                        conversationId: contactConversation.id,
+                        type: 'sms',
+                        content: `Auto-reply SMS sent to ${cleanPhone}\n\n${smsBody}`,
+                        direction: 'outbound',
+                        fromName: 'System',
+                        toContact: cleanPhone,
+                        platform: 'sms',
+                        metadata: { autoReply: true },
                       });
-                      await storage.updateJob(createdJob.id, { lastActivityAt: new Date() });
-                    } catch (diaryErr) {
-                      console.error('[contact] Failed to record auto-reply SMS receipt:', diaryErr);
+                    } catch (receiptErr) {
+                      console.error('[contact] Failed to record auto-reply SMS receipt:', receiptErr);
                     }
                   }
                 })

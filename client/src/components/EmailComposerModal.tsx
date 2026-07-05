@@ -1706,6 +1706,7 @@ export function EmailComposerModal({
               className="h-8 w-8"
               onClick={() => insertFormatting("bold")}
               data-testid="button-format-bold"
+              aria-label="Bold"
             >
               <Bold className="w-4 h-4" />
             </Button>
@@ -1716,6 +1717,7 @@ export function EmailComposerModal({
               className="h-8 w-8"
               onClick={() => insertFormatting("italic")}
               data-testid="button-format-italic"
+              aria-label="Italic"
             >
               <Italic className="w-4 h-4" />
             </Button>
@@ -1726,6 +1728,7 @@ export function EmailComposerModal({
               className="h-8 w-8"
               onClick={() => insertFormatting("link")}
               data-testid="button-format-link"
+              aria-label="Insert link"
             >
               <Link className="w-4 h-4" />
             </Button>
@@ -1737,6 +1740,7 @@ export function EmailComposerModal({
               className="h-8 w-8"
               onClick={() => {}}
               data-testid="button-format-list"
+              aria-label="Bulleted list"
             >
               <List className="w-4 h-4" />
             </Button>
@@ -1747,6 +1751,7 @@ export function EmailComposerModal({
               className="h-8 w-8"
               onClick={() => {}}
               data-testid="button-format-numbered-list"
+              aria-label="Numbered list"
             >
               <ListOrdered className="w-4 h-4" />
             </Button>
@@ -1759,6 +1764,7 @@ export function EmailComposerModal({
               onClick={() => setIsAvailabilityOpen(true)}
               title="Check your Google Calendar availability"
               data-testid="button-check-availability"
+              aria-label="Check calendar availability"
             >
               <CalendarIcon className="w-4 h-4" />
             </Button>
@@ -1769,6 +1775,7 @@ export function EmailComposerModal({
               className={`h-8 w-8 ${isListening ? "bg-red-500 hover:bg-red-600 text-white" : ""}`}
               onClick={toggleVoiceInput}
               data-testid="button-voice-input"
+              aria-label={isListening ? "Stop voice input" : "Start voice input"}
             >
               {isListening ? (
                 <MicOff className="w-4 h-4" />

@@ -61,7 +61,7 @@ export type AnnotationShape =
       fontSize: number; // normalized fraction of image width
     });
 
-const COLORS = ["#FF3B30", "#39FF14", "#FFFFFF", "#000000", "#FFCC00", "#3498DB"];
+const COLORS = ["#FF3B30", "#34C759", "#FFFFFF", "#000000", "#FFCC00", "#3498DB"];
 const STROKE_WIDTHS = [2, 4, 8];
 
 export interface PhotoAnnotatorProps {

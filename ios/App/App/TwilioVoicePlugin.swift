@@ -71,6 +71,12 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     /// Handling an incoming push needs no access token, so this is safe to run
     /// before JS hands one over.
     func startVoIP() {
+        // Pin the Twilio edge to Sydney — nearest to NZ. The default ("roaming")
+        // picks an edge by DNS-based latency routing, which carrier DNS or a
+        // VPN can misroute to a US edge; that adds multi-second call-setup and
+        // answer-to-audio delays. Explicit selection keeps signaling + media
+        // on the au1 edge every time.
+        TwilioVoiceSDK.edge = "sydney"
         if Thread.isMainThread {
             setupCallKit()
             registerForVoIPPush()
@@ -468,6 +474,10 @@ extension TwilioVoicePlugin: NotificationDelegate {
 
 extension TwilioVoicePlugin: CXProviderDelegate {
     public func providerDidReset(_ provider: CXProvider) {
+        // Quickstart (SDK 6.x) pattern: the audio device is enabled ONLY in
+        // didActivate; a provider reset means CallKit tore the session down,
+        // so make sure the audio graph is stopped too.
+        (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = false
         activeCall?.disconnect()
         activeCall = nil
     }
@@ -477,7 +487,23 @@ extension TwilioVoicePlugin: CXProviderDelegate {
             action.fail()
             return
         }
-        let acceptOptions = AcceptOptions(callInvite: callInvite) { _ in }
+        // Disable the Twilio audio device before accepting and hand the SDK our
+        // CallKit UUID via AcceptOptions. Per the SDK 6.x contract, a nil
+        // AcceptOptions.uuid means "no CallKit here" and the SDK enables the
+        // audio device ITSELF at accept — against an AVAudioSession CallKit
+        // hasn't activated yet. The audio unit fails to start and retries,
+        // audible as ~2-3s of dead microphone right after answering ("they
+        // can't hear me at first"). With the uuid set (and the device disabled
+        // until CallKit's didActivate re-enables it), audio starts the moment
+        // the session is actually live. Resetting the block also clears any
+        // stale speaker-route closure a previous call's setSpeaker left behind.
+        if let audioDevice = TwilioVoiceSDK.audioDevice as? DefaultAudioDevice {
+            audioDevice.isEnabled = false
+            audioDevice.block = DefaultAudioDevice.DefaultAVAudioSessionConfigurationBlock
+        }
+        let acceptOptions = AcceptOptions(callInvite: callInvite) { builder in
+            builder.uuid = action.callUUID
+        }
         self.activeCall = callInvite.accept(options: acceptOptions, delegate: self)
         self.callInvite = nil
         action.fulfill()

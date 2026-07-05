@@ -218,6 +218,7 @@ export function AIAssistantChat() {
               className="h-8 w-8 text-primary-foreground hover:bg-primary/80"
               onClick={clearHistory}
               title="Clear conversation"
+              aria-label="Clear conversation"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -226,6 +227,7 @@ export function AIAssistantChat() {
               variant="ghost"
               className="h-8 w-8 text-primary-foreground hover:bg-primary/80"
               onClick={() => setOpen(false)}
+              aria-label="Minimize chat"
             >
               <ChevronDown className="h-4 w-4" />
             </Button>
@@ -309,6 +311,7 @@ export function AIAssistantChat() {
                 onClick={recording ? stopRecording : startRecording}
                 disabled={loading}
                 title={recording ? "Stop recording" : "Voice input"}
+                aria-label={recording ? "Stop recording" : "Voice input"}
                 className="shrink-0"
               >
                 {recording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
@@ -318,6 +321,7 @@ export function AIAssistantChat() {
                 onClick={() => sendMessage(input)}
                 disabled={loading || !input.trim()}
                 title="Send"
+                aria-label="Send message"
                 className="shrink-0"
               >
                 <Send className="h-4 w-4" />

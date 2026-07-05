@@ -169,7 +169,6 @@ function HelpAdminInner() {
               onSaved={(saved) => {
                 qc.invalidateQueries({ queryKey: ["/api/help/articles"] });
                 setSelectedId(saved.id);
-                toast({ title: "Saved" });
               }}
               onDeleted={() => {
                 qc.invalidateQueries({ queryKey: ["/api/help/articles"] });

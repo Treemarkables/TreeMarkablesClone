@@ -71,12 +71,16 @@ export default function BookingReminderSettings() {
     queryKey: ["/api/business-settings"],
   });
 
+  // These endpoints return an envelope ({ success, data: [...] }) but the same
+  // query keys are cached as bare arrays by other pages — coerce both shapes.
   const { data: emailTemplates } = useQuery<EmailTemplate[]>({
     queryKey: ["/api/email-templates"],
+    select: (r: any) => (Array.isArray(r) ? r : r?.data ?? []),
   });
 
   const { data: smsTemplates } = useQuery<SmsTemplate[]>({
     queryKey: ["/api/sms-templates"],
+    select: (r: any) => (Array.isArray(r) ? r : r?.data ?? []),
   });
 
   useEffect(() => {
@@ -107,7 +111,6 @@ export default function BookingReminderSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/business-settings"] });
-      toast({ title: "Saved", description: "Booking reminder settings updated." });
     },
     onError: (err: any) => {
       toast({
@@ -166,7 +169,7 @@ export default function BookingReminderSettings() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/settings">
-            <Button variant="ghost" size="icon" data-testid="btn-back-to-settings">
+            <Button variant="ghost" size="icon" aria-label="Back to settings" data-testid="btn-back-to-settings">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
@@ -332,6 +335,7 @@ export default function BookingReminderSettings() {
                     variant="ghost"
                     size="icon"
                     onClick={() => removeOffset(index)}
+                    aria-label="Remove reminder"
                     data-testid={`btn-remove-offset-${index}`}
                   >
                     <Trash2 className="w-4 h-4 text-destructive" />

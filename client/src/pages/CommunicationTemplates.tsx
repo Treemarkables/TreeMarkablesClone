@@ -491,7 +491,7 @@ export default function CommunicationTemplates() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-4">
           <Link href="/settings">
-            <Button variant="ghost" size="icon" data-testid="button-back-to-settings">
+            <Button variant="ghost" size="icon" aria-label="Back to settings" data-testid="button-back-to-settings">
               <ChevronLeft className="h-5 w-5" />
             </Button>
           </Link>
@@ -563,11 +563,11 @@ export default function CommunicationTemplates() {
                     <CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap">
                       <span>{template.name}</span>
                       <div className="flex gap-2 items-center">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditTemplate(template)}
+                        <Button variant="ghost" size="icon" onClick={() => handleEditTemplate(template)} aria-label="Edit template"
                           data-testid={`button-edit-email-${template.id}`}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteTemplate(template.id)}
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteTemplate(template.id)} aria-label="Delete template"
                           data-testid={`button-delete-email-${template.id}`}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -626,11 +626,11 @@ export default function CommunicationTemplates() {
                     <CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap">
                       <span>{template.name}</span>
                       <div className="flex gap-2 items-center">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditTemplate(template)}
+                        <Button variant="ghost" size="icon" onClick={() => handleEditTemplate(template)} aria-label="Edit template"
                           data-testid={`button-edit-sms-${template.id}`}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteTemplate(template.id)}
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteTemplate(template.id)} aria-label="Delete template"
                           data-testid={`button-delete-sms-${template.id}`}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>

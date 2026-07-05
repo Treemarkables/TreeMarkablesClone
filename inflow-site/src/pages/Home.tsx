@@ -22,7 +22,7 @@ const featureHighlights = [
 
 const metrics = [
   { value: "1", label: "app instead of five" },
-  { value: "30+", label: "field workflows covered" },
+  { value: "20", label: "years in the trades" },
   { value: "100%", label: "built for trades, in NZ" },
 ];
 
@@ -89,7 +89,7 @@ export default function Home() {
             Built for the way trades businesses actually work.
           </h2>
           <p className="mt-5 text-ink-500 text-lg leading-relaxed">
-            Not a generic CRM with a "field service module" bolted on. Every workflow is shaped by 18 years of running a real trades business.
+            Not a generic CRM with a "field service module" bolted on. Every workflow is shaped by twenty years in the trades — ten of them running a real trades business.
           </p>
         </div>
 
@@ -173,7 +173,7 @@ export default function Home() {
       <section className="bg-ink-900 text-paper">
         <Container className="py-20 md:py-24 text-center">
           <h2 className="heading-display text-4xl md:text-6xl max-w-3xl mx-auto">
-            Stop running your business out of six different apps.
+            Stop running your business out of five different apps.
           </h2>
           <p className="mt-6 text-ink-300 text-lg max-w-prose mx-auto">
             We're letting a small group of NZ trades businesses in early. Tell us about yours and we'll get you set up.

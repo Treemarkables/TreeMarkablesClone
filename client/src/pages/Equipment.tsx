@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -450,19 +450,26 @@ export default function Equipment() {
     }
   };
 
-  // Filter equipment
-  const filteredEquipment = equipment.filter((item: any) => {
-    const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.model?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || item.status === statusFilter;
-    const matchesType = typeFilter === "all" || item.type === typeFilter;
-    
-    return matchesSearch && matchesStatus && matchesType;
-  });
+  // Filter equipment. Memoized: these filter chains previously re-ran over
+  // the full equipment + checkout lists on every render (every search
+  // keystroke / dialog state change). "now" freshness rides on the query
+  // refetches giving `equipment`/`checkouts` new identities.
+  const filteredEquipment = useMemo(
+    () =>
+      equipment.filter((item: any) => {
+        const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             item.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             item.model?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === "all" || item.status === statusFilter;
+        const matchesType = typeFilter === "all" || item.type === typeFilter;
 
-  // Get overdue maintenance equipment (for now, using lastMaintenanceDate + intervalDays)
-  const getOverdueMaintenance = () => {
+        return matchesSearch && matchesStatus && matchesType;
+      }),
+    [equipment, searchTerm, statusFilter, typeFilter],
+  );
+
+  // Overdue maintenance equipment (lastMaintenanceDate + intervalDays)
+  const overdueMaintenance = useMemo(() => {
     const now = new Date();
     return equipment.filter((item: any) => {
       if (!item.lastMaintenanceDate || !item.maintenanceIntervalDays) return false;
@@ -470,29 +477,33 @@ export default function Equipment() {
       const nextDue = new Date(lastMaintenance.getTime() + (item.maintenanceIntervalDays * 24 * 60 * 60 * 1000));
       return nextDue < now;
     });
-  };
+  }, [equipment]);
 
-  const overdueMaintenance = getOverdueMaintenance();
-
-  // Get active checkouts for display
-  const activeCheckouts = checkouts.filter((checkout: any) => !checkout.actualReturnTime);
-  const overdueCheckouts = activeCheckouts.filter((checkout: any) => {
-    if (!checkout.expectedReturnTime) return false;
-    return new Date(checkout.expectedReturnTime) < new Date();
-  });
+  // Active checkouts for display
+  const { activeCheckouts, overdueCheckouts } = useMemo(() => {
+    const active = checkouts.filter((checkout: any) => !checkout.actualReturnTime);
+    const overdue = active.filter((checkout: any) => {
+      if (!checkout.expectedReturnTime) return false;
+      return new Date(checkout.expectedReturnTime) < new Date();
+    });
+    return { activeCheckouts: active, overdueCheckouts: overdue };
+  }, [checkouts]);
 
   // Calculate stats
-  const stats = {
-    total: equipment.length,
-    available: equipment.filter((e: any) => e.status === "available").length,
-    inUse: equipment.filter((e: any) => e.status === "in_use").length,
-    maintenance: equipment.filter((e: any) => e.status === "maintenance").length,
-    retired: equipment.filter((e: any) => e.status === "retired").length,
-    activeCheckouts: activeCheckouts.length,
-    overdueCheckouts: overdueCheckouts.length,
-    overdueMaintenance: overdueMaintenance.length,
-    maintenanceRecords: maintenanceRecords.length,
-  };
+  const stats = useMemo(
+    () => ({
+      total: equipment.length,
+      available: equipment.filter((e: any) => e.status === "available").length,
+      inUse: equipment.filter((e: any) => e.status === "in_use").length,
+      maintenance: equipment.filter((e: any) => e.status === "maintenance").length,
+      retired: equipment.filter((e: any) => e.status === "retired").length,
+      activeCheckouts: activeCheckouts.length,
+      overdueCheckouts: overdueCheckouts.length,
+      overdueMaintenance: overdueMaintenance.length,
+      maintenanceRecords: maintenanceRecords.length,
+    }),
+    [equipment, activeCheckouts, overdueCheckouts, overdueMaintenance, maintenanceRecords],
+  );
 
   // Handle checkout/checkin/maintenance actions
   const handleCheckout = (equipmentItem: any) => {

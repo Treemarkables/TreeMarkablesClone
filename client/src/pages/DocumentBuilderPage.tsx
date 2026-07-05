@@ -95,7 +95,7 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
       {/* Header bar */}
       <div className="flex items-center gap-3 px-4 py-3 border-b bg-white flex-shrink-0">
         <Link href="/settings">
-          <Button size="icon" variant="ghost">
+          <Button size="icon" variant="ghost" aria-label="Back to settings">
             <ChevronLeft className="w-4 h-4" />
           </Button>
         </Link>

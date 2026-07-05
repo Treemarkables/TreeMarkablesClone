@@ -749,6 +749,7 @@ export default function TemplateManagement() {
                               variant="ghost"
                               disabled={index === 0}
                               onClick={() => moveSection(index, -1)}
+                              aria-label="Move section up"
                               data-testid={`button-section-up-${section.id}`}
                             >
                               <ChevronUp className="h-4 w-4" />
@@ -759,6 +760,7 @@ export default function TemplateManagement() {
                               variant="ghost"
                               disabled={index === sections.length - 1}
                               onClick={() => moveSection(index, 1)}
+                              aria-label="Move section down"
                               data-testid={`button-section-down-${section.id}`}
                             >
                               <ChevronDown className="h-4 w-4" />
