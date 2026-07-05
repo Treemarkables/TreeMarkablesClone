@@ -627,6 +627,7 @@ export function NotificationBell() {
           size="icon"
           className="relative [&_svg]:!size-8"
           data-testid="button-notifications"
+          aria-label="Notifications"
         >
           <Bell
             className={`fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${visibleUnread > 0 ? "animate-pulse" : ""}`}

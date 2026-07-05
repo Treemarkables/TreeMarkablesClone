@@ -787,6 +787,7 @@ export default function JobDashboard({
                   <Button
                     variant="outline"
                     size="icon"
+                    aria-label="Filter jobs"
                     data-testid="button-filter-jobs"
                   >
                     <Filter className="w-4 h-4" />

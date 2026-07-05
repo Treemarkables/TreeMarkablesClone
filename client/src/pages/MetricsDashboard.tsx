@@ -1151,6 +1151,7 @@ export default function MetricsDashboard() {
               size="icon"
               onClick={() => handleExportData("analytics")}
               disabled={isExporting}
+              aria-label="Export metrics"
               data-testid="button-export-metrics"
             >
               <BarChart3 className="h-4 w-4" />
@@ -1159,6 +1160,7 @@ export default function MetricsDashboard() {
               variant="ghost"
               size="icon"
               onClick={() => window.location.reload()}
+              aria-label="Refresh metrics"
             >
               <RefreshCw
                 className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}

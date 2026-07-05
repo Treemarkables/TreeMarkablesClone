@@ -1924,6 +1924,7 @@ export function InvoiceBuilder({
                         onClick={() => handleRemoveSection(idx)}
                         className="text-red-600 hover:text-red-700 flex-shrink-0"
                         data-testid={`button-remove-section-${idx}`}
+                        aria-label="Remove section"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -1995,6 +1996,7 @@ export function InvoiceBuilder({
                                 }
                                 className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                 data-testid={`button-remove-section-photo-${idx}`}
+                                aria-label="Remove photo"
                               >
                                 <X className="h-3 w-3" />
                               </button>

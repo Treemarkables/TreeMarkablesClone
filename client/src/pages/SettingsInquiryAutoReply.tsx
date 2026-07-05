@@ -109,7 +109,7 @@ export default function SettingsInquiryAutoReply() {
     <div className="flex flex-col min-h-full overflow-y-auto p-6 space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
         <Link href="/settings">
-          <Button variant="ghost" size="icon" data-testid="button-back-to-settings">
+          <Button variant="ghost" size="icon" aria-label="Back to settings" data-testid="button-back-to-settings">
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>

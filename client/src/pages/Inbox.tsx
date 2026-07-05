@@ -619,6 +619,7 @@ export default function Inbox() {
                         variant="ghost"
                         size="icon"
                         className="flex-shrink-0 h-8 w-8"
+                        aria-label="Conversation actions"
                         data-testid={`button-actions-${conversation.id}`}
                       >
                         <MoreVertical className="h-4 w-4" />

@@ -460,6 +460,7 @@ export default function NearMissReportPage() {
           <div key={i} className="flex items-center gap-1 flex-1">
             <button
               type="button"
+              aria-label={`Step ${i + 1}: ${label}`}
               onClick={() => { if (i < step || reportId) setStep(i); }}
               className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium border transition-colors ${
                 i === step
@@ -585,7 +586,7 @@ export default function NearMissReportPage() {
                   onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addEquipment(); } }}
                   placeholder="e.g. chainsaw, chipper, truck…"
                 />
-                <Button type="button" variant="outline" size="icon" onClick={addEquipment}>
+                <Button type="button" variant="outline" size="icon" onClick={addEquipment} aria-label="Add equipment">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>

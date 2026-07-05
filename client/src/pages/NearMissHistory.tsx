@@ -150,6 +150,7 @@ export default function NearMissHistory() {
             variant="outline"
             size="icon"
             onClick={() => setShowFilters(f => !f)}
+            aria-label="Toggle filters"
             className={showFilters ? "bg-amber-50 border-amber-200" : ""}
           >
             <Filter className="h-4 w-4" />

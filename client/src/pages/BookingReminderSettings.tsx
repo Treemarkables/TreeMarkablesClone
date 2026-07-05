@@ -169,7 +169,7 @@ export default function BookingReminderSettings() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/settings">
-            <Button variant="ghost" size="icon" data-testid="btn-back-to-settings">
+            <Button variant="ghost" size="icon" aria-label="Back to settings" data-testid="btn-back-to-settings">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
@@ -335,6 +335,7 @@ export default function BookingReminderSettings() {
                     variant="ghost"
                     size="icon"
                     onClick={() => removeOffset(index)}
+                    aria-label="Remove reminder"
                     data-testid={`btn-remove-offset-${index}`}
                   >
                     <Trash2 className="w-4 h-4 text-destructive" />
