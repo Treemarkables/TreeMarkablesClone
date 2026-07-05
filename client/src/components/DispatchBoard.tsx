@@ -1885,22 +1885,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return m;
   }, [todaysJobs]);
 
-  const getUnscheduledJobs = () => {
-    return jobs
-      .filter(
-        (job) =>
-          job.status === "quote" ||
-          job.status === "lead" ||
-          !job.startTime ||
-          job.startTime.includes("0000-00-00"),
-      )
-      .sort((a, b) => {
-        const jobNumberA = parseInt(a.jobNumber || "0", 10);
-        const jobNumberB = parseInt(b.jobNumber || "0", 10);
-        return jobNumberB - jobNumberA;
-      });
-  };
-
   // Job Mutations
   const createJobMutation = useMutation({
     mutationFn: async (data: any) => {
