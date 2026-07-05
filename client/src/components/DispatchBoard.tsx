@@ -1676,7 +1676,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, jobs, jobsLoading, isDeepSearchActive, isDeepSearchLoading]);
 
-  const getTodaysJobs = () => {
+  // Memoized: this runs a 4-pass filter + dedup + sort over up to 500 jobs
+  // (with per-job date parsing). Unmemoized it re-ran on every render of this
+  // component — including every search keystroke — twice the work when both
+  // call sites hit. Deps cover every input the pipeline reads; `jobs` gets a
+  // fresh identity from the 30s poll, so the "today" date window stays fresh.
+  const todaysJobs = useMemo(() => {
     // If deep search is active, return deep search results
     if (isDeepSearchActive) {
       return deepSearchResults;
@@ -1858,7 +1863,27 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     });
 
     return sorted;
-  };
+  }, [
+    jobs,
+    isDeepSearchActive,
+    deepSearchResults,
+    searchQuery,
+    laneFilter,
+    jobFilter,
+    onlyUnconfirmed,
+  ]);
+
+  // Shim so the six existing call sites keep working unchanged.
+  const getTodaysJobs = () => todaysJobs;
+
+  // Per-day price share per job — calculateDailyTotal parses the job's NZ
+  // scheduled-date set on every call, so compute once per jobs refresh
+  // instead of per row per render.
+  const dailyTotalByJobId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const job of todaysJobs) m.set(job.id, calculateDailyTotal(job));
+    return m;
+  }, [todaysJobs]);
 
   const getUnscheduledJobs = () => {
     return jobs
@@ -2610,7 +2635,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     );
   }
 
-  const todaysJobs = getTodaysJobs();
   const unconfirmedCount = countUnconfirmed(todaysJobs);
 
   return (
@@ -2776,7 +2800,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           {getTodaysJobs().map((job) => {
                             const customerName =
                               job.customerName || "Unknown Customer";
-                            const total = calculateDailyTotal(job);
+                            const total = dailyTotalByJobId.get(job.id) ?? calculateDailyTotal(job);
                             const fullAddress = job.address?.trim() || "";
 
                             // Get status badge styling - same as mobile
@@ -3204,7 +3228,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <div className="divide-y divide-gray-100 w-full">
               {getTodaysJobs().map((job: any) => {
                 const customerName = job.customerName || "Unknown Customer";
-                const total = calculateDailyTotal(job);
+                const total = dailyTotalByJobId.get(job.id) ?? calculateDailyTotal(job);
                 const suburb = job.address?.split(",")[0]?.trim() || "";
 
                 // Get status badge styling
