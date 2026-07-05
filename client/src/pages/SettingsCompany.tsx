@@ -157,7 +157,6 @@ export default function SettingsCompany() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates/default/invoice"] });
       queryClient.invalidateQueries({ queryKey: ["/api/business-settings"] });
-      toast({ title: "Company info saved" });
     },
     onError: () => {
       toast({ title: "Failed to save", variant: "destructive" });
