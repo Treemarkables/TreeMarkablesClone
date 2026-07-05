@@ -301,6 +301,7 @@ export default function JHARiskControlTemplates() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label="Edit template"
                           data-testid={`button-edit-${template.id}`}
                           onClick={() => handleEdit(template)}
                         >
@@ -309,6 +310,7 @@ export default function JHARiskControlTemplates() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label="Delete template"
                           data-testid={`button-delete-${template.id}`}
                           onClick={() => {
                             if (confirm(`Delete "${template.name}"?`)) {

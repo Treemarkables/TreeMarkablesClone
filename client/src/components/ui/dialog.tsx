@@ -43,7 +43,10 @@ const DialogContent = React.forwardRef<
         // off the top of the screen with no way to scroll or close). Call sites can
         // still override max-h via className. Radix Selects/popovers portal out, so
         // this does not clip dropdowns or date pickers.
-        "fixed left-[50%] top-[50%] z-[110] grid max-h-[90vh] w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        // Width: inset 1rem per side below sm so mobile dialogs float with a margin
+        // instead of running edge-to-edge (callers overriding max-w-* keep this —
+        // tailwind-merge only collapses same-property classes).
+        "fixed left-[50%] top-[50%] z-[110] grid max-h-[90vh] w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:w-full",
         className
       )}
       {...props}

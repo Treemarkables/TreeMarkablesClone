@@ -19,8 +19,8 @@ import {
   type InventoryTransaction, type InsertInventoryTransaction,
   type Material, type InsertMaterial,
   type Service, type InsertService,
-  type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
-  videos, type Video, type InsertVideo, type UpdateVideo,
+  photos, type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
+  videos, type Video, type InsertVideo, type UpdateVideo, type VideoSearch,
   helpArticles, type HelpArticle, type InsertHelpArticle, type UpdateHelpArticle,
   type Invoice, type InsertInvoice, type InvoiceSection, type InsertInvoiceSection, type UpdateInvoiceSection,
   type ServiceRequest, type InsertServiceRequest,
@@ -816,6 +816,7 @@ export interface IStorage {
   getVideosByJob(jobId: string): Promise<Video[]>;
   getCustomerVisibleVideosByJob(jobId: string): Promise<Video[]>;
   getVideos(filter?: { kind?: string; unassigned?: boolean }): Promise<Video[]>;
+  searchVideos(filters: VideoSearch): Promise<Video[]>;
 
   // Help articles (subscriber-facing /help page)
   createHelpArticle(data: InsertHelpArticle): Promise<HelpArticle>;
@@ -5311,6 +5312,110 @@ class DatabaseStorage implements IStorage {
     return row;
   }
 
+  // Cross-tenant CONCIERGE helpers — owner connection, scoped by explicit
+  // businessId. Only the platform-operator routes (requirePlatformAdmin) call
+  // these; they intentionally bypass RLS to manage other tenants' setup.
+  async listBusinesses(): Promise<Array<typeof schema.businesses.$inferSelect>> {
+    return await ownerDb.select().from(schema.businesses).orderBy(asc(schema.businesses.createdAt));
+  }
+
+  async updateBusinessSettingsForBusiness(
+    businessId: string,
+    updates: Partial<InsertBusinessSettings>,
+  ): Promise<BusinessSettings | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb
+      .update(schema.businessSettings)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(schema.businessSettings.businessId, businessId))
+      .returning();
+    return row;
+  }
+
+  async listTenantChannelsForBusiness(businessId: string): Promise<Array<typeof schema.tenantChannels.$inferSelect>> {
+    if (!businessId) return [];
+    return await ownerDb
+      .select()
+      .from(schema.tenantChannels)
+      .where(eq(schema.tenantChannels.businessId, businessId))
+      .orderBy(schema.tenantChannels.channelType, schema.tenantChannels.createdAt);
+  }
+
+  // Concierge channel mutations — owner connection, explicit businessId. Only
+  // requirePlatformAdmin routes call these (cross-tenant); the per-tenant
+  // /api/channels endpoints use the RLS db proxy instead.
+  async findTenantChannelForBusiness(businessId: string, channelType: string, identifier: string): Promise<(typeof schema.tenantChannels.$inferSelect) | undefined> {
+    const [row] = await ownerDb
+      .select()
+      .from(schema.tenantChannels)
+      .where(and(
+        eq(schema.tenantChannels.businessId, businessId),
+        eq(schema.tenantChannels.channelType, channelType),
+        eq(schema.tenantChannels.identifier, identifier),
+      ))
+      .limit(1);
+    return row;
+  }
+
+  async insertTenantChannel(values: { businessId: string; channelType: string; identifier: string; label?: string }): Promise<typeof schema.tenantChannels.$inferSelect> {
+    const [row] = await ownerDb.insert(schema.tenantChannels).values(values).returning();
+    return row;
+  }
+
+  async setTenantChannelActive(id: string, isActive: boolean, label?: string): Promise<typeof schema.tenantChannels.$inferSelect | undefined> {
+    const [row] = await ownerDb
+      .update(schema.tenantChannels)
+      .set({ isActive, ...(label !== undefined ? { label } : {}) })
+      .where(eq(schema.tenantChannels.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteTenantChannelForBusiness(businessId: string, id: string): Promise<void> {
+    await ownerDb.delete(schema.tenantChannels).where(and(
+      eq(schema.tenantChannels.id, id),
+      eq(schema.tenantChannels.businessId, businessId),
+    ));
+  }
+
+  // Concierge plan/status helpers — owner connection, explicit businessId. Only
+  // requirePlatformAdmin routes (+ the login suspension check) call these.
+  async getBusinessById(businessId: string): Promise<(typeof schema.businesses.$inferSelect) | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb.select().from(schema.businesses).where(eq(schema.businesses.id, businessId)).limit(1);
+    return row;
+  }
+
+  async setBusinessStatus(businessId: string, status: string): Promise<(typeof schema.businesses.$inferSelect) | undefined> {
+    const [row] = await ownerDb.update(schema.businesses).set({ status }).where(eq(schema.businesses.id, businessId)).returning();
+    return row;
+  }
+
+  async getSubscriptionForBusiness(businessId: string): Promise<(typeof schema.subscriptions.$inferSelect) | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb.select().from(schema.subscriptions).where(eq(schema.subscriptions.businessId, businessId)).limit(1);
+    return row;
+  }
+
+  async listSubscriptionPlans(): Promise<Array<typeof schema.subscriptionPlans.$inferSelect>> {
+    return await ownerDb.select().from(schema.subscriptionPlans)
+      .where(eq(schema.subscriptionPlans.isActive, true))
+      .orderBy(schema.subscriptionPlans.sortOrder);
+  }
+
+  async setSubscriptionPlanForBusiness(businessId: string, planId: string): Promise<(typeof schema.subscriptions.$inferSelect) | undefined> {
+    const existing = await this.getSubscriptionForBusiness(businessId);
+    if (existing) {
+      const [row] = await ownerDb.update(schema.subscriptions)
+        .set({ planId, status: 'active', updatedAt: new Date() })
+        .where(eq(schema.subscriptions.id, existing.id)).returning();
+      return row;
+    }
+    const [row] = await ownerDb.insert(schema.subscriptions)
+      .values({ businessId, planId, status: 'active' }).returning();
+    return row;
+  }
+
   async getBusinessSettings(): Promise<BusinessSettings> {
     // Try to get existing business settings from database.
     // Deterministic ordering guards against stray duplicate rows for a tenant:
@@ -5669,7 +5774,72 @@ class DatabaseStorage implements IStorage {
   async getFeaturedPhotos(limit?: number): Promise<Photo[]> { return []; }
   async getPhotosByType(type: string, jobId?: string): Promise<Photo[]> { return []; }
   async getBeforeAfterPairs(jobId: string): Promise<Photo[][]> { return []; }
-  async searchPhotos(filters: PhotoSearch): Promise<Photo[]> { return []; }
+  async searchPhotos(filters: PhotoSearch): Promise<Photo[]> {
+    const conditions = [];
+    if (filters.q) {
+      const like = `%${filters.q}%`;
+      conditions.push(or(
+        ilike(photos.notes, like),
+        ilike(photos.aiDescription, like),
+        ilike(photos.gpsAddress, like),
+        ilike(photos.location, like),
+        ilike(photos.filename, like),
+        ilike(photos.originalName, like),
+      ));
+    }
+    if (filters.jobId) conditions.push(eq(photos.jobId, filters.jobId));
+    if (filters.customerId) conditions.push(eq(photos.customerId, filters.customerId));
+    if (filters.type) conditions.push(eq(photos.type, filters.type));
+    if (filters.category) conditions.push(eq(photos.category, filters.category));
+    if (filters.capturedBy) conditions.push(eq(photos.capturedBy, filters.capturedBy));
+    if (filters.tags && filters.tags.length > 0) {
+      // Postgres array-overlap: row matches if any tag in the row is in the filter set.
+      conditions.push(sql`${photos.tags} && ${filters.tags}::text[]`);
+    }
+    if (filters.dateFrom) conditions.push(gte(photos.capturedAt, new Date(filters.dateFrom)));
+    if (filters.dateTo) conditions.push(lte(photos.capturedAt, new Date(filters.dateTo)));
+    if (filters.isPublic !== undefined) conditions.push(eq(photos.isPublic, filters.isPublic));
+    if (filters.isFeatured !== undefined) conditions.push(eq(photos.isFeatured, filters.isFeatured));
+    if (filters.hasGps) {
+      conditions.push(and(sql`${photos.gpsLatitude} IS NOT NULL`, sql`${photos.gpsLongitude} IS NOT NULL`));
+    }
+    if (filters.minQualityScore !== undefined) conditions.push(gte(photos.qualityScore, filters.minQualityScore));
+
+    const base = db.select().from(photos);
+    const query = conditions.length ? base.where(and(...conditions)) : base;
+    return await query
+      .orderBy(desc(photos.capturedAt))
+      .limit(filters.limit)
+      .offset(filters.offset);
+  }
+
+  async searchVideos(filters: VideoSearch): Promise<Video[]> {
+    const conditions = [];
+    if (filters.q) {
+      const like = `%${filters.q}%`;
+      conditions.push(or(
+        ilike(videos.title, like),
+        ilike(videos.description, like),
+        ilike(videos.filename, like),
+        ilike(videos.originalName, like),
+      ));
+    }
+    if (filters.kind) conditions.push(eq(videos.kind, filters.kind));
+    if (filters.jobId) conditions.push(eq(videos.jobId, filters.jobId));
+    if (filters.customerId) conditions.push(eq(videos.customerId, filters.customerId));
+    if (filters.category) conditions.push(eq(videos.category, filters.category));
+    if (filters.uploadedBy) conditions.push(eq(videos.uploadedBy, filters.uploadedBy));
+    if (filters.dateFrom) conditions.push(gte(videos.createdAt, new Date(filters.dateFrom)));
+    if (filters.dateTo) conditions.push(lte(videos.createdAt, new Date(filters.dateTo)));
+    if (filters.showToCustomer !== undefined) conditions.push(eq(videos.showToCustomer, filters.showToCustomer));
+
+    const base = db.select().from(videos);
+    const query = conditions.length ? base.where(and(...conditions)) : base;
+    return await query
+      .orderBy(desc(videos.createdAt))
+      .limit(filters.limit)
+      .offset(filters.offset);
+  }
 
   // Job Videos (Loom replacement) — real implementations against the videos table.
   async createVideo(data: InsertVideo): Promise<Video> {
@@ -6577,7 +6747,7 @@ class DatabaseStorage implements IStorage {
       id: schema.jobs.id,
       jobNumber: schema.jobs.jobNumber,
       customerId: schema.jobs.customerId,
-      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerName: sql<string>`COALESCE(${schema.customers.name}, '')`,
       customerEmail: schema.customers.email,
       customerPhone: schema.customers.phone,
       address: schema.jobs.address,
@@ -6672,7 +6842,7 @@ class DatabaseStorage implements IStorage {
       internalStatus: schema.reviewSubmissions.internalStatus,
       submittedAt: schema.reviewSubmissions.submittedAt,
       jobNumber: schema.jobs.jobNumber,
-      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerName: sql<string>`COALESCE(${schema.customers.name}, '')`,
       jobAddress: schema.jobs.address
     })
       .from(schema.reviewSubmissions)

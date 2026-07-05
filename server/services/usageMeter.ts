@@ -16,20 +16,31 @@
  * multiple OpenAI calls), NOT per token — see the plan.
  */
 import { db } from "../db";
-import { subscriptionPlans, subscriptions, usageEvents } from "@shared/schema";
+import { jobs, subscriptionPlans, subscriptions, usageEvents } from "@shared/schema";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getSubscriptionByBusiness, getPlanByKey } from "../billing";
 import { nzTimeToUTC } from "@shared/dateUtils";
+import { TREEMARKABLES_BUSINESS_IDS } from "@shared/roleChecklistAccess";
 
 export type Metric = "sms" | "ai";
 
 /** Only actually block when this is on. Off = record + log, never block. */
 export const ENFORCE = process.env.USAGE_CAPS_ENFORCE === "true";
 
-/** Businesses that are never capped (e.g. comped Treemarkables). Comma-separated env. */
+/** Businesses that are never capped (extra ones via comma-separated env). */
 const COMPED = new Set(
   (process.env.INFLOW_COMPED_BUSINESS_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
 );
+
+/**
+ * Comped = never capped. The env list PLUS Treemarkables itself — TM is the platform
+ * owner running Inflow, so it must never be throttled on its own product regardless of
+ * whether INFLOW_COMPED_BUSINESS_IDS is set (avoids a footgun where flipping enforcement
+ * on would cap the owner). Covers both the prod and dev-branch TM businessIds.
+ */
+function isComped(businessId: string): boolean {
+  return COMPED.has(businessId) || TREEMARKABLES_BUSINESS_IDS.includes(businessId);
+}
 
 const ENTITLED = new Set(["active", "trialing", "past_due"]);
 
@@ -55,7 +66,7 @@ function nzMonthStartUtc(): Date {
 
 /** Resolve the business's cap for a metric (null = unlimited) and its overage policy. */
 async function resolveCap(metric: Metric, businessId: string): Promise<{ cap: number | null; overage: string }> {
-  if (COMPED.has(businessId)) return { cap: null, overage: "soft_stop" };
+  if (isComped(businessId)) return { cap: null, overage: "soft_stop" };
 
   const sub = await getSubscriptionByBusiness(businessId);
   let plan: typeof subscriptionPlans.$inferSelect | undefined;
@@ -135,16 +146,75 @@ export async function guard(metric: Metric, businessId: string, feature?: string
   return true;
 }
 
-/** For GET /api/billing/usage — both meters + the period start. */
+// ── Active-job cap (jobs CREATED per NZ calendar month) ─────────────────────
+// Unlike SMS/AI this is counted from the jobs table itself (one row per job), not
+// the usage_events log. "Active jobs / month" is interpreted as the number of jobs
+// CREATED in the current NZ month (a monthly throughput allowance that resets) —
+// Free 15, Crew 75, Business unlimited (activeJobCap = null). Same dark-launch +
+// fail-open + comp rules as the SMS/AI meters.
+
+/** Resolve the active-job cap for a business (null = unlimited). */
+async function resolveJobCap(businessId: string): Promise<number | null> {
+  if (isComped(businessId)) return null;
+  const sub = await getSubscriptionByBusiness(businessId);
+  let plan: typeof subscriptionPlans.$inferSelect | undefined;
+  if (sub && ENTITLED.has(sub.status) && sub.planId) {
+    [plan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, sub.planId));
+  }
+  if (!plan) plan = await getPlanByKey("freemium");
+  return plan?.activeJobCap ?? null;
+}
+
+/** Count jobs CREATED this NZ calendar month for a business. */
+async function monthJobCount(businessId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(jobs)
+    .where(and(eq(jobs.businessId, businessId), gte(jobs.createdAt, nzMonthStartUtc())));
+  return row?.n ?? 0;
+}
+
+/** Read-only: is this business at/over its monthly job-creation cap? Fail-open. */
+export async function checkJobAllowance(businessId: string): Promise<Allowance> {
+  try {
+    const cap = await resolveJobCap(businessId);
+    if (cap === null) return { used: 0, cap: null, remaining: Infinity, blocked: false };
+    const used = await monthJobCount(businessId);
+    return { used, cap, remaining: Math.max(0, cap - used), blocked: used >= cap };
+  } catch (e) {
+    console.warn(`USAGE_METER_ERROR check metric=jobs business=${businessId}: ${(e as Error)?.message}`);
+    return { used: 0, cap: null, remaining: Infinity, blocked: false }; // fail-open
+  }
+}
+
+/**
+ * Guard for job creation: logs a structured line when at/over cap and returns whether
+ * creation may proceed. Returns false (block) ONLY when over cap AND USAGE_CAPS_ENFORCE
+ * is on. Call this right before inserting a genuinely-new job.
+ */
+export async function guardJobCreation(businessId: string): Promise<boolean> {
+  const a = await checkJobAllowance(businessId);
+  if (a.blocked) {
+    console.warn(
+      `USAGE_CAP_BLOCK metric=jobs business=${businessId} used=${a.used} cap=${a.cap} enforced=${ENFORCE}`,
+    );
+    if (ENFORCE) return false;
+  }
+  return true;
+}
+
+/** For GET /api/billing/usage — all three meters + the period start. */
 export async function getUsageSummary(businessId: string) {
-  const [sms, ai] = await Promise.all([
+  const [sms, ai, jobsAllowance] = await Promise.all([
     checkAllowance("sms", businessId),
     checkAllowance("ai", businessId),
+    checkJobAllowance(businessId),
   ]);
   return {
     periodStart: nzMonthStartUtc().toISOString(),
     enforced: ENFORCE,
     sms: { used: sms.used, cap: sms.cap, remaining: sms.remaining },
     ai: { used: ai.used, cap: ai.cap, remaining: ai.remaining },
+    jobs: { used: jobsAllowance.used, cap: jobsAllowance.cap, remaining: jobsAllowance.remaining },
   };
 }

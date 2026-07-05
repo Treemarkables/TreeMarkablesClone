@@ -6,6 +6,10 @@
  * tenant A never sees ANY of tenant B's rows (and vice-versa). Because every seeded row id
  * is a UUID, the leak check is simply: does A's response body contain any of B's ids?
  *
+ * Beyond reads, it also probes the WRITE path — A attempting to PUT/DELETE B's records —
+ * and confirms via an owner-role DB read that B's rows are genuinely untouched (a 200 over
+ * zero RLS-visible rows looks like success but changed nothing).
+ *
  * It also probes the session-less / owner-path surfaces I expect to be weak (the customer
  * portal, public resource links) so the output tells you exactly which routes isolate vs
  * leak vs fail-closed — not just "RLS works."
@@ -151,6 +155,24 @@ async function getAs(t: Tenant | null, path: string): Promise<{ status: number; 
   return { status: res.status, body: await res.text() };
 }
 
+// Like getAs, but for mutating verbs (PUT/DELETE). Sends a JSON body when one is given.
+async function requestAs(
+  t: Tenant | null,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<{ status: number; body: string }> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers: {
+      ...(t?.cookie ? { Cookie: t.cookie } : {}),
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  return { status: res.status, body: await res.text() };
+}
+
 function containsAny(body: string, ids: string[]): string[] {
   return ids.filter((id) => body.includes(id));
 }
@@ -201,13 +223,30 @@ function record(name: string, verdict: Row["verdict"], detail = "") {
 // The rest are isolation-only: either not seeded (invoices/equipment/calls) or shaped so
 // a bare seed won't appear (today-overview = today's jobs only; leads = minimal/filtered).
 const LIST_ENDPOINTS: { path: string; ownCheck: boolean }[] = [
+  // Seeded + echo their row id in the list response → assert own-visibility too.
   { path: "/api/customers", ownCheck: true },
   { path: "/api/jobs", ownCheck: true },
+  { path: "/api/quotes", ownCheck: true },
+  { path: "/api/employees", ownCheck: true },
+  // Isolation-only: either not seeded, or shaped so a bare seed won't appear
+  // (today-overview = today's jobs only; leads/business-settings = filtered/single).
   { path: "/api/leads", ownCheck: false },
   { path: "/api/invoices", ownCheck: false },
   { path: "/api/equipment", ownCheck: false },
   { path: "/api/calls", ownCheck: false },
   { path: "/api/today-overview", ownCheck: false },
+  { path: "/api/proposals", ownCheck: false },
+  { path: "/api/conversations", ownCheck: false },
+  { path: "/api/reviews", ownCheck: false },
+  { path: "/api/materials", ownCheck: false },
+  { path: "/api/services", ownCheck: false },
+  { path: "/api/price-rules", ownCheck: false },
+  { path: "/api/lanes", ownCheck: false },
+  { path: "/api/videos", ownCheck: false },
+  { path: "/api/follow-up-queue", ownCheck: false },
+  { path: "/api/job-templates", ownCheck: false },
+  { path: "/api/safety-assets", ownCheck: false },
+  { path: "/api/business-settings", ownCheck: false },
 ];
 
 async function testListEndpoint(ep: { path: string; ownCheck: boolean }, viewer: Tenant, other: Tenant) {
@@ -265,6 +304,53 @@ async function testListEndpoint(ep: { path: string; ownCheck: boolean }, viewer:
       const name = `${path}  (A fetching B's resource)`;
       if (body.includes(otherId) && status < 400) record(name, "SECURITY FAIL", `returned B's row (HTTP ${status})`);
       else record(name, "PASS", `not returned (HTTP ${status})`);
+    }
+
+    // 2b) Cross-tenant WRITE: A tries to MUTATE/DELETE B's rows. RLS must turn these
+    //     into no-ops (the target id isn't visible in A's tenant scope, so update/delete
+    //     touches zero rows). We verify with an OWNER-role DB read that B's row is
+    //     untouched — the HTTP status alone can lie: a 200 "success" over zero updated
+    //     rows looks identical to a real write. This is the dimension the read-only
+    //     matrix above can't cover, and the likeliest place a missing RLS policy bites.
+    {
+      const sentinel = `__isotest_MUTATED__${rnd}`;
+
+      // A → PUT B's customer (try to overwrite the name).
+      {
+        const name = `PUT /api/customers/:id  (A mutating B's customer)`;
+        const res = await requestAs(A, "PUT", `/api/customers/${B.customerId}`, { name: sentinel });
+        const after = await pool
+          .query(`SELECT name FROM customers WHERE id = $1`, [B.customerId])
+          .then((r) => r.rows[0]?.name as string | undefined)
+          .catch(() => "ERR");
+        if (after === sentinel) record(name, "SECURITY FAIL", `A overwrote B's customer name (HTTP ${res.status})`);
+        else record(name, "PASS", `B's customer unchanged (HTTP ${res.status})`);
+      }
+
+      // A → PUT B's job (try to overwrite the title).
+      {
+        const name = `PUT /api/jobs/:id  (A mutating B's job)`;
+        const res = await requestAs(A, "PUT", `/api/jobs/${B.jobId}`, { title: sentinel });
+        const after = await pool
+          .query(`SELECT title FROM jobs WHERE id = $1`, [B.jobId])
+          .then((r) => r.rows[0]?.title as string | undefined)
+          .catch(() => "ERR");
+        if (after === sentinel) record(name, "SECURITY FAIL", `A overwrote B's job title (HTTP ${res.status})`);
+        else record(name, "PASS", `B's job unchanged (HTTP ${res.status})`);
+      }
+
+      // A → DELETE B's customer (A is its own tenant's admin, so auth passes — RLS must
+      // still scope the delete to zero rows).
+      {
+        const name = `DELETE /api/customers/:id  (A deleting B's customer)`;
+        const res = await requestAs(A, "DELETE", `/api/customers/${B.customerId}`);
+        const stillThere = await pool
+          .query(`SELECT 1 FROM customers WHERE id = $1`, [B.customerId])
+          .then((r) => (r.rowCount ?? 0) > 0)
+          .catch(() => true); // on error, assume present → don't raise a false leak
+        if (!stillThere) record(name, "SECURITY FAIL", `A deleted B's customer (HTTP ${res.status})`);
+        else record(name, "PASS", `B's customer still present (HTTP ${res.status})`);
+      }
     }
 
     // 3) Session-less customer portal: B's customer's jobs, unauthenticated.

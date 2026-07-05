@@ -15,9 +15,31 @@ const xeroClient = new XeroClient({
 
 export function registerXeroRoutes(app: any, storage: IStorage) {
   console.log('🔗 Xero Custom Connection mode enabled');
-  
+
+  // Admin-only gate for Xero mutations (connect/disconnect/token/send/reset/
+  // settings). These touch the accounting integration and can push invoices, so
+  // they must not be reachable by a non-admin (previously they relied on RLS
+  // only, which does not enforce role).
+  const requireXeroAdmin = async (req: Request, res: Response, next: (err?: any) => void): Promise<void> => {
+    try {
+      const employeeId = (req.session as any)?.employeeId;
+      if (!employeeId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee || employee.role !== 'admin') {
+        res.status(403).json({ success: false, message: 'Admin access required' });
+        return;
+      }
+      next();
+    } catch (err) {
+      res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+  };
+
   // Connect to Xero using Custom Connection (client credentials)
-  app.post('/api/xero/connect', async (req: Request, res: Response) => {
+  app.post('/api/xero/connect', requireXeroAdmin, async (req: Request, res: Response) => {
     try {
       console.log('🔐 Connecting to Xero using Custom Connection...');
       
@@ -109,7 +131,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
   });
 
   // Disconnect from Xero
-  app.post('/api/xero/disconnect', async (req: Request, res: Response) => {
+  app.post('/api/xero/disconnect', requireXeroAdmin, async (req: Request, res: Response) => {
     try {
       const connection = await storage.getActiveXeroConnection();
       
@@ -127,7 +149,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
   });
 
   // Force refresh token - useful after updating scopes in Xero Developer portal
-  app.post('/api/xero/refresh-token', async (req: Request, res: Response) => {
+  app.post('/api/xero/refresh-token', requireXeroAdmin, async (req: Request, res: Response) => {
     try {
       const connection = await storage.getActiveXeroConnection();
       
@@ -232,7 +254,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
   }
   
   // Send job invoice to Xero (used by Invoices page)
-  app.post('/api/xero/send-invoice', async (req: Request, res: Response) => {
+  app.post('/api/xero/send-invoice', requireXeroAdmin, async (req: Request, res: Response) => {
     try {
       console.log('📤 Xero send-invoice request received:', req.body);
       const { jobId } = req.body;
@@ -699,7 +721,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
     }
   });
 
-  app.post('/api/xero/reset-invoice-sync', async (req: Request, res: Response) => {
+  app.post('/api/xero/reset-invoice-sync', requireXeroAdmin, async (req: Request, res: Response) => {
     try {
       const { invoiceId } = req.body;
       
@@ -748,7 +770,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
   });
 
   // Reset Xero sync by job ID — use this after voiding an invoice in Xero to re-enable sending
-  app.post('/api/xero/reset-job-sync', async (req: Request, res: Response) => {
+  app.post('/api/xero/reset-job-sync', requireXeroAdmin, async (req: Request, res: Response) => {
     try {
       const { jobId } = req.body;
       if (!jobId) {
@@ -865,7 +887,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
   });
   
   // Update Xero settings (account code and tax type)
-  app.put('/api/xero/settings', async (req: Request, res: Response) => {
+  app.put('/api/xero/settings', requireXeroAdmin, async (req: Request, res: Response) => {
     try {
       const { salesAccountCode, taxType } = req.body;
       

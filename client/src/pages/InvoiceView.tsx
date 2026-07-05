@@ -36,6 +36,7 @@ interface PublicInvoiceData {
   dueDate: string;
   amount: string;
   status: string;
+  onlinePaymentEnabled?: boolean;
   items: any;
   description: string | null;
   notes: string | null;
@@ -288,8 +289,10 @@ export default function InvoiceView() {
           </div>
         )}
 
-        {/* Pay online */}
+        {/* Pay online — only when this business can take card payments (single
+            Stripe account = Treemarkables until Connect); others pay by bank transfer. */}
         {stripeConfigured &&
+          invoice.onlinePaymentEnabled &&
           !justPaid &&
           invoice.status !== "paid" &&
           invoice.status !== "cancelled" &&

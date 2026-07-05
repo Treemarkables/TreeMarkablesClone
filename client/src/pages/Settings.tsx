@@ -37,6 +37,7 @@ import {
   FileStack,
   CreditCard,
   Search,
+  Rocket,
   type LucideIcon
 } from "lucide-react";
 import { Link } from "wouter";
@@ -67,6 +68,13 @@ const settingsSections: SettingSection[] = [
     chip: "bg-blue-50",
     dot: "bg-blue-600",
     options: [
+      {
+        id: "setup",
+        title: "Finish Setup",
+        description: "Complete your account setup — see what's left to do",
+        icon: Rocket,
+        path: "/settings/setup"
+      },
       {
         id: "company",
         title: "Company Info",
@@ -108,6 +116,13 @@ const settingsSections: SettingSection[] = [
         description: "Time zones, currency, date formats and defaults",
         icon: Sliders,
         path: "/settings/preferences"
+      },
+      {
+        id: "channels",
+        title: "Inbound Channels",
+        description: "Phone numbers and emails that route calls, texts and replies to you",
+        icon: Plug,
+        path: "/settings/channels"
       }
     ]
   },
@@ -340,6 +355,23 @@ const settingsSections: SettingSection[] = [
         path: "/unlinked-calls"
       }
     ]
+  },
+  {
+    // Platform-operator only — gated to Treemarkables/Inflow admins (same allowlist
+    // as the role-checklist feature), filtered out below for everyone else.
+    id: "platform",
+    label: "Platform",
+    chip: "bg-violet-50",
+    dot: "bg-violet-600",
+    options: [
+      {
+        id: "subscribers",
+        title: "Subscribers",
+        description: "Set up and review any subscriber's account during onboarding",
+        icon: Users,
+        path: "/admin/subscribers"
+      }
+    ]
   }
 ];
 
@@ -392,6 +424,8 @@ export default function Settings() {
         ...section,
         options: section.options.filter((option) => {
           if (option.id === "role-checklist-tasks" && !roleChecklistEnabled) return false;
+          // Concierge subscriber management is platform-operator only (same allowlist).
+          if (option.id === "subscribers" && !roleChecklistEnabled) return false;
           if (!q) return true;
           return (
             option.title.toLowerCase().includes(q) ||

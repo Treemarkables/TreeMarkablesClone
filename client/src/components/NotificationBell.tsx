@@ -627,6 +627,7 @@ export function NotificationBell() {
           size="icon"
           className="relative [&_svg]:!size-8"
           data-testid="button-notifications"
+          aria-label="Notifications"
         >
           <Bell
             className={`fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${visibleUnread > 0 ? "animate-pulse" : ""}`}
@@ -651,7 +652,7 @@ export function NotificationBell() {
         <Card className="border-0 shadow-lg">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between mb-2">
-              <CardTitle className="text-lg font-semibold bg-gradient-to-r from-red-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
+              <CardTitle className="text-lg font-semibold text-foreground">
                 Notifications
               </CardTitle>
               <div className="flex items-center gap-2">

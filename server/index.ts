@@ -7,7 +7,9 @@ import * as Sentry from "@sentry/node";
 import http from "http";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.ts";
+import { APP_URL } from "./config/appUrl";
 import { tenantContextMiddleware } from "./tenancy/tenantMiddleware";
+import { requireApiAuth } from "./tenancy/requireApiAuth";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
 import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
@@ -96,6 +98,33 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
 });
 
+// Legacy-domain redirect. Customer document links already sent out (invoices,
+// proposals, quotes, etc.) point at the old app host. The app now lives at
+// APP_URL (app.inflowapp.co.nz). 301 the customer-facing paths to the new host
+// so those old links keep working.
+//
+// Scoped to these path prefixes ONLY — NOT `/` or `/login` — so already-shipped
+// native apps, which load the app root on the old host and whose origin guards
+// expect it, keep working until they're rebuilt. The old host is grey-cloud
+// (DNS-only) so this can't be a Cloudflare redirect rule; it has to live here.
+//
+// The APP_HOST !== legacy guard prevents a redirect loop if APP_URL is unset and
+// still falls back to the old host.
+const LEGACY_APP_HOST = 'app.treemarkables.co.nz';
+const REDIRECT_PATH_PREFIXES = ['/proposal', '/invoice', '/quote', '/watch', '/review', '/customer-portal'];
+const APP_HOST = (() => { try { return new URL(APP_URL).host; } catch { return ''; } })();
+app.use((req, res, next) => {
+  if (
+    APP_HOST &&
+    APP_HOST !== LEGACY_APP_HOST &&
+    req.hostname === LEGACY_APP_HOST &&
+    REDIRECT_PATH_PREFIXES.some((p) => req.path === p || req.path.startsWith(p + '/'))
+  ) {
+    return res.redirect(301, `${APP_URL}${req.originalUrl}`);
+  }
+  next();
+});
+
 // Increase JSON payload limit for large CSV imports (ServiceM8 data can be huge)
 // The verify callback captures the raw body as a Buffer so webhook signature
 // verification (e.g. Svix for Resend events) can work correctly alongside
@@ -114,6 +143,14 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 // Configure session middleware with PostgreSQL store for persistence across server restarts
 const PgSession = connectPgSimple(session);
 const isDevelopment = process.env.NODE_ENV === 'development';
+
+// SESSION_SECRET signs the session cookie. If it's ever unset in production the
+// cookie would be signed with a public literal from the repo — an attacker could
+// then forge a valid session for any employee/business (defeating RLS too). Fail
+// fast at boot rather than silently shipping a forgeable secret.
+if (!isDevelopment && !process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET must be set in production — refusing to start with a default signing secret');
+}
 
 app.use(
   session({
@@ -154,6 +191,11 @@ console.log('✅ Session store: PostgreSQL (sessions persist across server resta
 // Postgres RLS enforces read isolation. Must come after session middleware. With the
 // flag off this only sets businessId (no pooled connection) — exact current behaviour.
 app.use(tenantContextMiddleware);
+
+// Global API auth backstop — 401 for unauthenticated /api/* calls that aren't on
+// the public allowlist, so authorization no longer depends solely on RLS. Flag-
+// gated (API_AUTH_ENFORCED, default off); roll out + smoke-test like RLS.
+app.use(requireApiAuth);
 
 // Runtime static file serving with path resolution
 function resolveAndServeStatic(appInstance: express.Express) {
@@ -691,6 +733,7 @@ The {businessName} Team';
         CREATE INDEX IF NOT EXISTS booking_reminders_pending_idx ON booking_reminders (status, scheduled_for);
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminders_enabled BOOLEAN DEFAULT true;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminder_offsets JSONB DEFAULT '[30, 7]'::jsonb;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS job_reply_forward_email TEXT;
         CREATE TABLE IF NOT EXISTS equipment_compliance_reminders (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           business_id VARCHAR,
@@ -1050,6 +1093,61 @@ The {businessName} Team';
         await pool.query(`ALTER TABLE business_settings ALTER COLUMN business_name SET DEFAULT 'My Business'`);
       } catch (identErr) {
         log(`⚠️ identity-defaults migration warning: ${(identErr as Error).message}`, "startup");
+      }
+
+      // --- Per-business speech-to-quote vocabulary (trade-gen) ---
+      // Adds the column + seeds Treemarkables with its exact tree vocab by name, so
+      // its Whisper bias is unchanged; new tenants stay blank (generic bias).
+      // Mirrors migrations/manual/20260628_trade_vocabulary.sql.
+      try {
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS trade_vocabulary TEXT DEFAULT ''`);
+        await pool.query(
+          `UPDATE business_settings SET trade_vocabulary = 'New Zealand tree services walkthrough. Species: pohutukawa, manuka, kanuka, kauri, totara, rimu, kahikatea, miro, tawa, rewarewa, kowhai, ribbonwood, pittosporum, cabbage tree, ti kouka, gleditsia, magnolia, oak, pine, eucalyptus, gum tree, macrocarpa, leyland cypress, willow, poplar, silver birch, plum. Operations: prune, lift, crown reduction, deadwood, remove, fell, dismantle, stump grind, mulch, chip, firewood lengths, cleanup.'
+            WHERE business_name = 'Treemarkables' AND (trade_vocabulary IS NULL OR trade_vocabulary = '')`,
+        );
+      } catch (vocabErr) {
+        log(`⚠️ trade-vocabulary migration warning: ${(vocabErr as Error).message}`, "startup");
+      }
+
+      // --- Stripe Connect (per-tenant card payments) columns ---
+      // Mirrors migrations/manual/20260628_stripe_connect.sql.
+      try {
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS stripe_connect_account_id TEXT DEFAULT ''`);
+        await pool.query(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS stripe_connect_charges_enabled BOOLEAN DEFAULT false`);
+      } catch (connectErr) {
+        log(`⚠️ stripe-connect migration warning: ${(connectErr as Error).message}`, "startup");
+      }
+
+      // --- Neutralize document_templates' Treemarkables identity defaults ---
+      // Mirrors migrations/manual/20260628_document_template_neutral_defaults.sql.
+      // Blank the TM-hardcoded column defaults (existing rows unchanged, TM keeps its
+      // values) + clear leftover TM defaults from non-TM templates (TM excluded by id).
+      try {
+        for (const col of ['company_name', 'company_address', 'company_email', 'company_phone', 'gst_number']) {
+          await pool.query(`ALTER TABLE document_templates ALTER COLUMN ${col} SET DEFAULT ''`);
+        }
+        await pool.query(
+          `UPDATE document_templates
+              SET company_name='', company_address='', company_email='', company_phone='', gst_number=''
+            WHERE business_id IS DISTINCT FROM (SELECT business_id FROM business_settings WHERE business_name='Treemarkables' LIMIT 1)
+              AND company_name='Treemarkables LTD' AND company_address='213 Stanley road, Gisborne'
+              AND company_email='quotes@treemarkables.nz' AND company_phone='027 216 6882'
+              AND gst_number='131-047-592-GST004'`,
+        );
+      } catch (tmplErr) {
+        log(`⚠️ document-template-defaults migration warning: ${(tmplErr as Error).message}`, "startup");
+      }
+
+      // --- Backfill default document templates for pre-#276 tenants ---
+      // Idempotent: seeds the 3 defaults (scoped + identity from the business's own
+      // settings) for any business that has NONE — e.g. the demo tenant — so their
+      // public proposal/quote/invoice views stop falling back to Treemarkables'
+      // template. Businesses that already have templates are skipped. See onboarding.ts.
+      try {
+        const { backfillMissingDocumentTemplates } = await import('./onboarding');
+        await backfillMissingDocumentTemplates();
+      } catch (backfillErr) {
+        log(`⚠️ document-template backfill warning: ${(backfillErr as Error).message}`, "startup");
       }
 
       // --- Per-business email brand colours (trade-gen Phase A) ---

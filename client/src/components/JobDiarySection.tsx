@@ -80,7 +80,7 @@ import { PendingMessagesCard } from "@/components/PendingMessagesCard";
 import PhotoAnnotator, { type AnnotationShape } from "@/components/PhotoAnnotator";
 import {
   savePhotoAnnotation,
-  fetchPhotoAnnotation,
+  fetchPhotoAnnotationsBatch,
 } from "@/lib/photoAnnotations";
 import { MdStickyNote2, MdEmail } from "react-icons/md";
 
@@ -1416,37 +1416,54 @@ export function JobDiarySection({
     return photos;
   }, [diaryEntries]);
 
-  // Lazy-fetch any saved annotation for the currently-viewed photo. Result is
-  // cached in `annotationsByUrl` so we don't re-fetch as the user navigates
-  // back and forth.
+  // Prefetch annotations for every photo in one batch so the baked annotated
+  // PNG shows in the timeline + grid thumbnails, not just the click-into
+  // viewer. Result is cached in `annotationsByUrl`; URLs with no saved
+  // annotation are recorded as empty to prevent re-fetch loops.
   React.useEffect(() => {
-    if (viewingPhotoIndex === null) return;
-    const url = allPhotos[viewingPhotoIndex];
-    if (!url || annotationsByUrl[url] !== undefined) return;
+    const missing = allPhotos.filter((u) => annotationsByUrl[u] === undefined);
+    if (missing.length === 0) return;
     let cancelled = false;
-    fetchPhotoAnnotation(url)
-      .then((rec) => {
+    fetchPhotoAnnotationsBatch(missing)
+      .then((map) => {
         if (cancelled) return;
-        setAnnotationsByUrl((m) => ({
-          ...m,
-          [url]: rec
-            ? { annotatedUrl: rec.annotatedUrl, shapes: rec.annotations }
-            : { annotatedUrl: null, shapes: [] },
-        }));
+        setAnnotationsByUrl((m) => {
+          const next = { ...m };
+          for (const url of missing) {
+            const rec = map[url];
+            next[url] = rec
+              ? { annotatedUrl: rec.annotatedUrl, shapes: rec.annotations }
+              : { annotatedUrl: null, shapes: [] };
+          }
+          return next;
+        });
       })
       .catch(() => {
-        // Network errors shouldn't break the viewer — just leave it
-        // un-annotated. Marking with an empty record prevents re-fetch loops.
+        // Network errors shouldn't break the thumbnails — just leave them
+        // un-annotated.
         if (cancelled) return;
-        setAnnotationsByUrl((m) => ({
-          ...m,
-          [url]: { annotatedUrl: null, shapes: [] },
-        }));
+        setAnnotationsByUrl((m) => {
+          const next = { ...m };
+          for (const url of missing) {
+            if (next[url] === undefined) {
+              next[url] = { annotatedUrl: null, shapes: [] };
+            }
+          }
+          return next;
+        });
       });
     return () => {
       cancelled = true;
     };
-  }, [viewingPhotoIndex, allPhotos, annotationsByUrl]);
+  }, [allPhotos, annotationsByUrl]);
+
+  // Resolve a source URL to the annotated PNG when one exists, else the
+  // original. Used by thumbnail renderers.
+  const resolveDisplayUrl = React.useCallback(
+    (url: string | null | undefined): string | undefined =>
+      (url && annotationsByUrl[url]?.annotatedUrl) || url || undefined,
+    [annotationsByUrl],
+  );
 
   // Resolved URL/shapes for the currently-viewed photo
   const currentSourceUrl =
@@ -2127,6 +2144,7 @@ export function JobDiarySection({
                 onClick={handleRefresh}
                 data-testid="button-refresh-diary"
                 className="h-7 w-7"
+                aria-label="Refresh diary"
               >
                 <RefreshCw className="w-3 h-3" />
               </Button>
@@ -2135,6 +2153,7 @@ export function JobDiarySection({
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7"
+                aria-label="Diary settings"
               >
                 <Settings className="w-3 h-3" />
               </Button>
@@ -2157,6 +2176,7 @@ export function JobDiarySection({
                 size="icon"
                 variant="ghost"
                 className="absolute right-1 top-1 h-7 w-7"
+                aria-label="Attach file"
               >
                 <Paperclip className="w-4 h-4" />
               </Button>
@@ -2177,6 +2197,7 @@ export function JobDiarySection({
                 }
               }}
               data-testid="button-add-note"
+              aria-label="Add note"
             >
               <Plus className="w-6 h-6" />
             </Button>
@@ -2307,7 +2328,7 @@ export function JobDiarySection({
                       data-testid={`photo-tile-${photo.id ?? idx}`}
                     >
                       <img
-                        src={photo.url}
+                        src={resolveDisplayUrl(photo.url)}
                         alt={`Diary photo ${idx + 1}`}
                         loading="lazy"
                         className="w-full h-full object-cover"
@@ -2347,7 +2368,13 @@ export function JobDiarySection({
               </div>
             </div>
           ) : (
-            <div className="space-y-3 p-2 pr-4">
+            <div className="space-y-3 p-2 pr-4 [&>*]:[content-visibility:auto] [&>*]:[contain-intrinsic-size:auto_160px]">
+              {/* content-visibility on each entry lets the browser skip
+                  layout+paint for off-screen entries — long diaries (100+
+                  entries with photo grids) only pay for what's on screen.
+                  contain-intrinsic-size keeps the scrollbar stable; `auto`
+                  remembers each entry's real height once rendered.
+                  Unsupported browsers (iOS <18) simply ignore it. */}
               {groupedEntries.map((group, groupIndex) => {
                 // Email thread rendering — one consolidated card containing the
                 // parent (sent) email plus all received replies stacked below.
@@ -2513,6 +2540,7 @@ export function JobDiarySection({
                                         }
                                       }}
                                       data-testid={`button-delete-thread-msg-${msg.id}`}
+                                      aria-label="Delete email"
                                     >
                                       <Trash2 className="w-2.5 h-2.5" />
                                     </Button>
@@ -2692,6 +2720,7 @@ export function JobDiarySection({
                                         }
                                       }}
                                       data-testid={`button-delete-sms-thread-msg-${msg.id}`}
+                                      aria-label="Delete message"
                                     >
                                       <Trash2 className="w-2.5 h-2.5" />
                                     </Button>
@@ -2782,6 +2811,7 @@ export function JobDiarySection({
                               }
                             }}
                             data-testid="button-delete-photo-group"
+                            aria-label="Delete photos"
                           >
                             <Trash2 className="w-3 h-3" />
                           </Button>
@@ -2816,8 +2846,9 @@ export function JobDiarySection({
                               }}
                             >
                               <img
-                                src={photo.photoUrl}
+                                src={resolveDisplayUrl(photo.photoUrl)}
                                 alt="Job photo"
+                                loading="lazy"
                                 className={
                                   photos.length === 1
                                     ? "w-full h-auto max-h-48 object-contain"
@@ -2998,6 +3029,7 @@ export function JobDiarySection({
                                 }
                               }}
                               data-testid={`button-delete-${entry.type}-${entry.id}`}
+                              aria-label="Delete message"
                             >
                               <Trash2 className="w-2.5 h-2.5" />
                             </Button>
@@ -3307,6 +3339,7 @@ export function JobDiarySection({
                                   setEditingContent(entry.content);
                                 }}
                                 data-testid={`button-edit-entry-${entry.id}`}
+                                aria-label="Edit note"
                               >
                                 <Edit className="w-3 h-3" />
                               </Button>
@@ -3328,6 +3361,7 @@ export function JobDiarySection({
                                   }
                                 }}
                                 data-testid={`button-delete-entry-${entry.id}`}
+                                aria-label="Delete entry"
                               >
                                 <Trash2 className="w-3 h-3" />
                               </Button>
@@ -3458,6 +3492,7 @@ export function JobDiarySection({
                                     <img
                                       src={url}
                                       alt="Job photo"
+                                      loading="lazy"
                                       className="max-w-[64px] h-auto max-h-[64px] rounded-lg cursor-pointer hover-elevate object-contain"
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -3490,6 +3525,7 @@ export function JobDiarySection({
                                       key={`${entry.id}-${i}`}
                                       src={url}
                                       alt={`Job photo ${i + 1}`}
+                                      loading="lazy"
                                       className="w-full aspect-square object-contain rounded-lg cursor-pointer hover-elevate bg-gray-100 dark:bg-gray-800"
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -4106,6 +4142,7 @@ export function JobDiarySection({
                     className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white"
                     onClick={() => setViewingPhotoIndex(viewingPhotoIndex - 1)}
                     data-testid="button-previous-photo"
+                    aria-label="Previous photo"
                   >
                     <ChevronLeft className="w-6 h-6" />
                   </Button>
@@ -4136,6 +4173,7 @@ export function JobDiarySection({
                         setViewingPhotoIndex(viewingPhotoIndex + 1)
                       }
                       data-testid="button-next-photo"
+                      aria-label="Next photo"
                     >
                       <ChevronRight className="w-6 h-6" />
                     </Button>

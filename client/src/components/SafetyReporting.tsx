@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -486,30 +486,40 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
       .join(" ");
   };
 
-  // Filter incidents
-  const filteredIncidents = incidents.filter((incident: SafetyIncident) => {
-    if (filter.type && incident.type !== filter.type) return false;
-    if (filter.severity && incident.severity !== filter.severity) return false;
-    if (filter.status && incident.status !== filter.status) return false;
-    return true;
-  });
+  // Filter incidents. Memoized — previously re-filtered the full incident
+  // list on every render (form keystrokes, tab changes).
+  const filteredIncidents = useMemo(
+    () =>
+      incidents.filter((incident: SafetyIncident) => {
+        if (filter.type && incident.type !== filter.type) return false;
+        if (filter.severity && incident.severity !== filter.severity) return false;
+        if (filter.status && incident.status !== filter.status) return false;
+        return true;
+      }),
+    [incidents, filter],
+  );
 
   // Calculate statistics
-  const stats = {
-    total: incidents.length,
-    open: incidents.filter(
-      (i: SafetyIncident) =>
-        i.status === "reported" || i.status === "investigating",
-    ).length,
-    resolved: incidents.filter((i: SafetyIncident) => i.status === "resolved")
-      .length,
-    highSeverity: incidents.filter(
-      (i: SafetyIncident) => i.severity === "high" || i.severity === "critical",
-    ).length,
-  };
+  const stats = useMemo(
+    () => ({
+      total: incidents.length,
+      open: incidents.filter(
+        (i: SafetyIncident) =>
+          i.status === "reported" || i.status === "investigating",
+      ).length,
+      resolved: incidents.filter((i: SafetyIncident) => i.status === "resolved")
+        .length,
+      highSeverity: incidents.filter(
+        (i: SafetyIncident) => i.severity === "high" || i.severity === "critical",
+      ).length,
+    }),
+    [incidents],
+  );
 
   if (compact) {
-    const recentIncidents = incidents
+    // Copy before sorting — .sort() mutates in place, and `incidents` is the
+    // shared React Query cache array.
+    const recentIncidents = [...incidents]
       .sort(
         (a: SafetyIncident, b: SafetyIncident) =>
           new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime(),

@@ -78,18 +78,22 @@ export default function SettingsCompany() {
     ownerName: string;
     businessTagline: string;
     businessDiscipline: string;
+    tradeVocabulary: string;
     bankAccountName: string;
     bankAccountNumber: string;
     brandHeaderColor: string;
     brandAccentColor: string;
+    jobReplyForwardEmail: string;
   };
   const { data: bizData } = useQuery<{ success: boolean; data: Partial<BizFields> }>({
     queryKey: ["/api/business-settings"],
   });
   const [biz, setBiz] = useState<BizFields>({
     businessName: "", ownerName: "", businessTagline: "", businessDiscipline: "",
+    tradeVocabulary: "",
     bankAccountName: "", bankAccountNumber: "",
     brandHeaderColor: "#0b0b0b", brandAccentColor: "#39FF14",
+    jobReplyForwardEmail: "",
   });
   const [bizLoaded, setBizLoaded] = useState(false);
   if (bizData?.data && !bizLoaded) {
@@ -98,10 +102,12 @@ export default function SettingsCompany() {
       ownerName: bizData.data.ownerName ?? "",
       businessTagline: bizData.data.businessTagline ?? "",
       businessDiscipline: bizData.data.businessDiscipline ?? "",
+      tradeVocabulary: bizData.data.tradeVocabulary ?? "",
       bankAccountName: bizData.data.bankAccountName ?? "",
       bankAccountNumber: bizData.data.bankAccountNumber ?? "",
       brandHeaderColor: bizData.data.brandHeaderColor || "#0b0b0b",
       brandAccentColor: bizData.data.brandAccentColor || "#39FF14",
+      jobReplyForwardEmail: bizData.data.jobReplyForwardEmail ?? "",
     });
     setBizLoaded(true);
   }
@@ -139,17 +145,18 @@ export default function SettingsCompany() {
         ownerName: biz.ownerName,
         businessTagline: biz.businessTagline,
         businessDiscipline: biz.businessDiscipline,
+        tradeVocabulary: biz.tradeVocabulary,
         bankAccountName: biz.bankAccountName,
         bankAccountNumber: biz.bankAccountNumber,
         brandHeaderColor: biz.brandHeaderColor,
         brandAccentColor: biz.brandAccentColor,
+        jobReplyForwardEmail: biz.jobReplyForwardEmail.trim(),
         businessGstNumber: values.gstNumber ?? "",
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates/default/invoice"] });
       queryClient.invalidateQueries({ queryKey: ["/api/business-settings"] });
-      toast({ title: "Company info saved" });
     },
     onError: () => {
       toast({ title: "Failed to save", variant: "destructive" });
@@ -263,7 +270,7 @@ export default function SettingsCompany() {
     <div className="max-w-2xl mx-auto p-6 space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/settings">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" aria-label="Back to settings">
             <ChevronLeft className="w-4 h-4" />
           </Button>
         </Link>
@@ -565,6 +572,20 @@ export default function SettingsCompany() {
 
         <div className="space-y-1">
           <Label className="flex items-center gap-2">
+            <Type className="w-4 h-4 text-muted-foreground" />
+            Speech-to-quote vocabulary
+          </Label>
+          <Textarea
+            value={biz.tradeVocabulary}
+            onChange={(e) => setB("tradeVocabulary", e.target.value)}
+            placeholder="e.g. PEX, copper, backflow, isolation valve, hot-water cylinder, rough-in"
+            rows={3}
+          />
+          <p className="text-xs text-muted-foreground">Your trade's terms — biases video-walkthrough transcription so it spells them right instead of inventing words. Leave blank for a generic field-service bias.</p>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="flex items-center gap-2">
             <Tag className="w-4 h-4 text-muted-foreground" />
             Tagline
           </Label>
@@ -574,6 +595,24 @@ export default function SettingsCompany() {
             placeholder="e.g. Qualified Arborists"
           />
           <p className="text-xs text-muted-foreground">Appears under your brand name in the email header.</p>
+        </div>
+
+        {/* Forward customer replies to an inbox (business_settings.jobReplyForwardEmail).
+            Blank = off; replies still appear on the job card either way. */}
+        <div className="space-y-1">
+          <Label className="flex items-center gap-2">
+            <Mail className="w-4 h-4 text-muted-foreground" />
+            Forward customer replies to
+          </Label>
+          <Input
+            type="email"
+            value={biz.jobReplyForwardEmail}
+            onChange={(e) => setB("jobReplyForwardEmail", e.target.value)}
+            placeholder="you@yourbusiness.co.nz"
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. When a customer replies to a job email, send a copy to this inbox so you also get it in your normal email. Leave blank to keep replies on the job card only. Replies you send go straight back to the customer.
+          </p>
         </div>
 
         {/* Email brand colours (business_settings) — drive the header band, accent

@@ -126,7 +126,6 @@ This is the real engineering work of the migration. Estimate: 1-2 days. Item A1 
 | Provider | Endpoint(s) |
 |---|---|
 | Twilio | `/api/webhooks/sms`, `/twilio-answer`, `/twilio-no-answer`, `/twilio-voice` |
-| Vonage | `/api/webhooks/vonage-voice` (GET+POST), `/vonage-event`, `/vonage-recording` |
 | Resend | `/api/webhooks/resend-events`, `/api/webhooks/email` (also handles Resend Inbound) |
 | SendGrid Inbound Parse | `/api/webhooks/email` |
 | Facebook Messenger | `/api/webhooks/messenger` |

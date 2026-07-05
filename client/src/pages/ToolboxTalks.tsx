@@ -534,6 +534,7 @@ function TalkDetailDialog({ talkId, onClose, topics, onError }: TalkDetailDialog
                           size="icon"
                           onClick={() => removeAttendeeMutation.mutate(attendee.id)}
                           disabled={removeAttendeeMutation.isPending}
+                          aria-label="Remove attendee"
                           data-testid={`button-remove-attendee-${attendee.id}`}
                         >
                           <Trash2 className="h-4 w-4" />

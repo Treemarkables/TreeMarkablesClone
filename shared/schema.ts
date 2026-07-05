@@ -1350,12 +1350,25 @@ export const businessSettings = pgTable("business_settings", {
   ownerName: text("owner_name").default(""),
   businessTagline: text("business_tagline").default(""),
   businessDiscipline: text("business_discipline").default(""),
+  // Per-business speech-to-quote vocabulary. Seeds the Whisper transcription bias +
+  // the transcript-cleanup prompt with the trade's own terms so it transcribes
+  // "macrocarpa"/"backflow"/"switchboard" correctly instead of inventing words.
+  // Blank → a generic field-service bias. Treemarkables is seeded with its tree
+  // species + arborist operations by migration, so its transcription is unchanged.
+  tradeVocabulary: text("trade_vocabulary").default(""),
   // Per-business bank-transfer details shown on invoices so a customer pays the
   // RIGHT business. Default EMPTY on purpose: a tenant shows NO payment block
   // until they set their own — it must never fall back to Treemarkables' account.
   // TM's real details are seeded into its row by migration.
   bankAccountName: text("bank_account_name").default(""),
   bankAccountNumber: text("bank_account_number").default(""),
+  // Stripe Connect (Express) — lets a tenant accept card payments from THEIR customers
+  // into THEIR OWN Stripe account. stripeConnectAccountId is the acct_… id; charges are
+  // only enabled once Stripe finishes onboarding (chargesEnabled, synced from the
+  // account.updated webbook). Blank/false = no Connect → invoices fall back to bank
+  // transfer. Treemarkables keeps using the single platform account, not Connect.
+  stripeConnectAccountId: text("stripe_connect_account_id").default(""),
+  stripeConnectChargesEnabled: boolean("stripe_connect_charges_enabled").default(false),
   // Per-business email brand colours. Drive the header/footer background and the
   // accent (wordmark, divider, CTA, amount) in branded customer emails so each
   // tenant's invoice/proposal/quote emails carry THEIR brand — not Treemarkables'.
@@ -1363,6 +1376,13 @@ export const businessSettings = pgTable("business_settings", {
   // render byte-identical until a business picks its own. See server/emailTemplates.ts.
   brandHeaderColor: text("brand_header_color").default("#0b0b0b"),
   brandAccentColor: text("brand_accent_color").default("#39FF14"),
+
+  // When set, a copy of every inbound customer reply on a job is also forwarded
+  // to this inbox, so the subscriber receives replies in their normal email — not
+  // only on the job card. Null/blank = off (in-app only; the default). The forward's
+  // Reply-To is the customer, so the subscriber can answer them directly. Wired in
+  // the inbound email webhook (server/routes.ts).
+  jobReplyForwardEmail: text("job_reply_forward_email"),
 
   // Business Rules & Workflow
   leadAssignmentMethod: text("lead_assignment_method").default("round_robin"), // round_robin, skill_based, manual
@@ -2879,6 +2899,7 @@ export type InsertHelpArticle = z.infer<typeof insertHelpArticleSchema>;
 export type UpdateHelpArticle = z.infer<typeof updateHelpArticleSchema>;
 
 export const photoSearchSchema = z.object({
+  q: z.string().optional(), // free-text: matches notes / aiDescription / gpsAddress / location / filename
   jobId: z.string().optional(),
   customerId: z.string().optional(),
   type: z.string().optional(),
@@ -2894,6 +2915,24 @@ export const photoSearchSchema = z.object({
   limit: z.number().min(1).max(100).default(20),
   offset: z.number().min(0).default(0),
 });
+
+// Mirror of photoSearchSchema for videos. Videos don't have type/category/quality
+// score; otherwise the shape is identical so the same UI surface can drive both.
+// NOTE: hasGps is reserved for Phase 2 — videos table has no GPS columns yet.
+export const videoSearchSchema = z.object({
+  q: z.string().optional(), // matches title / description / filename
+  kind: z.enum(["job", "knowledge"]).optional(),
+  jobId: z.string().optional(),
+  customerId: z.string().optional(),
+  category: z.string().optional(), // only meaningful for kind='knowledge'
+  uploadedBy: z.string().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  showToCustomer: z.boolean().optional(),
+  limit: z.number().min(1).max(100).default(20),
+  offset: z.number().min(0).default(0),
+});
+export type VideoSearch = z.infer<typeof videoSearchSchema>;
 
 // Type exports for photos
 export type Photo = typeof photos.$inferSelect;
@@ -3442,11 +3481,15 @@ export const documentTemplates = pgTable("document_templates", {
   isActive: boolean("is_active").default(true),
   
   // Company Branding
-  companyName: text("company_name").default("Treemarkables LTD"),
-  companyAddress: text("company_address").default("213 Stanley road, Gisborne"),
-  companyEmail: text("company_email").default("quotes@treemarkables.nz"),
-  companyPhone: text("company_phone").default("027 216 6882"),
-  gstNumber: text("gst_number").default("131-047-592-GST004"),
+  // Neutral defaults — never Treemarkables'. A new tenant's templates are seeded
+  // explicitly by createTenant; these blanks just stop any other insert path from
+  // re-introducing TM's identity onto another business's PDFs. TM keeps its values
+  // because they're stored on its own template rows, not via these defaults.
+  companyName: text("company_name").default(""),
+  companyAddress: text("company_address").default(""),
+  companyEmail: text("company_email").default(""),
+  companyPhone: text("company_phone").default(""),
+  gstNumber: text("gst_number").default(""),
   
   // Layout Configuration
   headerLayout: jsonb("header_layout"), // Logo position, company info layout
