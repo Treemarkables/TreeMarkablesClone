@@ -2908,6 +2908,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                     return;
                                   handleEditJob(job);
                                 }}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.target !== e.currentTarget) return;
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    handleEditJob(job);
+                                  }
+                                }}
                                 data-testid={`desktop-job-card-${job.id}`}
                               >
                                 <div className="flex items-start gap-3 p-4">
@@ -3338,6 +3347,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       return pal ? { borderLeft: `3px solid ${pal.dot}` } : {};
                     })()}
                     onClick={() => handleEditJob(job)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleEditJob(job);
+                      }
+                    }}
                     data-testid={`job-card-${job.id}`}
                   >
                     <div className="flex items-start gap-3 p-4 min-w-0 overflow-hidden">
