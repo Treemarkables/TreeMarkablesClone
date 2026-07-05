@@ -2864,7 +2864,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             return (
                               <div
                                 key={job.id}
-                                className="bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+                                className="bg-white hover:bg-gray-50 cursor-pointer transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_120px]"
                                 style={(() => {
                                   const firstId = job.assignedTeam?.[0];
                                   const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
@@ -3340,7 +3340,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 return (
                   <div
                     key={job.id}
-                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
+                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_130px]"
                     style={(() => {
                       const firstId = job.assignedTeam?.[0];
                       const pal = firstId ? crewPaletteMap.get(firstId) : undefined;

@@ -2368,7 +2368,13 @@ export function JobDiarySection({
               </div>
             </div>
           ) : (
-            <div className="space-y-3 p-2 pr-4">
+            <div className="space-y-3 p-2 pr-4 [&>*]:[content-visibility:auto] [&>*]:[contain-intrinsic-size:auto_160px]">
+              {/* content-visibility on each entry lets the browser skip
+                  layout+paint for off-screen entries — long diaries (100+
+                  entries with photo grids) only pay for what's on screen.
+                  contain-intrinsic-size keeps the scrollbar stable; `auto`
+                  remembers each entry's real height once rendered.
+                  Unsupported browsers (iOS <18) simply ignore it. */}
               {groupedEntries.map((group, groupIndex) => {
                 // Email thread rendering — one consolidated card containing the
                 // parent (sent) email plus all received replies stacked below.
