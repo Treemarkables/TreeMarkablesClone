@@ -652,9 +652,18 @@ export default function JobDashboard({
                       {displayJobs.slice(0, 5).map((job) => (
                         <div
                           key={job.id}
-                          className="flex items-center justify-between p-3 border rounded-lg hover-elevate cursor-pointer"
+                          className="flex items-center justify-between p-3 border rounded-lg hover-elevate cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           data-testid={`job-item-${job.id}`}
                           onClick={() => handleJobClick(job.id)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.target !== e.currentTarget) return;
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleJobClick(job.id);
+                            }
+                          }}
                         >
                           <div className="flex-1">
                             <h4
@@ -879,8 +888,18 @@ export default function JobDashboard({
                     return (
                       <Card
                         key={job.id}
-                        className={`hover-elevate cursor-pointer transition-all duration-200 ${isSelected ? "ring-2 ring-blue-500 bg-blue-50" : ""}`}
+                        className={`hover-elevate cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isSelected ? "ring-2 ring-blue-500 bg-blue-50" : ""}`}
                         onClick={() => handleJobClick(job.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          // Ignore keys bubbling from the inner checkbox/buttons.
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleJobClick(job.id);
+                          }
+                        }}
                         data-testid={`card-job-${job.id}`}
                       >
                         <CardContent className="p-4">

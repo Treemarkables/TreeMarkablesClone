@@ -744,8 +744,17 @@ export default function Opportunities() {
 
                   {/* Conversation Info */}
                   <div
-                    className="flex-1 min-w-0 overflow-hidden cursor-pointer"
+                    className="flex-1 min-w-0 overflow-hidden cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
                     onClick={() => handleConversationClick(conversation)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleConversationClick(conversation);
+                      }
+                    }}
                   >
                     <div className="flex items-baseline gap-1 sm:gap-2">
                       <h3
