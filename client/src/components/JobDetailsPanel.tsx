@@ -17,7 +17,7 @@
  *   - Voice transcription wired into the textareas
  *   - "Notify on arrival" toggle (not a real DB field — needs design call)
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, ChevronDown, Mic, MicOff, Lock, UserPlus, Pencil, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -243,6 +243,23 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
     }
   }, [job?.description, proposalDescription]);
   useEffect(() => { if (job) setInternalNotes(job.internalNotes ?? ""); }, [job?.internalNotes]);
+  // Auto-size both textareas to their content (min height comes from rows=3).
+  // scrollHeight is the exact browser measurement — same pattern as the
+  // desktop card's description popup in GlobalJobCard.
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const internalNotesRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const ta = descriptionRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [description]);
+  useEffect(() => {
+    const ta = internalNotesRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [internalNotes]);
   // Per-job address override. Initial value falls back to the customer's
   // address so the field reflects what's shown elsewhere (dispatch board,
   // etc.) — saving writes to job.address, leaving the customer record alone.
@@ -730,14 +747,15 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           </div>
         )}
         <textarea
+          ref={descriptionRef}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           onBlur={() => {
             if ((job?.description ?? "") !== description) saveField.mutate({ description });
           }}
           placeholder="Add a job description..."
-          rows={12}
-          className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 resize-none"
+          rows={3}
+          className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
           data-testid="job-description"
         />
       </div>
@@ -762,14 +780,15 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           Staff only — not visible to customers
         </div>
         <textarea
+          ref={internalNotesRef}
           value={internalNotes}
           onChange={(e) => setInternalNotes(e.target.value)}
           onBlur={() => {
             if ((job?.internalNotes ?? "") !== internalNotes) saveField.mutate({ internalNotes });
           }}
           placeholder="Add internal notes..."
-          rows={4}
-          className="w-full bg-white border border-orange-200 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+          rows={3}
+          className="w-full bg-white border border-orange-200 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-orange-400 resize-none overflow-hidden"
           data-testid="internal-notes"
         />
       </div>
