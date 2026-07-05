@@ -111,7 +111,6 @@ export default function BookingReminderSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/business-settings"] });
-      toast({ title: "Saved", description: "Booking reminder settings updated." });
     },
     onError: (err: any) => {
       toast({

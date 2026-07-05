@@ -81,7 +81,6 @@ export default function NearMissHistory() {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/near-miss-reports/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/near-miss-reports"] });
-      toast({ title: "Draft deleted" });
     },
   });
 
