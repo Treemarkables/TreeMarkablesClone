@@ -422,7 +422,7 @@ export default function ContactSection() {
                     role="status"
                   >
                     <div className="text-lg font-semibold mb-1">
-                      ✅ Quote Request Sent!
+                      Quote Request Sent!
                     </div>
                     <div className="text-sm">
                       Thank you! We'll respond within 24 hours with your

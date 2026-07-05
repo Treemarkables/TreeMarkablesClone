@@ -89,7 +89,7 @@ export default function HeaderV2() {
           <nav className="hidden lg:flex items-center gap-8">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1 text-xl font-medium text-white/80 hover:text-white transition-colors focus:outline-none">
+                <button className="flex items-center gap-1 text-xl font-medium text-white/80 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-sm">
                   Services <ChevronDown className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>

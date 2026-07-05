@@ -616,6 +616,7 @@ export default function QuoteManagement({
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => removeLineItem(item.id)}
+                                  aria-label="Remove line item"
                                   data-testid={`button-remove-line-item-${item.id}`}
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -776,6 +777,7 @@ export default function QuoteManagement({
                         size="sm"
                         variant="outline"
                         onClick={() => setPreviewingQuote(quote)}
+                        aria-label="Preview quote"
                         data-testid={`button-preview-quote-${quote.id}`}
                       >
                         <Eye className="w-4 h-4" />
@@ -793,6 +795,7 @@ export default function QuoteManagement({
                             terms: quote.terms || "",
                           });
                         }}
+                        aria-label="Edit quote"
                         data-testid={`button-edit-quote-${quote.id}`}
                       >
                         <Edit className="w-4 h-4" />
