@@ -4929,6 +4929,7 @@ The Treemarkables Team`;
               className="lg:hidden h-7 w-7 text-gray-600 hover:bg-gray-100"
               onClick={onClose}
               data-testid="button-close-mobile"
+              aria-label="Close job card"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -5712,6 +5713,7 @@ The Treemarkables Team`;
                                     onClick={() =>
                                       handleSaveCustomerName(editingNameValue)
                                     }
+                                    aria-label="Save customer name"
                                   >
                                     {isSavingCustomerName ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -5728,6 +5730,7 @@ The Treemarkables Team`;
                                       setIsEditingCustomerName(false);
                                       setEditingNameValue("");
                                     }}
+                                    aria-label="Cancel editing customer name"
                                   >
                                     <X className="h-4 w-4" />
                                   </Button>
@@ -6013,6 +6016,7 @@ The Treemarkables Team`;
                                 onClick={() =>
                                   handleSaveCustomerName(editingNameValue)
                                 }
+                                aria-label="Save customer name"
                               >
                                 {isSavingCustomerName ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -6029,6 +6033,7 @@ The Treemarkables Team`;
                                   setIsEditingCustomerName(false);
                                   setEditingNameValue("");
                                 }}
+                                aria-label="Cancel editing customer name"
                               >
                                 <X className="h-4 w-4" />
                               </Button>
@@ -6910,12 +6915,13 @@ The Treemarkables Team`;
                                         setNewChecklistItem(e.target.value)
                                       }
                                       placeholder="Add a task..."
-                                      className="flex-1 text-sm bg-transparent border-0 border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none py-1 text-gray-700 placeholder-gray-400"
+                                      className="flex-1 text-sm bg-transparent border-0 border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring py-1 text-gray-700 placeholder-gray-400"
                                     />
                                     <button
                                       type="submit"
                                       disabled={!newChecklistItem.trim()}
                                       className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center flex-shrink-0 disabled:opacity-30 transition-colors"
+                                      aria-label="Add checklist item"
                                     >
                                       <Plus className="w-3.5 h-3.5 text-gray-600" />
                                     </button>
@@ -7979,12 +7985,13 @@ The Treemarkables Team`;
                                         setNewChecklistItem(e.target.value)
                                       }
                                       placeholder="Add a task..."
-                                      className="flex-1 text-sm bg-transparent border-0 border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none py-1 text-gray-700 placeholder-gray-400"
+                                      className="flex-1 text-sm bg-transparent border-0 border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring py-1 text-gray-700 placeholder-gray-400"
                                     />
                                     <button
                                       type="submit"
                                       disabled={!newChecklistItem.trim()}
                                       className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center flex-shrink-0 disabled:opacity-30 transition-colors"
+                                      aria-label="Add checklist item"
                                     >
                                       <Plus className="w-3.5 h-3.5 text-gray-600" />
                                     </button>
@@ -8353,6 +8360,7 @@ The Treemarkables Team`;
                                           setCancelBookingDialogOpen(true);
                                         }}
                                         data-testid={`button-cancel-booking-${employeeId}`}
+                                        aria-label="Cancel booking"
                                       >
                                         <X className="h-3.5 w-3.5 text-gray-500 hover:text-red-600" />
                                       </Button>
@@ -9272,6 +9280,7 @@ The Treemarkables Team`;
                                             }
                                             className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
                                             data-testid={`button-delete-item-${index}`}
+                                            aria-label="Delete line item"
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
                                           </Button>
@@ -9457,6 +9466,7 @@ The Treemarkables Team`;
                                           }
                                           className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                                           data-testid={`button-delete-item-${index}`}
+                                          aria-label="Delete line item"
                                         >
                                           <Trash2 className="w-4 h-4" />
                                         </Button>
@@ -11110,6 +11120,7 @@ The Treemarkables Team`;
               onClick={() => setIsProfitTrackerOpen(false)}
               className="absolute left-2 top-2 h-9 w-9 z-10 sm:hidden"
               data-testid="button-close-profit-tracker"
+              aria-label="Close profit tracking"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -11335,6 +11346,7 @@ The Treemarkables Team`;
                   onClick={() => setMyGoogleCalendarOpen(true)}
                   data-testid="btn-my-google-calendar"
                   title="Check my Google Calendar"
+                  aria-label="Check my Google Calendar"
                 >
                   <Calendar className="h-4 w-4 text-green-600" />
                 </Button>
@@ -11420,6 +11432,7 @@ The Treemarkables Team`;
                           }
                           data-testid={`btn-staff-calendar-${employee.id}`}
                           title={`View ${employeeName}'s calendar`}
+                          aria-label={`View ${employeeName}'s calendar`}
                         >
                           <Calendar className="h-4 w-4 text-blue-600" />
                         </Button>

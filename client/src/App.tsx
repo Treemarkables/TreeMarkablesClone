@@ -351,6 +351,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="outline"
                         size="icon"
+                        aria-label="Create new"
                         data-testid="create-new-button-mobile"
                         className="rounded-full text-green-700 border-green-400 bg-green-100 shrink-0 h-12 w-12"
                       >
@@ -389,6 +390,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     variant="outline"
                     size="icon"
                     onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
+                    aria-label="Paste message"
                     data-testid="paste-message-button-mobile"
                     className="rounded-full text-orange-600 border-orange-400 bg-orange-100 shrink-0 h-12 w-12"
                   >
@@ -401,6 +403,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         variant="ghost"
                         size="icon"
                         className={`h-11 w-11 ${(dispatchFilter !== "all" || dispatchLane !== "all") ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                        aria-label="Filter jobs"
                         data-testid="mobile-filter-dropdown-trigger"
                       >
                         <Filter className="h-7 w-7" />
@@ -429,6 +432,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                           variant="ghost"
                           size="icon"
                           className={`h-11 w-11 ${dispatchLane !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                          aria-label="Filter by lane"
                           data-testid="dispatch-lanes-button-mobile"
                         >
                           <LayoutGrid className="h-6 w-6" />
@@ -460,6 +464,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     if (dispatchSearchOpen) setDispatchSearchOpen(false);
                     else setDispatchSearchOpen(true);
                   }}
+                  aria-label={dispatchSearchOpen ? "Close search" : "Search jobs"}
                   data-testid="mobile-search-toggle"
                   className="text-muted-foreground h-11 w-11"
                 >
@@ -485,7 +490,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {isAdmin && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" data-testid="button-account-dropdown-mobile">
+                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label="Account menu" data-testid="button-account-dropdown-mobile">
                       <User className="h-6 w-6" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -572,6 +577,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       if (input) { input.focus(); input.select(); }
                       setDispatchSearchOpen(!dispatchSearchOpen);
                     }}
+                    aria-label={dispatchSearchOpen ? "Close search" : "Search jobs"}
                     data-testid="desktop-search-toggle"
                     className="text-black"
                   >
@@ -694,6 +700,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       size="icon"
                       onClick={handleRefresh}
                       disabled={isRefreshing}
+                      aria-label="Refresh all data"
                       data-testid="button-desktop-refresh"
                     >
                       <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />

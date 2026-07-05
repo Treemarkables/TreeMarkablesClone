@@ -376,6 +376,7 @@ export default function JobTemplateManagement() {
                           setIsCreateOpen(false);
                         }}
                         data-testid={`button-edit-${template.id}`}
+                        aria-label="Edit template"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -384,6 +385,7 @@ export default function JobTemplateManagement() {
                         variant="ghost"
                         onClick={() => handleDeleteTemplate(template.id)}
                         data-testid={`button-delete-${template.id}`}
+                        aria-label="Delete template"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -1001,6 +1003,7 @@ function TemplateFormDialog({
                       variant="ghost"
                       onClick={() => removePreJobChecklistItem(index)}
                       data-testid={`button-remove-pre-checklist-${index}`}
+                      aria-label="Remove pre-job checklist item"
                     >
                       <X className="w-4 h-4" />
                     </Button>
@@ -1050,6 +1053,7 @@ function TemplateFormDialog({
                       variant="ghost"
                       onClick={() => removePostJobChecklistItem(index)}
                       data-testid={`button-remove-post-checklist-${index}`}
+                      aria-label="Remove post-job checklist item"
                     >
                       <X className="w-4 h-4" />
                     </Button>
@@ -1099,6 +1103,7 @@ function TemplateFormDialog({
                       variant="ghost"
                       onClick={() => removeEquipmentChecklistItem(index)}
                       data-testid={`button-remove-equipment-checklist-${index}`}
+                      aria-label="Remove equipment checklist item"
                     >
                       <X className="w-4 h-4" />
                     </Button>

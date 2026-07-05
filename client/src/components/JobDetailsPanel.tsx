@@ -1367,6 +1367,7 @@ function InputField({
       onChange={(e) => onChange(e.target.value)}
       onBlur={onBlur}
       placeholder={placeholder}
+      aria-label={placeholder}
       className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500"
     />
   );

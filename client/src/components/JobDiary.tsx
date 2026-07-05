@@ -802,6 +802,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                         }}
                         className={`absolute top-1 ${isSent ? '-left-9' : '-right-9'} h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity`}
                         data-testid={`button-delete-sms-${entry.id}`}
+                        aria-label="Delete message"
                       >
                         <Trash2 className="h-3 w-3 text-gray-400 hover:text-red-600" />
                       </Button>
@@ -838,6 +839,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                   className="absolute top-2 right-2 z-20 h-8 w-8"
                   data-testid={`button-delete-entry-${entry.id}`}
                   title="Delete entry"
+                  aria-label="Delete entry"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -921,6 +923,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                   className="absolute top-0.5 right-0.5 h-5 w-5 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
                                   data-testid={`button-delete-photo-${index}`}
                                   title="Delete photo"
+                                  aria-label="Delete photo"
                                   disabled={deletePhotoMutation.isPending}
                                 >
                                   <Trash2 className="h-2.5 w-2.5" />

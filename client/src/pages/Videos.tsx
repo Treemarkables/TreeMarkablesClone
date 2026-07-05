@@ -258,6 +258,7 @@ export default function Videos() {
                           className="h-8 w-8 shrink-0"
                           onClick={() => saveEdit(v.id)}
                           disabled={renameMutation.isPending}
+                          aria-label="Save title"
                           data-testid={`button-save-title-${v.id}`}
                         >
                           <Check className="w-3.5 h-3.5" />
@@ -268,6 +269,7 @@ export default function Videos() {
                           size="icon"
                           className="h-8 w-8 shrink-0"
                           onClick={() => setEditingId(null)}
+                          aria-label="Cancel editing title"
                           data-testid={`button-cancel-title-${v.id}`}
                         >
                           <X className="w-3.5 h-3.5" />

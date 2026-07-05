@@ -522,6 +522,7 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                   }
                   className="shrink-0 h-12 w-12 rounded-md overflow-hidden bg-muted flex items-center justify-center"
                   title={inv.documentUrl ? "View document" : "No document"}
+                  aria-label={inv.documentUrl ? "View document" : "No document"}
                 >
                   {inv.documentUrl && !isPdf ? (
                     <img
@@ -599,6 +600,7 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                       className="h-8 w-8"
                       onClick={() => window.open(inv.documentUrl, "_blank")}
                       title="View document"
+                      aria-label="View document"
                     >
                       <ExternalLink className="h-4 w-4" />
                     </Button>
@@ -610,6 +612,7 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                     className="h-8 w-8"
                     onClick={() => openEdit(inv)}
                     data-testid={`button-edit-${inv.id}`}
+                    aria-label="Edit invoice"
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -621,6 +624,7 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                     disabled={deleteMutation.isPending}
                     onClick={() => setDeletingId(inv.id)}
                     data-testid={`button-delete-${inv.id}`}
+                    aria-label="Delete invoice"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -812,6 +816,7 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                               lineItems: f.lineItems.filter((_, j) => j !== i),
                             }))
                           }
+                          aria-label="Remove line item"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

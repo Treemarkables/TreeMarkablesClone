@@ -2144,6 +2144,7 @@ export function JobDiarySection({
                 onClick={handleRefresh}
                 data-testid="button-refresh-diary"
                 className="h-7 w-7"
+                aria-label="Refresh diary"
               >
                 <RefreshCw className="w-3 h-3" />
               </Button>
@@ -2152,6 +2153,7 @@ export function JobDiarySection({
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7"
+                aria-label="Diary settings"
               >
                 <Settings className="w-3 h-3" />
               </Button>
@@ -2174,6 +2176,7 @@ export function JobDiarySection({
                 size="icon"
                 variant="ghost"
                 className="absolute right-1 top-1 h-7 w-7"
+                aria-label="Attach file"
               >
                 <Paperclip className="w-4 h-4" />
               </Button>
@@ -2194,6 +2197,7 @@ export function JobDiarySection({
                 }
               }}
               data-testid="button-add-note"
+              aria-label="Add note"
             >
               <Plus className="w-6 h-6" />
             </Button>
@@ -2530,6 +2534,7 @@ export function JobDiarySection({
                                         }
                                       }}
                                       data-testid={`button-delete-thread-msg-${msg.id}`}
+                                      aria-label="Delete email"
                                     >
                                       <Trash2 className="w-2.5 h-2.5" />
                                     </Button>
@@ -2709,6 +2714,7 @@ export function JobDiarySection({
                                         }
                                       }}
                                       data-testid={`button-delete-sms-thread-msg-${msg.id}`}
+                                      aria-label="Delete message"
                                     >
                                       <Trash2 className="w-2.5 h-2.5" />
                                     </Button>
@@ -2799,6 +2805,7 @@ export function JobDiarySection({
                               }
                             }}
                             data-testid="button-delete-photo-group"
+                            aria-label="Delete photos"
                           >
                             <Trash2 className="w-3 h-3" />
                           </Button>
@@ -3016,6 +3023,7 @@ export function JobDiarySection({
                                 }
                               }}
                               data-testid={`button-delete-${entry.type}-${entry.id}`}
+                              aria-label="Delete message"
                             >
                               <Trash2 className="w-2.5 h-2.5" />
                             </Button>
@@ -3325,6 +3333,7 @@ export function JobDiarySection({
                                   setEditingContent(entry.content);
                                 }}
                                 data-testid={`button-edit-entry-${entry.id}`}
+                                aria-label="Edit note"
                               >
                                 <Edit className="w-3 h-3" />
                               </Button>
@@ -3346,6 +3355,7 @@ export function JobDiarySection({
                                   }
                                 }}
                                 data-testid={`button-delete-entry-${entry.id}`}
+                                aria-label="Delete entry"
                               >
                                 <Trash2 className="w-3 h-3" />
                               </Button>
@@ -4126,6 +4136,7 @@ export function JobDiarySection({
                     className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white"
                     onClick={() => setViewingPhotoIndex(viewingPhotoIndex - 1)}
                     data-testid="button-previous-photo"
+                    aria-label="Previous photo"
                   >
                     <ChevronLeft className="w-6 h-6" />
                   </Button>
@@ -4156,6 +4167,7 @@ export function JobDiarySection({
                         setViewingPhotoIndex(viewingPhotoIndex + 1)
                       }
                       data-testid="button-next-photo"
+                      aria-label="Next photo"
                     >
                       <ChevronRight className="w-6 h-6" />
                     </Button>

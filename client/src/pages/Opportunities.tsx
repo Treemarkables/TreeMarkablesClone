@@ -521,6 +521,7 @@ export default function Opportunities() {
             variant="ghost"
             size="icon"
             className="flex-shrink-0"
+            aria-label="Open menu"
             data-testid="button-menu"
           >
             <Menu className="h-5 w-5" />
@@ -806,6 +807,7 @@ export default function Opportunities() {
                           size="icon"
                           className="flex-shrink-0 h-8 w-8 border-2 border-black bg-yellow-300"
                           onClick={(e) => e.stopPropagation()}
+                          aria-label="Conversation actions"
                           data-testid={`button-actions-${conversation.id}`}
                         >
                           <MoreVertical className="h-5 w-5" />

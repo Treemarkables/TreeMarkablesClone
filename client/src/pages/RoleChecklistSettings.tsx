@@ -201,7 +201,7 @@ export default function RoleChecklistSettings() {
     <div className="flex flex-col h-full p-4 md:p-6 space-y-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3">
         <Link href="/settings">
-          <Button variant="ghost" size="icon" data-testid="button-back">
+          <Button variant="ghost" size="icon" aria-label="Back to settings" data-testid="button-back">
             <ArrowLeft className="w-5 h-5" />
           </Button>
         </Link>
@@ -267,6 +267,7 @@ export default function RoleChecklistSettings() {
                         className="h-5 w-5"
                         disabled={index === 0}
                         onClick={() => moveTask(role, index, "up")}
+                        aria-label="Move task up"
                         data-testid={`button-move-up-${task.itemId}`}
                       >
                         <ArrowUp className="w-3 h-3" />
@@ -277,6 +278,7 @@ export default function RoleChecklistSettings() {
                         className="h-5 w-5"
                         disabled={index === tasksByRole[role].length - 1}
                         onClick={() => moveTask(role, index, "down")}
+                        aria-label="Move task down"
                         data-testid={`button-move-down-${task.itemId}`}
                       >
                         <ArrowDown className="w-3 h-3" />
@@ -348,6 +350,7 @@ export default function RoleChecklistSettings() {
                         className="text-red-400 hover:text-red-600 h-8 w-8"
                         onClick={() => deleteMutation.mutate(task.id)}
                         disabled={deleteMutation.isPending}
+                        aria-label="Delete task"
                         data-testid={`button-delete-${task.itemId}`}
                       >
                         <Trash2 className="w-4 h-4" />

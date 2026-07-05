@@ -433,6 +433,7 @@ export function JobVideos({ jobId }: JobVideosProps) {
                       onClick={() => saveEdit(v.id)}
                       disabled={renameMutation.isPending}
                       data-testid={`button-save-job-title-${v.id}`}
+                      aria-label="Save title"
                     >
                       <Check className="w-3.5 h-3.5" />
                     </Button>
@@ -443,6 +444,7 @@ export function JobVideos({ jobId }: JobVideosProps) {
                       className="h-8 w-8 shrink-0"
                       onClick={() => setEditingId(null)}
                       data-testid={`button-cancel-job-title-${v.id}`}
+                      aria-label="Cancel editing title"
                     >
                       <X className="w-3.5 h-3.5" />
                     </Button>

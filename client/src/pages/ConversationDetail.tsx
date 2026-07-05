@@ -74,6 +74,7 @@ function ContactField({ label, value }: { label: string; value: string }) {
         size="icon"
         className="h-7 w-7 flex-shrink-0"
         onClick={handleCopy}
+        aria-label={`Copy ${label}`}
         data-testid={`button-copy-${label.toLowerCase().replace(/\s/g, "-")}`}
       >
         {copied ? (
@@ -664,6 +665,7 @@ export default function ConversationDetail() {
             size="icon"
             className="flex-shrink-0 mt-1"
             onClick={() => setLocation("/opportunities")}
+            aria-label="Back to opportunities"
             data-testid="button-back"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -719,6 +721,7 @@ export default function ConversationDetail() {
             variant="ghost"
             size="icon"
             onClick={() => setShowManageMenu(true)}
+            aria-label="Manage conversation"
             data-testid="button-more"
           >
             <MoreVertical className="h-5 w-5" />
@@ -875,6 +878,7 @@ export default function ConversationDetail() {
             size="icon"
             onClick={handleSendReply}
             disabled={!replyContent.trim() || replyMutation.isPending}
+            aria-label="Send reply"
             className="flex-shrink-0 h-9 w-9 sm:h-11 sm:w-11 bg-blue-600 hover:bg-blue-700"
             data-testid="button-send"
           >
