@@ -41,7 +41,28 @@ const saveDailyTimeSchema = z.object({
  * ServiceM8-Style Time Tracking API Routes
  */
 export function setupTimeTrackingRoutes(app: any) {
-  
+
+  // Admin-only gate for pay-rate writes — compensation data must not be settable
+  // by a non-admin (previously relied on RLS only, which does not enforce role).
+  const requireAdmin = async (req: Request, res: Response, next: (err?: any) => void): Promise<void> => {
+    try {
+      const employeeId = (req.session as any)?.employeeId;
+      if (!employeeId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee || employee.role !== 'admin') {
+        res.status(403).json({ success: false, message: 'Admin access required' });
+        return;
+      }
+      next();
+    } catch (err) {
+      res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+  };
+
+
   // ========================================
   // DAILY TIME ENTRY ENDPOINTS
   // ========================================
@@ -360,7 +381,7 @@ export function setupTimeTrackingRoutes(app: any) {
   });
 
   // POST /api/staff-rates - Create new staff rate
-  app.post('/api/staff-rates', async (req: Request, res: Response) => {
+  app.post('/api/staff-rates', requireAdmin, async (req: Request, res: Response) => {
     try {
       const validation = staffRateFormSchema.safeParse(req.body);
       if (!validation.success) {

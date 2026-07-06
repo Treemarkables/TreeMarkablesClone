@@ -5312,6 +5312,110 @@ class DatabaseStorage implements IStorage {
     return row;
   }
 
+  // Cross-tenant CONCIERGE helpers — owner connection, scoped by explicit
+  // businessId. Only the platform-operator routes (requirePlatformAdmin) call
+  // these; they intentionally bypass RLS to manage other tenants' setup.
+  async listBusinesses(): Promise<Array<typeof schema.businesses.$inferSelect>> {
+    return await ownerDb.select().from(schema.businesses).orderBy(asc(schema.businesses.createdAt));
+  }
+
+  async updateBusinessSettingsForBusiness(
+    businessId: string,
+    updates: Partial<InsertBusinessSettings>,
+  ): Promise<BusinessSettings | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb
+      .update(schema.businessSettings)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(schema.businessSettings.businessId, businessId))
+      .returning();
+    return row;
+  }
+
+  async listTenantChannelsForBusiness(businessId: string): Promise<Array<typeof schema.tenantChannels.$inferSelect>> {
+    if (!businessId) return [];
+    return await ownerDb
+      .select()
+      .from(schema.tenantChannels)
+      .where(eq(schema.tenantChannels.businessId, businessId))
+      .orderBy(schema.tenantChannels.channelType, schema.tenantChannels.createdAt);
+  }
+
+  // Concierge channel mutations — owner connection, explicit businessId. Only
+  // requirePlatformAdmin routes call these (cross-tenant); the per-tenant
+  // /api/channels endpoints use the RLS db proxy instead.
+  async findTenantChannelForBusiness(businessId: string, channelType: string, identifier: string): Promise<(typeof schema.tenantChannels.$inferSelect) | undefined> {
+    const [row] = await ownerDb
+      .select()
+      .from(schema.tenantChannels)
+      .where(and(
+        eq(schema.tenantChannels.businessId, businessId),
+        eq(schema.tenantChannels.channelType, channelType),
+        eq(schema.tenantChannels.identifier, identifier),
+      ))
+      .limit(1);
+    return row;
+  }
+
+  async insertTenantChannel(values: { businessId: string; channelType: string; identifier: string; label?: string }): Promise<typeof schema.tenantChannels.$inferSelect> {
+    const [row] = await ownerDb.insert(schema.tenantChannels).values(values).returning();
+    return row;
+  }
+
+  async setTenantChannelActive(id: string, isActive: boolean, label?: string): Promise<typeof schema.tenantChannels.$inferSelect | undefined> {
+    const [row] = await ownerDb
+      .update(schema.tenantChannels)
+      .set({ isActive, ...(label !== undefined ? { label } : {}) })
+      .where(eq(schema.tenantChannels.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteTenantChannelForBusiness(businessId: string, id: string): Promise<void> {
+    await ownerDb.delete(schema.tenantChannels).where(and(
+      eq(schema.tenantChannels.id, id),
+      eq(schema.tenantChannels.businessId, businessId),
+    ));
+  }
+
+  // Concierge plan/status helpers — owner connection, explicit businessId. Only
+  // requirePlatformAdmin routes (+ the login suspension check) call these.
+  async getBusinessById(businessId: string): Promise<(typeof schema.businesses.$inferSelect) | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb.select().from(schema.businesses).where(eq(schema.businesses.id, businessId)).limit(1);
+    return row;
+  }
+
+  async setBusinessStatus(businessId: string, status: string): Promise<(typeof schema.businesses.$inferSelect) | undefined> {
+    const [row] = await ownerDb.update(schema.businesses).set({ status }).where(eq(schema.businesses.id, businessId)).returning();
+    return row;
+  }
+
+  async getSubscriptionForBusiness(businessId: string): Promise<(typeof schema.subscriptions.$inferSelect) | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb.select().from(schema.subscriptions).where(eq(schema.subscriptions.businessId, businessId)).limit(1);
+    return row;
+  }
+
+  async listSubscriptionPlans(): Promise<Array<typeof schema.subscriptionPlans.$inferSelect>> {
+    return await ownerDb.select().from(schema.subscriptionPlans)
+      .where(eq(schema.subscriptionPlans.isActive, true))
+      .orderBy(schema.subscriptionPlans.sortOrder);
+  }
+
+  async setSubscriptionPlanForBusiness(businessId: string, planId: string): Promise<(typeof schema.subscriptions.$inferSelect) | undefined> {
+    const existing = await this.getSubscriptionForBusiness(businessId);
+    if (existing) {
+      const [row] = await ownerDb.update(schema.subscriptions)
+        .set({ planId, status: 'active', updatedAt: new Date() })
+        .where(eq(schema.subscriptions.id, existing.id)).returning();
+      return row;
+    }
+    const [row] = await ownerDb.insert(schema.subscriptions)
+      .values({ businessId, planId, status: 'active' }).returning();
+    return row;
+  }
+
   async getBusinessSettings(): Promise<BusinessSettings> {
     // Try to get existing business settings from database.
     // Deterministic ordering guards against stray duplicate rows for a tenant:
@@ -6657,7 +6761,7 @@ class DatabaseStorage implements IStorage {
       id: schema.jobs.id,
       jobNumber: schema.jobs.jobNumber,
       customerId: schema.jobs.customerId,
-      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerName: sql<string>`COALESCE(${schema.customers.name}, '')`,
       customerEmail: schema.customers.email,
       customerPhone: schema.customers.phone,
       address: schema.jobs.address,
@@ -6752,7 +6856,7 @@ class DatabaseStorage implements IStorage {
       internalStatus: schema.reviewSubmissions.internalStatus,
       submittedAt: schema.reviewSubmissions.submittedAt,
       jobNumber: schema.jobs.jobNumber,
-      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerName: sql<string>`COALESCE(${schema.customers.name}, '')`,
       jobAddress: schema.jobs.address
     })
       .from(schema.reviewSubmissions)

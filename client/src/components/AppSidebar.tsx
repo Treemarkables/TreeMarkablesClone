@@ -3,6 +3,24 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  LayoutDashboard,
+  Pin,
+  ClipboardList,
+  ListTodo,
+  Video,
+  Search,
+  BookOpen,
+  Bot,
+  Briefcase,
+  Zap,
+  Phone,
+  CalendarDays,
+  Car,
+  Shield,
+  Target,
+  DollarSign,
+  TrendingUp,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -24,30 +42,31 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { PlanGate } from "@/components/PlanGate";
 
 interface AppSidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
 }
 
-// Shared row classes: tall flat row + blue-pill active state.
-// Note: emoji are multi-colour glyphs — they can't be tinted, so the active row
-// shows a blue background + blue label while the emoji keeps its native colours.
+// Shared row classes: tall flat row + blue-pill active state. Icons inherit
+// currentColor, so the active row tints both the label and the icon blue.
 const ITEM = "rounded-lg h-11 gap-3 text-[15px] data-[active=true]:bg-blue-50 data-[active=true]:text-blue-600 data-[active=true]:hover:bg-blue-50 data-[active=true]:hover:text-blue-600";
 
-// Consistent emoji rendering: fixed width so labels line up, slightly larger
-// than the surrounding text for visual weight.
-function Glyph({ children }: { children: string }) {
+// Fixed-width icon slot so labels line up. The span wrapper keeps the svg out
+// of SidebarMenuButton's [&>svg]:size-4 direct-child rule (we want 20px here
+// to match the 15-16px labels on tall h-11 rows).
+function NavIcon({ icon: Icon }: { icon: LucideIcon }) {
   return (
-    <span className="text-xl leading-none w-6 text-center shrink-0" aria-hidden>
-      {children}
+    <span className="w-6 flex items-center justify-center shrink-0" aria-hidden>
+      <Icon className="h-5 w-5" />
     </span>
   );
 }
 
 const dashboardItems = [
-  { title: "All Jobs", url: "/job-dashboard", emoji: "💼", value: "jobs", isTab: true },
-  { title: "Pipeline", url: "/pipeline", emoji: "⚡", value: "pipeline", isTab: false },
+  { title: "All Jobs", url: "/job-dashboard", icon: Briefcase, value: "jobs", isTab: true },
+  { title: "Pipeline", url: "/pipeline", icon: Zap, value: "pipeline", isTab: false },
 ];
 
 
@@ -130,21 +149,23 @@ function SidebarNavContent({
             <SidebarMenu className="font-normal text-[16px]">
               {/* One Dashboard — top-level overview */}
               {isAdmin && (
+                <PlanGate requires="plan:crew">
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/metrics"} className={ITEM}>
                     <Link href="/metrics" onClick={handleLinkClick} data-testid="link-one-dashboard">
-                      <Glyph>📊</Glyph>
+                      <NavIcon icon={LayoutDashboard} />
                       <span>One Dashboard</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                </PlanGate>
               )}
 
               {/* Today — daily command centre */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/today"} className={ITEM}>
                   <Link href="/today" onClick={handleLinkClick} data-testid="link-today">
-                    <Glyph>📌</Glyph>
+                    <NavIcon icon={Pin} />
                     <span>Today</span>
                   </Link>
                 </SidebarMenuButton>
@@ -154,7 +175,7 @@ function SidebarNavContent({
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/dispatch"} className={ITEM}>
                   <Link href="/dispatch" onClick={handleLinkClick} data-testid="link-dispatch">
-                    <Glyph>📋</Glyph>
+                    <NavIcon icon={ClipboardList} />
                     <span>Dispatch Board</span>
                   </Link>
                 </SidebarMenuButton>
@@ -164,7 +185,7 @@ function SidebarNavContent({
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/tasks"} className={ITEM}>
                   <Link href="/tasks" onClick={handleLinkClick} data-testid="link-tasks">
-                    <Glyph>✅</Glyph>
+                    <NavIcon icon={ListTodo} />
                     <span>Tasks</span>
                   </Link>
                 </SidebarMenuButton>
@@ -174,7 +195,7 @@ function SidebarNavContent({
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/videos"} className={ITEM}>
                   <Link href="/videos" onClick={handleLinkClick} data-testid="link-videos">
-                    <Glyph>🎥</Glyph>
+                    <NavIcon icon={Video} />
                     <span>Videos</span>
                   </Link>
                 </SidebarMenuButton>
@@ -184,7 +205,7 @@ function SidebarNavContent({
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/library"} className={ITEM}>
                   <Link href="/library" onClick={handleLinkClick} data-testid="link-library">
-                    <Glyph>🔍</Glyph>
+                    <NavIcon icon={Search} />
                     <span>Library</span>
                   </Link>
                 </SidebarMenuButton>
@@ -194,7 +215,7 @@ function SidebarNavContent({
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/help"} className={ITEM}>
                   <Link href="/help" onClick={handleLinkClick} data-testid="link-help">
-                    <Glyph>📖</Glyph>
+                    <NavIcon icon={BookOpen} />
                     <span>Help</span>
                   </Link>
                 </SidebarMenuButton>
@@ -205,7 +226,7 @@ function SidebarNavContent({
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/ai-scheduler"} className={ITEM}>
                     <Link href="/ai-scheduler" onClick={handleLinkClick} data-testid="link-ai-scheduler">
-                      <Glyph>🤖</Glyph>
+                      <NavIcon icon={Bot} />
                       <span>AI Smart Dispatch</span>
                     </Link>
                   </SidebarMenuButton>
@@ -221,13 +242,13 @@ function SidebarNavContent({
                       data-testid={`button-tab-${item.value}`}
                       className={ITEM}
                     >
-                      <Glyph>{item.emoji}</Glyph>
+                      <NavIcon icon={item.icon} />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
                   ) : (
                     <SidebarMenuButton asChild isActive={location === item.url} className={ITEM}>
                       <Link href={item.url} onClick={handleLinkClick} data-testid={`link-${item.value}`}>
-                        <Glyph>{item.emoji}</Glyph>
+                        <NavIcon icon={item.icon} />
                         <span>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -240,7 +261,7 @@ function SidebarNavContent({
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/calls"} className={ITEM}>
                     <Link href="/calls" onClick={handleLinkClick} data-testid="link-calls">
-                      <Glyph>📞</Glyph>
+                      <NavIcon icon={Phone} />
                       <span>Calls</span>
                     </Link>
                   </SidebarMenuButton>
@@ -251,7 +272,7 @@ function SidebarNavContent({
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/staff-schedule"} className={ITEM}>
                   <Link href="/staff-schedule" onClick={handleLinkClick} data-testid="link-staff-schedule">
-                    <Glyph>📅</Glyph>
+                    <NavIcon icon={CalendarDays} />
                     <span>Staff Schedule</span>
                   </Link>
                 </SidebarMenuButton>
@@ -262,7 +283,7 @@ function SidebarNavContent({
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={vehicleActive} className={ITEM}>
                     <Link href="/vehicle-inspection" onClick={handleLinkClick} data-testid="link-vehicle-inspection">
-                      <Glyph>🚗</Glyph>
+                      <NavIcon icon={Car} />
                       <span className="truncate">Vehicle Inspection</span>
                     </Link>
                   </SidebarMenuButton>
@@ -292,12 +313,13 @@ function SidebarNavContent({
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* Safety — collapsible group (JHA + Near Miss) */}
+              {/* Safety — collapsible group (JHA + Near Miss). Crew+ only — hidden on Freemium. */}
+              <PlanGate requires="plan:crew">
               <Collapsible open={safetyOpen} onOpenChange={setSafetyOpen} className="group/safety-collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton data-testid="collapsible-safety" isActive={safetyActive} className={ITEM}>
-                      <Glyph>🛡️</Glyph>
+                      <NavIcon icon={Shield} />
                       <span>Safety</span>
                       <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/safety-collapsible:rotate-90" />
                     </SidebarMenuButton>
@@ -385,12 +407,13 @@ function SidebarNavContent({
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </Collapsible>
+              </PlanGate>
 
               {/* Mulch Drops */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/mulch-drops"} className={ITEM}>
                   <Link href="/mulch-drops" onClick={handleLinkClick} data-testid="link-mulch-drops">
-                    <Glyph>🎯</Glyph>
+                    <NavIcon icon={Target} />
                     <span>Mulch Drops</span>
                   </Link>
                 </SidebarMenuButton>
@@ -408,23 +431,27 @@ function SidebarNavContent({
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton data-testid="collapsible-finance" isActive={financeActive} className={ITEM}>
-                        <Glyph>💰</Glyph>
+                        <NavIcon icon={DollarSign} />
                         <span>Finance & Admin</span>
                         <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/finance-collapsible:rotate-90" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarMenuSub>
+                        <PlanGate requires="plan:crew">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/metrics"}>
                             <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics"><span>Metrics Dashboard</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        </PlanGate>
+                        <PlanGate requires="plan:crew">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/profitability-calculator"}>
                             <Link href="/profitability-calculator" onClick={handleLinkClick} data-testid="link-profitability-calculator"><span>Profitability Calculator</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        </PlanGate>
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>
@@ -443,7 +470,7 @@ function SidebarNavContent({
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton data-testid="collapsible-ops" isActive={opsActive} className={ITEM}>
-                        <Glyph>📈</Glyph>
+                        <NavIcon icon={TrendingUp} />
                         <span>Operations & Analysis</span>
                         <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/ops-collapsible:rotate-90" />
                       </SidebarMenuButton>
@@ -455,11 +482,13 @@ function SidebarNavContent({
                             <Link href="/calendar" onClick={handleLinkClick} data-testid="link-calendar"><span>Calendar</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        <PlanGate requires="plan:business">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/workflows"}>
                             <Link href="/workflows" onClick={handleLinkClick} data-testid="link-workflows"><span>Workflows</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        </PlanGate>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/opportunities"}>
                             <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-opportunities"><span>Conversations</span></Link>

@@ -585,7 +585,12 @@ function FilterPill({
   const [open, setOpen] = useState(false);
   const isActive = !!value;
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") setOpen(false);
+      }}
+    >
       <button
         onClick={() => setOpen((o) => !o)}
         className={`px-2.5 py-1 rounded-md border flex items-center gap-1 transition-colors ${
@@ -599,7 +604,7 @@ function FilterPill({
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden="true" />
           <div className="absolute z-20 top-full left-0 mt-1 w-56 max-h-72 overflow-auto rounded-md border border-gray-200 bg-white py-1 text-xs">
             <button
               className="w-full text-left px-3 py-1.5 hover:bg-gray-50 text-gray-500"

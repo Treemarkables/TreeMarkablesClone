@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, TreePine } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -83,13 +83,15 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center">
-              <TreePine className="w-10 h-10 text-white" />
-            </div>
+            <img
+              src="/inflow-icon-192.png"
+              alt="Inflow"
+              className="w-16 h-16 rounded-full"
+            />
           </div>
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
           <CardDescription>
-            Sign in to access your Treemarkables dashboard
+            Sign in to access your Inflow dashboard
           </CardDescription>
         </CardHeader>
         <CardContent>

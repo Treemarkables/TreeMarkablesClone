@@ -51,6 +51,26 @@ export async function fetchPhotoAnnotation(
   return json.annotation ?? null;
 }
 
+// Batch variant: resolve many photos in a single request. Returns a map keyed
+// by sourceUrl; URLs with no saved annotation are simply absent from the map.
+// Used by thumbnail grids / the diary timeline / proposals so the baked
+// annotated PNG shows everywhere, not just in the click-into viewer.
+export async function fetchPhotoAnnotationsBatch(
+  sourceUrls: string[],
+): Promise<Record<string, PhotoAnnotationRecord>> {
+  const unique = Array.from(new Set(sourceUrls.filter(Boolean)));
+  if (unique.length === 0) return {};
+  const res = await fetch("/api/photo-annotations/batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ sourceUrls: unique }),
+  });
+  if (!res.ok) return {};
+  const json = await res.json();
+  return json.annotations ?? {};
+}
+
 export async function clearPhotoAnnotation(sourceUrl: string): Promise<void> {
   await fetch(
     `/api/photo-annotations?sourceUrl=${encodeURIComponent(sourceUrl)}`,

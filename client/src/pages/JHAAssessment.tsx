@@ -815,6 +815,7 @@ export default function JHAAssessment() {
                             variant="outline"
                             size="icon"
                             onClick={() => removeCustomControl(index)}
+                            aria-label="Remove control"
                             data-testid={`button-remove-control-${index}`}
                           >
                             <X className="h-4 w-4" />
@@ -1256,6 +1257,7 @@ export default function JHAAssessment() {
                         size="icon"
                         className="absolute top-1 right-1 h-6 w-6"
                         onClick={() => handleRemovePhoto(idx, false)}
+                        aria-label="Remove photo"
                       >
                         <X className="w-3 h-3" />
                       </Button>
@@ -1279,6 +1281,7 @@ export default function JHAAssessment() {
                         size="icon"
                         className="absolute top-1 right-1 h-6 w-6"
                         onClick={() => handleRemovePhoto(idx, true)}
+                        aria-label="Remove pending photo"
                       >
                         <X className="w-3 h-3" />
                       </Button>

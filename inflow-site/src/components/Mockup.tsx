@@ -1,9 +1,9 @@
-type Status = "Quoted" | "Scheduled" | "In progress" | "Invoiced" | "Paid";
+type Status = "Quote" | "Scheduled" | "Work order" | "Invoiced" | "Paid";
 
 const statusStyle: Record<Status, string> = {
-  Quoted: "bg-ink-100 text-ink-700",
+  Quote: "bg-ink-100 text-ink-700",
   Scheduled: "bg-ink-900 text-paper",
-  "In progress": "bg-lime text-ink-900",
+  "Work order": "bg-lime text-ink-900",
   Invoiced: "bg-ink-100 text-ink-700",
   Paid: "bg-ink-100 text-ink-500 line-through-ink",
 };
@@ -17,11 +17,11 @@ type Row = {
 };
 
 const rows: Row[] = [
-  { job: "Macrocarpa removal", client: "Te Whata, Wainui Rd", crew: "Crew A", value: "$2,840", status: "In progress" },
-  { job: "Hedge trim — 45m", client: "Greenfield Estate", crew: "Crew B", value: "$1,150", status: "Scheduled" },
-  { job: "Pohutukawa pruning", client: "Roebuck, Salisbury", crew: "Crew A", value: "$680", status: "Quoted" },
-  { job: "Stump grind ×3", client: "Watson, Mangapapa", crew: "Crew C", value: "$420", status: "Invoiced" },
-  { job: "Storm clean-up", client: "Anderson, Wainui", crew: "Crew A", value: "$3,100", status: "Paid" },
+  { job: "Switchboard upgrade", client: "Harper, Ormond Rd", crew: "Crew A", value: "$2,840", status: "Work order" },
+  { job: "Blocked drain callout", client: "Greenfield Estate", crew: "Crew B", value: "$480", status: "Scheduled" },
+  { job: "Hedge & tree trim", client: "Te Whata, Wainui Rd", crew: "Crew A", value: "$1,150", status: "Quote" },
+  { job: "Bathroom re-fit", client: "Watson, Mangapapa", crew: "Crew C", value: "$6,400", status: "Invoiced" },
+  { job: "Storm damage repair", client: "Anderson, Wainui", crew: "Crew A", value: "$3,100", status: "Paid" },
 ];
 
 export default function Mockup() {

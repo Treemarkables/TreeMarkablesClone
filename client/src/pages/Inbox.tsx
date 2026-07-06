@@ -553,10 +553,19 @@ export default function Inbox() {
                   </Avatar>
 
                   <div
-                    className="flex-1 min-w-0 cursor-pointer"
+                    className="flex-1 min-w-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
                     onClick={() =>
                       setLocation(`/conversation/${conversation.id}`)
                     }
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setLocation(`/conversation/${conversation.id}`);
+                      }
+                    }}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
@@ -619,6 +628,7 @@ export default function Inbox() {
                         variant="ghost"
                         size="icon"
                         className="flex-shrink-0 h-8 w-8"
+                        aria-label="Conversation actions"
                         data-testid={`button-actions-${conversation.id}`}
                       >
                         <MoreVertical className="h-4 w-4" />

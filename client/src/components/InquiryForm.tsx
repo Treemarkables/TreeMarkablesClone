@@ -13,6 +13,9 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import TurnstileCaptcha, {
+  useCaptchaConfig,
+} from "@/components/TurnstileCaptcha";
 
 declare global {
   interface Window {
@@ -48,6 +51,10 @@ export default function InquiryForm({
   const [message, setMessage] = useState("");
   const [hearAbout, setHearAbout] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [website, setWebsite] = useState(""); // honeypot — humans never fill this
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const { enabled: captchaEnabled } = useCaptchaConfig();
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -57,6 +64,8 @@ export default function InquiryForm({
         phone: phone.trim(),
         hearAbout,
         message: message.trim(),
+        website,
+        captchaToken,
       });
       return response.json();
     },
@@ -77,6 +86,8 @@ export default function InquiryForm({
       onSuccess?.();
     },
     onError: (error: Error) => {
+      // Turnstile tokens are single-use — get a fresh one for the retry.
+      setCaptchaReset((c) => c + 1);
       toast({
         title: "Submission failed",
         description:
@@ -95,6 +106,8 @@ export default function InquiryForm({
       return "Please enter a valid email address";
     if (!message.trim()) return "Please tell us about the job";
     if (!hearAbout) return "Please tell us how you heard about us";
+    if (captchaEnabled && !captchaToken)
+      return "Please complete the security check";
     return null;
   };
 
@@ -274,6 +287,27 @@ export default function InquiryForm({
             </SelectContent>
           </Select>
         </div>
+
+        <div
+          className="absolute -left-[9999px] top-auto h-px w-px overflow-hidden"
+          aria-hidden="true"
+        >
+          <label htmlFor="inquiryWebsite">Website</label>
+          <input
+            id="inquiryWebsite"
+            name="website"
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+          />
+        </div>
+
+        <TurnstileCaptcha
+          onToken={setCaptchaToken}
+          resetSignal={captchaReset}
+        />
       </div>
 
       <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">

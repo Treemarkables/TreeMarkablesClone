@@ -74,6 +74,7 @@ function ContactField({ label, value }: { label: string; value: string }) {
         size="icon"
         className="h-7 w-7 flex-shrink-0"
         onClick={handleCopy}
+        aria-label={`Copy ${label}`}
         data-testid={`button-copy-${label.toLowerCase().replace(/\s/g, "-")}`}
       >
         {copied ? (
@@ -664,6 +665,7 @@ export default function ConversationDetail() {
             size="icon"
             className="flex-shrink-0 mt-1"
             onClick={() => setLocation("/opportunities")}
+            aria-label="Back to opportunities"
             data-testid="button-back"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -689,15 +691,42 @@ export default function ConversationDetail() {
             </p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="flex-shrink-0 mt-1"
-          onClick={() => setShowManageMenu(true)}
-          data-testid="button-more"
-        >
-          <MoreVertical className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-1.5 flex-shrink-0 mt-1">
+          {conversation.status !== "converted" &&
+            !conversation.conversionDate && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  const extracted = extractContactDetails();
+                  setLeadForm({
+                    name: extracted.name || conversation?.title || "New Lead",
+                    email: extracted.email || "",
+                    phone: extracted.phone || "",
+                    address: extracted.address || "",
+                    serviceRequested: extracted.description || "",
+                    urgency: "medium",
+                    status: "new_lead",
+                    notes: `Lead from conversation: ${conversation?.title || ""}`,
+                  });
+                  setShowCreateJob(true);
+                }}
+                data-testid="button-create-job-header"
+              >
+                <Briefcase className="h-4 w-4 mr-1.5" />
+                <span className="hidden sm:inline">Create job card</span>
+                <span className="sm:hidden">Job card</span>
+              </Button>
+            )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowManageMenu(true)}
+            aria-label="Manage conversation"
+            data-testid="button-more"
+          >
+            <MoreVertical className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       {/* Linked jobs banner — shown when the sender's email matches a job contact */}
@@ -849,6 +878,7 @@ export default function ConversationDetail() {
             size="icon"
             onClick={handleSendReply}
             disabled={!replyContent.trim() || replyMutation.isPending}
+            aria-label="Send reply"
             className="flex-shrink-0 h-9 w-9 sm:h-11 sm:w-11 bg-blue-600 hover:bg-blue-700"
             data-testid="button-send"
           >

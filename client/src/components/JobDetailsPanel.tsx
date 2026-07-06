@@ -17,10 +17,11 @@
  *   - Voice transcription wired into the textareas
  *   - "Notify on arrival" toggle (not a real DB field — needs design call)
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, ChevronDown, Mic, MicOff, Lock, UserPlus, Pencil, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { getJobStatusChip } from "@/lib/jobStatusColors";
 import { useToast } from "@/hooks/use-toast";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { SpeechToQuote } from "@/components/SpeechToQuote";
@@ -137,31 +138,6 @@ function composeCustomerAddress(
   return "";
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  lead: "Lead",
-  quote: "Quote",
-  work_order: "Work Order",
-  scheduled: "Scheduled",
-  completed: "Completed",
-  unsuccessful: "Unsuccessful",
-};
-
-const STATUS_BG: Record<string, string> = {
-  lead: "#fef3c7",
-  quote: "#fef3c7",
-  work_order: "#eff6ff",
-  scheduled: "#f3e8ff",
-  completed: "#dcfce7",
-  unsuccessful: "#fee2e2",
-};
-const STATUS_FG: Record<string, string> = {
-  lead: "#9a3412",
-  quote: "#9a3412",
-  work_order: "#1d4ed8",
-  scheduled: "#6b21a8",
-  completed: "#15803d",
-  unsuccessful: "#b91c1c",
-};
 
 export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   const queryClient = useQueryClient();
@@ -267,6 +243,23 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
     }
   }, [job?.description, proposalDescription]);
   useEffect(() => { if (job) setInternalNotes(job.internalNotes ?? ""); }, [job?.internalNotes]);
+  // Auto-size both textareas to their content (min height comes from rows=3).
+  // scrollHeight is the exact browser measurement — same pattern as the
+  // desktop card's description popup in GlobalJobCard.
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const internalNotesRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const ta = descriptionRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [description]);
+  useEffect(() => {
+    const ta = internalNotesRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [internalNotes]);
   // Per-job address override. Initial value falls back to the customer's
   // address so the field reflects what's shown elsewhere (dispatch board,
   // etc.) — saving writes to job.address, leaving the customer record alone.
@@ -397,7 +390,8 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   });
 
   const status = job?.status ?? "lead";
-  const statusLabel = STATUS_LABEL[status] ?? status;
+  const statusChip = getJobStatusChip(status);
+  const statusLabel = statusChip.label;
 
   // Link a customer to this job. On first link (no existing job.address),
   // also patch the job's address from the customer so it surfaces in
@@ -454,7 +448,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             </button>
             <span
               className="text-[11px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0"
-              style={{ background: STATUS_BG[status] ?? "#f1f5f9", color: STATUS_FG[status] ?? "#475569" }}
+              style={{ background: statusChip.bg, color: statusChip.fg }}
             >
               {statusLabel}
             </span>
@@ -578,7 +572,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             </div>
             <span
               className="text-[11px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0"
-              style={{ background: STATUS_BG[status] ?? "#f1f5f9", color: STATUS_FG[status] ?? "#475569" }}
+              style={{ background: statusChip.bg, color: statusChip.fg }}
             >
               {statusLabel}
             </span>
@@ -753,14 +747,15 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           </div>
         )}
         <textarea
+          ref={descriptionRef}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           onBlur={() => {
             if ((job?.description ?? "") !== description) saveField.mutate({ description });
           }}
           placeholder="Add a job description..."
-          rows={4}
-          className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 resize-none"
+          rows={3}
+          className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
           data-testid="job-description"
         />
       </div>
@@ -785,14 +780,15 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           Staff only — not visible to customers
         </div>
         <textarea
+          ref={internalNotesRef}
           value={internalNotes}
           onChange={(e) => setInternalNotes(e.target.value)}
           onBlur={() => {
             if ((job?.internalNotes ?? "") !== internalNotes) saveField.mutate({ internalNotes });
           }}
           placeholder="Add internal notes..."
-          rows={4}
-          className="w-full bg-white border border-orange-200 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+          rows={3}
+          className="w-full bg-white border border-orange-200 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-orange-400 resize-none overflow-hidden"
           data-testid="internal-notes"
         />
       </div>
@@ -1390,6 +1386,7 @@ function InputField({
       onChange={(e) => onChange(e.target.value)}
       onBlur={onBlur}
       placeholder={placeholder}
+      aria-label={placeholder}
       className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500"
     />
   );

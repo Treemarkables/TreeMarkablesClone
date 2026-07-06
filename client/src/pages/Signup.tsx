@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,13 +8,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, TreePine } from "lucide-react";
 
+interface Plan {
+  key: string;
+  name: string;
+  priceNzd: string;
+}
+
 export default function Signup() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
   const params = new URLSearchParams(window.location.search);
-  const planKey = params.get("plan") || "freemium";
+  // The plan can arrive from the pricing page (?plan=crew) but is also selectable
+  // here so someone landing on /signup directly can choose. Paid → Stripe; free → app.
+  const [planKey, setPlanKey] = useState(params.get("plan") || "freemium");
   const planLabel = planKey === "crew" ? "Crew" : planKey === "business" ? "Business" : "Free";
+
+  // Live plans so the picker shows the current prices (never hardcoded).
+  const { data: plansResp } = useQuery<{ success: boolean; data: Plan[] }>({
+    queryKey: ["/api/billing/plans"],
+  });
+  const plans = plansResp?.data ?? [];
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -61,6 +76,31 @@ export default function Signup() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+          {plans.length > 0 && (
+            <div className="space-y-2 mb-4">
+              <Label>Choose your plan</Label>
+              {plans.map((p) => {
+                const selected = p.key === planKey;
+                const price = Number(p.priceNzd);
+                return (
+                  <button
+                    type="button"
+                    key={p.key}
+                    onClick={() => setPlanKey(p.key)}
+                    aria-pressed={selected}
+                    className={`w-full flex items-center justify-between rounded-lg border p-3 text-left ${
+                      selected ? "border-primary ring-1 ring-primary bg-primary/5" : "border-border"
+                    }`}
+                  >
+                    <span className="font-medium">{p.name}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {price > 0 ? `$${price.toFixed(0)}/mo` : "Free"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div>
               <Label htmlFor="businessName">Business name</Label>
@@ -88,8 +128,10 @@ export default function Signup() {
             <Button type="submit" className="w-full" disabled={pending}>
               {pending ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating your account…</>
-              ) : (
+              ) : planKey === "freemium" ? (
                 "Create account"
+              ) : (
+                "Continue to payment"
               )}
             </Button>
           </form>

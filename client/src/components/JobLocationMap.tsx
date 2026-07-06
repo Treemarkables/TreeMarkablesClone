@@ -136,6 +136,7 @@ export function JobLocationMap({ jobAddress, className = "" }: JobLocationMapPro
                   size="icon"
                   onClick={() => window.open(satelliteViewUrl, '_blank')}
                   title="Open full satellite view"
+                  aria-label="Open full satellite view"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Button>

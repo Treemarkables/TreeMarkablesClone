@@ -59,6 +59,7 @@ import {
   Trash2,
   ListOrdered,
 } from "lucide-react";
+import { getJobStatusBadge } from "@/lib/jobStatusColors";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -159,15 +160,6 @@ export interface JobCardDesktopProps {
   onProposalClick?: (proposalNumber: string) => void;
 }
 
-// Map job status → badge colour. Mirrors JobCardMobile's STATUS_BADGE so
-// the badge looks identical on both surfaces.
-const STATUS_BADGE: Record<string, { label: string; bg: string }> = {
-  lead: { label: "Lead", bg: "#f59e0b" },
-  quote: { label: "Quote", bg: "#f59e0b" },
-  work_order: { label: "Work Order", bg: "#2563eb" },
-  completed: { label: "Completed", bg: "#16a34a" },
-  unsuccessful: { label: "Unsuccessful", bg: "#ef4444" },
-};
 
 const TABS: { id: JobCardDesktopTab; label: string }[] = [
   { id: "details", label: "Details" },
@@ -325,7 +317,7 @@ export function JobCardDesktop({
 
   const jobNumber = (job?.jobNumber as string | number | undefined) ?? undefined;
   const status = (job?.status as string | undefined) ?? "lead";
-  const badge = STATUS_BADGE[status] ?? { label: status, bg: "#64748b" };
+  const badge = getJobStatusBadge(status);
 
   // Canonical job-price hierarchy (mirrors StaffSchedule.getJobPrice / PR #24):
   // line items (ex-GST) → job.subtotal → job.totalIncludingGst / 1.15 →

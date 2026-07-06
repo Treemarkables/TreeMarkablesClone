@@ -465,11 +465,24 @@ export class PhotoStorageService {
           stream.pipe(res);
         }
       } else {
-        // Serve non-HEIC files normally
+        // Serve non-HEIC files normally. Because uploads historically accepted
+        // any content-type, a stored text/html or image/svg+xml would otherwise
+        // execute inline on the app's own origin (stored XSS). Neutralise the
+        // script-capable types (coerce to octet-stream + force download) and
+        // always send nosniff so a benign declared type can't be sniffed into
+        // active content. Images/PDF/etc. still render inline as before.
+        const stored = (metadata.contentType || "image/jpeg").toLowerCase();
+        const dangerous = [
+          "text/html", "application/xhtml+xml", "image/svg+xml",
+          "application/xml", "text/xml", "text/javascript", "application/javascript",
+        ];
+        const isDangerous = dangerous.some((t) => stored.startsWith(t));
         res.set({
-          "Content-Type": metadata.contentType || "image/jpeg",
+          "Content-Type": isDangerous ? "application/octet-stream" : (metadata.contentType || "image/jpeg"),
           "Content-Length": metadata.size,
           "Cache-Control": "private, max-age=31536000",
+          "X-Content-Type-Options": "nosniff",
+          ...(isDangerous ? { "Content-Disposition": "attachment" } : {}),
         });
 
         const stream = file.createReadStream();
