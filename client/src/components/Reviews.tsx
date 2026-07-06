@@ -266,6 +266,7 @@ export default function Reviews() {
                 onClick={goToPrevious}
                 className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 md:-translate-x-12 min-h-[44px] min-w-[44px]"
                 data-testid="button-review-previous"
+                aria-label="Previous review"
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
@@ -276,6 +277,7 @@ export default function Reviews() {
                 onClick={goToNext}
                 className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 md:translate-x-12 min-h-[44px] min-w-[44px]"
                 data-testid="button-review-next"
+                aria-label="Next review"
               >
                 <ChevronRight className="h-5 w-5" />
               </Button>

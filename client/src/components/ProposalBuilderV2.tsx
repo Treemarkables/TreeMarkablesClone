@@ -4,13 +4,16 @@ import { format } from "date-fns";
 import {
   X, Plus, Upload, Trash2, Mail, MessageSquare, Check, Crown,
   GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye, ArrowLeft, Save,
+  SlidersHorizontal,
 } from "lucide-react";
+import { BuilderToolbarButton } from "@/components/BuilderToolbarButton";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
 import { ProposalReviewsWidget } from "@/components/ProposalReviewsWidget";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { RecipientPicker } from "@/components/RecipientPicker";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -20,6 +23,7 @@ import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { fetchPhotoAnnotationsBatch } from "@/lib/photoAnnotations";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
 import type { DocumentTemplate, Customer, Proposal, DocumentBlock } from "@shared/schema";
 import { DEFAULT_PROPOSAL_BLOCKS } from "@shared/schema";
@@ -121,8 +125,9 @@ interface ProposalBuilderV2Props {
   lineItems?: unknown;
   // When "quote", the builder UI stays identical to proposal mode — only the
   // save payload (templateUsed='quote') and the email endpoint change. The
-  // quote email delivers a PDF attachment with a mailto "Accept Quote" button
-  // (no public viewer link).
+  // quote email delivers a PDF attachment with a "View Quote" button that
+  // opens the online accept page (replying "I accept quote Q-*" still works
+  // as a fallback).
   kind?: "proposal" | "quote";
 }
 
@@ -425,11 +430,13 @@ function PhotoBlock({
   block,
   jobId,
   diaryPhotos,
+  resolveAnnotated,
   onUpdate,
 }: {
   block: WysiwygBlock;
   jobId?: string;
   diaryPhotos: string[];
+  resolveAnnotated: (url: string) => string;
   onUpdate: (updates: Partial<WysiwygBlock>) => void;
 }) {
   const { toast } = useToast();
@@ -486,6 +493,9 @@ function PhotoBlock({
   const addFromDiary = () => {
     const existing = new Set(block.photos.map((p) => p.url));
     const newPhotos: UploadedPhoto[] = selectedUrls
+      // Store the annotated PNG when one exists so the proposal carries the
+      // markup; the customer-facing renderer shows whatever URL we save here.
+      .map((url) => resolveAnnotated(url))
       .filter((url) => !existing.has(url))
       .map((url, i) => ({
         id: `diary-${Date.now()}-${i}`,
@@ -632,7 +642,7 @@ function PhotoBlock({
                     className={`relative rounded cursor-pointer overflow-hidden border-2 ${selectedUrls.includes(url) ? "border-blue-500" : "border-transparent"}`}
                     style={{ paddingBottom: "100%" }}
                   >
-                    <img src={url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={resolveAnnotated(url)} alt="" className="absolute inset-0 w-full h-full object-cover" />
                     {selectedUrls.includes(url) && (
                       <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
                         <Check className="w-4 h-4 text-blue-600" />
@@ -1254,6 +1264,37 @@ export function ProposalBuilderV2({
     return [...new Set(all.filter(Boolean))];
   })();
 
+  // Map each diary/job photo to its baked annotated PNG (when one exists) so
+  // photos pulled into the proposal carry their markup — the customer-facing
+  // proposal renders whatever URL we store on the block, so we resolve to the
+  // annotated version at pick time.
+  const [annotatedByUrl, setAnnotatedByUrl] = useState<Record<string, string>>({});
+  const diaryPhotosKey = diaryPhotos.join(",");
+  useEffect(() => {
+    if (diaryPhotos.length === 0) return;
+    let cancelled = false;
+    fetchPhotoAnnotationsBatch(diaryPhotos)
+      .then((map) => {
+        if (cancelled) return;
+        const next: Record<string, string> = {};
+        for (const [src, rec] of Object.entries(map)) {
+          if (rec?.annotatedUrl) next[src] = rec.annotatedUrl;
+        }
+        setAnnotatedByUrl(next);
+      })
+      .catch(() => {
+        // Annotation lookups are best-effort — fall back to originals.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diaryPhotosKey]);
+  const resolveAnnotated = useCallback(
+    (url: string) => annotatedByUrl[url] ?? url,
+    [annotatedByUrl],
+  );
+
   // ── Local state ────────────────────────────────────────────────────────────
 
   const [blocks, setBlocks] = useState<WysiwygBlock[]>([]);
@@ -1345,6 +1386,22 @@ export function ProposalBuilderV2({
     const depRaw = (p.depositType as string) || "none";
     setDepositType((["none", "percent", "fixed"].includes(depRaw) ? depRaw : "none") as "none" | "percent" | "fixed");
     setDepositValue(parseFloat(p.depositValue as string) || 0);
+
+    // Restore the discount. The server stores discountAmount as a dollar amount
+    // (see the CREATE/PUT/accept handlers); the builder treats the field as a
+    // percentage when discountType is "percentage". Reconstruct the original
+    // percent from the stored dollars and the pre-discount subtotal so a "10%"
+    // discount round-trips; otherwise fall back to a fixed dollar discount.
+    // Without this, reopening a proposal reset the discount to 0 and it vanished.
+    const savedDiscountDollars = parseFloat(p.discountAmount as string) || 0;
+    const preDiscountSubtotal = parseFloat(p.subtotal as string) || 0;
+    if (p.discountType === "percentage" && savedDiscountDollars > 0 && preDiscountSubtotal > 0) {
+      setDiscountAmount(Math.round((savedDiscountDollars / preDiscountSubtotal) * 10000) / 100);
+      setDiscountType("percentage");
+    } else {
+      setDiscountAmount(savedDiscountDollars);
+      setDiscountType("fixed");
+    }
 
     if (Array.isArray(p.sections)) {
       const loadedBlocks: WysiwygBlock[] = (p.sections as Array<{
@@ -1692,7 +1749,11 @@ export function ProposalBuilderV2({
 
   useEffect(() => {
     if (!isOpen || blocks.length === 0) return;
-    const snap = JSON.stringify({ blocks, proposalTitle });
+    // Include the discount, deposit and validUntil in the snapshot — otherwise
+    // applying a VIP/discount (or changing the deposit) without also editing a
+    // block or the title never changes the snapshot, so auto-save never fires
+    // and the change is silently lost on close.
+    const snap = JSON.stringify({ blocks, proposalTitle, discountAmount, discountType, depositType, depositValue, validUntil });
     latestSnapshotRef.current = snap;
     latestPayloadRef.current = buildPayload();
     latestDraftIdRef.current = draftId ?? null;
@@ -1720,7 +1781,7 @@ export function ProposalBuilderV2({
     }, 2000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blocks, proposalTitle, isOpen, draftId]);
+  }, [blocks, proposalTitle, isOpen, draftId, discountAmount, discountType, depositType, depositValue, validUntil]);
 
   // Flush any pending auto-save when the builder closes or unmounts.
   // The 2s debounce above gets cancelled silently on unmount — if the user
@@ -1769,8 +1830,15 @@ export function ProposalBuilderV2({
 
   const sendSmsMutation = useMutation({
     mutationFn: async (d: { to: string; message: string; jobId?: string; customerId?: string; proposalId?: string }) => {
-      const res = await apiRequest("POST", "/api/communications/sms", d);
-      return await res.json();
+      // One copy of the message per number when sending to multiple contacts.
+      const numbers = d.to.split(/[,;]+/).map((s) => s.trim()).filter(Boolean);
+      const targets = numbers.length > 0 ? numbers : [d.to];
+      let last: any;
+      for (const to of targets) {
+        const res = await apiRequest("POST", "/api/communications/sms", { ...d, to });
+        last = await res.json();
+      }
+      return last;
     },
     onSuccess: () => { setShowSmsDialog(false); setSmsForm({ to: "", message: "" }); },
     onError: (err: Error) => toast({ title: "SMS Failed", description: err.message || "Failed to send SMS", variant: "destructive" }),
@@ -1791,23 +1859,30 @@ export function ProposalBuilderV2({
   }, [onRequestJobSave, jobId, toast]);
 
   const ensureDraftSaved = useCallback(async (): Promise<string | null> => {
-    if (draftId) return draftId;
-    const resolvedJobId = await ensureJobSaved();
-    if (onRequestJobSave && !resolvedJobId) return null;
+    // Always flush the latest state before sending — auto-save only watches
+    // blocks/title, so a discount-only (or deposit-only) change may not have
+    // been persisted yet. Previously this returned early when a draftId already
+    // existed, which meant the email/live link went out with stale totals and
+    // the applied discount silently vanished.
+    const resolvedJobId = draftId ? jobId || null : await ensureJobSaved();
+    if (!draftId && onRequestJobSave && !resolvedJobId) return null;
     setAutoSaveStatus("saving");
     try {
       const payload = buildPayload();
       const res = await saveDraftMutation.mutateAsync({ ...payload, jobId: resolvedJobId || payload.jobId });
-      const id = res?.data?.id || res?.id;
+      const id = res?.data?.id || res?.id || draftId;
       if (id) {
-        setDraftId(id);
+        if (!draftId) setDraftId(id);
         return id;
       }
     } catch {
       toast({ title: "Save Failed", description: "Could not save proposal.", variant: "destructive" });
+      // For an existing draft, let the send proceed with what's already saved
+      // rather than blocking entirely.
+      return draftId;
     }
-    return null;
-  }, [draftId, ensureJobSaved, buildPayload, saveDraftMutation, onRequestJobSave, toast]);
+    return draftId;
+  }, [draftId, ensureJobSaved, buildPayload, saveDraftMutation, onRequestJobSave, toast, jobId]);
 
   const initEmailForm = useCallback(() => {
     const email = customEmail || (job as { jobContactEmail?: string } | null)?.jobContactEmail || (customer as { email?: string } | null)?.email || "";
@@ -1818,7 +1893,7 @@ export function ProposalBuilderV2({
     const phone = (customer as { phone?: string } | null)?.phone || (job as { jobContactMobile?: string } | null)?.jobContactMobile || (job as { jobContactPhone?: string } | null)?.jobContactPhone || "";
     const name = (customer as { name?: string } | null)?.name || "Valued Customer";
     const first = name.split(" ")[0];
-    const link = draftId ? `https://app.treemarkables.co.nz/proposal/${draftId}` : "";
+    const link = draftId ? `${window.location.origin}/proposal/${draftId}` : "";
     setSmsForm({
       to: phone,
       message: link
@@ -1966,41 +2041,34 @@ export function ProposalBuilderV2({
       <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 w-full">
           {/* ── Toolbar ── */}
-          <div className="flex-shrink-0 flex items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b bg-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
+          <div className="flex-shrink-0 flex items-stretch sm:items-center justify-between gap-1.5 sm:gap-2 px-1.5 sm:px-4 py-2 border-b bg-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
             <>
-            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-              <button
-                type="button"
+            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-none">
+              <BuilderToolbarButton
+                icon={ArrowLeft}
+                label="Back"
                 onClick={handleClose}
-                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-gray-700 rounded-md shadow-sm hover:bg-gray-800 transition-colors"
                 aria-label="Back to job card"
-                title="Back"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Back</span>
-              </button>
-              <button
-                type="button"
+                className="bg-gray-700 hover:bg-gray-800"
+              />
+              <BuilderToolbarButton
+                icon={Mail}
+                label="Email"
                 onClick={() => { initEmailForm(); setShowEmailDialog(true); }}
-                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 transition-colors"
-                aria-label="Email proposal"
-                title="Email"
-              >
-                <Mail className="w-4 h-4" />
-                <span className="hidden sm:inline">Email</span>
-              </button>
-              <button
-                type="button"
+                aria-label={isQuote ? "Email quote" : "Email proposal"}
+                className="bg-blue-600 hover:bg-blue-700"
+              />
+              <BuilderToolbarButton
+                icon={MessageSquare}
+                label="SMS"
                 onClick={() => { initSmsForm(); setShowSmsDialog(true); }}
-                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md shadow-sm hover:bg-green-700 transition-colors"
-                aria-label="SMS proposal"
-                title="SMS"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span className="hidden sm:inline">SMS</span>
-              </button>
-              <button
-                type="button"
+                aria-label={isQuote ? "SMS quote" : "SMS proposal"}
+                className="bg-green-600 hover:bg-green-700"
+              />
+              <BuilderToolbarButton
+                icon={autoSaveStatus === "saved" && lastSavedAt ? Check : Save}
+                label={autoSaveStatus === "saving" ? "Saving" : autoSaveStatus === "saved" && lastSavedAt ? "Saved" : "Save"}
+                loading={autoSaveStatus === "saving"}
                 onClick={async () => {
                   // First click: persists the draft and unlocks auto-save.
                   // Subsequent clicks: flush the latest edits immediately
@@ -2013,38 +2081,21 @@ export function ProposalBuilderV2({
                     try { await saveDraftMutation.mutateAsync(buildPayload()); } catch { /* surfaced via toast */ }
                   }
                 }}
-                disabled={autoSaveStatus === "saving"}
-                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 disabled:opacity-60 transition-colors"
                 aria-label={isQuote ? "Save quote" : "Save proposal"}
-                title="Save"
-              >
-                <Save className="w-4 h-4" />
-                <span className="hidden sm:inline">Save</span>
-              </button>
+                className="bg-indigo-600 hover:bg-indigo-700"
+              />
               {/* Preview button removed — the customer view now lives inline
                   below the editor (scroll down to see it), matching the
                   invoice modal's live-preview pattern. */}
             </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-              {autoSaveStatus === "saving" && (
-                <div className="hidden sm:flex items-center gap-1 text-xs text-blue-500">
-                  <div className="w-2.5 h-2.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                  Saving
-                </div>
-              )}
-              {autoSaveStatus === "saved" && lastSavedAt && (
-                <div className="hidden sm:flex items-center gap-1 text-xs text-green-600">
-                  <Check className="w-3 h-3" /> Saved
-                </div>
-              )}
+            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 flex-[2] sm:flex-none">
               <Popover open={showSettings} onOpenChange={setShowSettings}>
                 <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
-                  >
-                    Settings <ChevronDown className="w-3.5 h-3.5" />
-                  </button>
+                  <BuilderToolbarButton
+                    icon={SlidersHorizontal}
+                    label="Settings"
+                    className="bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                  />
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-4" align="end">
                   <p className="text-sm font-semibold mb-3">Proposal Settings</p>
@@ -2118,15 +2169,13 @@ export function ProposalBuilderV2({
                   </div>
                 </PopoverContent>
               </Popover>
-              <button
-                type="button"
+              <BuilderToolbarButton
+                icon={X}
+                label="Close"
                 onClick={handleClose}
-                aria-label="Close proposal"
-                title="Close"
-                className="flex items-center justify-center h-9 w-9 rounded-md text-white bg-red-500 shadow-sm hover:bg-red-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+                aria-label={isQuote ? "Close quote" : "Close proposal"}
+                className="bg-red-500 hover:bg-red-600"
+              />
             </div>
             </>
           </div>
@@ -2314,6 +2363,7 @@ export function ProposalBuilderV2({
                             block={block}
                             jobId={jobId}
                             diaryPhotos={diaryPhotos}
+                            resolveAnnotated={resolveAnnotated}
                             onUpdate={(u) => updateBlock(block.id, u)}
                           />
                         )}
@@ -2500,7 +2550,17 @@ export function ProposalBuilderV2({
               <h2 className="text-base font-semibold mb-4">Send Proposal via Email</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-gray-500 font-medium">To</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-gray-500 font-medium">To</label>
+                    <RecipientPicker
+                      channel="email"
+                      customerId={(customer as { id?: string } | null)?.id || customerId}
+                      job={job}
+                      customer={customer}
+                      value={emailForm.to}
+                      onChange={(to) => setEmailForm((f) => ({ ...f, to }))}
+                    />
+                  </div>
                   <Input value={emailForm.to} onChange={(e) => setEmailForm((f) => ({ ...f, to: e.target.value }))} className="mt-1" placeholder="recipient@email.com" />
                 </div>
                 <div>
@@ -2535,7 +2595,17 @@ export function ProposalBuilderV2({
               <h2 className="text-base font-semibold mb-4">Send Proposal via SMS</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-gray-500 font-medium">Phone Number</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-gray-500 font-medium">Phone Number</label>
+                    <RecipientPicker
+                      channel="sms"
+                      customerId={(customer as { id?: string } | null)?.id || customerId}
+                      job={job}
+                      customer={customer}
+                      value={smsForm.to}
+                      onChange={(to) => setSmsForm((f) => ({ ...f, to }))}
+                    />
+                  </div>
                   <Input value={smsForm.to} onChange={(e) => setSmsForm((f) => ({ ...f, to: e.target.value }))} className="mt-1" placeholder="+64 21 xxx xxxx" />
                 </div>
                 <div>

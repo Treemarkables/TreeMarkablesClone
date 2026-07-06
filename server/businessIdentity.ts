@@ -5,10 +5,10 @@
  * strings that customer-facing output + AI prompts should use, instead of the
  * literals "Treemarkables" / "Jules" / "arborist" hardcoded across the app.
  *
- * Every field falls back to Treemarkables' current value, so behaviour is
- * UNCHANGED until a business sets its own — the de-hardcoding is safe to roll
- * out incrementally (wire one consumer at a time). See
- * INFLOW_TRADE_GENERALIZATION_PLAN.md (Track A).
+ * Fields fall back to NEUTRAL / generic values, not Treemarkables' — so a new
+ * tenant starts trade-agnostic and fills in its own via Company Info. Treemarkables
+ * keeps its values because they're stored on its own settings row (seeded by name),
+ * not because they're the fallback. See INFLOW_TRADE_GENERALIZATION_PLAN.md.
  */
 
 import type { BusinessSettings } from "@shared/schema";
@@ -21,18 +21,23 @@ export interface BusinessIdentity {
   phone: string;
   email: string;
   address: string;
+  gstNumber: string;   // per-business GST; "" when unset (NEVER Treemarkables')
 }
 
-// Current Treemarkables literals — the fallback so nothing changes until a
-// business overrides them.
+// NEUTRAL fallbacks — never Treemarkables/Jules/arborist. An unset business shows
+// nothing (blank name/owner/tagline) rather than leaking another business's
+// identity; `discipline` falls back to a generic "field-service" so AI prompts
+// ("a New Zealand {discipline} business") still read naturally. Treemarkables keeps
+// its values from its own settings row.
 const DEFAULTS: BusinessIdentity = {
-  name: "Treemarkables",
-  ownerName: "Jules",
-  discipline: "arborist",
-  tagline: "Qualified Arborists",
+  name: "",
+  ownerName: "",
+  discipline: "field-service",
+  tagline: "",
   phone: "",
   email: "",
   address: "",
+  gstNumber: "",
 };
 
 type SettingsLike = Partial<
@@ -45,6 +50,10 @@ type SettingsLike = Partial<
     | "businessPhone"
     | "businessEmail"
     | "businessAddress"
+    | "businessGstNumber"
+    | "businessWebsite"
+    | "brandHeaderColor"
+    | "brandAccentColor"
   >
 > | null | undefined;
 
@@ -57,5 +66,28 @@ export function getBusinessIdentity(settings: SettingsLike): BusinessIdentity {
     phone: settings?.businessPhone || DEFAULTS.phone,
     email: settings?.businessEmail || DEFAULTS.email,
     address: settings?.businessAddress || DEFAULTS.address,
+    gstNumber: settings?.businessGstNumber || DEFAULTS.gstNumber,
+  };
+}
+
+export interface BrandColors {
+  headerColor: string; // header/footer band background
+  accentColor: string; // wordmark / accent rule / CTA / amount
+}
+
+// Default brand palette = Treemarkables' black + neon-green. Matches the
+// business_settings column defaults, so every email is unchanged until a business
+// picks its own colours in Company Info. Unlike identity text, colours are not an
+// identity leak, so a shared visual default is acceptable per the product call.
+const BRAND_COLOR_DEFAULTS: BrandColors = {
+  headerColor: "#0b0b0b",
+  accentColor: "#39FF14",
+};
+
+/** Resolve a business's email brand colours, falling back to the default palette. */
+export function getBrandColors(settings: SettingsLike): BrandColors {
+  return {
+    headerColor: settings?.brandHeaderColor || BRAND_COLOR_DEFAULTS.headerColor,
+    accentColor: settings?.brandAccentColor || BRAND_COLOR_DEFAULTS.accentColor,
   };
 }

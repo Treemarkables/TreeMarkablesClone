@@ -355,7 +355,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               {/* Right: Proposal reference info */}
               <div className="text-right shrink-0">
                 <p className="text-base font-bold text-gray-900" data-testid="text-proposal-number">
-                  Proposal #{proposal.proposalNumber}
+                  {proposal.templateUsed === 'quote' ? 'Quote' : 'Proposal'} #{proposal.proposalNumber}
                 </p>
                 {job?.jobNumber && (
                   <p className="text-sm text-gray-600 mt-0.5">Job #{job.jobNumber}</p>

@@ -517,7 +517,7 @@ export function InventoryManager({ compact = false }: InventoryManagerProps) {
             <DialogTitle>Add New Equipment</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="name">Name</Label>
                 <Input id="name" placeholder="Equipment name" data-testid="input-equipment-name" />
@@ -538,7 +538,7 @@ export function InventoryManager({ compact = false }: InventoryManagerProps) {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="brand">Brand</Label>
                 <Input id="brand" placeholder="Brand" data-testid="input-equipment-brand" />

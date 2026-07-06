@@ -292,6 +292,7 @@ export default function Calendar() {
             variant="ghost"
             size="icon"
             onClick={goToPrevious}
+            aria-label="Previous period"
             data-testid="button-previous-month"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -306,6 +307,7 @@ export default function Calendar() {
             variant="ghost"
             size="icon"
             onClick={goToNext}
+            aria-label="Next period"
             data-testid="button-next-month"
           >
             <ChevronRight className="h-5 w-5" />
@@ -315,8 +317,7 @@ export default function Calendar() {
           employees={employees}
           filter={filter}
           onFilterChange={setFilter}
-        />
-      </div>
+        />      </div>
 
       {/* Legend: explains confirmed vs awaiting-confirmation styling */}
       <div className="flex items-center gap-4 px-3 sm:px-4 py-1.5 border-b text-[11px] text-muted-foreground flex-wrap">

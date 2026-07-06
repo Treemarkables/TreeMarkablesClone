@@ -4,6 +4,9 @@ import { db } from '../db';
 import { jobs, jobDiaryEntries, customers, conversationMessages } from '../../shared/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { PhotoStorageService } from '../photoStorage';
+import { onLaneJobEvent } from './laneAutomationService';
+import { resolveBusinessIdByChannel } from '../tenancy/channelMap';
+import { runWithBusiness } from '../tenancy/tenantStore';
 
 interface ParsedEmailAttachment {
   filename?: string;
@@ -323,21 +326,33 @@ class GmailReplyService {
         }
       }
       
+      // Resolve which tenant this email was addressed to: its To address is a
+      // registered inbound channel (server/tenancy/channelMap). This session-less
+      // poller reads on the owner connection (sees ALL tenants), so the fallback
+      // lookups below must self-scope by this businessId or they could match
+      // another business's customer/conversation. Undefined when the address isn't
+      // a registered channel → unchanged, single-tenant-safe behaviour.
+      const channelBusinessId = await resolveBusinessIdByChannel('email', email.to);
+
       // STEP 2: If no job found by TO address, fall back to finding customer by FROM email
       if (!job) {
-        console.log(`📧 Looking up customer with email: ${email.from}`);
-        
-        // Find customer by email address
+        console.log(`📧 Looking up customer with email: ${email.from}${channelBusinessId ? ` (scoped to tenant ${channelBusinessId})` : ''}`);
+
+        // Find customer by email address — scoped to the addressed tenant when known.
         customer = await db.query.customers.findFirst({
-          where: eq(customers.email, email.from)
+          where: channelBusinessId
+            ? and(eq(customers.email, email.from), eq(customers.businessId, channelBusinessId))
+            : eq(customers.email, email.from)
         });
 
         if (customer) {
           console.log(`📧 ✅ Found customer: ${customer.name} (ID: ${customer.id})`);
 
-          // Find the most recent job for this customer
+          // Find the most recent job for this customer (same tenant scope).
           const customerJobs = await db.query.jobs.findMany({
-            where: eq(jobs.customerId, customer.id),
+            where: channelBusinessId
+              ? and(eq(jobs.customerId, customer.id), eq(jobs.businessId, channelBusinessId))
+              : eq(jobs.customerId, customer.id),
             orderBy: (jobs, { desc }) => [desc(jobs.createdAt)],
             limit: 1
           });
@@ -352,7 +367,13 @@ class GmailReplyService {
       // This handles replies from leads who haven't been converted to customers yet
       if (!customer && !job) {
         console.log(`📧 No customer found for email: ${email.from} - checking for existing conversation`);
-        
+
+        // Scope this brand-new-lead path to the addressed tenant: runWithBusiness
+        // stamps every conversation/message/notification insert below (via withTenant)
+        // with channelBusinessId, and the cross-tenant reads are guarded explicitly.
+        // When the address isn't a registered channel, channelBusinessId is undefined
+        // and this is a no-op (unchanged behaviour).
+        return await runWithBusiness(channelBusinessId, async () => {
         try {
           const notificationHelper = await import('./notificationHelper.js');
           const { storage } = await import('../storage.js');
@@ -372,8 +393,12 @@ class GmailReplyService {
             }
           }
 
-          // Check for existing open conversation from this email
+          // Check for existing open conversation from this email. The helper reads
+          // across all tenants, so ignore a match owned by a different business.
           let conversation = await notificationHelper.findExistingOpenConversation(email.from.trim().toLowerCase());
+          if (channelBusinessId && conversation && (conversation as any).businessId !== channelBusinessId) {
+            conversation = null;
+          }
           
           // Clean up email body text (remove quoted replies)
           const cleanedBody = this.cleanEmailBody(email.textBody);
@@ -395,6 +420,8 @@ class GmailReplyService {
             const allConvs = await storage.getAllConversations({});
             let priorConv: any = null;
             for (const c of allConvs) {
+              // Don't reopen/attach to another tenant's conversation.
+              if (channelBusinessId && (c as any).businessId !== channelBusinessId) continue;
               const msgs = await storage.getConversationMessages(c.id);
               if (msgs.some((m: any) => m.fromContact?.toLowerCase() === email.from.trim().toLowerCase())) {
                 priorConv = c;
@@ -462,6 +489,7 @@ class GmailReplyService {
           console.error('📧 Error creating conversation from lead email:', convError);
           return false;
         }
+        }); // runWithBusiness(channelBusinessId)
       }
 
       // Clean up email body text (remove quoted replies)
@@ -537,7 +565,10 @@ class GmailReplyService {
         const diaryEntryId = insertedDiaryEntry?.id;
 
         console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
-        
+
+        // Lanes: a customer reply can auto-remove the job from a follow-up lane (or move it).
+        onLaneJobEvent(job.id, 'customer_replied').catch(err => console.error('[Lanes] email-reply trigger error:', err));
+
         // Create notification for email reply so it appears in notification bell.
         // Dedup by the email's Message-ID — NOT "any reply for this job in the
         // last 24h". The diary insert above already skips re-polled emails by
@@ -602,7 +633,39 @@ class GmailReplyService {
         } catch (notifError) {
           console.error('Error creating email reply notification:', notifError);
         }
-        
+
+        // Optionally forward a copy of the reply to the subscriber's own inbox
+        // (business_settings.jobReplyForwardEmail). OFF when blank — the reply
+        // already lives on the job card above. The copy's Reply-To is the customer
+        // so the owner can answer directly, and its From name is the customer's so
+        // it reads like a forwarded reply. Never throws; never blocks the poll.
+        try {
+          const { storage } = await import('../storage.js');
+          const fwdSettings = await storage.getBusinessSettingsForBusiness(job.businessId);
+          const forwardTo = (fwdSettings?.jobReplyForwardEmail || '').trim();
+          const fromAddr = (email.from || '').trim();
+          if (forwardTo && forwardTo.toLowerCase() !== fromAddr.toLowerCase()) {
+            const { emailService } = await import('./emailService.js');
+            const senderLabel = customer?.name || fromAddr || 'Customer';
+            const intro = `${senderLabel} replied to Job #${job.jobNumber}. Reply to this email to respond to them directly — a copy is already on the job card in Inflow.`;
+            const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
+            await emailService.sendEmail({
+              to: forwardTo,
+              fromName: senderLabel,
+              replyTo: fromAddr || undefined,
+              subject: `[Job #${job.jobNumber}] ${email.subject || `Reply from ${senderLabel}`}`,
+              html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111;">`
+                + `<p style="margin:0 0 12px;color:#555;font-size:13px;">${esc(intro)}</p>`
+                + `<hr style="border:none;border-top:1px solid #eee;margin:0 0 12px;">`
+                + `<div style="white-space:pre-wrap;font-size:14px;line-height:1.5;">${esc(cleanedBody || '')}</div></div>`,
+              text: `${intro}\n\n----\n\n${cleanedBody || ''}`,
+            });
+            console.log(`📤 Forwarded job #${job.jobNumber} customer reply to owner inbox ${forwardTo}`);
+          }
+        } catch (fwdErr) {
+          console.error('Failed to forward customer reply to owner inbox:', fwdErr);
+        }
+
         // Job-matched replies live in the job diary only — never in the conversations page.
         // The diary entry + email_reply notification above is the complete record; creating a
         // conversation here would also fire a `new_conversation` notification that routes to

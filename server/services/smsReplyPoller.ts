@@ -1,9 +1,12 @@
 import { retrieveSMSReplies } from './smsEveryoneClient';
 import { db } from '../db';
 import { jobs, jobDiaryEntries, customers, notifications, conversations, conversationMessages } from '@shared/schema';
-import { eq, or, sql, desc } from 'drizzle-orm';
+import { eq, and, or, sql, desc } from 'drizzle-orm';
 import { fromZonedTime } from 'date-fns-tz';
 import { broadcast } from '../sseManager';
+import { runWithBusiness, withTenant } from '../tenancy/tenantStore';
+import { resolveBusinessIdByChannel } from '../tenancy/channelMap';
+import { onLaneJobEvent } from './laneAutomationService';
 
 const POLLING_INTERVAL_MS = 60 * 1000; // 1 minute (60 seconds)
 let pollingIntervalId: NodeJS.Timeout | null = null;
@@ -59,21 +62,30 @@ async function processSMSReplies() {
         // Both formats share the same last 8 digits: 21959262
         const last8Digits = senderPhone.slice(-8);
         console.log(`📱 Matching with last 8 digits: ${last8Digits}`);
-        
+
+        // Multi-tenant routing: resolve which business this reply was sent TO — its
+        // Recipient is the registered inbound number — via the channel map, then scope
+        // the job match to that tenant so an overlapping customer number can't attach the
+        // reply to another business. An unmapped recipient (e.g. the legacy single-tenant
+        // line) falls back to the prior cross-tenant match + matched-job tenant.
+        const recipientBusinessId = await resolveBusinessIdByChannel('phone', reply.Recipient);
+        if (recipientBusinessId) {
+          console.log(`📱 Reply recipient ${reply.Recipient} → business ${recipientBusinessId}`);
+        }
+
         // Check jobContactPhone, billingContactPhone, billingContactMobile, AND customer phone/mobile
+        const phoneMatch = or(
+          sql`REGEXP_REPLACE(${jobs.jobContactPhone}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
+          sql`REGEXP_REPLACE(${jobs.billingContactPhone}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
+          sql`REGEXP_REPLACE(${jobs.billingContactMobile}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
+          sql`REGEXP_REPLACE(${customers.phone}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
+          sql`REGEXP_REPLACE(${customers.mobile}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`
+        );
         const matchedJobs = await db
           .select()
           .from(jobs)
           .leftJoin(customers, eq(jobs.customerId, customers.id))
-          .where(
-            or(
-              sql`REGEXP_REPLACE(${jobs.jobContactPhone}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
-              sql`REGEXP_REPLACE(${jobs.billingContactPhone}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
-              sql`REGEXP_REPLACE(${jobs.billingContactMobile}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
-              sql`REGEXP_REPLACE(${customers.phone}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
-              sql`REGEXP_REPLACE(${customers.mobile}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`
-            )
-          )
+          .where(recipientBusinessId ? and(eq(jobs.businessId, recipientBusinessId), phoneMatch) : phoneMatch)
           .limit(10);
 
         if (matchedJobs.length === 0) {
@@ -102,6 +114,13 @@ async function processSMSReplies() {
         // Get customer name for diary entry
         let customerName = matchedCustomer?.name || 'Customer';
 
+        // The poller runs as a background job (no request/session → owner connection),
+        // so bind the matched job's tenant for the writes below — withTenant() then stamps
+        // each insert (diary entry, notification, conversation message) with that businessId
+        // instead of the column DEFAULT (Treemarkables). NOTE: the admin-push fan-out and
+        // the cross-tenant phone match remain tracked separately (need tenant-mapping infra).
+        await runWithBusiness(recipientBusinessId ?? matchedJob.businessId ?? undefined, async () => {
+
         // Create diary entry for the SMS reply
         // SMS Everyone NZ timestamps are in NZ local time without timezone indicator.
         // Use fromZonedTime (date-fns-tz) so it automatically handles NZST (+12:00) vs
@@ -112,7 +131,7 @@ async function processSMSReplies() {
           'Pacific/Auckland'
         );
         
-        await db.insert(jobDiaryEntries).values({
+        await db.insert(jobDiaryEntries).values(withTenant({
           jobId: matchedJob.id,
           entryType: 'sms',
           title: '📱 SMS Reply Received',
@@ -122,10 +141,10 @@ async function processSMSReplies() {
           tags: ['sms', 'reply', 'communication', 'customer-reply'],
           createdAt: receivedTimestamp,
           metadata: { phoneNumber: reply.Originator }
-        });
+        }));
 
         // Create notification for SMS reply
-        await db.insert(notifications).values({
+        await db.insert(notifications).values(withTenant({
           title: `📱 SMS Reply from ${customerName}`,
           message: `${reply.MessageText.substring(0, 100)}${reply.MessageText.length > 100 ? '...' : ''}`,
           type: 'sms_reply',
@@ -134,15 +153,18 @@ async function processSMSReplies() {
           customerId: matchedJob.customerId,
           actionUrl: `/dispatch?job=${matchedJob.id}`,
           createdAt: receivedTimestamp
-        });
+        }));
 
         // Update job's lastActivityAt to bring it to top of dispatch board
         await db
           .update(jobs)
-          .set({ 
+          .set({
             lastActivityAt: receivedTimestamp
           })
           .where(eq(jobs.id, matchedJob.id));
+
+        // Lanes: a customer reply can auto-remove the job from a follow-up lane (or move it).
+        onLaneJobEvent(matchedJob.id, 'customer_replied').catch(err => console.error('[Lanes] sms-reply trigger error:', err));
 
         // Extract email address from SMS body if present and update job/customer
         const emailMatch = reply.MessageText.match(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Z|a-z]{2,}\b/);
@@ -205,7 +227,12 @@ async function processSMSReplies() {
             .select()
             .from(conversations)
             .where(
-              sql`REGEXP_REPLACE(${conversations.participantContact}, '[^0-9]', '', 'g') LIKE '%' || ${phoneToMatch} || '%'`
+              and(
+                // Scope to the matched job's tenant so we never attach this reply to a
+                // different business's conversation (raw owner read — not RLS-scoped here).
+                eq(conversations.businessId, matchedJob.businessId),
+                sql`REGEXP_REPLACE(${conversations.participantContact}, '[^0-9]', '', 'g') LIKE '%' || ${phoneToMatch} || '%'`
+              )
             )
             .orderBy(desc(conversations.lastMessageAt))
             .limit(1);
@@ -214,7 +241,7 @@ async function processSMSReplies() {
             const conversation = matchingConversations[0];
             
             // Add the SMS reply as a conversation message
-            await db.insert(conversationMessages).values({
+            await db.insert(conversationMessages).values(withTenant({
               conversationId: conversation.id,
               type: 'message',
               content: reply.MessageText,
@@ -224,7 +251,7 @@ async function processSMSReplies() {
               platform: 'sms',
               isRead: false,
               createdAt: receivedTimestamp
-            });
+            }));
 
             // Update conversation's lastMessageAt
             await db
@@ -241,6 +268,7 @@ async function processSMSReplies() {
         } catch (convError) {
           console.error('📱 Error adding SMS reply to conversation:', convError);
         }
+        }); // runWithBusiness(matchedJob.businessId)
       } catch (error) {
         console.error(`📱 Error processing SMS reply from ${reply.Originator}:`, error);
       }

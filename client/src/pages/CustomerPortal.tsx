@@ -545,7 +545,7 @@ export function CustomerPortal() {
                 <TreePine className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <h1 className="text-lg font-semibold">Treemarkables Portal</h1>
+                <h1 className="text-lg font-semibold">{(customerInvoices?.[0]?.company?.name) || "Customer"} Portal</h1>
                 <p className="text-sm text-muted-foreground">
                   Welcome back, {customer?.name?.split(" ")[0] || "Customer"}
                 </p>
@@ -1616,29 +1616,34 @@ export function CustomerPortal() {
                 </div>
               </div>
 
-              {/* Payment Information */}
-              <div className="mt-6 p-5 bg-gray-50 border border-gray-200 rounded-lg">
-                <h3 className="text-base font-semibold text-black mb-3">
-                  Payment Information
-                </h3>
-                <div className="text-sm text-gray-600 space-y-1.5">
-                  <p>
-                    <span className="font-medium text-black">Bank:</span> ANZ
-                  </p>
-                  <p>
-                    <span className="font-medium text-black">
-                      Account Number:
-                    </span>{" "}
-                    06 0637 0768850 00
-                  </p>
-                  <p>
-                    <span className="font-medium text-black">
-                      Account Name:
-                    </span>{" "}
-                    Treemarkables LTD
-                  </p>
+              {/* Payment Information — from the invoice's OWNING business, shown only
+                  when it has set its bank details (never another business's account). */}
+              {selectedInvoice.company?.bankAccountNumber ? (
+                <div className="mt-6 p-5 bg-gray-50 border border-gray-200 rounded-lg">
+                  <h3 className="text-base font-semibold text-black mb-3">
+                    Payment Information
+                  </h3>
+                  <div className="text-sm text-gray-600 space-y-1.5">
+                    {selectedInvoice.company?.bankAccountName ? (
+                      <p>
+                        <span className="font-medium text-black">
+                          Account Name:
+                        </span>{" "}
+                        {selectedInvoice.company.bankAccountName}
+                      </p>
+                    ) : null}
+                    <p>
+                      <span className="font-medium text-black">
+                        Account Number:
+                      </span>{" "}
+                      {selectedInvoice.company.bankAccountNumber}
+                    </p>
+                    <p className="pt-1">
+                      Please use Invoice #{selectedInvoice.invoiceNumber} as the reference.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               {/* Actions */}
               <div className="flex gap-2 pt-6 border-t border-gray-200">

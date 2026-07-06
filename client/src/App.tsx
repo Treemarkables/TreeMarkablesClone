@@ -2,6 +2,10 @@ import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { UpgradeGate } from "@/components/PlanGate";
+import { BillingBanner } from "@/components/BillingBanner";
+import { GettingStarted } from "@/components/GettingStarted";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
@@ -31,10 +35,12 @@ const SummerOffer = lazy(() => import("@/pages/SummerOffer"));
 const Contact = lazy(() => import("@/pages/Contact"));
 const PrivacyPolicy = lazy(() => import("@/pages/PrivacyPolicy"));
 const JobDashboard = lazy(() => import("@/pages/JobDashboard"));
+const TodayDashboard = lazy(() => import("@/pages/TodayDashboard"));
 const JobCardPreview = lazy(() => import("@/pages/JobCardPreview"));
 const MetricsDashboard = lazy(() => import("@/pages/MetricsDashboard"));
 const Tasks = lazy(() => import("@/pages/Tasks"));
 const Videos = lazy(() => import("@/pages/Videos"));
+const Library = lazy(() => import("@/pages/Library"));
 const Help = lazy(() => import("@/pages/Help"));
 const HelpAdmin = lazy(() => import("@/pages/admin/HelpAdmin"));
 const Pipeline = lazy(() => import("@/pages/Pipeline"));
@@ -66,6 +72,7 @@ const Calendar = lazy(() => import("@/pages/Calendar"));
 const StaffSchedule = lazy(() => import("@/pages/StaffSchedule"));
 const SettingsPreferences = lazy(() => import("@/pages/SettingsPreferences"));
 const BookingReminderSettings = lazy(() => import("@/pages/BookingReminderSettings"));
+const LaneSettings = lazy(() => import("@/pages/LaneSettings"));
 const CommunicationTemplates = lazy(() => import("@/pages/CommunicationTemplates"));
 const VehicleInspectionSettings = lazy(() => import("@/pages/VehicleInspectionSettings"));
 const NotificationPreferences = lazy(() => import("@/pages/NotificationPreferences"));
@@ -106,19 +113,22 @@ const QuotingProcessSettings = lazy(() => import("@/pages/QuotingProcessSettings
 const DocumentBuilderPage = lazy(() => import("@/pages/DocumentBuilderPage"));
 const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
 const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
+const SettingsAccount = lazy(() => import("@/pages/SettingsAccount"));
+const SettingsChannels = lazy(() => import("@/pages/SettingsChannels"));
+const SettingsSetup = lazy(() => import("@/pages/SettingsSetup"));
+const AdminSubscribers = lazy(() => import("@/pages/AdminSubscribers"));
 const SettingsQuoteFollowup = lazy(() => import("@/pages/SettingsQuoteFollowup"));
 const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoReply"));
-const TimeTracking = lazy(() => import("@/pages/TimeTracking"));
 const FollowUpQueue = lazy(() => import("@/pages/FollowUpQueue"));
 const UnlinkedCalls = lazy(() => import("@/pages/UnlinkedCalls"));
 const Reconciliation = lazy(() => import("@/pages/Reconciliation"));
 const ProfitabilityCalculator = lazy(() => import("@/pages/ProfitabilityCalculator"));
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft } from "lucide-react";
-import { useJobFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft, LayoutGrid } from "lucide-react";
+import { useJobFilter, useLaneFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useSSE } from "@/hooks/useSSE";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -215,7 +225,18 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   // Check if we're on dispatch page
   const isDispatchPage = location === '/dispatch';
   const [dispatchFilter, setDispatchFilter] = useJobFilter();
+  const [dispatchLane, setDispatchLane] = useLaneFilter();
   const [dispatchSearchOpen, setDispatchSearchOpen] = useDispatchSearchOpen();
+
+  // Lanes for the dispatch filter (only on the dispatch page).
+  const { data: lanesResponse } = useQuery<{ data: { id: string; name: string; color: string }[] }>({
+    queryKey: ['/api/lanes'],
+    enabled: isDispatchPage,
+  });
+  const dispatchLanes = lanesResponse?.data || [];
+  // Status and lane are mutually-exclusive views. Selecting one clears the other.
+  const selectStatus = (v: string) => { setDispatchFilter(v); setDispatchLane("all"); };
+  const selectLane = (v: string) => { setDispatchLane(v); setDispatchFilter("all"); };
 
   // Close search strip when leaving dispatch page
   useEffect(() => {
@@ -330,6 +351,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="outline"
                         size="icon"
+                        aria-label="Create new"
                         data-testid="create-new-button-mobile"
                         className="rounded-full text-green-700 border-green-400 bg-green-100 shrink-0 h-12 w-12"
                       >
@@ -368,6 +390,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     variant="outline"
                     size="icon"
                     onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
+                    aria-label="Paste message"
                     data-testid="paste-message-button-mobile"
                     className="rounded-full text-orange-600 border-orange-400 bg-orange-100 shrink-0 h-12 w-12"
                   >
@@ -379,20 +402,21 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-11 w-11 ${dispatchFilter !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                        className={`h-11 w-11 ${(dispatchFilter !== "all" || dispatchLane !== "all") ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                        aria-label="Filter jobs"
                         data-testid="mobile-filter-dropdown-trigger"
                       >
                         <Filter className="h-7 w-7" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setDispatchFilter("all")} data-testid="mobile-filter-all">
+                      <DropdownMenuItem onClick={() => selectStatus("all")} data-testid="mobile-filter-all">
                         All
                       </DropdownMenuItem>
                       {DISPATCH_STATUS_FILTERS.map(tab => (
                         <DropdownMenuItem
                           key={tab.value}
-                          onClick={() => setDispatchFilter(tab.value)}
+                          onClick={() => selectStatus(tab.value)}
                           data-testid={`mobile-filter-tab-${tab.value}`}
                         >
                           {tab.label}
@@ -400,11 +424,39 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  {/* Dedicated Lanes filter button — mobile */}
+                  {dispatchLanes.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-11 w-11 ${dispatchLane !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                          aria-label="Filter by lane"
+                          data-testid="dispatch-lanes-button-mobile"
+                        >
+                          <LayoutGrid className="h-6 w-6" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => selectLane("all")} data-testid="mobile-lane-all">
+                          All lanes
+                        </DropdownMenuItem>
+                        {dispatchLanes.map(lane => (
+                          <DropdownMenuItem key={lane.id} onClick={() => selectLane(lane.id)} data-testid={`mobile-lane-${lane.id}`}>
+                            <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: lane.color }} />
+                            {lane.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </>
               )}
 
-              {/* Search toggle (dispatch page) or Refresh (other pages) — Mobile */}
-              {isDispatchPage ? (
+              {/* Search toggle (dispatch page) — Mobile. Other pages refresh
+                  via the global pull-to-refresh gesture, no header button. */}
+              {isDispatchPage && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -412,28 +464,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     if (dispatchSearchOpen) setDispatchSearchOpen(false);
                     else setDispatchSearchOpen(true);
                   }}
+                  aria-label={dispatchSearchOpen ? "Close search" : "Search jobs"}
                   data-testid="mobile-search-toggle"
                   className="text-muted-foreground h-11 w-11"
                 >
                   {dispatchSearchOpen ? <X className="h-7 w-7" /> : <Search className="h-7 w-7" />}
                 </Button>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={handleRefresh}
-                      disabled={isRefreshing}
-                      data-testid="button-mobile-refresh"
-                    >
-                      <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Refresh all data</p>
-                  </TooltipContent>
-                </Tooltip>
               )}
               
               {/* Logout Button - Crew Only */}
@@ -454,7 +490,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {isAdmin && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" data-testid="button-account-dropdown-mobile">
+                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label="Account menu" data-testid="button-account-dropdown-mobile">
                       <User className="h-6 w-6" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -541,6 +577,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       if (input) { input.focus(); input.select(); }
                       setDispatchSearchOpen(!dispatchSearchOpen);
                     }}
+                    aria-label={dispatchSearchOpen ? "Close search" : "Search jobs"}
                     data-testid="desktop-search-toggle"
                     className="text-black"
                   >
@@ -555,18 +592,20 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         data-testid="desktop-filter-dropdown-trigger"
                       >
                         <Filter className="h-4 w-4" />
-                        {DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All"}
+                        {dispatchLane !== "all"
+                          ? (dispatchLanes.find(l => l.id === dispatchLane)?.name ?? "Lane")
+                          : (DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All")}
                         <ChevronDown className="h-3 w-3" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setDispatchFilter("all")} data-testid="desktop-filter-all">
+                      <DropdownMenuItem onClick={() => selectStatus("all")} data-testid="desktop-filter-all">
                         All
                       </DropdownMenuItem>
                       {DISPATCH_STATUS_FILTERS.map(tab => (
                         <DropdownMenuItem
                           key={tab.value}
-                          onClick={() => setDispatchFilter(tab.value)}
+                          onClick={() => selectStatus(tab.value)}
                           data-testid={`desktop-filter-tab-${tab.value}`}
                         >
                           {tab.label}
@@ -574,6 +613,34 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  {/* Dedicated Lanes filter button */}
+                  {dispatchLanes.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid="dispatch-lanes-button-desktop"
+                          className={`gap-1.5 ${dispatchLane !== "all" ? "text-[#1877F2]" : "text-black"}`}
+                        >
+                          <LayoutGrid className="h-4 w-4" />
+                          {dispatchLane !== "all" ? (dispatchLanes.find(l => l.id === dispatchLane)?.name ?? "Lanes") : "Lanes"}
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => selectLane("all")} data-testid="desktop-lane-all">
+                          All lanes
+                        </DropdownMenuItem>
+                        {dispatchLanes.map(lane => (
+                          <DropdownMenuItem key={lane.id} onClick={() => selectLane(lane.id)} data-testid={`desktop-lane-${lane.id}`}>
+                            <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: lane.color }} />
+                            {lane.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -633,6 +700,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       size="icon"
                       onClick={handleRefresh}
                       disabled={isRefreshing}
+                      aria-label="Refresh all data"
                       data-testid="button-desktop-refresh"
                     >
                       <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -737,15 +805,22 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               )}
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col md:pt-6" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-            <div className="h-full flex flex-col md:pb-0">
-              {/* Closest Suspense boundary to sidebar pages — keeps the sidebar
-                  + header mounted while the next page's chunk loads, showing the
-                  spinner only in the content area instead of full-screen. */}
-              <Suspense fallback={<PageSpinner />}>
-                {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
-              </Suspense>
-            </div>
+          <main className="flex-1 w-full max-w-full min-w-0 min-h-0 relative md:pt-6" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            {/* Global pull-to-refresh: swipe down from the top of any page to
+                refetch. Dispatch has its own (wired to its queries), so the
+                global one stands down there. Touch-only — desktop unaffected. */}
+            <PullToRefresh onRefresh={handleRefresh} enabled={!isDispatchPage} contentClassName="flex flex-col">
+              <BillingBanner />
+              <div className="h-full flex flex-col md:pb-0">
+                <GettingStarted />
+                {/* Closest Suspense boundary to sidebar pages — keeps the sidebar
+                    + header mounted while the next page's chunk loads, showing the
+                    spinner only in the content area instead of full-screen. */}
+                <Suspense fallback={<PageSpinner />}>
+                  {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
+                </Suspense>
+              </div>
+            </PullToRefresh>
           </main>
         </div>
         
@@ -802,10 +877,35 @@ function Router() {
   }, [setLocation]);
 
   // Handle push notification taps from the iOS Capacitor native shell.
-  // AppDelegate+Firebase.swift injects a `nativeNotificationTap` CustomEvent
-  // and waits 100ms for `nativeNotificationTapAck` — if we don't ack it falls
-  // back to window.location.assign (full reload). Acking gives us SPA-smooth
-  // routing instead.
+  //
+  // Two arrival paths, because the right one depends on whether the app was
+  // already running when the notification was tapped:
+  //   • Warm tap: AppDelegate+Firebase.swift dispatches a `nativeNotificationTap`
+  //     CustomEvent that the live listener below catches → instant SPA routing.
+  //   • Cold tap (app was killed): the native event fires during boot, before
+  //     this listener — even before index.html — exists, so it can't be caught
+  //     live. The native layer instead persists the target to localStorage
+  //     (`pendingNotificationNav`) and to window.__pendingNotificationPath; the
+  //     mount-consumer below replays it once React is ready. Without this, every
+  //     cold tap fell through to the default `/` → `/dispatch` redirect and
+  //     landed on the dashboard instead of the job/conversation.
+  const navigateFromNotification = useCallback((url: string) => {
+    setLocation(url);
+    // Fire the dispatch-board signal immediately AND again at 150ms — the first
+    // catches the case where DispatchBoard is already mounted and wouter's
+    // same-pathname setLocation doesn't trigger a re-render; the second catches
+    // the case where setLocation needed a tick to settle (or the board is still
+    // mounting after a cold start).
+    if (url.startsWith('/dispatch')) {
+      const fire = () => window.dispatchEvent(
+        new CustomEvent('notification-navigation', { detail: { url } }),
+      );
+      fire();
+      setTimeout(fire, 150);
+    }
+  }, [setLocation]);
+
+  // Live listener — warm taps.
   useEffect(() => {
     const handler = (event: Event) => {
       const url = (event as CustomEvent<string>).detail;
@@ -815,23 +915,49 @@ function Router() {
         return;
       }
       window.dispatchEvent(new Event('nativeNotificationTapAck'));
-      setLocation(url);
-      // Fire the dispatch-board signal immediately AND again at 150ms — the
-      // first catches the case where DispatchBoard is already mounted and
-      // wouter's same-pathname setLocation doesn't trigger a re-render; the
-      // second catches the case where setLocation needed a tick to settle.
-      if (url.startsWith('/dispatch')) {
-        const fire = () => window.dispatchEvent(
-          new CustomEvent('notification-navigation', { detail: { url } }),
-        );
-        fire();
-        setTimeout(fire, 150);
-      }
+      // Clear the persisted/early-captured copies so the cold-start consumer
+      // doesn't replay this same tap on the next reload.
+      (window as any).__pendingNotificationPath = null;
+      try { localStorage.removeItem('pendingNotificationNav'); } catch {}
+      navigateFromNotification(url);
     };
     window.addEventListener('nativeNotificationTap', handler);
     return () => window.removeEventListener('nativeNotificationTap', handler);
-  }, [setLocation]);
-  
+  }, [navigateFromNotification]);
+
+  // Mount-consumer — cold taps. Runs once when the app boots and replays any
+  // deep-link the native layer captured before React was ready.
+  useEffect(() => {
+    // 1) In-memory global set by index.html's early-capture listener.
+    const early: string | null = (window as any).__pendingNotificationPath ?? null;
+    (window as any).__pendingNotificationPath = null;
+    if (early) {
+      console.log('🔔 Consuming early-captured notification path:', early);
+      navigateFromNotification(early);
+      try { localStorage.removeItem('pendingNotificationNav'); } catch {}
+      return;
+    }
+
+    // 2) localStorage fallback persisted natively on cold launch. Gated on a
+    //    60s freshness window so a normal app open never jumps to a stale job.
+    try {
+      const raw = localStorage.getItem('pendingNotificationNav');
+      if (raw) {
+        localStorage.removeItem('pendingNotificationNav');
+        const parsed = JSON.parse(raw);
+        if (parsed?.path && typeof parsed.path === 'string'
+            && Date.now() - (parsed.ts || 0) < 60_000) {
+          console.log('🔔 Consuming persisted notification path:', parsed.path);
+          navigateFromNotification(parsed.path);
+        }
+      }
+    } catch {
+      /* localStorage unavailable — nothing to replay */
+    }
+    // Run once on mount; navigateFromNotification is stable via useCallback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Detect Capacitor (iOS Inflow app) once — used to keep marketing/customer pages
   // out of the native app shell. The iOS WebView loads the same URL as the website,
   // but the staff app shouldn't expose Treemarkables marketing content (tree services,
@@ -925,6 +1051,15 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      {/* Today — daily command centre (fleet compliance + today's jobs) */}
+      <Route path="/today">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <TodayDashboard />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+
       {/* Job Dashboard - All Jobs list page */}
       <Route path="/job-dashboard">
         <ProtectedRoute>
@@ -936,7 +1071,9 @@ function Router() {
       <Route path="/metrics">
         <ProtectedRoute>
           <SidebarLayout>
-            <MetricsDashboard />
+            <UpgradeGate requires="plan:crew" feature="The Metrics Dashboard">
+              <MetricsDashboard />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -951,6 +1088,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <Videos />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/library">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Library />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -971,7 +1115,9 @@ function Router() {
       <Route path="/profitability-calculator">
         <ProtectedRoute>
           <SidebarLayout>
-            <ProfitabilityCalculator />
+            <UpgradeGate requires="plan:crew" feature="The Profitability Calculator">
+              <ProfitabilityCalculator />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1039,7 +1185,9 @@ function Router() {
       <Route path="/integrations">
         <ProtectedRoute>
           <SidebarLayout>
-            <Integrations />
+            <UpgradeGate requires="plan:crew" feature="Integrations">
+              <Integrations />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1068,13 +1216,6 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <ConversationDetail />
-          </SidebarLayout>
-        </ProtectedRoute>
-      </Route>
-      <Route path="/time-tracking">
-        <ProtectedRoute>
-          <SidebarLayout>
-            <TimeTracking />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1179,7 +1320,9 @@ function Router() {
       <Route path="/safety">
         <AuthenticatedRoute>
           <SidebarLayout>
-            <SafetyHub />
+            <UpgradeGate requires="plan:crew" feature="The safety suite">
+              <SafetyHub />
+            </UpgradeGate>
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>
@@ -1245,7 +1388,9 @@ function Router() {
       <Route path="/workflows">
         <ProtectedRoute>
           <SidebarLayout>
-            <WorkflowAutomation />
+            <UpgradeGate requires="plan:business" feature="Workflow automation">
+              <WorkflowAutomation />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1315,6 +1460,26 @@ function Router() {
       <Route path="/settings/billing">
         <SidebarLayout>
           <SettingsBilling />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/account">
+        <SidebarLayout>
+          <SettingsAccount />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/channels">
+        <SidebarLayout>
+          <SettingsChannels />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/setup">
+        <SidebarLayout>
+          <SettingsSetup />
+        </SidebarLayout>
+      </Route>
+      <Route path="/admin/subscribers">
+        <SidebarLayout>
+          <AdminSubscribers />
         </SidebarLayout>
       </Route>
       <Route path="/settings/security">
@@ -1387,6 +1552,11 @@ function Router() {
       <Route path="/settings/booking-reminders">
         <SidebarLayout>
           <BookingReminderSettings />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/lanes">
+        <SidebarLayout>
+          <LaneSettings />
         </SidebarLayout>
       </Route>
       <Route path="/settings/templates">
@@ -1503,8 +1673,17 @@ function App() {
   // Watchdog for Radix Dialog/Sheet leaving `body { pointer-events: none }`
   // stuck after rapid nested open/close cycles (notably in the job card).
   // When that happens every click on the page is dead — including the
-  // sidebar menu button. If body is locked but no dialog is actually open,
-  // clear the lock so the UI self-heals.
+  // sidebar menu button, which looks "jammed on" to staff. If body is locked
+  // but no dialog is actually open, clear the lock so the UI self-heals.
+  //
+  // The lock is set/restored by Radix on the *dialog* element's lifecycle, but
+  // it leaks onto `document.body`. So we must re-check on three triggers:
+  //   1. body's own style attribute changing (Radix toggling the lock),
+  //   2. any dialog opening/closing anywhere in the tree (subtree mutations) —
+  //      this is the case the old version missed: a dialog that unmounts
+  //      without touching body.style again left the stale lock forever,
+  //   3. a low-frequency interval as a guaranteed backstop for any missed
+  //      mutation.
   useEffect(() => {
     const clearIfStale = () => {
       if (document.body.style.pointerEvents !== 'none') return;
@@ -1513,11 +1692,31 @@ function App() {
       );
       if (!hasOpenDialog) {
         document.body.style.pointerEvents = '';
+        console.warn('[pointer-events watchdog] cleared stale body lock (no open dialog)');
       }
     };
-    const observer = new MutationObserver(clearIfStale);
-    observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
-    return () => observer.disconnect();
+    // Coalesce bursts of mutations into a single check on the next frame.
+    let scheduled = false;
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        clearIfStale();
+      });
+    };
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['style', 'data-state'],
+      subtree: true,
+      childList: true,
+    });
+    const interval = window.setInterval(clearIfStale, 1000);
+    return () => {
+      observer.disconnect();
+      window.clearInterval(interval);
+    };
   }, []);
 
   return (

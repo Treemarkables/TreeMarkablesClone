@@ -7,8 +7,38 @@
 //   STRIPE_SECRET_KEY        sk_live_... or sk_test_...
 //   STRIPE_PUBLISHABLE_KEY   pk_live_... or pk_test_... (only sent to client)
 //   STRIPE_WEBHOOK_SECRET    whsec_... — required for signature verification
+//   STRIPE_CONNECT_WEBHOOK_SECRET  whsec_... — optional; the signing secret of the SECOND
+//                            webhook endpoint that listens to "events on Connected accounts".
+//                            Needed so Connect direct-charge events (a tenant's customer paying
+//                            an invoice) verify. Each Stripe endpoint has its own secret, so we
+//                            try both. Unset = Connect payment events won't verify.
+//   STRIPE_GST_TAX_RATE_ID   txr_... — optional; a 15% tax-exclusive NZ GST rate added
+//                            to subscription checkouts (prices are GST-exclusive). Unset = no GST added.
+
+import { TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
 
 type StripeClient = any; // typed via runtime import to avoid hard dep
+
+// ── Who may take online CARD payments (invoice / deposit / job checkout) ─────
+// There is ONE Stripe account (STRIPE_SECRET_KEY) and — until Stripe Connect
+// exists — it belongs to Treemarkables. Every `mode: 'payment'` checkout settles
+// into it, so only Treemarkables may take card payments online; any other tenant's
+// customer would otherwise pay into TM's account (misdirected funds). Every other
+// tenant collects by bank transfer instead — their own bank details render on the
+// invoice (see business_settings.bankAccount*). Subscription billing is NOT gated
+// by this: a tenant subscribing to Inflow is *meant* to pay the platform account.
+//
+// STRIPE_PAYMENT_BUSINESS_IDS (comma-separated) opts extra businessIds in without a
+// code change — e.g. once Connect lands and routing becomes per-tenant.
+export function businessOwnsStripeAccount(businessId: string | null | undefined): boolean {
+  if (!businessId) return false;
+  if (TREEMARKABLES_BUSINESS_IDS.includes(businessId)) return true;
+  const extra = (process.env.STRIPE_PAYMENT_BUSINESS_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return extra.includes(businessId);
+}
 
 let cachedClient: StripeClient | null = null;
 let cachedClientPromise: Promise<StripeClient> | null = null;
@@ -50,6 +80,7 @@ export interface DepositCheckoutInput {
   successUrl: string;
   cancelUrl: string;
   businessName?: string;
+  connectedAccountId?: string; // Stripe Connect: when set, the charge is created ON this connected account (direct charge → funds go to the tenant).
 }
 
 // Creates a Stripe Checkout Session for a proposal deposit. Returns the
@@ -96,7 +127,7 @@ export async function createDepositCheckoutSession(input: DepositCheckoutInput):
         proposalNumber: input.proposalNumber,
       },
     },
-  });
+  }, input.connectedAccountId ? { stripeAccount: input.connectedAccountId } : undefined);
 
   if (!session.url) {
     throw new Error('Stripe checkout session did not return a redirect URL');
@@ -113,6 +144,7 @@ export interface InvoiceCheckoutInput {
   successUrl: string;
   cancelUrl: string;
   businessName?: string;
+  connectedAccountId?: string; // Stripe Connect: when set, the charge is created ON this connected account (direct charge → funds go to the tenant).
 }
 
 // Creates a Stripe Checkout Session for an invoice payment. Mirrors the
@@ -159,7 +191,7 @@ export async function createInvoiceCheckoutSession(input: InvoiceCheckoutInput):
         invoiceNumber: input.invoiceNumber,
       },
     },
-  });
+  }, input.connectedAccountId ? { stripeAccount: input.connectedAccountId } : undefined);
 
   if (!session.url) {
     throw new Error('Stripe checkout session did not return a redirect URL');
@@ -176,6 +208,7 @@ export interface JobCheckoutInput {
   successUrl: string;
   cancelUrl: string;
   businessName?: string;
+  connectedAccountId?: string; // Stripe Connect: when set, the charge is created ON this connected account (direct charge → funds go to the tenant).
 }
 
 // Creates a Stripe Checkout Session for an on-the-spot job payment (staff
@@ -222,7 +255,7 @@ export async function createJobCheckoutSession(input: JobCheckoutInput): Promise
         jobNumber: input.jobNumber || '',
       },
     },
-  });
+  }, input.connectedAccountId ? { stripeAccount: input.connectedAccountId } : undefined);
 
   if (!session.url) {
     throw new Error('Stripe checkout session did not return a redirect URL');
@@ -248,9 +281,17 @@ export interface SubscriptionCheckoutInput {
 // metadata so the webhook can map the resulting subscription back to the tenant.
 export async function createSubscriptionCheckoutSession(input: SubscriptionCheckoutInput): Promise<{ id: string; url: string }> {
   const stripe = await getStripe();
+  // The plan prices are GST-EXCLUSIVE (the billing page says so + Jules set them as
+  // $89/$150 + GST). Apply a NZ GST tax rate so Stripe adds 15% on top of each charge
+  // and the Stripe invoice doubles as a GST tax receipt. STRIPE_GST_TAX_RATE_ID is the
+  // id (txr_…) of a 15%, tax-exclusive "GST" rate created in the Stripe dashboard.
+  // Unset → no tax added (current behaviour), so this is safe to ship before the rate
+  // exists. NB: only subscriptions need this — invoice/deposit/job checkouts already
+  // charge GST-inclusive amounts (the tenant's own invoicing).
+  const gstRate = process.env.STRIPE_GST_TAX_RATE_ID?.trim();
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
-    line_items: [{ price: input.priceId, quantity: 1 }],
+    line_items: [{ price: input.priceId, quantity: 1, ...(gstRate ? { tax_rates: [gstRate] } : {}) }],
     customer: input.customerId || undefined,
     customer_email: input.customerId ? undefined : (input.customerEmail || undefined),
     client_reference_id: input.businessId,
@@ -291,22 +332,102 @@ export async function createBillingPortalSession(customerId: string, returnUrl: 
   return { url: session.url };
 }
 
+// ── Stripe Connect (Express) — per-tenant card payments ─────────────────────
+// Lets a tenant accept card payments from THEIR customers into THEIR OWN Stripe
+// account. Direct-charge model: an invoice/deposit/job checkout is created ON the
+// tenant's connected account (Phase 2 passes { stripeAccount }), so funds land in
+// their account and they are the merchant of record. Onboarding is Stripe-hosted via
+// Account Links. NOTE: the platform Stripe account must have Connect enabled in the
+// dashboard for accounts.create to work.
+
+/** Create an Express connected account for a tenant. Returns the acct_… id. */
+export async function createConnectAccount(opts: { email?: string | null; businessName?: string | null }): Promise<string> {
+  const stripe = await getStripe();
+  const account = await stripe.accounts.create({
+    type: 'express',
+    country: 'NZ',
+    email: opts.email || undefined,
+    business_profile: opts.businessName ? { name: opts.businessName } : undefined,
+    capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+  });
+  return account.id;
+}
+
+/** A Stripe-hosted onboarding link for a connected account (or to resume onboarding). */
+export async function createConnectAccountLink(accountId: string, opts: { returnUrl: string; refreshUrl: string }): Promise<string> {
+  const stripe = await getStripe();
+  const link = await stripe.accountLinks.create({
+    account: accountId,
+    type: 'account_onboarding',
+    return_url: opts.returnUrl,
+    refresh_url: opts.refreshUrl,
+  });
+  return link.url;
+}
+
+/** Current onboarding/capability status of a connected account. */
+export async function retrieveConnectAccount(accountId: string): Promise<{
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+}> {
+  const stripe = await getStripe();
+  const acct = await stripe.accounts.retrieve(accountId);
+  return {
+    chargesEnabled: !!acct.charges_enabled,
+    payoutsEnabled: !!acct.payouts_enabled,
+    detailsSubmitted: !!acct.details_submitted,
+  };
+}
+
+/** A Stripe Express dashboard login link, so a connected tenant can view their payouts. */
+export async function createConnectLoginLink(accountId: string): Promise<string> {
+  const stripe = await getStripe();
+  const link = await stripe.accounts.createLoginLink(accountId);
+  return link.url;
+}
+
+/**
+ * Best-effort delete of a connected Express account (the platform created it, so it may
+ * delete it). Fails if the account still holds a balance — the caller should clear the
+ * stored link regardless, so the app stops routing to it either way. Never throws.
+ */
+export async function deleteConnectAccount(accountId: string): Promise<boolean> {
+  try {
+    const stripe = await getStripe();
+    const deleted = await stripe.accounts.del(accountId);
+    return !!deleted?.deleted;
+  } catch {
+    return false; // e.g. account has a balance — leave it for the tenant to close in Stripe
+  }
+}
+
 // Verifies a Stripe webhook signature against the raw request body and
 // returns the parsed event. Throws on signature mismatch — caller should
 // 400 the response so Stripe will retry.
 export async function constructWebhookEvent(rawBody: Buffer, signature: string | undefined): Promise<any> {
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  // Two endpoints can deliver to this URL: the platform-account endpoint and (for Connect
+  // direct charges) a second endpoint that listens to Connected-account events. Each has its
+  // own signing secret, so try both — whichever verifies wins.
+  const secrets = [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_CONNECT_WEBHOOK_SECRET]
+    .map((s) => (s ?? '').trim())
+    .filter(Boolean);
+  if (secrets.length === 0) {
     throw new Error('Stripe webhook is not configured: missing STRIPE_WEBHOOK_SECRET env var');
   }
   if (!signature) {
     throw new Error('Missing Stripe signature header');
   }
   const stripe = await getStripe();
-  return stripe.webhooks.constructEvent(
-    rawBody,
-    signature,
-    process.env.STRIPE_WEBHOOK_SECRET,
-  );
+  let lastErr: any;
+  for (const secret of secrets) {
+    try {
+      return stripe.webhooks.constructEvent(rawBody, signature, secret);
+    } catch (err: any) {
+      lastErr = err;
+    }
+  }
+  throw lastErr ?? new Error('Webhook signature verification failed');
 }
 
 // Computes deposit amount (in dollars) from a proposal's deposit settings +

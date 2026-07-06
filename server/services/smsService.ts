@@ -1,8 +1,12 @@
 import { sendSMSEveryoneMessage, getSMSEveryoneSenderId } from './smsEveryoneClient';
+import * as usageMeter from './usageMeter';
+import { currentBusinessId } from '../tenancy/tenantStore';
 
 interface SMSParams {
   to: string;
   message: string;
+  businessId?: string;  // explicit tenant (required on cron/off-request paths); else from ALS
+  feature?: string;     // e.g. 'booking_reminder' — for usage analytics
 }
 
 function normalizePhoneNumber(phone: string): string {
@@ -60,6 +64,14 @@ class SMSService {
     try {
       await this.ensureConfigured();
 
+      // Usage-cap gate. businessId comes explicitly (cron paths) or from the request's
+      // tenant context. No tenant → can't meter → fail-open (send unmetered).
+      const businessId = params.businessId ?? currentBusinessId();
+      if (businessId) {
+        const ok = await usageMeter.guard('sms', businessId, params.feature);
+        if (!ok) return false; // over cap AND enforcement on
+      }
+
       const normalizedPhone = normalizePhoneNumber(params.to);
       console.log(`📱 Normalizing phone: ${params.to} -> ${normalizedPhone}`);
 
@@ -70,6 +82,7 @@ class SMSService {
         console.log(`Message: ${params.message}`);
         console.log('Time:', new Date().toLocaleString());
         console.log('==============================\n');
+        if (businessId) await usageMeter.recordUsage('sms', businessId, { feature: params.feature });
         return true;
       }
 
@@ -77,6 +90,7 @@ class SMSService {
 
       console.log(`📱 SMS sent successfully to ${normalizedPhone} via SMS Everyone (Campaign ID: ${result.CampaignId})`);
       console.log(`📱 Credits used: ${result.Credits}, Messages: ${result.Messages}`);
+      if (businessId) await usageMeter.recordUsage('sms', businessId, { feature: params.feature });
       return true;
     } catch (error) {
       console.error('📱 SMS Everyone error:', error);

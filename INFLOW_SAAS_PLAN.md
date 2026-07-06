@@ -32,7 +32,7 @@ This is the design + handoff doc for that work, in the same spirit as `MIGRATION
 | Tier count | Three tiers: **Freemium (free) / Crew / Business** (free entry + two paid) | **Decided (2026-05-30)** — structure draft in §Subscriptions | Freemium (free) tier is the funnel; paid tiers gate features + raise job caps. |
 | Cost-incurring features | Sold as add-ons (call recording, SMS, anything with per-use cost to us) | **Locked** | — |
 | Trial / freemium model | **Freemium** — the Freemium (free) tier is the trial (job-capped, no time limit); optional 14-day Business trial on top | **Decided (2026-05-30)** | — |
-| Pricing (NZD per tier / add-on) | Crew $89/mo, Business $189/mo (draft, ex-GST); Freemium $0 | **Draft — needs validation** | Drives Stripe product setup + sales-page copy. |
+| Pricing (NZD per tier / add-on) | Crew $85/mo, Business $130/mo (ex-GST; revised 2026-06-22); Freemium $0. Bundled allowances: SMS 200/600, AI 75/250 actions | **Draft — needs validation** | Drives Stripe product setup + sales-page copy. |
 | Treemarkables (tenant #1) billing | **Comped — does not pay.** Gets full (Business-equivalent) entitlements at $0 | **Decided (2026-06-02)** | Owner's own business, backfilled as tenant #1 in Phase 1; exercises the full feature set without charging ourselves. |
 | Domain / sales page | Migrate to `inflowapp.co.nz`, build marketing/sales site | **Locked (intent), later phase** | Owned already. |
 
@@ -169,35 +169,40 @@ businessAddOns         -- which add-ons a business has switched on
 
 | | **Freemium** (free) | **Crew** | **Business** |
 |---|---|---|---|
-| **Price (NZD/mo, ex-GST)** | $0 | $89 | $189 |
-| **Annual (2 months free)** | — | $890/yr | $1,890/yr |
+| **Price (NZD/mo, ex-GST)** | $0 | $85 | $130 |
+| **Annual (2 months free)** | — | $850/yr | $1,300/yr |
 | **Who it's for** | Trial / solo owner-operator testing the water | Small established crew | Multi-crew company |
 | **Active jobs / month** | 15 | 75 | Unlimited |
 | **Users** | 1 user | Unlimited | Unlimited |
 | **Core: jobs, invoicing, scheduling, photos** | ✅ | ✅ | ✅ |
 | **Photos** | ✅ max 3 / job | ✅ Unlimited | ✅ Unlimited |
 | **Quoting & Proposals** | ✅ | ✅ | ✅ |
-| **SMS (booking reminders, customer texting)** | — | ✅ capped allowance | ✅ capped allowance |
+| **SMS (booking reminders, customer texting)** | — | ✅ 200/mo capped | ✅ 600/mo capped |
 | **Safety module (SWMS, toolbox talks, checklists)** | — | ✅ | ✅ |
 | **Custom roles & per-staff permissions (RBAC)** | Defaults only (Admin/Crew) | ✅ Full | ✅ Full |
 | **CompanyCam-style: voice captions, public timeline link, before/after** | — | ✅ | ✅ |
-| **Marketing suite (Meta/social planner, campaigns)** | — | — | ✅ |
-| **Advanced analytics & job costing** | — | Basic | ✅ |
+| **AI assist (Smart Dispatch, Speech-to-Quote, extraction, transcription)** | — | ✅ 75 actions/mo | ✅ 250 actions/mo |
+| **Advanced analytics & job costing** | — | ✅ | ✅ |
+| **Integrations (Xero, Google Calendar, Gmail, Mailchimp)** | — | ✅ | ✅ |
 | **Help centre access** | ✅ | ✅ | ✅ |
 | **Support** | Community / docs | Email | Priority |
 | **Card-processing fee** | 3.4% | 2.8% | 2.49% |
+
+> **Revised 2026-06-22 (user):** Marketing suite (social planner / campaigns / reputation) **removed from the offering entirely** — no longer a tier feature. AI assist now sits on **both** paid tiers (Crew limited-use, Business higher limits). Advanced analytics & job costing moved **down to Crew** (now on both paid tiers). Integrations (Xero, Google Calendar, Gmail, **Mailchimp**) work on **both** paid tiers; **Facebook integration dropped**. Net effect: Business now differs from Crew only by job cap (unlimited vs 75), SMS allowance (600 vs 200), AI allowance (250 vs 75 actions), support level, and card fee — see the differentiation note below.
+>
+> **Pricing revised 2026-06-22 (user):** Crew $89→**$85**, Business $189→**$130** (ex-GST). SMS allowances set to **200 (Crew) / 600 (Business)**, AI to **75 / 250 actions/mo** (1 action ≈ one Speech-to-Quote / dispatch run / transcription / extraction, ~10c cost each). At these prices the bundled allowances are a healthy share of revenue (Business worst-case ~65%, typical ~19%). ⚠️ The `stripe_price_id`s still point at the old $89/$189 Stripe Price objects; Stripe prices are immutable, so new $85/$130 Price objects must be created and swapped in before this is live.
 
 **What counts as an "active job":** a job **created within the calendar month** (the counter resets on the 1st) — *not* open-status. Simple to display, simple to meter in Stripe, and can't be gamed by closing/reopening jobs.
 
 **SMS handling** (cost-incurring → **paid tiers only, capped**):
 - **Freemium:** no SMS at all. Keeps the free tier free of any payment method (cleaner funnel) and makes "text your customers / send booking reminders" a concrete Freemium→Crew upgrade hook.
-- **Crew / Business:** bundled monthly allowance (300 / 1000 messages) that rides the tier and is **capped**. Once the cap is hit, choose per-business: **soft-stop** (block further sends until next cycle) or **metered overage** (~10c/SMS) + top-up packs. The allowance is the cost ceiling; overage is opt-in. *(Open sub-choice: soft-stop vs. overage as the default.)*
+- **Crew / Business:** bundled monthly allowance (200 / 600 messages) that rides the tier and is **capped**. Once the cap is hit, choose per-business: **soft-stop** (block further sends until next cycle) or **metered overage** (~10c/SMS) + top-up packs. The allowance is the cost ceiling; overage is opt-in. *(Open sub-choice: soft-stop vs. overage as the default.)*
 
-**AI/GPT assist:** **not on Freemium** (it has no payment method, and GPT/Whisper carry real per-use cost). AI features — Smart Dispatch, Speech-to-Quote, lead/message extraction, video transcription — sit on **Business** (bundled with a fair-use cap) or as a **metered add-on** to Crew. Freemium users see them as locked upsells.
+**AI/GPT assist:** **not on Freemium** (it has no payment method, and GPT/Whisper carry real per-use cost). AI features — Smart Dispatch, Speech-to-Quote, lead/message extraction, video transcription — are **included on both paid tiers** (revised 2026-06-22): **Crew ~75 AI actions/mo**, **Business ~250 AI actions/mo** (1 action = one Speech-to-Quote, Smart Dispatch run, video transcription, or lead/message extraction; ~10c cost each — meter on actions, not tokens). Freemium users see them as locked upsells.
 
 **Add-ons (flat, on top of any *paid* tier):**
 - **Call recording** — flat monthly (per the locked decision; real per-use cost to us).
-- **AI bundle** — metered usage, or a flat "unlimited-AI" add-on for Crew (Business bundles it under fair-use).
+- **AI top-up** — both paid tiers include AI (Crew limited, Business higher); this add-on lifts the cap / adds metered usage beyond the bundled allowance.
 
 **Freemium funnel (resolves open question #2 — freemium chosen):**
 - The **Freemium** (free) tier *is* the trial — no time limit, but single-user, hard-capped at 15 active jobs/month and max 3 photos/job, core features only. Upgrade prompts appear when a business hits the job cap, needs a second user, exceeds the photo limit, or taps a gated feature (SMS, safety, marketing).
@@ -230,23 +235,23 @@ businessAddOns         -- which add-ons a business has switched on
 | Module | Features (from code) | Freemium | Crew | Business |
 |---|---|---|---|---|
 | **Jobs & Dispatch** | Job dashboard, job cards, tasks/Kanban, activity dashboard, daily briefing | Jobs + tasks only | ✅ + dispatch board, job templates | ✅ |
-| **AI Smart Dispatch** | `/ai-scheduler` (GPT) | — | — | ✅ *(AI add-on / fair-use)* |
+| **AI Smart Dispatch** | `/ai-scheduler` (GPT) | — | ✅ *(limited use)* | ✅ *(higher limits)* |
 | **Quoting & Proposals** | Quotes, quote viewer, follow-up automation, quoting-process settings, multi-item proposal builder, proposal viewer/accept | ✅ | ✅ | ✅ |
-| **Speech-to-Quote** | `/api/speech-to-quote` (Whisper + GPT) | — | — | ✅ *(AI add-on)* |
+| **Speech-to-Quote** | `/api/speech-to-quote` (Whisper + GPT) | — | ✅ *(limited use)* | ✅ *(higher limits)* |
 | **Invoicing & Finance** | Invoices, invoice viewer, reconciliation, profitability calculator | Basic invoicing | ✅ + reconciliation, profitability | ✅ |
 | **Scheduling** | Calendar, staff schedule, schedule events | Basic calendar | ✅ + staff schedule | ✅ |
 | **Photos & media** | Photos, annotations, before/after, voice captions, public timeline link | Photos + annotations (max 3 / job) | ✅ Unlimited + captions, timeline | ✅ |
-| **Videos** | Upload/playback (GCS), video transcription (Whisper) | — | ✅ playback/upload | ✅ + transcription *(AI add-on)* |
+| **Videos** | Upload/playback (GCS), video transcription (Whisper) | — | ✅ playback/upload + transcription *(limited use)* | ✅ + transcription *(higher limits)* |
 | **Safety & compliance** (13 modules) | Safety hub, toolbox talks, SWMS, pre-start checklists, equipment register, competency register, notifiable events, JHA, near-miss (+ attachments/witnesses/actions) | — | ✅ Full suite | ✅ + safety analytics |
 | **Equipment** | Catalog, checkouts, maintenance, inductions, vehicle inspections | — | ✅ | ✅ |
 | **Staff & permissions** | Staff management, assignments, competencies, time tracking, RBAC, permissions-management page | Defaults only (Admin/Crew) | ✅ Full custom RBAC + time tracking | ✅ |
 | **Communications** | Email (transactional), SMS templates, comms templates, booking reminders, inquiry auto-reply, unified inbox | Transactional email only | ✅ templates, reminders, auto-reply, inbox | ✅ |
 | **Calls / voice** | Call records, recording playback, in-app calling, unlinked calls (Twilio/Vonage) | — | — | — *(**flat add-on**, any tier)* |
-| **Marketing & reputation** | Marketing planner, social plans, campaigns, reputation, reviews (Google/FB), price rules, blog/SEO | — | — | ✅ |
+| **Marketing & reputation** | ~~Marketing planner, social plans, campaigns, reputation, reviews, price rules, blog/SEO~~ — **REMOVED from offering 2026-06-22 (user)**; code retained for comped Treemarkables only, not sold/gated on any tier | — | — | — |
 | **Documents** | Template builder, document builder, generated docs | — | ✅ | ✅ |
-| **Analytics** | Dashboard stats, today metrics, man-hours, revenue stats/breakdown | Basic dashboard | Basic | ✅ Advanced + job costing |
+| **Analytics** | Dashboard stats, today metrics, man-hours, revenue stats/breakdown | Basic dashboard | ✅ Advanced + job costing | ✅ Advanced + job costing |
 | **Workflows / automation** | Workflow rules, automated triggers | — | — | ✅ |
-| **Integrations** | Xero (accounting/payroll), Google Calendar, Gmail | — | ✅ Xero, Calendar, Gmail | ✅ + Mailchimp, Facebook |
+| **Integrations** | Xero (accounting/payroll), Google Calendar, Gmail, Mailchimp | — | ✅ Xero, Calendar, Gmail, Mailchimp | ✅ Xero, Calendar, Gmail, Mailchimp *(Facebook dropped 2026-06-22)* |
 | **Field specializations** | Tree removal, pruning, stump grinding, hedge trimming, mulch drops planners | ✅ (core job types) | ✅ | ✅ |
 | **Help centre** | `/help` consumption (see `INFLOW_HELP_PLAN.md`) | ✅ | ✅ | ✅ |
 
@@ -260,7 +265,7 @@ businessAddOns         -- which add-ons a business has switched on
 1. Is the **safety suite** a Crew feature (as drafted) or a paid-everywhere differentiator? It's your biggest build and a strong upgrade hook — could justify its own tier or add-on.
 2. Should **Xero** be Crew or Business-only? Accounting integration is a classic "serious business" gate.
 3. Is **15 jobs/month + 1 user + 3 photos/job** the right Freemium cap for multi-day tree work, or does it strangle the funnel?
-4. Does **AI** belong bundled-in-Business, or always a metered add-on (cleaner cost control)?
+4. ~~Does **AI** belong bundled-in-Business, or always a metered add-on?~~ **RESOLVED 2026-06-22 (user):** AI is bundled into **both** paid tiers — Crew limited-use, Business higher limits — with an AI top-up add-on for overage.
 
 ---
 

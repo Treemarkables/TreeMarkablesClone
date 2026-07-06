@@ -17,12 +17,24 @@
  *   - Voice transcription wired into the textareas
  *   - "Notify on arrival" toggle (not a real DB field — needs design call)
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, ChevronDown, Mic, MicOff, Lock, UserPlus, Pencil, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { getJobStatusChip } from "@/lib/jobStatusColors";
+import { useToast } from "@/hooks/use-toast";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
+import { SpeechToQuote } from "@/components/SpeechToQuote";
 import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAutocomplete";
+
+// The Web Speech API (webkitSpeechRecognition) is present on `window` inside the
+// iOS Capacitor WKWebView but is a silent no-op there — recognition never starts,
+// so the inline Voice button did nothing on the native app. Detect the native
+// shell so we can route it to the Whisper-backed recorder instead.
+const isNativeApp = () =>
+  typeof window !== "undefined" &&
+  typeof (window as any).Capacitor !== "undefined" &&
+  !!(window as any).Capacitor.isNativePlatform?.();
 
 interface JobDetailsPanelProps {
   jobId: string;
@@ -35,6 +47,7 @@ interface JobShape {
   internalNotes?: string | null;
   status?: string | null;
   leadSource?: string | null;
+  laneId?: string | null;
   // The existing app saves the on-site / sent-later toggle to
   // quotePresentationMethod (jobs.quote_presentation_method). There's also an
   // older presentationMethod column kicking around, but the desktop UI binds
@@ -125,34 +138,10 @@ function composeCustomerAddress(
   return "";
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  lead: "Lead",
-  quote: "Quote",
-  work_order: "Work Order",
-  scheduled: "Scheduled",
-  completed: "Completed",
-  unsuccessful: "Unsuccessful",
-};
-
-const STATUS_BG: Record<string, string> = {
-  lead: "#fef3c7",
-  quote: "#fef3c7",
-  work_order: "#eff6ff",
-  scheduled: "#f3e8ff",
-  completed: "#dcfce7",
-  unsuccessful: "#fee2e2",
-};
-const STATUS_FG: Record<string, string> = {
-  lead: "#9a3412",
-  quote: "#9a3412",
-  work_order: "#1d4ed8",
-  scheduled: "#6b21a8",
-  completed: "#15803d",
-  unsuccessful: "#b91c1c",
-};
 
 export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // ── Data ────────────────────────────────────────────────────────────────────
   const { data: jobResp } = useQuery<{ success?: boolean; data?: JobShape }>({
@@ -254,6 +243,23 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
     }
   }, [job?.description, proposalDescription]);
   useEffect(() => { if (job) setInternalNotes(job.internalNotes ?? ""); }, [job?.internalNotes]);
+  // Auto-size both textareas to their content (min height comes from rows=3).
+  // scrollHeight is the exact browser measurement — same pattern as the
+  // desktop card's description popup in GlobalJobCard.
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const internalNotesRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const ta = descriptionRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [description]);
+  useEffect(() => {
+    const ta = internalNotesRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [internalNotes]);
   // Per-job address override. Initial value falls back to the customer's
   // address so the field reflects what's shown elsewhere (dispatch board,
   // etc.) — saving writes to job.address, leaving the customer record alone.
@@ -284,6 +290,29 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
     },
+  });
+
+  // Lanes — custom buckets a job can sit in (orthogonal to status). Assigning goes through the
+  // dedicated /lane endpoint (not the auto-save PUT) so on-enter automations fire consistently.
+  const { data: lanesData } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/lanes"],
+    queryFn: async () => {
+      const res = await fetch("/api/lanes");
+      if (!res.ok) throw new Error("Failed to load lanes");
+      return (await res.json()).data;
+    },
+  });
+  // Coerce to an array no matter what the query/cache yields (undefined, null, or a stale
+  // non-array entry) — this feeds .map()/.length below and must never be non-array.
+  const lanes = Array.isArray(lanesData) ? lanesData : [];
+
+  const saveLane = useMutation({
+    mutationFn: async (laneId: string | null) => {
+      const res = await apiRequest("PATCH", `/api/jobs/${jobId}/lane`, { laneId });
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] }),
+    onError: () => toast({ title: "Error", description: "Could not update the lane", variant: "destructive" }),
   });
 
   // ── Change-customer popover (linked-customer card) ─────────────────────
@@ -361,7 +390,8 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   });
 
   const status = job?.status ?? "lead";
-  const statusLabel = STATUS_LABEL[status] ?? status;
+  const statusChip = getJobStatusChip(status);
+  const statusLabel = statusChip.label;
 
   // Link a customer to this job. On first link (no existing job.address),
   // also patch the job's address from the customer so it surfaces in
@@ -418,7 +448,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             </button>
             <span
               className="text-[11px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0"
-              style={{ background: STATUS_BG[status] ?? "#f1f5f9", color: STATUS_FG[status] ?? "#475569" }}
+              style={{ background: statusChip.bg, color: statusChip.fg }}
             >
               {statusLabel}
             </span>
@@ -542,7 +572,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             </div>
             <span
               className="text-[11px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0"
-              style={{ background: STATUS_BG[status] ?? "#f1f5f9", color: STATUS_FG[status] ?? "#475569" }}
+              style={{ background: statusChip.bg, color: statusChip.fg }}
             >
               {statusLabel}
             </span>
@@ -562,7 +592,24 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             />
             <ul className="mt-2 max-h-60 overflow-y-auto bg-white rounded-lg border border-blue-100 divide-y divide-blue-50">
               {filteredPickCustomers.length === 0 ? (
-                <li className="px-3 py-2 text-[13px] text-slate-500">No matches</li>
+                <li className="px-3 py-2">
+                  {pickCustomerSearch.trim() ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewCustomerName(pickCustomerSearch.trim());
+                        setShowNewCustomerForm(true);
+                      }}
+                      className="text-[13px] font-semibold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1"
+                      data-testid="customer-picker-create-from-search"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      Create "{pickCustomerSearch.trim()}" as a new customer
+                    </button>
+                  ) : (
+                    <span className="text-[13px] text-slate-500">No matches</span>
+                  )}
+                </li>
               ) : (
                 filteredPickCustomers.map((c) => (
                   <li key={c.id}>
@@ -662,7 +709,12 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           ) : (
             <button
               type="button"
-              onClick={() => setShowNewCustomerForm(true)}
+              onClick={() => {
+                if (pickCustomerSearch.trim() && !newCustomerName.trim()) {
+                  setNewCustomerName(pickCustomerSearch.trim());
+                }
+                setShowNewCustomerForm(true);
+              }}
               className="mt-3 text-[13px] font-semibold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1"
               data-testid="show-new-customer-form"
             >
@@ -678,6 +730,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
         <div className="flex items-center justify-between mb-2">
           <div className="text-[14px] font-bold text-blue-600">Job Description</div>
           <VoiceButton
+            context="job-description"
             onTranscript={(text) => {
               const next = description ? `${description} ${text}` : text;
               setDescription(next);
@@ -694,14 +747,15 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           </div>
         )}
         <textarea
+          ref={descriptionRef}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           onBlur={() => {
             if ((job?.description ?? "") !== description) saveField.mutate({ description });
           }}
           placeholder="Add a job description..."
-          rows={4}
-          className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 resize-none"
+          rows={3}
+          className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
           data-testid="job-description"
         />
       </div>
@@ -714,6 +768,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             Internal Notes
           </div>
           <VoiceButton
+            context="internal-notes"
             onTranscript={(text) => {
               const next = internalNotes ? `${internalNotes} ${text}` : text;
               setInternalNotes(next);
@@ -725,20 +780,21 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           Staff only — not visible to customers
         </div>
         <textarea
+          ref={internalNotesRef}
           value={internalNotes}
           onChange={(e) => setInternalNotes(e.target.value)}
           onBlur={() => {
             if ((job?.internalNotes ?? "") !== internalNotes) saveField.mutate({ internalNotes });
           }}
           placeholder="Add internal notes..."
-          rows={4}
-          className="w-full bg-white border border-orange-200 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+          rows={3}
+          className="w-full bg-white border border-orange-200 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-orange-400 resize-none overflow-hidden"
           data-testid="internal-notes"
         />
       </div>
 
       {/* ── Status grid ── */}
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <SelectField
           label="Job Status"
           value={status}
@@ -776,6 +832,15 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             { value: "", label: "—" },
             { value: "on_site", label: "On-site" },
             { value: "sent_later", label: "Sent later" },
+          ]}
+        />
+        <SelectField
+          label="Lane"
+          value={job?.laneId ?? ""}
+          onChange={(v) => saveLane.mutate(v || null)}
+          options={[
+            { value: "", label: lanes.length ? "— None —" : "No lanes — add in Settings" },
+            ...lanes.map((l) => ({ value: l.id, label: l.name })),
           ]}
         />
       </div>
@@ -832,6 +897,95 @@ function ContactsCard({
     },
   });
 
+  // ── Add saved contact (inline form) ──────────────────────────────────────
+  // Saves a person under this customer so they can be reused across jobs, then
+  // auto-loads them into the active contact tab. Mirrors the desktop job card's
+  // createContactMutation (GlobalJobCard) but uses the mobile inline-form style.
+  const emptyContactDraft = { firstName: "", lastName: "", role: "", email: "", mobile: "", phone: "" };
+  const [showAddContact, setShowAddContact] = useState(false);
+  // When non-null, the inline form is editing the saved contact with this id
+  // (PATCH) instead of adding a new one (POST). The form UI is shared.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [contactDraft, setContactDraft] = useState(emptyContactDraft);
+  const createContact = useMutation<SavedContact, Error, typeof emptyContactDraft>({
+    mutationFn: async (input) => {
+      if (!customerId) throw new Error("no customer id");
+      const res = await apiRequest("POST", `/api/customers/${customerId}/contacts`, input);
+      const json = await res.json();
+      if (!json?.success || !json?.data) {
+        throw new Error(json?.message || "Couldn't save the contact. Please try again.");
+      }
+      return json.data as SavedContact;
+    },
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers", customerId, "contacts"] });
+      // Auto-load the freshly-created contact into whichever tab is active.
+      const patch: Partial<JobShape> = tab === "job"
+        ? {
+            jobContactFirstName: created.firstName ?? null,
+            jobContactLastName: created.lastName ?? null,
+            jobContactEmail: created.email ?? null,
+            jobContactMobile: created.mobile ?? null,
+            jobContactPhone: created.phone ?? null,
+          }
+        : {
+            tenantContactFirstName: created.firstName ?? null,
+            tenantContactLastName: created.lastName ?? null,
+            tenantContactEmail: created.email ?? null,
+            tenantContactMobile: created.mobile ?? null,
+            tenantContactPhone: created.phone ?? null,
+          };
+      saveField.mutate(patch);
+      setShowAddContact(false);
+      setContactDraft(emptyContactDraft);
+    },
+  });
+
+  // Edit an existing saved contact (PATCH /api/customer-contacts/:id). Lets the
+  // user fix a contact's email/mobile/etc. so the change persists to the contact
+  // record itself — not just a per-job override.
+  const updateContact = useMutation<SavedContact, Error, { id: string; patch: typeof emptyContactDraft }>({
+    mutationFn: async ({ id, patch }) => {
+      const res = await apiRequest("PATCH", `/api/customer-contacts/${id}`, patch);
+      const json = await res.json();
+      if (!json?.success || !json?.data) {
+        throw new Error(json?.message || "Couldn't update the contact. Please try again.");
+      }
+      return json.data as SavedContact;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers", customerId, "contacts"] });
+      setEditingId(null);
+      setShowAddContact(false);
+      setContactDraft(emptyContactDraft);
+    },
+  });
+
+  // Open the inline form in edit mode, pre-filled from the chosen contact.
+  const openEditContact = (sc: SavedContact) => {
+    setShowAddContact(false);
+    setEditingId(sc.id);
+    setContactDraft({
+      firstName: sc.firstName ?? "",
+      lastName: sc.lastName ?? "",
+      role: sc.role ?? "",
+      email: sc.email ?? "",
+      mobile: sc.mobile ?? "",
+      phone: sc.phone ?? "",
+    });
+  };
+
+  const closeContactForm = () => {
+    setShowAddContact(false);
+    setEditingId(null);
+    setContactDraft(emptyContactDraft);
+  };
+
+  // The inline form is shown for either add or edit.
+  const contactFormOpen = showAddContact || editingId !== null;
+  const contactFormPending = createContact.isPending || updateContact.isPending;
+  const contactFormError = editingId !== null ? updateContact.error : createContact.error;
+
   // Pick the right set of fields based on which tab is active.
   // For "job" tab, fall back to the customer record when job-level overrides are
   // empty — leads created from the website only ever stamp jobContactMobile/Phone
@@ -877,7 +1031,16 @@ function ContactsCard({
     const next = draft[k];
     const current = fields[k];
     if ((next ?? "") === (current ?? "")) return;
-    saveField.mutate({ [fieldKey(k)]: next || null } as Partial<JobShape>);
+    const key = fieldKey(k);
+    const trimmed = (next ?? "").trim();
+    if (trimmed === "") {
+      // Intentional clear. The server's anti-wipe safeguard restores empty
+      // values UNLESS the field is named in _clearFields, so without this a
+      // user can never remove a contact number/email — it just reappears.
+      saveField.mutate({ [key]: null, _clearFields: [key] } as unknown as Partial<JobShape>);
+    } else {
+      saveField.mutate({ [key]: trimmed } as Partial<JobShape>);
+    }
   };
 
   return (
@@ -899,15 +1062,126 @@ function ContactsCard({
         <button
           type="button"
           onClick={() => {
-            // eslint-disable-next-line no-console
-            console.warn("[JobDetailsPanel] + Add saved contact not wired up yet — Phase B.6");
+            if (!customerId) return;
+            if (contactFormOpen) {
+              closeContactForm();
+            } else {
+              setEditingId(null);
+              setContactDraft(emptyContactDraft);
+              setShowAddContact(true);
+            }
           }}
-          className="text-[14px] font-bold text-blue-600 flex-shrink-0 self-start"
+          disabled={!customerId}
+          className="text-[14px] font-bold text-blue-600 flex-shrink-0 self-start disabled:opacity-50"
           data-testid="add-saved-contact"
         >
-          + Add
+          {contactFormOpen ? "Close" : "+ Add"}
         </button>
       </div>
+
+      {/* Add/edit-contact inline form — opens under the banner via + Add, or via
+          the Edit button on a saved contact. */}
+      {contactFormOpen && (
+        <div className="mt-2 border border-blue-200 rounded-xl p-3 space-y-2 bg-blue-50/40">
+          <div className="text-[12px] font-bold uppercase tracking-wider text-blue-700">
+            {editingId !== null ? "Edit contact" : "New contact"}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text"
+              value={contactDraft.firstName}
+              onChange={(e) => setContactDraft({ ...contactDraft, firstName: e.target.value })}
+              placeholder="First name"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-first-name"
+              autoFocus
+            />
+            <input
+              type="text"
+              value={contactDraft.lastName}
+              onChange={(e) => setContactDraft({ ...contactDraft, lastName: e.target.value })}
+              placeholder="Last name"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-last-name"
+            />
+          </div>
+          <input
+            type="text"
+            value={contactDraft.role}
+            onChange={(e) => setContactDraft({ ...contactDraft, role: e.target.value })}
+            placeholder="Role (e.g. Manager)"
+            className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+            data-testid="add-contact-role"
+          />
+          <input
+            type="email"
+            value={contactDraft.email}
+            onChange={(e) => setContactDraft({ ...contactDraft, email: e.target.value })}
+            placeholder="Email"
+            className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+            data-testid="add-contact-email"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="tel"
+              value={contactDraft.mobile}
+              onChange={(e) => setContactDraft({ ...contactDraft, mobile: e.target.value })}
+              placeholder="Mobile"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-mobile"
+            />
+            <input
+              type="tel"
+              value={contactDraft.phone}
+              onChange={(e) => setContactDraft({ ...contactDraft, phone: e.target.value })}
+              placeholder="Phone (landline)"
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="add-contact-phone"
+            />
+          </div>
+          {contactFormError && (
+            <p className="text-[12px] text-red-700">{contactFormError.message}</p>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={closeContactForm}
+              disabled={contactFormPending}
+              className="flex-1 bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+              data-testid="add-contact-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const draft = {
+                  firstName: contactDraft.firstName.trim(),
+                  lastName: contactDraft.lastName.trim(),
+                  role: contactDraft.role.trim(),
+                  email: contactDraft.email.trim(),
+                  mobile: contactDraft.mobile.trim(),
+                  phone: contactDraft.phone.trim(),
+                };
+                if (!draft.firstName && !draft.lastName) return;
+                if (editingId !== null) {
+                  updateContact.mutate({ id: editingId, patch: draft });
+                } else {
+                  createContact.mutate(draft);
+                }
+              }}
+              disabled={
+                (!contactDraft.firstName.trim() && !contactDraft.lastName.trim()) ||
+                contactFormPending
+              }
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-[14px] font-semibold disabled:opacity-60"
+              data-testid="add-contact-save"
+            >
+              {contactFormPending ? "Saving…" : "Save contact"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Saved contacts list — when present */}
       {savedContacts.length > 0 && (
@@ -915,38 +1189,52 @@ function ContactsCard({
           {savedContacts.map((sc) => {
             const name = [sc.firstName, sc.lastName].filter(Boolean).join(" ") || "(unnamed)";
             return (
-              <button
+              <div
                 key={sc.id}
-                type="button"
-                onClick={() => {
-                  // Tap-to-load: populate the active contact tab with this saved contact.
-                  const patch: Partial<JobShape> = tab === "job"
-                    ? {
-                        jobContactFirstName: sc.firstName ?? null,
-                        jobContactLastName: sc.lastName ?? null,
-                        jobContactEmail: sc.email ?? null,
-                        jobContactMobile: sc.mobile ?? null,
-                        jobContactPhone: sc.phone ?? null,
-                      }
-                    : {
-                        tenantContactFirstName: sc.firstName ?? null,
-                        tenantContactLastName: sc.lastName ?? null,
-                        tenantContactEmail: sc.email ?? null,
-                        tenantContactMobile: sc.mobile ?? null,
-                        tenantContactPhone: sc.phone ?? null,
-                      };
-                  saveField.mutate(patch);
-                }}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-left"
+                className="w-full flex items-center gap-1 px-1 rounded-lg border border-slate-200 hover:bg-slate-50"
               >
-                <div className="min-w-0">
-                  <div className="text-[14px] font-semibold text-slate-900 truncate">{name}</div>
-                  {sc.role && <div className="text-[12px] text-slate-500 truncate">{sc.role}</div>}
-                </div>
-                {sc.isPrimary && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">Primary</span>
-                )}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Tap-to-load: populate the active contact tab with this saved contact.
+                    const patch: Partial<JobShape> = tab === "job"
+                      ? {
+                          jobContactFirstName: sc.firstName ?? null,
+                          jobContactLastName: sc.lastName ?? null,
+                          jobContactEmail: sc.email ?? null,
+                          jobContactMobile: sc.mobile ?? null,
+                          jobContactPhone: sc.phone ?? null,
+                        }
+                      : {
+                          tenantContactFirstName: sc.firstName ?? null,
+                          tenantContactLastName: sc.lastName ?? null,
+                          tenantContactEmail: sc.email ?? null,
+                          tenantContactMobile: sc.mobile ?? null,
+                          tenantContactPhone: sc.phone ?? null,
+                        };
+                    saveField.mutate(patch);
+                  }}
+                  className="flex-1 min-w-0 flex items-center justify-between px-2 py-2 text-left"
+                  data-testid={`load-saved-contact-${sc.id}`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-semibold text-slate-900 truncate">{name}</div>
+                    {sc.role && <div className="text-[12px] text-slate-500 truncate">{sc.role}</div>}
+                  </div>
+                  {sc.isPrimary && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">Primary</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openEditContact(sc)}
+                  className="flex-shrink-0 p-2 text-slate-400 hover:text-blue-600"
+                  data-testid={`edit-saved-contact-${sc.id}`}
+                  aria-label={`Edit ${name}`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </div>
             );
           })}
         </div>
@@ -992,7 +1280,64 @@ function ContactsCard({
 
 // ─── Voice transcription button ─────────────────────────────────────────────
 
-function VoiceButton({ onTranscript }: { onTranscript: (text: string) => void }) {
+type VoiceContext = "job-description" | "internal-notes";
+
+function VoiceButton({
+  onTranscript,
+  context,
+}: {
+  onTranscript: (text: string) => void;
+  context: VoiceContext;
+}) {
+  // Web Speech recognition doesn't function inside the iOS Capacitor WKWebView,
+  // so the native app uses the Whisper-backed SpeechToQuote recorder (MediaRecorder
+  // → /api/speech-to-quote), which is iOS-hardened and uses the mic permission
+  // declared in Info.plist. Real browsers keep the lighter inline live path.
+  // isNativeApp() is stable for the lifetime of the app, so branching on it here
+  // doesn't violate the rules of hooks (each child calls its own hooks).
+  if (isNativeApp()) {
+    return <NativeVoiceButton onTranscript={onTranscript} context={context} />;
+  }
+  return <WebVoiceButton onTranscript={onTranscript} />;
+}
+
+// Native app: open the Whisper recorder and append the returned transcription.
+function NativeVoiceButton({
+  onTranscript,
+  context,
+}: {
+  onTranscript: (text: string) => void;
+  context: VoiceContext;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 text-[14px] font-bold text-purple-600"
+        data-testid="voice-button"
+      >
+        <Mic className="w-3.5 h-3.5" />
+        Voice
+      </button>
+      <SpeechToQuote
+        open={open}
+        onOpenChange={setOpen}
+        context={context}
+        onQuoteGenerated={(data: any) => {
+          const text =
+            typeof data?.transcription === "string" ? data.transcription.trim() : "";
+          if (text) onTranscript(text);
+        }}
+      />
+    </>
+  );
+}
+
+// Browsers: inline live transcription via the Web Speech API.
+function WebVoiceButton({ onTranscript }: { onTranscript: (text: string) => void }) {
   const { isListening, isSupported, toggleListening } = useSpeechToText({
     onResult: (text) => {
       const trimmed = text.trim();
@@ -1041,6 +1386,7 @@ function InputField({
       onChange={(e) => onChange(e.target.value)}
       onBlur={onBlur}
       placeholder={placeholder}
+      aria-label={placeholder}
       className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500"
     />
   );

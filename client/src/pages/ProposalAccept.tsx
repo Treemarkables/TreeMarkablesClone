@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Check, AlertCircle, Loader2, ArrowLeft, ShieldCheck } from "lucide-react";
+import { Check, AlertCircle, Download, Loader2, ArrowLeft, ShieldCheck } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
@@ -48,6 +48,24 @@ export default function ProposalAccept() {
       setAcceptanceStatus('deposit_cancelled');
     }
   }, []);
+
+  // Quotes share this page (same proposals row, templateUsed === 'quote').
+  // The ?type=quote hint from the email/PDF link sets the labels before data
+  // loads; once loaded, the record itself is authoritative.
+  const quoteTypeHint = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('type') === 'quote';
+
+  // Tell the server the customer opened the document. Idempotent server-side:
+  // the first hit flips status sent → viewed and writes a diary entry.
+  const viewedSentRef = useRef(false);
+  useEffect(() => {
+    if (!proposalId || viewedSentRef.current) return;
+    viewedSentRef.current = true;
+    fetch(`/api/proposals/${proposalId}/viewed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => {});
+  }, [proposalId]);
 
   const handleChoiceSelect = (lineItemId: string, choiceId: string) => {
     setSelectedChoices(prev => ({ ...prev, [lineItemId]: choiceId }));
@@ -110,16 +128,22 @@ export default function ProposalAccept() {
   const proposal = proposalDataResponse?.data?.proposal;
   const customer = proposalDataResponse?.data?.customer;
   const job = proposalDataResponse?.data?.job;
+  const isQuote = proposal ? proposal.templateUsed === 'quote' : quoteTypeHint;
+  const docLabel = isQuote ? 'Quote' : 'Proposal';
+  const docLower = isQuote ? 'quote' : 'proposal';
+  // Company fields come from the server payload (scoped to the proposal's tenant).
+  // The fallback is intentionally BLANK — never another business's details — for
+  // the rare case the server returns no template.
   const template = proposalDataResponse?.data?.template || {
     id: 'default',
     name: 'Default Template',
     type: 'proposal',
-    companyName: 'Treemarkables',
-    companyPhone: '+64 6 867 1234',
-    companyEmail: 'info@treemarkables.co.nz',
-    companyAddress: 'Gisborne, New Zealand',
+    companyName: '',
+    companyPhone: '',
+    companyEmail: '',
+    companyAddress: '',
     paymentTerms: 'This proposal is valid for 30 days from the date above. Payment due within 7 days of acceptance.',
-    gstNumber: '123-456-789'
+    gstNumber: ''
   };
 
   // If we already loaded the proposal and it's pending deposit (e.g. customer
@@ -152,7 +176,7 @@ export default function ProposalAccept() {
             <div className="mb-6">
               <Loader2 className="w-16 h-16 text-orange-600 animate-spin mx-auto" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Loading Proposal</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Loading {docLabel}</h1>
             <p className="text-gray-600">Please wait...</p>
           </CardContent>
         </Card>
@@ -166,9 +190,9 @@ export default function ProposalAccept() {
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Proposal Not Found</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{docLabel} Not Found</h1>
             <p className="text-gray-600 mb-6">
-              The proposal you're looking for doesn't exist or may have been removed.
+              The {docLower} you're looking for doesn't exist or may have been removed.
             </p>
             <Link href="/">
               <Button variant="outline">
@@ -186,8 +210,8 @@ export default function ProposalAccept() {
 
   const depositDescription = depositInfo
     ? depositInfo.depositType === 'percent'
-      ? `A deposit of ${depositInfo.depositValue}% (${formatNzd(depositInfo.depositAmount)} of ${formatNzd(depositInfo.totalAmount)}) is required before this proposal can be finalized.`
-      : `A deposit of ${formatNzd(depositInfo.depositAmount)} is required before this proposal can be finalized.`
+      ? `A deposit of ${depositInfo.depositValue}% (${formatNzd(depositInfo.depositAmount)} of ${formatNzd(depositInfo.totalAmount)}) is required before this ${docLower} can be finalized.`
+      : `A deposit of ${formatNzd(depositInfo.depositAmount)} is required before this ${docLower} can be finalized.`
     : '';
 
   const depositDialog = depositInfo ? (
@@ -271,14 +295,14 @@ export default function ProposalAccept() {
               </div>
               <div className="flex-1 min-w-0">
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                  Proposal Accepted Successfully!
+                  {docLabel} Accepted Successfully!
                 </h1>
                 <p className="text-gray-600 mb-4">
-                  Thank you for accepting our proposal. Treemarkables will be in touch soon to schedule your job.
+                  Thank you for accepting our {docLower}. Treemarkables will be in touch soon to schedule your job.
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="font-semibold text-gray-700">Proposal #:</span>
+                    <span className="font-semibold text-gray-700">{docLabel} #:</span>
                     <span className="text-gray-900">{proposal.proposalNumber}</span>
                   </div>
                   {customer && (
@@ -287,6 +311,14 @@ export default function ProposalAccept() {
                       <span className="text-gray-900">{customer.name}</span>
                     </div>
                   )}
+                </div>
+                <div className="mt-4">
+                  <Button variant="outline" asChild data-testid="button-download-pdf-success">
+                    <a href={`/api/proposals/${proposalId}/pdf`}>
+                      <Download className="w-4 h-4 mr-2" />
+                      Download PDF
+                    </a>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -337,7 +369,7 @@ export default function ProposalAccept() {
               <div className="space-y-3 text-gray-600">
                 <p className="flex items-start gap-2">
                   <Check className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                  <span>Your proposal has been accepted and converted to a work order</span>
+                  <span>Your {docLower} has been accepted and converted to a work order</span>
                 </p>
                 <p className="flex items-start gap-2">
                   <Check className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
@@ -345,7 +377,7 @@ export default function ProposalAccept() {
                 </p>
                 <p className="flex items-start gap-2">
                   <Check className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                  <span>If you have any questions, please contact us at {template.companyPhone}</span>
+                  <span>If you have any questions, please contact us{template.companyPhone ? ` at ${template.companyPhone}` : ""}</span>
                 </p>
               </div>
             </CardContent>
@@ -362,7 +394,7 @@ export default function ProposalAccept() {
         <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-3 sm:gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Review Your Proposal</h1>
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Review Your {docLabel}</h1>
               <div className="flex flex-wrap gap-2 mt-0.5 sm:mt-1">
                 <span className="text-xs sm:text-sm text-gray-600">
                   {proposal.proposalNumber}
@@ -375,35 +407,42 @@ export default function ProposalAccept() {
                 )}
               </div>
             </div>
-            <Button
-              onClick={() => acceptProposalMutation.mutate()}
-              disabled={acceptProposalMutation.isPending}
-              className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap shrink-0 shadow-lg"
-              size="default"
-              data-testid="button-accept-proposal-sticky"
-            >
-              {acceptProposalMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Accepting...
-                </>
-              ) : proposal?.status === 'accepted' ? (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Already Accepted
-                </>
-              ) : proposal?.status === 'accepted_pending_deposit' ? (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Continue to deposit
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Accept Proposal
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="outline" size="icon" asChild data-testid="button-download-pdf">
+                <a href={`/api/proposals/${proposalId}/pdf`} aria-label="Download PDF">
+                  <Download className="w-4 h-4" />
+                </a>
+              </Button>
+              <Button
+                onClick={() => acceptProposalMutation.mutate()}
+                disabled={acceptProposalMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap shrink-0 shadow-lg"
+                size="default"
+                data-testid="button-accept-proposal-sticky"
+              >
+                {acceptProposalMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Accepting...
+                  </>
+                ) : proposal?.status === 'accepted' ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Already Accepted
+                  </>
+                ) : proposal?.status === 'accepted_pending_deposit' ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Continue to deposit
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Accept {docLabel}
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

@@ -5,7 +5,8 @@ const config: CapacitorConfig = {
   appName: "Inflow",
   webDir: "dist/public",
   server: {
-    url: "https://app.treemarkables.co.nz",
+    // The native shells load the live app from its own domain.
+    url: "https://app.inflowapp.co.nz",
     cleartext: false,
   },
   ios: {

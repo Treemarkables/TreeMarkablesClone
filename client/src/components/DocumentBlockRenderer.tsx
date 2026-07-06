@@ -121,6 +121,11 @@ function openPhotoLightbox(urls: string[], startIndex: number): void {
 }
 
 export interface DocumentRenderContext {
+  // Document noun for headings/labels — 'Invoice' (default), 'Proposal', or
+  // 'Quote'. The header and meta blocks are shared across all three document
+  // types, so without this the customer-facing proposal/quote pages render
+  // "Invoice #PROP-…".
+  docLabel?: string;
   invoiceNumber: string;
   issueDate: Date;
   dueDate: Date;
@@ -342,7 +347,7 @@ export function renderDocumentBlock(
                   className="w-auto max-w-full h-auto object-contain flex-shrink-0"
                 />
                 <div className="min-w-0">
-                  <h1 className="text-base font-bold break-words" style={{ color: textPrimary }}>Invoice #{ctx.invoiceNumber}</h1>
+                  <h1 className="text-base font-bold break-words" style={{ color: textPrimary }}>{ctx.docLabel ?? 'Invoice'} #{ctx.invoiceNumber}</h1>
                   {cfg.showCompanyName && <p className="text-xs mt-1 break-words" style={{ color: textSecondary }}>{co.name}</p>}
                 </div>
               </div>
@@ -357,7 +362,7 @@ export function renderDocumentBlock(
                   />
                 </div>
                 <div className={`flex-1 min-w-0 ${logoAlign === 'right' ? 'text-left' : 'text-right'}`}>
-                  <h1 className="text-base font-bold break-words" style={{ color: textPrimary, wordBreak: 'break-word' }}>Invoice #{ctx.invoiceNumber}</h1>
+                  <h1 className="text-base font-bold break-words" style={{ color: textPrimary, wordBreak: 'break-word' }}>{ctx.docLabel ?? 'Invoice'} #{ctx.invoiceNumber}</h1>
                   {cfg.showCompanyName && <p className="text-xs mt-1 break-words" style={{ color: textSecondary, wordBreak: 'break-word' }}>{co.name}</p>}
                 </div>
               </div>
@@ -382,7 +387,7 @@ export function renderDocumentBlock(
       const cfg = block.config as DocumentBlockConfigInvoiceMeta;
       return (
         <div key={block.id} className="mb-4 text-xs space-y-1">
-          {cfg.showInvoiceNumber && <div className="flex justify-between gap-2"><span className="text-gray-600">{cfg.labelInvoice || 'Invoice #'}</span><span className="font-medium">{ctx.invoiceNumber}</span></div>}
+          {cfg.showInvoiceNumber && <div className="flex justify-between gap-2"><span className="text-gray-600">{cfg.labelInvoice && cfg.labelInvoice !== 'Invoice #' ? cfg.labelInvoice : `${ctx.docLabel ?? 'Invoice'} #`}</span><span className="font-medium">{ctx.invoiceNumber}</span></div>}
           {cfg.showIssueDate && <div className="flex justify-between gap-2"><span className="text-gray-600">{cfg.labelIssueDate || 'Issue Date'}</span><span>{format(ctx.issueDate, 'dd/MM/yyyy')}</span></div>}
           {cfg.showDueDate && <div className="flex justify-between gap-2"><span className="text-gray-600">{cfg.labelDueDate || 'Due Date'}</span><span>{format(ctx.dueDate, 'dd/MM/yyyy')}</span></div>}
           {cfg.showJobNumber && ctx.jobNumber ? <div className="flex justify-between gap-2"><span className="text-gray-600">Job #</span><span>{ctx.jobNumber}</span></div> : null}
@@ -523,7 +528,7 @@ export function renderDocumentBlock(
         <div key={block.id} className="mb-4 text-xs space-y-1">
           {cfg.showProposalNumber && ctx.proposalNumber && (
             <div className="flex justify-between gap-2">
-              <span className="text-gray-600">{cfg.labelProposal || 'Proposal #'}</span>
+              <span className="text-gray-600">{cfg.labelProposal && cfg.labelProposal !== 'Proposal #' ? cfg.labelProposal : `${ctx.docLabel ?? 'Proposal'} #`}</span>
               <span className="font-medium">{ctx.proposalNumber}</span>
             </div>
           )}

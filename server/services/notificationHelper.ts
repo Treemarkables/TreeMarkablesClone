@@ -9,6 +9,7 @@ interface NotificationOptions {
   title: string;
   body: string;
   clickAction?: string;
+  collapseId?: string;
   data?: Record<string, any>;
 }
 
@@ -34,7 +35,7 @@ export async function notifyEmployee(employeeId: string, options: NotificationOp
     // Send to all active devices
     let successCount = 0;
     for (const tokenRecord of tokens) {
-      const sent = await firebaseMessagingService.sendToDevice(tokenRecord.token, options);
+      const sent = await firebaseMessagingService.sendToDevice(tokenRecord.token, options, tokenRecord.deviceInfo || undefined);
       if (sent) {
         successCount++;
         // Mark token as recently used
@@ -75,6 +76,7 @@ export async function notifyJobAssignment(employeeId: string, jobNumber: string,
     title: '📋 New Job Assignment',
     body: `You've been assigned to Job #${jobNumber}${jobTitle ? `: ${jobTitle}` : ''}`,
     clickAction: clickUrl,
+    collapseId: `job-assignment-${jobNumber}`,
     data: {
       type: 'job_assignment',
       jobNumber,
@@ -98,6 +100,7 @@ export async function notifyScheduleChange(employeeId: string, jobNumber: string
     title: '🕒 Schedule Update',
     body: `Job #${jobNumber} has been rescheduled to ${newDate}`,
     clickAction: clickUrl,
+    collapseId: `schedule-change-${jobNumber}`,
     data: {
       type: 'schedule_change',
       jobNumber,
@@ -366,7 +369,7 @@ export async function createConversationNotification(conversation: {
 }) {
   try {
     await storage.createNotification({
-      title: `New ${conversation.source || 'conversation'} contact`,
+      title: `New ${conversation.source === 'web_form' ? 'website' : (conversation.source || 'conversation')} contact`,
       message: conversation.title || 'New inquiry received',
       type: 'new_conversation',
       priority: conversation.priority === 'urgent' ? 'high' : 'medium',
@@ -381,6 +384,7 @@ export async function createConversationNotification(conversation: {
     const sourceLabel = conversation.source === 'email' ? 'Email' :
                         conversation.source === 'sms' ? 'SMS' :
                         conversation.source === 'phone' ? 'Call' :
+                        conversation.source === 'web_form' ? 'Website' :
                         conversation.source || 'Message';
 
     const jobId = await getConversationJobId(conversation.id);
@@ -572,6 +576,7 @@ export async function notifyConversationReply(conversation: {
     const sourceLabel = conversation.source === 'email' ? 'Email' :
                         conversation.source === 'sms' ? 'SMS' :
                         conversation.source === 'phone' ? 'Call' :
+                        conversation.source === 'web_form' ? 'Website' :
                         conversation.source || 'Message';
 
     const senderName = conversation.customerName || conversation.title || 'Customer';

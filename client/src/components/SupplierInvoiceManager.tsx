@@ -34,6 +34,8 @@ import {
   ExternalLink,
   ArrowRightLeft,
   Check,
+  Mail,
+  Copy,
 } from "lucide-react";
 
 interface SupplierInvoiceManagerProps {
@@ -125,6 +127,20 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
   const [form, setForm] = useState<FormState>(emptyForm());
   const [extracting, setExtracting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [copiedAddress, setCopiedAddress] = useState(false);
+
+  // Per-job forwarding address. The jobId encodes both the job and (via the job
+  // row) the tenant, so a bill emailed/CC'd here lands on this job automatically.
+  const forwardingAddress = `bills-${jobId}@jobs.treemarkables.co.nz`;
+  const copyForwardingAddress = async () => {
+    try {
+      await navigator.clipboard.writeText(forwardingAddress);
+      setCopiedAddress(true);
+      window.setTimeout(() => setCopiedAddress(false), 2000);
+    } catch {
+      /* clipboard unavailable — ignore */
+    }
+  };
 
   const { data: listResp, isLoading } = useQuery({
     queryKey: ["/api/jobs", jobId, "supplier-invoices"],
@@ -158,6 +174,11 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
     queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
     queryClient.invalidateQueries({
       queryKey: ["/api/supplier-invoices/supplier-names"],
+    });
+    // Supplier costs feed the back-costing rollup; refresh it so margins
+    // update the moment a bill is added, edited, deleted, or rebilled.
+    queryClient.invalidateQueries({
+      queryKey: ["/api/jobs", jobId, "back-costing"],
     });
   };
 
@@ -269,6 +290,9 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
   };
 
   const buildPayload = () => ({
+    // A human save (manual entry or reviewing an emailed bill) always confirms it
+    // — only the forward-to-inbox webhook leaves bills as pending_review.
+    status: "confirmed",
     supplierName: form.supplierName.trim(),
     invoiceNumber: form.invoiceNumber || null,
     invoiceDate: form.invoiceDate || null,
@@ -345,6 +369,17 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
     },
   });
 
+  // Accept an emailed (pending_review) bill as-is, so it starts counting in back
+  // costing without opening the full review dialog.
+  const confirmMutation = useMutation({
+    mutationFn: async (id: string) =>
+      apiRequest("PATCH", `/api/supplier-invoices/${id}`, { status: "confirmed" }),
+    onSuccess: () => invalidate(),
+    onError: (e: any) => {
+      toast({ title: "Could not confirm", description: e?.message, variant: "destructive" });
+    },
+  });
+
   const totalCost = invoices.reduce(
     (sum, inv) => sum + (parseFloat(inv.total) || 0),
     0,
@@ -373,6 +408,34 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
         Snap a photo or attach a PDF of a supplier bill — it's read automatically.
         Costs feed your job profit; flag lines to rebill the customer with markup.
       </p>
+
+      {/* Forward-to-inbox: email or auto-CC bills straight onto this job. */}
+      <div className="rounded-lg border border-border bg-muted/30 p-3">
+        <div className="flex items-center gap-2 text-xs font-medium text-gray-700">
+          <Mail className="h-4 w-4 text-blue-600" />
+          Or email bills straight to this job
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <code className="flex-1 truncate rounded bg-background px-2 py-1 text-xs" title={forwardingAddress}>
+            {forwardingAddress}
+          </code>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs shrink-0"
+            onClick={copyForwardingAddress}
+            data-testid="button-copy-forwarding-address"
+          >
+            {copiedAddress ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+            {copiedAddress ? "Copied" : "Copy"}
+          </Button>
+        </div>
+        <p className="mt-2 text-[11px] text-gray-500">
+          Forward a supplier's emailed invoice here, or ask the supplier to CC it.
+          It's read automatically and appears above for you to confirm.
+        </p>
+      </div>
 
       {/* Capture buttons */}
       <div className="flex flex-wrap gap-2">
@@ -443,10 +506,13 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
             const catLabel =
               COST_CATEGORIES.find((c) => c.value === inv.costCategory)?.label ||
               inv.costCategory;
+            const isPending = inv.status === "pending_review";
             return (
               <div
                 key={inv.id}
-                className="flex items-center gap-3 border rounded-lg p-3 bg-card"
+                className={`flex items-center gap-3 border rounded-lg p-3 bg-card ${
+                  isPending ? "border-amber-300 bg-amber-50/50 dark:bg-amber-950/20" : ""
+                }`}
                 data-testid={`supplier-invoice-${inv.id}`}
               >
                 <button
@@ -456,6 +522,7 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                   }
                   className="shrink-0 h-12 w-12 rounded-md overflow-hidden bg-muted flex items-center justify-center"
                   title={inv.documentUrl ? "View document" : "No document"}
+                  aria-label={inv.documentUrl ? "View document" : "No document"}
                 >
                   {inv.documentUrl && !isPdf ? (
                     <img
@@ -476,6 +543,11 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                     <Badge variant="secondary" className="text-[10px]">
                       {catLabel}
                     </Badge>
+                    {isPending && (
+                      <Badge className="text-[10px] bg-amber-100 text-amber-900">
+                        Review — emailed
+                      </Badge>
+                    )}
                     {inv.rebilledAt && (
                       <Badge className="text-[10px] bg-green-100 text-green-800">
                         <Check className="h-3 w-3 mr-0.5" /> Rebilled
@@ -490,7 +562,22 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
-                  {!inv.rebilledAt && (
+                  {isPending && (
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      disabled={confirmMutation.isPending}
+                      onClick={() => confirmMutation.mutate(inv.id)}
+                      title="Accept this emailed bill and count it in back costing"
+                      data-testid={`button-confirm-${inv.id}`}
+                    >
+                      <Check className="h-4 w-4 mr-1" />
+                      Confirm
+                    </Button>
+                  )}
+                  {!isPending && !inv.rebilledAt && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -513,6 +600,7 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                       className="h-8 w-8"
                       onClick={() => window.open(inv.documentUrl, "_blank")}
                       title="View document"
+                      aria-label="View document"
                     >
                       <ExternalLink className="h-4 w-4" />
                     </Button>
@@ -524,6 +612,7 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                     className="h-8 w-8"
                     onClick={() => openEdit(inv)}
                     data-testid={`button-edit-${inv.id}`}
+                    aria-label="Edit invoice"
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -535,6 +624,7 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                     disabled={deleteMutation.isPending}
                     onClick={() => setDeletingId(inv.id)}
                     data-testid={`button-delete-${inv.id}`}
+                    aria-label="Delete invoice"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -726,6 +816,7 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                               lineItems: f.lineItems.filter((_, j) => j !== i),
                             }))
                           }
+                          aria-label="Remove line item"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

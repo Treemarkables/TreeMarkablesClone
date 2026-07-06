@@ -9,6 +9,10 @@ import { useLocation } from 'wouter';
 export interface AuthUser extends Employee {
   permissions?: string[];
   roleTier?: { id: string; key: string | null; name: string; description: string | null } | null;
+  // Subscription plan + unlocked entitlement strings ("plan:crew" | "plan:business" |
+  // "addon:*"), for plan-based UI gating. Mirrors the server feature gates.
+  planKey?: string;
+  entitlements?: string[];
 }
 
 interface AuthContextType {
@@ -21,6 +25,12 @@ interface AuthContextType {
   permissions: string[];
   hasPermission: (key: string) => boolean;
   hasAnyPermission: (...keys: string[]) => boolean;
+  // Subscription entitlements + plan-gate check. `can("plan:crew")` is true when the
+  // business's plan unlocks that tier/add-on. NOT short-circuited for admins — gating
+  // is plan-based, so even an admin on Freemium can't access a Crew feature.
+  entitlements: string[];
+  planKey: string;
+  can: (requires: string) => boolean;
   login: (credentials: { employeeId?: string; email?: string; password?: string }) => Promise<any>;
   loginPending: boolean;
   logout: () => void;
@@ -276,6 +286,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [isAdmin, permSet],
   );
 
+  const entitlements = useMemo(() => currentUser?.entitlements ?? [], [currentUser]);
+  const entSet = useMemo(() => new Set(entitlements), [entitlements]);
+  const planKey = currentUser?.planKey ?? 'freemium';
+  // Plan-gate check — deliberately NOT short-circuited for admins. A feature is
+  // unlocked by the BUSINESS's subscription, not the staff member's role.
+  const can = useCallback((requires: string) => entSet.has(requires), [entSet]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -288,6 +305,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         permissions,
         hasPermission,
         hasAnyPermission,
+        entitlements,
+        planKey,
+        can,
         login,
         loginPending: loginMutation.isPending,
         logout,

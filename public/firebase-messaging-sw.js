@@ -96,48 +96,58 @@ function setupBackgroundMessageHandler() {
 // Handle notification click events
 self.addEventListener('notificationclick', (event) => {
   console.log('🖱️ Notification clicked:', event);
-  
+
   event.notification.close();
-  
+
   // Handle action buttons
   if (event.action === 'dismiss') {
     return;
   }
-  
+
   // Determine where to navigate based on notification data
   let urlToOpen = '/dispatch'; // Default
-  
+
   if (event.notification.data) {
+    // clickAction is set by the server on every notification and is the most
+    // direct path. Firebase may auto-show background notifications without
+    // populating type/jobId in event.notification.data, so checking clickAction
+    // first ensures the tap always lands on the right screen.
+    const clickAction = event.notification.data.clickAction
+      || event.notification.data?.FCM_MSG?.data?.clickAction;
     const { type, jobId, conversationId } = event.notification.data;
 
-    switch (type) {
-      case 'job_assignment':
-      case 'schedule_change':
-        // Navigate directly to the specific job if we have its ID
-        urlToOpen = jobId ? `/dispatch?job=${jobId}` : '/dispatch';
-        break;
-      case 'new_lead':
-        urlToOpen = '/conversations';
-        break;
-      case 'new_conversation':
-      case 'conversation_reply':
-        // Once a conversation has been converted to a lead/job, notifications
-        // deep-link to that job card's diary tab. Pre-lead conversations (no
-        // job yet) still land on the conversation detail page.
-        if (jobId) {
-          urlToOpen = `/dispatch?job=${jobId}&tab=diary`;
-        } else if (conversationId) {
-          urlToOpen = `/conversation/${conversationId}`;
-        } else {
-          urlToOpen = '/conversations';
-        }
-        break;
-      case 'invoice_payment':
-        urlToOpen = '/invoices';
-        break;
-      case 'quote_accepted':
-        urlToOpen = '/quotes';
-        break;
+    if (clickAction) {
+      urlToOpen = clickAction;
+    } else {
+      switch (type) {
+        case 'job_assignment':
+        case 'schedule_change':
+          // Navigate directly to the specific job if we have its ID
+          urlToOpen = jobId ? `/dispatch?job=${jobId}` : '/dispatch';
+          break;
+        case 'new_lead':
+          urlToOpen = jobId ? `/dispatch?job=${jobId}&tab=diary` : '/conversations';
+          break;
+        case 'new_conversation':
+        case 'conversation_reply':
+          // Once a conversation has been converted to a lead/job, notifications
+          // deep-link to that job card's diary tab. Pre-lead conversations (no
+          // job yet) still land on the conversation detail page.
+          if (jobId) {
+            urlToOpen = `/dispatch?job=${jobId}&tab=diary`;
+          } else if (conversationId) {
+            urlToOpen = `/conversation/${conversationId}`;
+          } else {
+            urlToOpen = '/conversations';
+          }
+          break;
+        case 'invoice_payment':
+          urlToOpen = '/invoices';
+          break;
+        case 'quote_accepted':
+          urlToOpen = '/quotes';
+          break;
+      }
     }
   }
   

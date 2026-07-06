@@ -393,6 +393,7 @@ Thank you, Jack
                       setImagePreview(null);
                       setExtractedData(null);
                     }}
+                    aria-label="Remove screenshot"
                   >
                     <X className="h-4 w-4" />
                   </Button>
