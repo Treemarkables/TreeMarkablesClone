@@ -1203,6 +1203,9 @@ async function generateProposalPDFBuffer(
   // a public PDF route, where unscoped getBusinessSettings() returns Treemarkables'
   // identity for every tenant's proposal/quote PDF.
   const __pdfIdentity = getBusinessIdentity(await storage.getBusinessSettingsForBusiness(proposal.businessId));
+  // Tenant logo bytes (GCS-backed, legacy local, or bundled fallback) — fetched
+  // up-front because the PDFKit Promise executor below is synchronous.
+  const __pdfLogo = await getCompanyLogoBytes(proposal.businessId);
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDoc({ size: 'A4', margin: 50 });
     const chunks: Buffer[] = [];
@@ -1216,17 +1219,24 @@ async function generateProposalPDFBuffer(
       d ? new Date(d).toLocaleDateString('en-NZ', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
     const pageW = doc.page.width - 100;
 
-    // Header bar
-    doc.rect(0, 0, doc.page.width, 90).fill('#f97316');
-    try { doc.image('client/public/treemarkables-logo.png', 50, 15, { height: 55 }); } catch { /* no logo */ }
-    doc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold')
+    // Header — neutral white for every tenant (the old hard-coded orange bar +
+    // bundled Treemarkables logo put TM branding on subscriber quotes). Logo
+    // bytes come from the tenant's document template, boxed to fit any aspect
+    // ratio — mirrors generateInvoicePDFBuffer's header.
+    if (__pdfLogo?.buffer) {
+      try { doc.image(__pdfLogo.buffer, 50, 20, { fit: [160, 50] }); } catch { /* logo optional */ }
+    } else if (__pdfIdentity.name) {
+      doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold').text(__pdfIdentity.name, 50, 35, { width: 250 });
+    }
+    doc.fillColor('#111827').fontSize(18).font('Helvetica-Bold')
       .text(docTitle, doc.page.width - 200, 20, { width: 150, align: 'right' });
-    doc.fontSize(10).font('Helvetica')
+    doc.fillColor('#6b7280').fontSize(10).font('Helvetica')
       .text(`#${proposalNumber}`, doc.page.width - 200, 43, { width: 150, align: 'right' });
     const validUntil = (proposal as any).expiryDate || (proposal as any).expiresAt;
     if (validUntil) {
       doc.fontSize(8).text(`Valid until: ${fmtDate(validUntil)}`, doc.page.width - 200, 58, { width: 150, align: 'right' });
     }
+    doc.moveTo(50, 90).lineTo(doc.page.width - 50, 90).lineWidth(1).strokeColor('#e5e7eb').stroke();
 
     // Customer block
     doc.fillColor('#111827').fontSize(12).font('Helvetica-Bold').text('Prepared for:', 50, 110);
@@ -1330,7 +1340,7 @@ async function generateProposalPDFBuffer(
     if (pdfDiscountAmt > 0) {
       doc.moveDown(0.4);
       doc.fillColor('#6b7280').text('Discount', tX, doc.y, { width: vW - 70, align: 'left' });
-      doc.fillColor('#f97316').text(`-${fmtCurrency(pdfDiscountAmt)}`, tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+      doc.fillColor('#111827').text(`-${fmtCurrency(pdfDiscountAmt)}`, tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
     }
     doc.moveDown(0.4);
     doc.fillColor('#6b7280').text('GST (15%)', tX, doc.y, { width: vW - 70 });
@@ -1340,7 +1350,7 @@ async function generateProposalPDFBuffer(
     doc.moveDown(0.3);
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#111827')
       .text('Total (inc. GST)', tX, doc.y, { width: vW - 70 });
-    doc.fillColor('#f97316').text(fmtCurrency(total), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+    doc.fillColor('#111827').text(fmtCurrency(total), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
 
     // Reviews block — curated review screenshots under the total. Each uploaded
     // image gets its own row, centred at a readable size. Skipped entirely when
@@ -1379,7 +1389,7 @@ async function generateProposalPDFBuffer(
       doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
         .text('To accept this quote, open the link below and tap "Accept Quote". No signature required.', 50, doc.y, { width: pageW });
       doc.moveDown(0.3);
-      doc.fillColor('#f97316')
+      doc.fillColor('#2563eb')
         .text(acceptUrl, 50, doc.y, { width: pageW, link: acceptUrl, underline: true });
       doc.moveDown(0.3);
       doc.fillColor('#6b7280')
@@ -1413,8 +1423,8 @@ async function generateProposalPDFBuffer(
     const footerY = doc.page.height - 70;
     doc.moveTo(50, footerY).lineTo(50 + pageW, footerY).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
     doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
-      .text(`${__pdfIdentity.name} — ${__pdfIdentity.tagline}`, 50, footerY + 8, { width: pageW, align: 'center' });
-    doc.text(`${__pdfIdentity.email || 'info@treemarkables.co.nz'} | ${__pdfIdentity.phone || '027 216 6882'}`, 50, footerY + 20, { width: pageW, align: 'center' });
+      .text([__pdfIdentity.name, __pdfIdentity.tagline].filter(Boolean).join(' — '), 50, footerY + 8, { width: pageW, align: 'center' });
+    doc.text([__pdfIdentity.email, __pdfIdentity.phone].filter(Boolean).join(' | '), 50, footerY + 20, { width: pageW, align: 'center' });
 
     doc.end();
   });
@@ -1477,7 +1487,7 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
   const discountRow = summaryDiscountAmt > 0
     ? `<tr><td>Discount</td><td style="text-align:right">-$${summaryDiscountAmt.toFixed(2)}</td></tr>`
     : '';
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${docLabel} ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">${__htmlIdentity.name} ${docLabel}</h1><p><strong>${docLabel} #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr>${discountRow}<tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">${__htmlIdentity.name} | ${__htmlIdentity.email || 'info@treemarkables.co.nz'} | ${__htmlIdentity.phone || '027 216 6882'}</p></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${docLabel} ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#111827">${__htmlIdentity.name} ${docLabel}</h1><p><strong>${docLabel} #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr>${discountRow}<tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">${[__htmlIdentity.name, __htmlIdentity.email, __htmlIdentity.phone].filter(Boolean).join(' | ')}</p></body></html>`;
 }
 
 // ---------------------------------------------------------------------------
