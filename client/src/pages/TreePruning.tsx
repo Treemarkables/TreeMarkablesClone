@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import HeaderV2 from "@/components/HeaderV2";
 import RedesignFooter from "@/components/RedesignFooter";
 import RedesignReviews from "@/components/RedesignReviews";
 import SEO from "@/components/SEO";
 import InquiryForm from "@/components/InquiryForm";
+import ContactFormModal from "@/components/ContactFormModal";
 import {
   Phone,
   Mail,
@@ -58,6 +59,7 @@ const faqs: [string, string][] = [
 ];
 
 export default function TreePruning() {
+  const [isQuoteOpen, setIsQuoteOpen] = useState(false);
   useEffect(() => {
     const script = document.createElement("script");
     script.innerHTML = `gtag('event', 'Formsubmission', {});`;
@@ -129,7 +131,7 @@ export default function TreePruning() {
               Expert pruning to keep your trees healthy, safe and beautifully shaped — qualified arborists across Gisborne and the East Coast.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <a href="#contact" className="inline-flex items-center gap-2 bg-neon text-black font-bold text-base px-7 py-4 rounded-full hover:brightness-95 transition-all shadow-[0_8px_30px_rgba(57,255,20,0.4)]">
+              <a href="#contact" onClick={(e) => { e.preventDefault(); setIsQuoteOpen(true); }} className="inline-flex items-center gap-2 bg-neon text-black font-bold text-base px-7 py-4 rounded-full hover:brightness-95 transition-all shadow-[0_8px_30px_rgba(57,255,20,0.4)]">
                 Get a free quote <ArrowRight className="h-5 w-5" />
               </a>
               <a href={`tel:${PHONE}`} onClick={handlePhoneClick} className="inline-flex items-center gap-2 text-white font-semibold text-base px-7 py-4 rounded-full border border-white/25 hover:bg-white/10 transition-colors backdrop-blur-sm">
@@ -179,7 +181,7 @@ export default function TreePruning() {
                 We only recommend <strong className="text-ink">removal</strong> when it's genuinely necessary for safety — never as the easy option.
               </p>
             </div>
-            <a href="#contact" className="inline-flex items-center gap-2 mt-8 bg-ink text-white font-bold px-7 py-4 rounded-full hover:bg-ink2 transition-colors">
+            <a href="#contact" onClick={(e) => { e.preventDefault(); setIsQuoteOpen(true); }} className="inline-flex items-center gap-2 mt-8 bg-ink text-white font-bold px-7 py-4 rounded-full hover:bg-ink2 transition-colors">
               Book a free assessment <ArrowRight className="h-5 w-5 text-neon" />
             </a>
           </div>
@@ -220,7 +222,7 @@ export default function TreePruning() {
           <div className="flex-1 flex flex-col justify-center px-8 py-14 md:py-0 md:pl-10 md:pr-16 lg:pl-14 lg:pr-24">
             <p className="font-display font-bold mb-8 text-neon" style={{ fontSize: "clamp(28px,3.5vw,52px)" }}>Get a free quote.</p>
             <div>
-              <a href="#contact" className="inline-block bg-neon hover:brightness-95 text-ink font-bold uppercase tracking-[0.12em] px-10 py-4 rounded-md transition text-sm shadow-[0_8px_30px_rgba(57,255,20,0.35)]">
+              <a href="#contact" onClick={(e) => { e.preventDefault(); setIsQuoteOpen(true); }} className="inline-block bg-neon hover:brightness-95 text-ink font-bold uppercase tracking-[0.12em] px-10 py-4 rounded-md transition text-sm shadow-[0_8px_30px_rgba(57,255,20,0.35)]">
                 Request a Quote
               </a>
             </div>
@@ -308,6 +310,7 @@ export default function TreePruning() {
         </div>
       </section>
 
+      <ContactFormModal open={isQuoteOpen} onOpenChange={setIsQuoteOpen} />
       <RedesignFooter />
     </div>
   );

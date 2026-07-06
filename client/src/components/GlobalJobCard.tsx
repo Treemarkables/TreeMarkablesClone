@@ -117,6 +117,7 @@ import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
 import { formatInTimeZone } from "date-fns-tz";
 
 import { Button } from "@/components/ui/button";
+import { PlanGate } from "@/components/PlanGate";
 import {
   Dialog,
   DialogContent,
@@ -185,7 +186,7 @@ import {
 } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, ApiError } from "@/lib/queryClient";
-import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import {
   insertJobSchema,
   type ChecklistItem,
@@ -962,16 +963,6 @@ export function GlobalJobCard({
       await refetchJob();
     }
   }, [jobId, createdJobId, queryClient, refetchJob]);
-
-  const {
-    pullDistance: jobCardPullDistance,
-    isRefreshing: jobCardIsRefreshing,
-    shouldTrigger: jobCardShouldTrigger,
-    handlers: jobCardPullHandlers,
-  } = usePullToRefresh({
-    onRefresh: handlePullRefresh,
-    enabled: isMobile && mode === "edit",
-  });
 
   // Lazy load templates - only when billing tab is active or invoice modal is open
   const { data: invoiceTemplateData } = useQuery({
@@ -2829,9 +2820,35 @@ export function GlobalJobCard({
     },
     onError: (error: any) => {
       console.error("Error sending to Xero:", error);
+      // apiRequest throws an ApiError whose structured backend payload lives on
+      // `error.body` (errorCode / missingField / details.suggestion), NOT spread
+      // onto the error itself. Read from there so Xero's actual reason (e.g. a
+      // duplicate invoice number, which Xero reserves permanently) is surfaced
+      // instead of a vague "Xero Error".
+      const body = error?.body ?? error;
+      let title = "Xero error";
+      let description =
+        error?.message ||
+        body?.message ||
+        "Failed to send invoice to Xero. Please try again.";
+
+      if (body?.errorCode === "DUPLICATE_INVOICE_NUMBER") {
+        title = `Invoice #${body?.jobNumber ?? ""} already exists in Xero`;
+        description =
+          body?.details?.suggestion ||
+          "That invoice number is already in use in Xero — even a voided or deleted invoice keeps the number reserved. Renumber the existing invoice in Xero, then send again.";
+      } else if (body?.missingField === "address") {
+        title = "Missing address";
+        description =
+          body?.message ||
+          "This job/invoice needs a valid address before it can go to Xero.";
+      } else if (body?.details?.suggestion) {
+        description = body.details.suggestion;
+      }
+
       toast({
-        title: "Xero Error",
-        description: error?.message || "Failed to send invoice to Xero. Please try again.",
+        title,
+        description,
         variant: "destructive",
       });
     },
@@ -3865,11 +3882,10 @@ The Treemarkables Team`;
         scheduledEndDateISO = lastDayEndUTC.toISOString();
       }
 
-      // Only flip status when the booking represents the actual work crew —
-      // i.e. a work_order being scheduled. A 'quote' job booked in is a
-      // quoting site visit and must stay 'quote'; a 'lead' becomes 'quote'.
-      // statusAfterBooking() returns null for everything else (already
-      // scheduled, completed, etc.) so we leave status untouched.
+      // Scheduling a 'quote' advances it to 'work_order' (booking = committing
+      // to the work). statusAfterBooking() returns null for every other status
+      // so we leave those untouched. The server applies the same rule as a
+      // safety net for paths that don't compute this client-side.
       const nextStatus = statusAfterBooking(editingJob.status);
 
       // Close the modal immediately. The user has filled everything in; the
@@ -4063,8 +4079,8 @@ The Treemarkables Team`;
         }
 
         // Update form's status to match the transition we actually applied
-        // (or leave it alone when statusAfterBooking returned null — e.g. a
-        // 'quote' job being booked for a site visit).
+        // (or leave it alone when statusAfterBooking returned null — i.e. any
+        // status other than 'quote').
         if (nextStatus) {
           form.setValue("status", nextStatus);
 
@@ -4705,6 +4721,34 @@ The Treemarkables Team`;
   const currentStatus =
     mode === "edit" ? (watchedStatus || editingJob?.status) : watchedStatus;
 
+  // Single entry point for every "Send to Xero" control. The buttons used to be
+  // silently `disabled` when preconditions weren't met, so a tap/click did
+  // nothing and the user had no idea why (the dominant case: the job isn't
+  // marked Completed yet). Surface the reason instead of dead-ending.
+  const handleSendToXeroClick = () => {
+    if (!editingJob?.id || mode === "create") return;
+    if (sendToXeroMutation.isPending) return;
+    if (editingJob?.xeroStatus === "sent") {
+      toast({
+        title: "Already sent to Xero",
+        description:
+          'This invoice is already in Xero. Use "Reset Xero Sync" first if you need to re-send it.',
+        variant: "destructive",
+      });
+      return;
+    }
+    if (currentStatus !== "completed") {
+      toast({
+        title: "Can't send to Xero yet",
+        description:
+          "Mark this job as Completed before sending its invoice to Xero.",
+        variant: "destructive",
+      });
+      return;
+    }
+    sendToXeroMutation.mutate();
+  };
+
   if (jobLoading) {
     const loadingContent = (
       <div className="flex items-center justify-center h-full w-full bg-gray-50">
@@ -4884,6 +4928,7 @@ The Treemarkables Team`;
               className="lg:hidden h-7 w-7 text-gray-600 hover:bg-gray-100"
               onClick={onClose}
               data-testid="button-close-mobile"
+              aria-label="Close job card"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -5142,12 +5187,12 @@ The Treemarkables Team`;
                   <Archive className="w-4 h-4 mr-2" />
                   Archive
                 </DropdownMenuItem>
+                <PlanGate requires="plan:crew">
                 <DropdownMenuItem
-                  onClick={() => sendToXeroMutation.mutate()}
+                  onClick={handleSendToXeroClick}
                   disabled={
                     !editingJob?.id ||
                     mode === "create" ||
-                    currentStatus !== "completed" ||
                     editingJob?.xeroStatus === "sent" ||
                     sendToXeroMutation.isPending
                   }
@@ -5159,6 +5204,7 @@ The Treemarkables Team`;
                       ? "Sent to Xero"
                       : "Send to Xero"}
                 </DropdownMenuItem>
+                </PlanGate>
                 {editingJob?.xeroStatus === "sent" && (
                   <DropdownMenuItem
                     onClick={() => setShowXeroResetConfirm(true)}
@@ -5425,33 +5471,14 @@ The Treemarkables Team`;
               data-form="job-form"
             >
               <div className="flex flex-col sm:flex-row h-full w-full min-w-0">
-                {/* Pull-to-refresh wrapper: relative+overflow-hidden so indicator is clipped above until pulled */}
+                {/* Pull-to-refresh wrapper: relative+overflow-hidden so the spinner is clipped above until pulled */}
                 <div
                   className="flex-1 relative overflow-hidden sm:border-r border-gray-300 sm:rounded-l-lg min-w-0"
                 >
-                  {/* Pull indicator — lives outside the scrollable div so it's not clipped by overflow-y-auto */}
-                  {(jobCardPullDistance > 0 || jobCardIsRefreshing) && (
-                    <div
-                      className="absolute top-0 left-0 right-0 flex items-center justify-center pointer-events-none z-50"
-                      style={{ transform: `translateY(${Math.min(jobCardPullDistance, 64) - 44}px)`, transition: jobCardIsRefreshing ? 'transform 0.2s ease' : 'none' }}
-                    >
-                      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-white shadow-md border border-gray-200 text-xs font-medium ${jobCardShouldTrigger ? 'text-primary' : 'text-gray-500'}`}>
-                        <RotateCcw
-                          className={`w-3.5 h-3.5 ${jobCardIsRefreshing ? 'animate-spin' : ''}`}
-                          style={{ transform: !jobCardIsRefreshing ? `rotate(${Math.min(jobCardPullDistance * 4, 360)}deg)` : undefined }}
-                        />
-                        {jobCardIsRefreshing ? 'Refreshing…' : jobCardShouldTrigger ? 'Release to refresh' : 'Pull to refresh'}
-                      </div>
-                    </div>
-                  )}
-                  {/* Scrollable content — receives transform so it pushes down revealing the indicator */}
-                  <div
-                    className="bg-white h-full p-3 sm:p-4 overflow-y-auto overflow-x-hidden"
-                    style={{
-                      transform: jobCardIsRefreshing ? 'translateY(52px)' : jobCardPullDistance > 0 ? `translateY(${Math.min(jobCardPullDistance, 64)}px)` : undefined,
-                      transition: jobCardIsRefreshing || jobCardPullDistance === 0 ? 'transform 0.25s ease' : 'none',
-                    }}
-                    {...jobCardPullHandlers}
+                  <PullToRefresh
+                    onRefresh={handlePullRefresh}
+                    enabled={isMobile && mode === "edit"}
+                    contentClassName="bg-white p-3 sm:p-4"
                   >
                   {sidebarTab === "details" && (
                     <div className="space-y-3 md:space-y-4">
@@ -5685,6 +5712,7 @@ The Treemarkables Team`;
                                     onClick={() =>
                                       handleSaveCustomerName(editingNameValue)
                                     }
+                                    aria-label="Save customer name"
                                   >
                                     {isSavingCustomerName ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -5701,6 +5729,7 @@ The Treemarkables Team`;
                                       setIsEditingCustomerName(false);
                                       setEditingNameValue("");
                                     }}
+                                    aria-label="Cancel editing customer name"
                                   >
                                     <X className="h-4 w-4" />
                                   </Button>
@@ -5986,6 +6015,7 @@ The Treemarkables Team`;
                                 onClick={() =>
                                   handleSaveCustomerName(editingNameValue)
                                 }
+                                aria-label="Save customer name"
                               >
                                 {isSavingCustomerName ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -6002,6 +6032,7 @@ The Treemarkables Team`;
                                   setIsEditingCustomerName(false);
                                   setEditingNameValue("");
                                 }}
+                                aria-label="Cancel editing customer name"
                               >
                                 <X className="h-4 w-4" />
                               </Button>
@@ -6883,12 +6914,13 @@ The Treemarkables Team`;
                                         setNewChecklistItem(e.target.value)
                                       }
                                       placeholder="Add a task..."
-                                      className="flex-1 text-sm bg-transparent border-0 border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none py-1 text-gray-700 placeholder-gray-400"
+                                      className="flex-1 text-sm bg-transparent border-0 border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring py-1 text-gray-700 placeholder-gray-400"
                                     />
                                     <button
                                       type="submit"
                                       disabled={!newChecklistItem.trim()}
                                       className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center flex-shrink-0 disabled:opacity-30 transition-colors"
+                                      aria-label="Add checklist item"
                                     >
                                       <Plus className="w-3.5 h-3.5 text-gray-600" />
                                     </button>
@@ -7952,12 +7984,13 @@ The Treemarkables Team`;
                                         setNewChecklistItem(e.target.value)
                                       }
                                       placeholder="Add a task..."
-                                      className="flex-1 text-sm bg-transparent border-0 border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none py-1 text-gray-700 placeholder-gray-400"
+                                      className="flex-1 text-sm bg-transparent border-0 border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring py-1 text-gray-700 placeholder-gray-400"
                                     />
                                     <button
                                       type="submit"
                                       disabled={!newChecklistItem.trim()}
                                       className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center flex-shrink-0 disabled:opacity-30 transition-colors"
+                                      aria-label="Add checklist item"
                                     >
                                       <Plus className="w-3.5 h-3.5 text-gray-600" />
                                     </button>
@@ -8326,6 +8359,7 @@ The Treemarkables Team`;
                                           setCancelBookingDialogOpen(true);
                                         }}
                                         data-testid={`button-cancel-booking-${employeeId}`}
+                                        aria-label="Cancel booking"
                                       >
                                         <X className="h-3.5 w-3.5 text-gray-500 hover:text-red-600" />
                                       </Button>
@@ -9245,6 +9279,7 @@ The Treemarkables Team`;
                                             }
                                             className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
                                             data-testid={`button-delete-item-${index}`}
+                                            aria-label="Delete line item"
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
                                           </Button>
@@ -9430,6 +9465,7 @@ The Treemarkables Team`;
                                           }
                                           className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                                           data-testid={`button-delete-item-${index}`}
+                                          aria-label="Delete line item"
                                         >
                                           <Trash2 className="w-4 h-4" />
                                         </Button>
@@ -10060,7 +10096,7 @@ The Treemarkables Team`;
                       )}
                     </div>
                   )}
-                  </div>
+                  </PullToRefresh>
                 </div>
 
                 {/* Right-hand diary panel — always visible alongside the
@@ -10309,19 +10345,19 @@ The Treemarkables Team`;
               </button>
 
               {/* Send to Xero */}
+              <PlanGate requires="plan:crew">
               <button
                 type="button"
                 className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
                 disabled={
                   !editingJob?.id ||
                   mode === "create" ||
-                  currentStatus !== "completed" ||
                   editingJob?.xeroStatus === "sent" ||
                   sendToXeroMutation.isPending
                 }
                 onClick={() => {
                   setShowMoreActionsSheet(false);
-                  sendToXeroMutation.mutate();
+                  handleSendToXeroClick();
                 }}
                 data-testid="more-sheet-send-xero"
               >
@@ -10330,6 +10366,7 @@ The Treemarkables Team`;
                   {sendToXeroMutation.isPending ? "Sending..." : "Send to Xero"}
                 </span>
               </button>
+              </PlanGate>
 
               {/* Re-send to Xero (conditional) */}
               {editingJob?.xeroStatus === "sent" && (
@@ -10838,7 +10875,7 @@ The Treemarkables Team`;
     proposal: () => setIsProposalBuilderOpen(true),
     timeTracking: () => setIsTimeTrackingOpen(true),
     profitTracker: () => setIsProfitTrackerOpen(true),
-    sendToXero: () => sendToXeroMutation.mutate(),
+    sendToXero: handleSendToXeroClick,
   };
 
   // Diary doc-click handlers reused by both surfaces. Quote/invoice just
@@ -10873,6 +10910,13 @@ The Treemarkables Team`;
             setCreatedJobId(newJobId);
           }}
           actions={sharedActions}
+          // Diary doc-click handlers — without these the diary's "View
+          // Invoice" / "View Quote" buttons fall back to a toast instead of
+          // opening the modal. Desktop has always passed them; mobile lost
+          // them in the JobCardMobile split.
+          onQuoteClick={handleDiaryQuoteClick}
+          onInvoiceClick={handleDiaryInvoiceClick}
+          onProposalClick={handleDiaryProposalClick}
           // queueJob: handled internally by JobCardMobile (opens its own
           // queue-reason dialog and PUTs inQueue/queueReason directly).
           // GlobalJobCard doesn't need to wire it. Desktop defers Queue
@@ -10950,8 +10994,8 @@ The Treemarkables Team`;
       )}
 
       {/* Quote Builder — proposal-builder-style UI in quote mode.
-          Sends by email with a PDF attachment and a mailto "Accept Quote"
-          button (no public viewer link). */}
+          Sends by email with a PDF attachment and a "View Quote" button that
+          opens the online accept page (/proposal/:id/accept?type=quote). */}
       {isQuoteModalOpen && editingJob && (
         <ProposalBuilderV2
           kind="quote"
@@ -11075,6 +11119,7 @@ The Treemarkables Team`;
               onClick={() => setIsProfitTrackerOpen(false)}
               className="absolute left-2 top-2 h-9 w-9 z-10 sm:hidden"
               data-testid="button-close-profit-tracker"
+              aria-label="Close profit tracking"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -11300,6 +11345,7 @@ The Treemarkables Team`;
                   onClick={() => setMyGoogleCalendarOpen(true)}
                   data-testid="btn-my-google-calendar"
                   title="Check my Google Calendar"
+                  aria-label="Check my Google Calendar"
                 >
                   <Calendar className="h-4 w-4 text-green-600" />
                 </Button>
@@ -11385,6 +11431,7 @@ The Treemarkables Team`;
                           }
                           data-testid={`btn-staff-calendar-${employee.id}`}
                           title={`View ${employeeName}'s calendar`}
+                          aria-label={`View ${employeeName}'s calendar`}
                         >
                           <Calendar className="h-4 w-4 text-blue-600" />
                         </Button>

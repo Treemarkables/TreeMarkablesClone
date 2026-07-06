@@ -19,8 +19,8 @@ import {
   type InventoryTransaction, type InsertInventoryTransaction,
   type Material, type InsertMaterial,
   type Service, type InsertService,
-  type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
-  videos, type Video, type InsertVideo, type UpdateVideo,
+  photos, type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
+  videos, type Video, type InsertVideo, type UpdateVideo, type VideoSearch,
   helpArticles, type HelpArticle, type InsertHelpArticle, type UpdateHelpArticle,
   type Invoice, type InsertInvoice, type InvoiceSection, type InsertInvoiceSection, type UpdateInvoiceSection,
   type ServiceRequest, type InsertServiceRequest,
@@ -79,7 +79,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db, ownerDb } from "./db";
-import { withTenant } from "./tenancy/tenantStore";
+import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
@@ -532,6 +532,7 @@ export interface IStorage {
   getEmployeesByPosition(position: string): Promise<Employee[]>;
   getEmployeesBySkill(skill: string): Promise<Employee[]>;
   deleteEmployee(id: string): Promise<void>;
+  anonymizeEmployeeForDeletion(id: string): Promise<void>;
 
   // Role Tier Management
   createRoleTier(tier: schema.InsertRoleTier): Promise<schema.RoleTier>;
@@ -720,6 +721,7 @@ export interface IStorage {
 
   // Business Settings Management
   getBusinessSettings(): Promise<BusinessSettings>;
+  getBusinessSettingsForBusiness(businessId: string | null | undefined): Promise<BusinessSettings | undefined>;
   updateBusinessSettings(updates: UpdateBusinessSettings): Promise<BusinessSettings>;
   resetBusinessSettings(): Promise<BusinessSettings>;
   
@@ -814,6 +816,7 @@ export interface IStorage {
   getVideosByJob(jobId: string): Promise<Video[]>;
   getCustomerVisibleVideosByJob(jobId: string): Promise<Video[]>;
   getVideos(filter?: { kind?: string; unassigned?: boolean }): Promise<Video[]>;
+  searchVideos(filters: VideoSearch): Promise<Video[]>;
 
   // Help articles (subscriber-facing /help page)
   createHelpArticle(data: InsertHelpArticle): Promise<HelpArticle>;
@@ -953,7 +956,8 @@ export interface IStorage {
   getAllDocumentTemplates(): Promise<DocumentTemplate[]>;
   getDocumentTemplatesByType(type: string): Promise<DocumentTemplate[]>;
   getDefaultDocumentTemplate(type: string): Promise<DocumentTemplate | undefined>;
-  
+  getDefaultDocumentTemplateForBusiness(businessId: string | null | undefined, type: string): Promise<DocumentTemplate | undefined>;
+
   // Template Sections Management
   createTemplateSection(section: InsertTemplateSection): Promise<TemplateSection>;
   getTemplateSection(id: string): Promise<TemplateSection | undefined>;
@@ -1212,13 +1216,21 @@ class DatabaseStorage implements IStorage {
     // pitfalls in the query template.
     const key = (last8 || '').replace(/\D/g, '').slice(-8);
     if (key.length < 7) return undefined;
+    // Twilio webhooks run on the RLS-bypassing owner connection, so this query
+    // would otherwise search EVERY tenant's customers — leaking another
+    // business's customer name onto the caller-ID screen. Scope to the ambient
+    // tenant when one is set (webhook requests stamp it — same context that
+    // sets businessId on the call record).
+    const businessId = currentBusinessId();
+    const phoneMatch = sql`(right(regexp_replace(coalesce(${schema.customers.phone}, ''), '[^0-9]', '', 'g'), 8) = ${key}
+            or right(regexp_replace(coalesce(${schema.customers.mobile}, ''), '[^0-9]', '', 'g'), 8) = ${key})`;
     const [customer] = await db
       .select()
       .from(schema.customers)
-      .where(
-        sql`right(regexp_replace(coalesce(${schema.customers.phone}, ''), '[^0-9]', '', 'g'), 8) = ${key}
-            or right(regexp_replace(coalesce(${schema.customers.mobile}, ''), '[^0-9]', '', 'g'), 8) = ${key}`,
-      )
+      .where(businessId ? and(eq(schema.customers.businessId, businessId), phoneMatch) : phoneMatch)
+      // Deterministic pick if several records share a number (imports often
+      // duplicate contacts): oldest record wins instead of plan-dependent luck.
+      .orderBy(asc(schema.customers.createdAt))
       .limit(1);
     return customer || undefined;
   }
@@ -1836,6 +1848,18 @@ class DatabaseStorage implements IStorage {
       const existing = Array.isArray(existingRows) ? existingRows[0] : undefined;
       if (!existing?.workOrderAt) {
         (finalUpdates as any).workOrderAt = new Date();
+      }
+    }
+    // Stamp lane_entered_at whenever the lane changes — this is the clock the "N days in lane"
+    // automations and the UI badge read. Clear it when the job leaves all lanes. Only touch it
+    // when the caller actually changed laneId, so unrelated edits don't reset the clock.
+    if ('laneId' in updates && !(updates as any).laneEnteredAt) {
+      const [existing] = await db.select({ laneId: schema.jobs.laneId })
+        .from(schema.jobs)
+        .where(eq(schema.jobs.id, id));
+      const newLaneId = (updates as any).laneId ?? null;
+      if (existing && existing.laneId !== newLaneId) {
+        (finalUpdates as any).laneEnteredAt = newLaneId ? new Date() : null;
       }
     }
     const [job] = await db.update(schema.jobs)
@@ -3439,7 +3463,12 @@ class DatabaseStorage implements IStorage {
       // (no date filter) so that the margin column is always populated regardless of
       // which date window the user is viewing. Counts/revenue still use the date window.
       const [bizSettingsRows, jobs, allCompletedJobs] = await Promise.all([
-        db.select().from(schema.businessSettings).limit(1),
+        // Deterministic ordering (canonical id='default' row, then oldest) so a stray
+        // duplicate settings row can't flip the margin benchmark — same guard as
+        // getBusinessSettings.
+        db.select().from(schema.businessSettings)
+          .orderBy(sql`(${schema.businessSettings.id} = 'default') DESC`, asc(schema.businessSettings.createdAt))
+          .limit(1),
         db.select().from(schema.jobs).where(and(...jobConditions)),
         db.select().from(schema.jobs).where(and(
           sql`${schema.jobs.status} IN ('completed', 'invoiced')`,
@@ -4467,6 +4496,37 @@ class DatabaseStorage implements IStorage {
     await db.delete(schema.employees).where(eq(schema.employees.id, id));
   }
 
+  // Account deletion (App Store Guideline 5.1.1(v)). A hard row-delete would
+  // violate the 20+ FK references to employees.id that have no ON DELETE rule,
+  // so instead we irreversibly scrub the personal data and sever the login: the
+  // account can no longer be authenticated and carries no PII. Operational
+  // records the staff member touched (jobs, timesheets) keep referential
+  // integrity but are de-identified. Also drops their push tokens.
+  async anonymizeEmployeeForDeletion(id: string): Promise<void> {
+    await db.update(schema.employees)
+      .set({
+        firstName: 'Deleted',
+        lastName: 'User',
+        email: null,
+        phone: null,
+        password: null,
+        emergencyContact: null,
+        emergencyContactPhone: null,
+        notes: null,
+        permissionOverrides: { grant: [], deny: [] },
+        status: 'inactive',
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.employees.id, id));
+
+    // Remove device push tokens so notifications stop reaching the old account.
+    const tokens = await this.getFcmTokensByEmployee(id);
+    for (const t of tokens) {
+      await this.deleteFcmToken(t.id);
+    }
+  }
+
   // Role Tier Management
   async createRoleTier(tier: schema.InsertRoleTier): Promise<schema.RoleTier> {
     const [newTier] = await db.insert(schema.roleTiers).values(withTenant(tier as any)).returning();
@@ -5237,6 +5297,125 @@ class DatabaseStorage implements IStorage {
       .orderBy(schema.equipment.registrationExpiryDate);
   }
 
+  // Resolve a SPECIFIC tenant's settings on the owner connection — for public,
+  // session-less document routes that must read the owning business's row (e.g.
+  // bank details on an invoice) regardless of RLS context. Returns undefined when
+  // the business has no row; callers treat unset fields as blank (never TM's).
+  async getBusinessSettingsForBusiness(businessId: string | null | undefined): Promise<BusinessSettings | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb
+      .select()
+      .from(schema.businessSettings)
+      .where(eq(schema.businessSettings.businessId, businessId))
+      .orderBy(sql`(${schema.businessSettings.id} = 'default') DESC`, asc(schema.businessSettings.createdAt))
+      .limit(1);
+    return row;
+  }
+
+  // Cross-tenant CONCIERGE helpers — owner connection, scoped by explicit
+  // businessId. Only the platform-operator routes (requirePlatformAdmin) call
+  // these; they intentionally bypass RLS to manage other tenants' setup.
+  async listBusinesses(): Promise<Array<typeof schema.businesses.$inferSelect>> {
+    return await ownerDb.select().from(schema.businesses).orderBy(asc(schema.businesses.createdAt));
+  }
+
+  async updateBusinessSettingsForBusiness(
+    businessId: string,
+    updates: Partial<InsertBusinessSettings>,
+  ): Promise<BusinessSettings | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb
+      .update(schema.businessSettings)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(schema.businessSettings.businessId, businessId))
+      .returning();
+    return row;
+  }
+
+  async listTenantChannelsForBusiness(businessId: string): Promise<Array<typeof schema.tenantChannels.$inferSelect>> {
+    if (!businessId) return [];
+    return await ownerDb
+      .select()
+      .from(schema.tenantChannels)
+      .where(eq(schema.tenantChannels.businessId, businessId))
+      .orderBy(schema.tenantChannels.channelType, schema.tenantChannels.createdAt);
+  }
+
+  // Concierge channel mutations — owner connection, explicit businessId. Only
+  // requirePlatformAdmin routes call these (cross-tenant); the per-tenant
+  // /api/channels endpoints use the RLS db proxy instead.
+  async findTenantChannelForBusiness(businessId: string, channelType: string, identifier: string): Promise<(typeof schema.tenantChannels.$inferSelect) | undefined> {
+    const [row] = await ownerDb
+      .select()
+      .from(schema.tenantChannels)
+      .where(and(
+        eq(schema.tenantChannels.businessId, businessId),
+        eq(schema.tenantChannels.channelType, channelType),
+        eq(schema.tenantChannels.identifier, identifier),
+      ))
+      .limit(1);
+    return row;
+  }
+
+  async insertTenantChannel(values: { businessId: string; channelType: string; identifier: string; label?: string }): Promise<typeof schema.tenantChannels.$inferSelect> {
+    const [row] = await ownerDb.insert(schema.tenantChannels).values(values).returning();
+    return row;
+  }
+
+  async setTenantChannelActive(id: string, isActive: boolean, label?: string): Promise<typeof schema.tenantChannels.$inferSelect | undefined> {
+    const [row] = await ownerDb
+      .update(schema.tenantChannels)
+      .set({ isActive, ...(label !== undefined ? { label } : {}) })
+      .where(eq(schema.tenantChannels.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteTenantChannelForBusiness(businessId: string, id: string): Promise<void> {
+    await ownerDb.delete(schema.tenantChannels).where(and(
+      eq(schema.tenantChannels.id, id),
+      eq(schema.tenantChannels.businessId, businessId),
+    ));
+  }
+
+  // Concierge plan/status helpers — owner connection, explicit businessId. Only
+  // requirePlatformAdmin routes (+ the login suspension check) call these.
+  async getBusinessById(businessId: string): Promise<(typeof schema.businesses.$inferSelect) | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb.select().from(schema.businesses).where(eq(schema.businesses.id, businessId)).limit(1);
+    return row;
+  }
+
+  async setBusinessStatus(businessId: string, status: string): Promise<(typeof schema.businesses.$inferSelect) | undefined> {
+    const [row] = await ownerDb.update(schema.businesses).set({ status }).where(eq(schema.businesses.id, businessId)).returning();
+    return row;
+  }
+
+  async getSubscriptionForBusiness(businessId: string): Promise<(typeof schema.subscriptions.$inferSelect) | undefined> {
+    if (!businessId) return undefined;
+    const [row] = await ownerDb.select().from(schema.subscriptions).where(eq(schema.subscriptions.businessId, businessId)).limit(1);
+    return row;
+  }
+
+  async listSubscriptionPlans(): Promise<Array<typeof schema.subscriptionPlans.$inferSelect>> {
+    return await ownerDb.select().from(schema.subscriptionPlans)
+      .where(eq(schema.subscriptionPlans.isActive, true))
+      .orderBy(schema.subscriptionPlans.sortOrder);
+  }
+
+  async setSubscriptionPlanForBusiness(businessId: string, planId: string): Promise<(typeof schema.subscriptions.$inferSelect) | undefined> {
+    const existing = await this.getSubscriptionForBusiness(businessId);
+    if (existing) {
+      const [row] = await ownerDb.update(schema.subscriptions)
+        .set({ planId, status: 'active', updatedAt: new Date() })
+        .where(eq(schema.subscriptions.id, existing.id)).returning();
+      return row;
+    }
+    const [row] = await ownerDb.insert(schema.subscriptions)
+      .values({ businessId, planId, status: 'active' }).returning();
+    return row;
+  }
+
   async getBusinessSettings(): Promise<BusinessSettings> {
     // Try to get existing business settings from database.
     // Deterministic ordering guards against stray duplicate rows for a tenant:
@@ -5595,26 +5774,112 @@ class DatabaseStorage implements IStorage {
   async getFeaturedPhotos(limit?: number): Promise<Photo[]> { return []; }
   async getPhotosByType(type: string, jobId?: string): Promise<Photo[]> { return []; }
   async getBeforeAfterPairs(jobId: string): Promise<Photo[][]> { return []; }
-  async searchPhotos(filters: PhotoSearch): Promise<Photo[]> { return []; }
+  async searchPhotos(filters: PhotoSearch): Promise<Photo[]> {
+    const conditions = [];
+    if (filters.q) {
+      const like = `%${filters.q}%`;
+      conditions.push(or(
+        ilike(photos.notes, like),
+        ilike(photos.aiDescription, like),
+        ilike(photos.gpsAddress, like),
+        ilike(photos.location, like),
+        ilike(photos.filename, like),
+        ilike(photos.originalName, like),
+      ));
+    }
+    if (filters.jobId) conditions.push(eq(photos.jobId, filters.jobId));
+    if (filters.customerId) conditions.push(eq(photos.customerId, filters.customerId));
+    if (filters.type) conditions.push(eq(photos.type, filters.type));
+    if (filters.category) conditions.push(eq(photos.category, filters.category));
+    if (filters.capturedBy) conditions.push(eq(photos.capturedBy, filters.capturedBy));
+    if (filters.tags && filters.tags.length > 0) {
+      // Postgres array-overlap: row matches if any tag in the row is in the filter set.
+      conditions.push(sql`${photos.tags} && ${filters.tags}::text[]`);
+    }
+    if (filters.dateFrom) conditions.push(gte(photos.capturedAt, new Date(filters.dateFrom)));
+    if (filters.dateTo) conditions.push(lte(photos.capturedAt, new Date(filters.dateTo)));
+    if (filters.isPublic !== undefined) conditions.push(eq(photos.isPublic, filters.isPublic));
+    if (filters.isFeatured !== undefined) conditions.push(eq(photos.isFeatured, filters.isFeatured));
+    if (filters.hasGps) {
+      conditions.push(and(sql`${photos.gpsLatitude} IS NOT NULL`, sql`${photos.gpsLongitude} IS NOT NULL`));
+    }
+    if (filters.minQualityScore !== undefined) conditions.push(gte(photos.qualityScore, filters.minQualityScore));
+
+    const base = db.select().from(photos);
+    const query = conditions.length ? base.where(and(...conditions)) : base;
+    return await query
+      .orderBy(desc(photos.capturedAt))
+      .limit(filters.limit)
+      .offset(filters.offset);
+  }
+
+  async searchVideos(filters: VideoSearch): Promise<Video[]> {
+    const conditions = [];
+    if (filters.q) {
+      const like = `%${filters.q}%`;
+      conditions.push(or(
+        ilike(videos.title, like),
+        ilike(videos.description, like),
+        ilike(videos.filename, like),
+        ilike(videos.originalName, like),
+      ));
+    }
+    if (filters.kind) conditions.push(eq(videos.kind, filters.kind));
+    if (filters.jobId) conditions.push(eq(videos.jobId, filters.jobId));
+    if (filters.customerId) conditions.push(eq(videos.customerId, filters.customerId));
+    if (filters.category) conditions.push(eq(videos.category, filters.category));
+    if (filters.uploadedBy) conditions.push(eq(videos.uploadedBy, filters.uploadedBy));
+    if (filters.dateFrom) conditions.push(gte(videos.createdAt, new Date(filters.dateFrom)));
+    if (filters.dateTo) conditions.push(lte(videos.createdAt, new Date(filters.dateTo)));
+    if (filters.showToCustomer !== undefined) conditions.push(eq(videos.showToCustomer, filters.showToCustomer));
+
+    const base = db.select().from(videos);
+    const query = conditions.length ? base.where(and(...conditions)) : base;
+    return await query
+      .orderBy(desc(videos.createdAt))
+      .limit(filters.limit)
+      .offset(filters.offset);
+  }
 
   // Job Videos (Loom replacement) — real implementations against the videos table.
   async createVideo(data: InsertVideo): Promise<Video> {
+    // Knowledge (how-to) videos are GLOBAL platform content shown to every
+    // subscriber: written with no tenant stamp (business_id NULL) via the owner
+    // client so the RLS WITH CHECK on `videos` doesn't reject the null tenant.
+    // Job videos stay tenant-scoped.
+    if (data.kind === "knowledge") {
+      const [row] = await ownerDb.insert(videos).values({ ...data, businessId: null }).returning();
+      return row;
+    }
     const [row] = await db.insert(videos).values(withTenant(data)).returning();
     return row;
   }
   async getVideo(id: string): Promise<Video | undefined> {
     const [row] = await db.select().from(videos).where(eq(videos.id, id));
-    return row || undefined;
+    if (row) return row;
+    // Global knowledge videos are invisible to the tenant-scoped client under RLS.
+    // Fall back to the owner client but ONLY surface knowledge rows, so job-video
+    // isolation is never weakened (a job video by id stays unreachable cross-tenant).
+    const [global] = await ownerDb.select().from(videos)
+      .where(and(eq(videos.id, id), eq(videos.kind, "knowledge")));
+    return global || undefined;
   }
   async updateVideo(id: string, updates: UpdateVideo): Promise<Video> {
-    const [row] = await db.update(videos)
+    // Global knowledge videos live outside any tenant — mutate them via the owner
+    // client (the tenant-scoped client can't see business_id NULL rows under RLS).
+    // Route-level publisher gating prevents non-publishers reaching this path.
+    const existing = await this.getVideo(id);
+    const client = existing?.kind === "knowledge" ? ownerDb : db;
+    const [row] = await client.update(videos)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(videos.id, id))
       .returning();
     return row;
   }
   async deleteVideo(id: string): Promise<void> {
-    await db.delete(videos).where(eq(videos.id, id));
+    const existing = await this.getVideo(id);
+    const client = existing?.kind === "knowledge" ? ownerDb : db;
+    await client.delete(videos).where(eq(videos.id, id));
   }
   async getVideosByJob(jobId: string): Promise<Video[]> {
     return await db.select().from(videos)
@@ -5627,6 +5892,14 @@ class DatabaseStorage implements IStorage {
       .orderBy(asc(videos.sequenceOrder), asc(videos.createdAt));
   }
   async getVideos(filter?: { kind?: string; unassigned?: boolean }): Promise<Video[]> {
+    // Knowledge = GLOBAL library: read via the owner client so every tenant sees the
+    // same how-to videos regardless of RLS. (Job videos stay on the tenant-scoped
+    // client below, which RLS isolates per business.)
+    if (filter?.kind === "knowledge") {
+      return await ownerDb.select().from(videos)
+        .where(eq(videos.kind, "knowledge"))
+        .orderBy(desc(videos.createdAt));
+    }
     const conditions = [];
     if (filter?.kind) conditions.push(eq(videos.kind, filter.kind));
     if (filter?.unassigned) conditions.push(isNull(videos.jobId));
@@ -5701,6 +5974,18 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.invoices.jobId, jobId))
       .orderBy(desc(schema.invoices.createdAt));
     return invoices;
+  }
+  // Cron-only (no tenant filter): invoices that are past due and still owing, linked to a job.
+  // Used by the lane late-payment scan to auto-add jobs to a chase lane.
+  async getOverdueUnpaidInvoicesGlobal(): Promise<Invoice[]> {
+    return await db.select()
+      .from(schema.invoices)
+      .where(and(
+        ne(schema.invoices.status, 'paid'),
+        ne(schema.invoices.status, 'cancelled'),
+        lt(schema.invoices.dueDate, new Date()),
+        sql`${schema.invoices.jobId} IS NOT NULL`,
+      ));
   }
   async getAllInvoices(): Promise<Invoice[]> {
     const invoices = await db.select()
@@ -5796,9 +6081,23 @@ class DatabaseStorage implements IStorage {
     return this.getInvoiceSectionsByInvoice(invoiceId);
   }
 
-  async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> { throw new Error("Not implemented"); }
-  async getServiceRequest(id: string): Promise<ServiceRequest | undefined> { return undefined; }
-  async getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]> { return []; }
+  async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> {
+    const [result] = await db.insert(schema.serviceRequests).values(withTenant(request)).returning();
+    return result;
+  }
+  async getServiceRequest(id: string): Promise<ServiceRequest | undefined> {
+    const [result] = await db.select()
+      .from(schema.serviceRequests)
+      .where(eq(schema.serviceRequests.id, id))
+      .limit(1);
+    return result;
+  }
+  async getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]> {
+    return db.select()
+      .from(schema.serviceRequests)
+      .where(eq(schema.serviceRequests.customerId, customerId))
+      .orderBy(desc(schema.serviceRequests.createdAt));
+  }
   
   // Xero Integration Implementation
   async createXeroConnection(connection: InsertXeroConnection): Promise<XeroConnection> {
@@ -5837,8 +6136,11 @@ class DatabaseStorage implements IStorage {
   
   // Xero Settings Implementation
   async getXeroSettings(): Promise<XeroSettings | undefined> {
+    // Deterministic ordering so a stray duplicate row can't return the wrong
+    // tenant's Xero OAuth credentials (same guard as getBusinessSettings).
     const [result] = await db.select()
       .from(schema.xeroSettings)
+      .orderBy(sql`(${schema.xeroSettings.id} = 'default') DESC`, asc(schema.xeroSettings.createdAt))
       .limit(1);
     return result;
   }
@@ -6064,6 +6366,28 @@ class DatabaseStorage implements IStorage {
         eq(schema.documentTemplates.isActive, true)
       ));
     return template;
+  }
+
+  // Resolve the default document template for a SPECIFIC tenant. Public document
+  // routes (proposal/invoice viewers) are session-less and run on the owner
+  // connection, so the unscoped getDefaultDocumentTemplate above returns an
+  // arbitrary (Treemarkables) tenant's template — a cross-tenant branding leak.
+  // This scopes by the document's businessId (queried on ownerDb so it works with
+  // no tenant context). Falls back to the unscoped default when the business has
+  // none — e.g. legacy Treemarkables rows whose business_id was never backfilled —
+  // so TM's output is unchanged.
+  async getDefaultDocumentTemplateForBusiness(businessId: string | null | undefined, type: string): Promise<DocumentTemplate | undefined> {
+    if (businessId) {
+      const [template] = await ownerDb.select().from(schema.documentTemplates)
+        .where(and(
+          eq(schema.documentTemplates.businessId, businessId),
+          eq(schema.documentTemplates.type, type),
+          eq(schema.documentTemplates.isDefault, true),
+          eq(schema.documentTemplates.isActive, true)
+        ));
+      if (template) return template;
+    }
+    return this.getDefaultDocumentTemplate(type);
   }
 
   // Template Sections Management
@@ -6466,7 +6790,7 @@ class DatabaseStorage implements IStorage {
       id: schema.jobs.id,
       jobNumber: schema.jobs.jobNumber,
       customerId: schema.jobs.customerId,
-      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerName: sql<string>`COALESCE(${schema.customers.name}, '')`,
       customerEmail: schema.customers.email,
       customerPhone: schema.customers.phone,
       address: schema.jobs.address,
@@ -6561,7 +6885,7 @@ class DatabaseStorage implements IStorage {
       internalStatus: schema.reviewSubmissions.internalStatus,
       submittedAt: schema.reviewSubmissions.submittedAt,
       jobNumber: schema.jobs.jobNumber,
-      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerName: sql<string>`COALESCE(${schema.customers.name}, '')`,
       jobAddress: schema.jobs.address
     })
       .from(schema.reviewSubmissions)
@@ -7484,6 +7808,149 @@ class DatabaseStorage implements IStorage {
       .where(and(eq(schema.tasks.id, id), sql`${schema.tasks.deletedAt} IS NULL`))
       .returning();
     return !!updated;
+  }
+
+  // ─── Lanes ──────────────────────────────────────────────────────────────
+  // Per-business buckets a job can optionally sit in (orthogonal to status). Request-path
+  // methods rely on RLS / withTenant for tenant scoping. The *Global readers are used by the
+  // lane-automation cron, which runs with NO tenant context (db falls back to the owner role),
+  // so they intentionally return rows across all businesses; the cron groups them itself.
+
+  async getLanes(opts: { includeArchived?: boolean } = {}): Promise<schema.Lane[]> {
+    const conditions: any[] = [];
+    if (!opts.includeArchived) conditions.push(eq(schema.lanes.archived, false));
+    const q = db.select().from(schema.lanes);
+    const rows = conditions.length
+      ? await q.where(and(...conditions)).orderBy(asc(schema.lanes.sortOrder), asc(schema.lanes.createdAt))
+      : await q.orderBy(asc(schema.lanes.sortOrder), asc(schema.lanes.createdAt));
+    return rows;
+  }
+
+  async getLane(id: string): Promise<schema.Lane | undefined> {
+    const [l] = await db.select().from(schema.lanes).where(eq(schema.lanes.id, id)).limit(1);
+    return l || undefined;
+  }
+
+  async createLane(input: schema.InsertLane): Promise<schema.Lane> {
+    const [created] = await db.insert(schema.lanes).values(withTenant(input)).returning();
+    return created;
+  }
+
+  async updateLane(id: string, updates: schema.UpdateLane): Promise<schema.Lane | undefined> {
+    const [updated] = await db.update(schema.lanes)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.lanes.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteLane(id: string): Promise<boolean> {
+    // Hard delete: lane_automations cascade (FK ON DELETE CASCADE) and jobs.lane_id is nulled
+    // (FK ON DELETE SET NULL), so jobs survive and simply leave the lane.
+    const [deleted] = await db.delete(schema.lanes).where(eq(schema.lanes.id, id)).returning();
+    return !!deleted;
+  }
+
+  async reorderLanes(orderedIds: string[]): Promise<void> {
+    // Persist the new column order. Sequential awaits keep each update inside the caller's
+    // tenant scope; the list is short (a handful of lanes) so this is cheap.
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.update(schema.lanes)
+        .set({ sortOrder: i, updatedAt: new Date() })
+        .where(eq(schema.lanes.id, orderedIds[i]));
+    }
+  }
+
+  async getLaneAutomations(laneId: string): Promise<schema.LaneAutomation[]> {
+    return await db.select().from(schema.laneAutomations)
+      .where(eq(schema.laneAutomations.laneId, laneId))
+      .orderBy(asc(schema.laneAutomations.createdAt));
+  }
+
+  async getLaneAutomation(id: string): Promise<schema.LaneAutomation | undefined> {
+    const [a] = await db.select().from(schema.laneAutomations)
+      .where(eq(schema.laneAutomations.id, id)).limit(1);
+    return a || undefined;
+  }
+
+  async createLaneAutomation(input: schema.InsertLaneAutomation): Promise<schema.LaneAutomation> {
+    const [created] = await db.insert(schema.laneAutomations).values(withTenant(input)).returning();
+    return created;
+  }
+
+  async updateLaneAutomation(id: string, updates: schema.UpdateLaneAutomation): Promise<schema.LaneAutomation | undefined> {
+    const [updated] = await db.update(schema.laneAutomations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.laneAutomations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteLaneAutomation(id: string): Promise<boolean> {
+    const [deleted] = await db.delete(schema.laneAutomations)
+      .where(eq(schema.laneAutomations.id, id)).returning();
+    return !!deleted;
+  }
+
+  /** Thin assign/move helper. lane_entered_at is stamped centrally in updateJob. */
+  async assignJobToLane(jobId: string, laneId: string | null): Promise<Job> {
+    return await this.updateJob(jobId, { laneId } as Partial<InsertJob>);
+  }
+
+  // Lanes configured to auto-receive a job on an external event (e.g. 'quote_sent'). Modelled as
+  // an internal `auto_enter` automation row whose `trigger` holds the event name — no schema change.
+  // Called in request context, so RLS scopes it to the current business.
+  // Lanes set to auto-receive a job on an event. Pass businessId when calling from a no-tenant
+  // context (pollers, webhooks) so the owner-role query doesn't leak other tenants' lanes.
+  async getAutoEntryLanes(event: string, businessId?: string): Promise<schema.LaneAutomation[]> {
+    const conds = [
+      eq(schema.laneAutomations.type, 'auto_enter'),
+      eq(schema.laneAutomations.trigger, event),
+      eq(schema.laneAutomations.enabled, true),
+    ];
+    if (businessId) conds.push(eq(schema.laneAutomations.businessId, businessId));
+    return await db.select().from(schema.laneAutomations).where(and(...conds));
+  }
+
+  // --- Cron-only global readers (no tenant filter; see note above) ---
+
+  async getJobsInLanesGlobal(): Promise<Job[]> {
+    return await db.select().from(schema.jobs)
+      .where(sql`${schema.jobs.laneId} IS NOT NULL`);
+  }
+
+  async getActiveLaneAutomationsGlobal(): Promise<schema.LaneAutomation[]> {
+    return await db.select().from(schema.laneAutomations)
+      .where(eq(schema.laneAutomations.enabled, true));
+  }
+
+  /** De-dup: has this automation already fired for this job during its current lane stay? */
+  async hasLaneAutomationFiredSince(jobId: string, automationId: string, since: Date): Promise<boolean> {
+    const [row] = await db.select({ id: schema.laneAutomationRuns.id })
+      .from(schema.laneAutomationRuns)
+      .where(and(
+        eq(schema.laneAutomationRuns.jobId, jobId),
+        eq(schema.laneAutomationRuns.automationId, automationId),
+        gte(schema.laneAutomationRuns.firedAt, since),
+      ))
+      .limit(1);
+    return !!row;
+  }
+
+  async recordLaneAutomationRun(input: { jobId: string; laneId: string; automationId: string }): Promise<void> {
+    await db.insert(schema.laneAutomationRuns).values(withTenant(input)).returning();
+  }
+
+  /** How many times an automation has fired for a job since `since` (used for max-attempts guards). */
+  async countLaneAutomationRunsSince(jobId: string, automationId: string, since: Date): Promise<number> {
+    const rows = await db.select({ id: schema.laneAutomationRuns.id })
+      .from(schema.laneAutomationRuns)
+      .where(and(
+        eq(schema.laneAutomationRuns.jobId, jobId),
+        eq(schema.laneAutomationRuns.automationId, automationId),
+        gte(schema.laneAutomationRuns.firedAt, since),
+      ));
+    return rows.length;
   }
 
   // ─── Payments ───────────────────────────────────────────────────────────

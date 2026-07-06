@@ -16,6 +16,7 @@ import {
 interface ProposalLike {
   id: string;
   proposalNumber?: string;
+  templateUsed?: string | null;
   status?: string;
   createdAt?: string | Date;
   expiryDate?: string | Date | null;
@@ -162,6 +163,7 @@ export function buildProposalRenderContext(
     })));
 
   return {
+    docLabel: proposal.templateUsed === 'quote' ? 'Quote' : 'Proposal',
     invoiceNumber: proposal.proposalNumber ?? '',
     proposalNumber: proposal.proposalNumber,
     issueDate,

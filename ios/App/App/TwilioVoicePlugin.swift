@@ -5,6 +5,13 @@ import Capacitor
 import TwilioVoice
 import PushKit
 import CallKit
+import os
+
+/// Public logger so the speaker-routing diagnostics are readable in Console
+/// (filter subsystem "co.nz.inflowapp"). Plain NSLog with an interpolated Swift
+/// string is marked <private> on-device and gets redacted, which hid build-17's
+/// route logs entirely — os_log with `privacy: .public` shows the real values.
+private let tvLog = Logger(subsystem: "co.nz.inflowapp", category: "TwilioVoice")
 
 // MARK: - Capacitor Plugin Declaration
 
@@ -39,6 +46,15 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     private var callUUID: UUID?
     private var accessToken: String?
     private var deviceToken: Data?
+    /// Last speaker selection the user made for the live call. Reapplied when
+    /// CallKit (re)activates the audio session, since the output route resets to
+    /// the receiver on activation. Cleared when the call ends.
+    private var speakerOn = false
+    /// Bounds the route-change re-assert loop so a never-holding override can't
+    /// spin forever. Resets to 0 whenever the route actually reaches the speaker
+    /// (so a later revert gets a fresh budget) and on each user toggle / call end.
+    private var speakerReassertAttempts = 0
+    private let maxSpeakerReasserts = 4
 
     // MARK: - Plugin Lifecycle
 
@@ -55,6 +71,12 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     /// Handling an incoming push needs no access token, so this is safe to run
     /// before JS hands one over.
     func startVoIP() {
+        // Pin the Twilio edge to Sydney — nearest to NZ. The default ("roaming")
+        // picks an edge by DNS-based latency routing, which carrier DNS or a
+        // VPN can misroute to a US edge; that adds multi-second call-setup and
+        // answer-to-audio delays. Explicit selection keeps signaling + media
+        // on the au1 edge every time.
+        TwilioVoiceSDK.edge = "sydney"
         if Thread.isMainThread {
             setupCallKit()
             registerForVoIPPush()
@@ -100,51 +122,144 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func answer(_ call: CAPPluginCall) {
-        guard let callInvite = self.callInvite else {
+        // Operate on the SHARED instance throughout. VoIP push + CallKit are
+        // stood up on `shared` at launch (AppDelegate), so the live call/invite
+        // live there — but Capacitor can route JS bridge calls to a SECOND
+        // plugin instance (the `.m` CAP_PLUGIN macro auto-creates one) whose
+        // call state is nil. answer/reject happened to still work because they
+        // go through CallKit actions handled by shared's provider delegate;
+        // mute/hangup/setSpeaker touched `self` directly and silently no-op'd.
+        let shared = TwilioVoicePlugin.shared
+        guard shared.callInvite != nil, let uuid = shared.callUUID else {
             call.reject("No active call invite")
             return
         }
-        let acceptOptions = AcceptOptions(callInvite: callInvite) { _ in }
-        self.activeCall = callInvite.accept(options: acceptOptions, delegate: self)
-        self.callInvite = nil
-        call.resolve()
+        // Answer THROUGH CallKit (request a CXAnswerCallAction) instead of
+        // accepting the invite directly here. This is what makes the in-app
+        // speaker toggle audible: CallKit only activates the VoIP audio session
+        // — and fires provider(didActivate:) — when it drives the answer itself.
+        // A bare callInvite.accept() leaves CallKit's managed session inactive,
+        // so a later overrideOutputAudioPort(.speaker) has no effect and audio
+        // stays on the earpiece even though the button shows "on". Routing both
+        // the lock-screen and in-app answers through the same CXAnswerCallAction
+        // path (handled in provider(perform:) below, which does the actual
+        // accept) keeps speaker routing consistent. callUUID is set in
+        // reportIncomingCall before JS is ever notified, so it's available here.
+        let answerAction = CXAnswerCallAction(call: uuid)
+        shared.callKitCallController.request(CXTransaction(action: answerAction)) { error in
+            if let error = error {
+                call.reject("Answer failed: \(error.localizedDescription)")
+            } else {
+                call.resolve()
+            }
+        }
     }
 
     @objc func reject(_ call: CAPPluginCall) {
-        self.callInvite?.reject()
-        self.callInvite = nil
-        if let uuid = self.callUUID {
+        // See answer() — operate on shared, where the live invite/call lives.
+        let shared = TwilioVoicePlugin.shared
+        shared.callInvite?.reject()
+        shared.callInvite = nil
+        if let uuid = shared.callUUID {
             let action = CXEndCallAction(call: uuid)
-            self.callKitCallController.request(CXTransaction(action: action)) { _ in }
-            self.callUUID = nil
+            shared.callKitCallController.request(CXTransaction(action: action)) { _ in }
+            shared.callUUID = nil
         }
         call.resolve()
     }
 
     @objc func hangup(_ call: CAPPluginCall) {
-        self.activeCall?.disconnect()
+        // self.activeCall is nil on a JS-routed second instance, so the in-app
+        // End/Mute/Speaker buttons silently did nothing. Use shared's live call.
+        TwilioVoicePlugin.shared.activeCall?.disconnect()
         call.resolve()
     }
 
     @objc func mute(_ call: CAPPluginCall) {
         let isMuted = call.getBool("muted") ?? true
-        self.activeCall?.isMuted = isMuted
+        TwilioVoicePlugin.shared.activeCall?.isMuted = isMuted
         call.resolve()
     }
 
     @objc func setSpeaker(_ call: CAPPluginCall) {
         let on = call.getBool("on") ?? false
-        let applyRoute = {
-            do {
-                try AVAudioSession.sharedInstance()
-                    .overrideOutputAudioPort(on ? .speaker : .none)
-            } catch {
-                NSLog("[TwilioVoice] Failed to set speaker route: \(error.localizedDescription)")
+        // Drive speaker state on shared so the route-change watchdog and the
+        // didActivate reapply (both registered on shared's CallKit provider)
+        // see the user's selection. On a JS-routed second instance, self.speakerOn
+        // would be stranded and the override would never hold.
+        let shared = TwilioVoicePlugin.shared
+        shared.speakerOn = on
+        shared.speakerReassertAttempts = 0
+        // AVAudioSession route changes must run on the main thread. Capacitor
+        // dispatches plugin calls on a background queue, and an off-main
+        // setCategory/overrideOutputAudioPort silently fails to move audio —
+        // which is why the IN-APP speaker toggle (foreground calls) could still
+        // do nothing even with .defaultToSpeaker set, while the native CallKit
+        // speaker button (lock screen, handled by iOS itself) worked. The other
+        // CallKit/audio methods here already hop to main; setSpeaker was the
+        // outlier.
+        DispatchQueue.main.async {
+            shared.applySpeakerRoute(on)
+            call.resolve()
+            // The routeChange watchdog only fires on AVAudioSession route-change
+            // notifications. Some reverts — Twilio restarting its own audio unit,
+            // or the session being reconfigured without a system route change —
+            // flip the output back to the receiver WITHOUT posting that
+            // notification, so the watchdog never sees them and the speaker
+            // silently drops. Re-assert a few times in the first ~1.5s after the
+            // toggle to catch those. Guarded by speakerOn so toggling back off
+            // (or the call ending, which clears speakerOn) stops the re-asserts.
+            if on {
+                for delay in [0.3, 0.8, 1.6] {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                        guard shared.speakerOn else { return }
+                        shared.applySpeakerRoute(true)
+                    }
+                }
             }
         }
-        // Twilio's DefaultAudioDevice owns the AVAudioSession, so a bare
-        // overrideOutputAudioPort gets reverted on the next audio-unit cycle.
-        // Routing changes must run inside the device's configuration block.
+    }
+
+    /// Forces the live call's audio route to the speaker (or back to the
+    /// receiver). Must be called on the main thread.
+    private func applySpeakerRoute(_ on: Bool) {
+        let applyRoute = {
+            let session = AVAudioSession.sharedInstance()
+            do {
+                // A bare overrideOutputAudioPort(.speaker) is transient under
+                // CallKit: the next session reconfiguration (Twilio audio-unit
+                // restart, route recompute) silently reverts to the earpiece —
+                // the button stays "on" but the volume never changes. Adding
+                // .defaultToSpeaker to the category makes speaker the session's
+                // standing preference, which survives those cycles; the
+                // override still gives the immediate switch. Bluetooth options
+                // mirror Twilio's default config so paired headsets keep
+                // working and win over .defaultToSpeaker when connected.
+                var options: AVAudioSession.CategoryOptions = [
+                    .allowBluetoothHFP, .allowBluetoothA2DP,
+                ]
+                if on { options.insert(.defaultToSpeaker) }
+                try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
+                try session.overrideOutputAudioPort(on ? .speaker : .none)
+            } catch {
+                tvLog.error("setSpeaker(\(on, privacy: .public)) failed: \(error.localizedDescription, privacy: .public)")
+            }
+            // What iOS ACTUALLY routed to (expect builtInSpeaker when on=true,
+            // receiver when off) plus the session state — the ground truth when
+            // the toggle doesn't match the audible output.
+            let outputs = session.currentRoute.outputs
+                .map { $0.portType.rawValue }
+                .joined(separator: ",")
+            tvLog.log("setSpeaker(\(on, privacy: .public)) cat=\(session.category.rawValue, privacy: .public) mode=\(session.mode.rawValue, privacy: .public) outputs=[\(outputs, privacy: .public)]")
+            // Push the same ground-truth to the webview. On this device the os_log
+            // lines above are unreadable (Console/`log collect` can't reach this
+            // app's logs), so the in-app call screen is the only diagnostic
+            // channel — it shows what iOS ACTUALLY routed to.
+            self.emitAudioRoute("setSpeaker(\(on))")
+        }
+        // Twilio's DefaultAudioDevice owns the AVAudioSession, so routing
+        // changes must also live inside the device's configuration block —
+        // that's what re-runs on each internal audio-unit cycle.
         if let audioDevice = TwilioVoiceSDK.audioDevice as? DefaultAudioDevice {
             audioDevice.block = {
                 DefaultAudioDevice.DefaultAVAudioSessionConfigurationBlock()
@@ -154,7 +269,28 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         } else {
             applyRoute()
         }
-        call.resolve()
+    }
+
+    /// Emits the live audio route to the webview ("audioRoute" event) so the
+    /// in-app call screen can display it. This is the diagnostic channel that
+    /// replaces unreadable device logs: `outputs` is what iOS is actually playing
+    /// through (expect "Speaker" when the speaker is on, "Receiver" otherwise),
+    /// while `speakerSelected` is what the user asked for — a mismatch is the bug.
+    private func emitAudioRoute(_ context: String) {
+        let session = AVAudioSession.sharedInstance()
+        let outputs = session.currentRoute.outputs
+            .map { $0.portType.rawValue }
+            .joined(separator: ",")
+        let onSpeaker = session.currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
+        notifyListeners("audioRoute", data: [
+            "context": context,
+            "outputs": outputs,
+            "onSpeaker": onSpeaker ? "true" : "false",
+            "speakerSelected": self.speakerOn ? "true" : "false",
+            "attempts": String(self.speakerReassertAttempts),
+            "category": session.category.rawValue,
+            "mode": session.mode.rawValue,
+        ])
     }
 
     // MARK: - CallKit Setup
@@ -338,6 +474,10 @@ extension TwilioVoicePlugin: NotificationDelegate {
 
 extension TwilioVoicePlugin: CXProviderDelegate {
     public func providerDidReset(_ provider: CXProvider) {
+        // Quickstart (SDK 6.x) pattern: the audio device is enabled ONLY in
+        // didActivate; a provider reset means CallKit tore the session down,
+        // so make sure the audio graph is stopped too.
+        (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = false
         activeCall?.disconnect()
         activeCall = nil
     }
@@ -347,7 +487,23 @@ extension TwilioVoicePlugin: CXProviderDelegate {
             action.fail()
             return
         }
-        let acceptOptions = AcceptOptions(callInvite: callInvite) { _ in }
+        // Disable the Twilio audio device before accepting and hand the SDK our
+        // CallKit UUID via AcceptOptions. Per the SDK 6.x contract, a nil
+        // AcceptOptions.uuid means "no CallKit here" and the SDK enables the
+        // audio device ITSELF at accept — against an AVAudioSession CallKit
+        // hasn't activated yet. The audio unit fails to start and retries,
+        // audible as ~2-3s of dead microphone right after answering ("they
+        // can't hear me at first"). With the uuid set (and the device disabled
+        // until CallKit's didActivate re-enables it), audio starts the moment
+        // the session is actually live. Resetting the block also clears any
+        // stale speaker-route closure a previous call's setSpeaker left behind.
+        if let audioDevice = TwilioVoiceSDK.audioDevice as? DefaultAudioDevice {
+            audioDevice.isEnabled = false
+            audioDevice.block = DefaultAudioDevice.DefaultAVAudioSessionConfigurationBlock
+        }
+        let acceptOptions = AcceptOptions(callInvite: callInvite) { builder in
+            builder.uuid = action.callUUID
+        }
         self.activeCall = callInvite.accept(options: acceptOptions, delegate: self)
         self.callInvite = nil
         action.fulfill()
@@ -360,6 +516,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         activeCall?.disconnect()
         activeCall = nil
         callUUID = nil
+        speakerOn = false
         action.fulfill()
         notifyListeners("callEnded", data: [:], retainUntilConsumed: true)
     }
@@ -370,11 +527,64 @@ extension TwilioVoicePlugin: CXProviderDelegate {
     }
 
     public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        // Fires once CallKit owns and activates the VoIP audio session. This is
+        // the signal that the speaker override will actually engage — if you
+        // answer in the foreground and DON'T see this, the answer didn't go
+        // through CallKit and setSpeaker(.speaker) will silently stay on the
+        // earpiece. Both lock-screen and in-app answers route through
+        // CXAnswerCallAction, so it should fire for both.
+        tvLog.log("CallKit didActivate — speakerOn=\(self.speakerOn, privacy: .public)")
+        emitAudioRoute("didActivate")
         (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = true
+        // Watch for the route being yanked back to the earpiece. Earpiece audio
+        // works but the speaker override doesn't stick, which points at something
+        // (CallKit, Twilio's audio unit, or the WKWebView) reconfiguring the
+        // session right after we set it. Re-assert speaker whenever the route
+        // changes away from it while the user has speaker selected.
+        NotificationCenter.default.removeObserver(
+            self, name: AVAudioSession.routeChangeNotification, object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRouteChange(_:)),
+            name: AVAudioSession.routeChangeNotification,
+            object: nil
+        )
+        // The output route resets to the receiver when the session activates, so
+        // reapply any speaker selection the user already made (e.g. tapped
+        // speaker before the session finished activating).
+        if self.speakerOn {
+            self.applySpeakerRoute(true)
+        }
     }
 
     public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        NotificationCenter.default.removeObserver(
+            self, name: AVAudioSession.routeChangeNotification, object: nil
+        )
         (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = false
+    }
+
+    /// Re-assert the speaker route if it gets reverted mid-call. Only acts when
+    /// the user has speaker selected and the current output is NOT the built-in
+    /// speaker, so it converges (a successful override flips the route to speaker
+    /// and the next notification is a no-op) rather than looping.
+    @objc private func handleRouteChange(_ notification: Notification) {
+        guard self.speakerOn else { return }
+        let session = AVAudioSession.sharedInstance()
+        let onSpeaker = session.currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
+        let reasonRaw = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) ?? 0
+        let outputs = session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
+        tvLog.log("routeChange reason=\(reasonRaw, privacy: .public) onSpeaker=\(onSpeaker, privacy: .public) attempts=\(self.speakerReassertAttempts, privacy: .public) outputs=[\(outputs, privacy: .public)]")
+        emitAudioRoute("routeChange reason=\(reasonRaw)")
+        if onSpeaker {
+            speakerReassertAttempts = 0
+        } else if speakerReassertAttempts < maxSpeakerReasserts {
+            speakerReassertAttempts += 1
+            DispatchQueue.main.async { self.applySpeakerRoute(true) }
+        } else {
+            tvLog.error("speaker reassert gave up after \(self.maxSpeakerReasserts, privacy: .public) tries — override not holding")
+        }
     }
 }
 
@@ -391,6 +601,7 @@ extension TwilioVoicePlugin: CallDelegate {
         }
         activeCall = nil
         callUUID = nil
+        speakerOn = false
         notifyListeners("callDisconnected", data: [
             "error": error?.localizedDescription ?? "",
         ], retainUntilConsumed: true)
@@ -402,6 +613,7 @@ extension TwilioVoicePlugin: CallDelegate {
         }
         activeCall = nil
         callUUID = nil
+        speakerOn = false
         notifyListeners("callFailed", data: ["error": error.localizedDescription], retainUntilConsumed: true)
     }
 }

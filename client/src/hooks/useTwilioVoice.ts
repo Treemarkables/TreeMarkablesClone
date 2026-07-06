@@ -68,6 +68,13 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
         console.error(
           `[TwilioVoice] token endpoint returned ${res.status}: ${bodyText}`,
         );
+        // A failed token fetch means this device never (re)binds with Twilio,
+        // so inbound calls silently stop ringing here. Route it through the
+        // registrationError handler so the UI can tell the user instead of
+        // only whispering into the webview console.
+        optionsRef.current.onRegistrationError?.({
+          message: `Couldn't authorise this device for incoming calls (${res.status}). Try logging in again.`,
+        });
         return;
       }
       const data = JSON.parse(bodyText) as {
@@ -90,6 +97,9 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
         "[TwilioVoice] Registration failed:",
         err instanceof Error ? err.message : String(err),
       );
+      optionsRef.current.onRegistrationError?.({
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
   }, [isNative]);
 

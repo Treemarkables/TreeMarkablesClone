@@ -77,6 +77,13 @@ async function getUncachableGoogleCalendarClient() {
   return google.calendar({ version: 'v3', auth: oauth2Client });
 }
 
+// Only jobs in the quoting pipeline sync to the owner's personal Google
+// Calendar. The on-site quote visit is booked while the job is still 'lead';
+// 'quote' covers any follow-up visit after the proposal is sent. Crew work
+// (work_order), completed, unsuccessful and mulch jobs deliberately do NOT
+// sync — the personal calendar is for quotes only. See syncJobToCalendar.
+export const CALENDAR_SYNCABLE_JOB_STATUSES = new Set(['lead', 'quote']);
+
 interface CalendarEventData {
   summary: string;
   description?: string;
@@ -202,6 +209,12 @@ class GoogleCalendarService {
         return null;
       }
 
+      // Personal calendar is for quotes only — skip crew/work-order jobs etc.
+      if (!CALENDAR_SYNCABLE_JOB_STATUSES.has(job.status)) {
+        console.log(`⏭️  Skipping Google Calendar sync for job ${job.jobNumber || job.id} (status '${job.status}' is not a quote stage)`);
+        return null;
+      }
+
       // Get staff emails for attendees
       const attendees: string[] = [];
       
@@ -268,6 +281,43 @@ View in Treemarkables Dashboard
         location: item.location ?? undefined,
       });
     }
+    return events;
+  }
+
+  // List ALL events on the primary calendar in a range, paging past the
+  // 250-per-page API cap. Unlike listEvents() this keeps all-day events and
+  // returns every event — used by the one-off job-event cleanup which needs
+  // the full set, not just hourly slots. Throws on failure.
+  async listAllEvents(startIso: string, endIso: string): Promise<CalendarEventSummary[]> {
+    const calendar = await getUncachableGoogleCalendarClient();
+    const events: CalendarEventSummary[] = [];
+    let pageToken: string | undefined = undefined;
+    do {
+      const response: any = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin: startIso,
+        timeMax: endIso,
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 250,
+        pageToken,
+      });
+      const items = response.data.items ?? [];
+      for (const item of items) {
+        if (!item.id) continue;
+        const start = item.start?.dateTime || item.start?.date || '';
+        const end = item.end?.dateTime || item.end?.date || '';
+        events.push({
+          id: item.id,
+          summary: item.summary || '(no title)',
+          start,
+          end,
+          htmlLink: item.htmlLink ?? undefined,
+          location: item.location ?? undefined,
+        });
+      }
+      pageToken = response.data.nextPageToken ?? undefined;
+    } while (pageToken);
     return events;
   }
 

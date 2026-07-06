@@ -38,8 +38,9 @@ class FirebaseMessagingService {
     body: string;
     icon?: string;
     clickAction?: string;
+    collapseId?: string;
     data?: Record<string, string>;
-  }): Promise<boolean> {
+  }, deviceLabel?: string): Promise<boolean> {
     if (!this.init()) return false;
 
     try {
@@ -47,6 +48,12 @@ class FirebaseMessagingService {
       if (notification.clickAction) {
         dataPayload.clickAction = notification.clickAction;
       }
+
+      // collapseId makes APNs/FCM replace an undelivered or displayed copy of
+      // the same logical alert instead of stacking it — an employee whose
+      // reinstalls left several live tokens pointing at one phone sees a
+      // single banner, not one per token. apns-collapse-id max is 64 bytes.
+      const collapseId = notification.collapseId?.slice(0, 64);
 
       const message: admin.messaging.Message = {
         token,
@@ -56,11 +63,15 @@ class FirebaseMessagingService {
         },
         data: dataPayload,
         apns: {
-          headers: { 'apns-priority': '10' },
+          headers: {
+            'apns-priority': '10',
+            ...(collapseId ? { 'apns-collapse-id': collapseId } : {}),
+          },
           payload: { aps: { sound: 'default', badge: 1 } },
         },
         android: {
           priority: 'high',
+          ...(collapseId ? { collapseKey: collapseId } : {}),
           notification: {
             sound: 'default',
             ...(notification.clickAction ? { clickAction: notification.clickAction } : {}),
@@ -69,7 +80,12 @@ class FirebaseMessagingService {
       };
 
       const result = await admin.messaging().send(message);
-      console.log('✅ FCM notification sent:', result);
+      // Log the deep-link target alongside the message id so the DO logs reveal
+      // whether a tap that "lands on the dispatch board" was sent the right
+      // /dispatch?job=<id> target or a bare /dispatch fallback (missing jobId).
+      console.log(
+        `✅ FCM notification sent: id=${result} type=${dataPayload.type || '?'} clickAction=${dataPayload.clickAction || '(none)'} jobId=${dataPayload.jobId || '(none)'} device=${deviceLabel || '?'} token=…${token.slice(-8)}`,
+      );
       return true;
     } catch (error: unknown) {
       const err = error as { code?: string; message?: string };
@@ -88,7 +104,21 @@ class FirebaseMessagingService {
         return false;
       }
 
-      console.error('❌ FCM send failed:', err.code, err.message);
+      // messaging/third-party-auth-error = Firebase was rejected when forwarding
+      // to the platform's push gateway (APNs for iOS, Web Push/VAPID for
+      // browsers). This is a PROJECT CREDENTIAL problem, NOT a bad token — the
+      // APNs auth key (.p8) or Web Push cert in the Firebase console is missing,
+      // expired, or mismatched (wrong Key ID / Team ID / bundle id, or
+      // sandbox-vs-production APNs). Do NOT deactivate the token here; log the
+      // device platform so we can tell which gateway's credential is broken.
+      if (err.code === 'messaging/third-party-auth-error') {
+        console.error(
+          `❌ FCM third-party-auth-error (push-gateway credential rejected — check Firebase APNs key / Web Push cert): device=${deviceLabel || '?'} token=…${token.slice(-8)} — ${err.message}`,
+        );
+        return false;
+      }
+
+      console.error(`❌ FCM send failed: ${err.code} device=${deviceLabel || '?'} token=…${token.slice(-8)} — ${err.message}`);
       return false;
     }
   }

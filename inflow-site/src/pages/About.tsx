@@ -26,7 +26,7 @@ export default function About() {
             </div>
             <div className="mt-8 space-y-6 text-[17px] leading-[1.75] text-ink-700 text-left">
               <p>
-                Inflow started inside <a className="underline decoration-lime-deep" href="https://app.treemarkables.co.nz">Treemarkables</a>, a tree-services business based in Gisborne, New Zealand. Eighteen years of running real jobs, hiring real crews, chasing real invoices and trying to keep real customers happy.
+                Inflow started inside <a className="underline decoration-lime-deep" href="https://www.treemarkables.co.nz">Treemarkables</a>, a tree-services business based in Gisborne, New Zealand. Twenty years in the trades — the last ten of them running the business. Real jobs, real crews, real invoices to chase and real customers to keep happy.
               </p>
               <p>
                 For most of it, we ran the business out of five different apps and a notebook in the truck. None of them spoke to each other. Job sheets that never made it back to the office. Quotes that got lost between SMS and email. Safety paperwork that everyone signed and no-one read.

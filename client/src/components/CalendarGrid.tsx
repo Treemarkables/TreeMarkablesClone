@@ -285,10 +285,21 @@ export function CalendarGrid({
         });
       }
 
+      // A drag onto a single calendar cell is a single-day placement: pin the
+      // job to that one NZ day and its new time-of-day. We MUST also clear any
+      // stale scheduledEndDate — otherwise a job that previously had an end
+      // date keeps it, leaving scheduledDate..scheduledEndDate spanning weeks.
+      // That phantom span makes the job render on every day in the range (wrong
+      // date) and splits its price across all those days on the roster.
       await fetch(`/api/jobs/${jobId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scheduledDate: startDateTime.toISOString() }),
+        body: JSON.stringify({
+          scheduledDate: startDateTime.toISOString(),
+          scheduledEndDate: null,
+          scheduledStartTime: startTimeStr,
+          scheduledEndTime: endTimeStr,
+        }),
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
@@ -339,6 +350,7 @@ export function CalendarGrid({
             size="icon"
             onClick={goToPrevious}
             data-testid="button-previous"
+            aria-label="Previous period"
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
@@ -350,6 +362,7 @@ export function CalendarGrid({
             size="icon"
             onClick={goToNext}
             data-testid="button-next"
+            aria-label="Next period"
           >
             <ChevronRight className="h-5 w-5" />
           </Button>

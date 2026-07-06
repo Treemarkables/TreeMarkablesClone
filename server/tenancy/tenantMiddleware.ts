@@ -63,6 +63,14 @@ const OWNER_PATH_PATTERNS: RegExp[] = [
   /^\/api\/proposals\/[^/]+\/accept$/,
   /^\/api\/quotes\/[^/]+\/accept$/,
   /^\/api\/invoices\/[^/]+\/public$/,
+  // The invoice PDF and online-payment endpoints are reached by customers from
+  // the emailed invoice link / public invoice view (no session). Like /public
+  // they must run as owner — otherwise RLS pins an empty-GUC connection and the
+  // single-resource lookup matches zero rows ("Invoice not found" / the Download
+  // PDF + Pay now buttons fail). Same anonymous-single-resource-by-id class as
+  // the proposal/quote viewer links above.
+  /^\/api\/invoices\/[^/]+\/pdf$/,
+  /^\/api\/invoices\/[^/]+\/payment-checkout$/,
   /^\/api\/videos\/[^/]+\/public$/,
   /^\/api\/jobs\/[^/]+\/videos\/public$/,
   /^\/api\/photos\/public$/,
@@ -70,7 +78,7 @@ const OWNER_PATH_PATTERNS: RegExp[] = [
   /^\/api\/reviews\/submit$/,
 ];
 
-function isOwnerPath(path: string): boolean {
+export function isOwnerPath(path: string): boolean {
   return (
     OWNER_PATHS.some((p) => path === p || path.startsWith(p + "/")) ||
     OWNER_PATH_PATTERNS.some((re) => re.test(path))

@@ -52,7 +52,6 @@ import {
   MoreHorizontal,
   Mic,
   Calendar as CalendarIcon,
-  Clock,
   TrendingUp,
   Send,
   CheckCircle,
@@ -60,6 +59,7 @@ import {
   Trash2,
   ListOrdered,
 } from "lucide-react";
+import { getJobStatusBadge } from "@/lib/jobStatusColors";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -160,15 +160,6 @@ export interface JobCardDesktopProps {
   onProposalClick?: (proposalNumber: string) => void;
 }
 
-// Map job status → badge colour. Mirrors JobCardMobile's STATUS_BADGE so
-// the badge looks identical on both surfaces.
-const STATUS_BADGE: Record<string, { label: string; bg: string }> = {
-  lead: { label: "Lead", bg: "#f59e0b" },
-  quote: { label: "Quote", bg: "#f59e0b" },
-  work_order: { label: "Work Order", bg: "#2563eb" },
-  completed: { label: "Completed", bg: "#16a34a" },
-  unsuccessful: { label: "Unsuccessful", bg: "#ef4444" },
-};
 
 const TABS: { id: JobCardDesktopTab; label: string }[] = [
   { id: "details", label: "Details" },
@@ -326,11 +317,13 @@ export function JobCardDesktop({
 
   const jobNumber = (job?.jobNumber as string | number | undefined) ?? undefined;
   const status = (job?.status as string | undefined) ?? "lead";
-  const badge = STATUS_BADGE[status] ?? { label: status, bg: "#64748b" };
+  const badge = getJobStatusBadge(status);
 
-  // Mirror the desktop-header price logic — line items (ex-GST) → subtotal
-  // → totalAmount/1.15. Identical math to JobCardMobile.tsx after the
-  // header-price fix landed.
+  // Canonical job-price hierarchy (mirrors StaffSchedule.getJobPrice / PR #24):
+  // line items (ex-GST) → job.subtotal → job.totalIncludingGst / 1.15 →
+  // job.totalAmount / 1.15. The totalIncludingGst step matters: jobs whose
+  // value lives only in total_including_gst (subtotal + totalAmount both 0)
+  // otherwise render as $0.00 here while the roster shows the real figure.
   const jobValue = (() => {
     const toNum = (v: unknown): number => {
       if (v == null) return 0;
@@ -345,6 +338,8 @@ export function JobCardDesktop({
     if (liTotal > 0) return liTotal;
     const subtotal = toNum(job?.subtotal);
     if (subtotal > 0) return subtotal;
+    const incGst = toNum(job?.totalIncludingGst);
+    if (incGst > 0) return incGst / 1.15;
     const total = toNum(job?.totalAmount);
     return total > 0 ? total / 1.15 : undefined;
   })();
@@ -591,12 +586,7 @@ export function JobCardDesktop({
             <div className="flex-1 overflow-y-auto min-h-0">
               {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
               {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
-              {activeTab === "backcosting" && (
-                <BackCostingPanel
-                  jobId={jobId}
-                  onOpenTimeEntries={actions?.timeTracking}
-                />
-              )}
+              {activeTab === "backcosting" && <BackCostingPanel jobId={jobId} />}
               {activeTab === "checklist" && roleChecklistEnabled && <JobChecklistPanel jobId={jobId} />}
               {activeTab === "quoting" && <JobQuotingPanel jobId={jobId} />}
             </div>
@@ -689,12 +679,6 @@ export function JobCardDesktop({
                     Schedule
                   </DropdownMenuItem>
                 )}
-                {actions?.timeTracking && (
-                  <DropdownMenuItem onClick={actions.timeTracking} data-testid="more-time-tracking">
-                    <Clock className="w-4 h-4 mr-2 text-emerald-600" />
-                    Time Tracking
-                  </DropdownMenuItem>
-                )}
                 {actions?.profitTracker && (
                   <DropdownMenuItem onClick={actions.profitTracker} data-testid="more-profit-tracker">
                     <TrendingUp className="w-4 h-4 mr-2 text-emerald-600" />
@@ -707,7 +691,7 @@ export function JobCardDesktop({
                     Send to Xero
                   </DropdownMenuItem>
                 )}
-                {(actions?.speechToQuote || actions?.schedule || actions?.timeTracking || actions?.profitTracker || actions?.sendToXero) && (
+                {(actions?.speechToQuote || actions?.schedule || actions?.profitTracker || actions?.sendToXero) && (
                   <DropdownMenuSeparator />
                 )}
                 <DropdownMenuItem

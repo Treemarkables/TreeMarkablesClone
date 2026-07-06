@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,6 +34,9 @@ import { Phone, Mail, MapPin, TreeDeciduous } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
+import TurnstileCaptcha, {
+  useCaptchaConfig,
+} from "@/components/TurnstileCaptcha";
 
 declare global {
   interface Window {
@@ -99,6 +103,10 @@ const urgencyLabels: Record<string, string> = {
 
 export default function Contact() {
   const { toast } = useToast();
+  const [website, setWebsite] = useState(""); // honeypot — humans never fill this
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const { enabled: captchaEnabled } = useCaptchaConfig();
 
   const form = useForm<ContactFormData>({
     resolver: zodResolver(contactFormSchema),
@@ -113,7 +121,11 @@ export default function Contact() {
 
   const contactMutation = useMutation({
     mutationFn: async (data: ContactFormData) => {
-      const response = await apiRequest("POST", "/api/contact", data);
+      const response = await apiRequest("POST", "/api/contact", {
+        ...data,
+        website,
+        captchaToken,
+      });
       return await response.json();
     },
     onSuccess: (response) => {
@@ -124,8 +136,11 @@ export default function Contact() {
         });
       }
       form.reset();
+      // Turnstile tokens are single-use — get a fresh one for the next submit.
+      setCaptchaReset((c) => c + 1);
     },
     onError: (error: Error) => {
+      setCaptchaReset((c) => c + 1);
       toast({
         title: "Submission Failed",
         description:
@@ -137,6 +152,14 @@ export default function Contact() {
   });
 
   const onSubmit = (data: ContactFormData) => {
+    if (captchaEnabled && !captchaToken) {
+      toast({
+        title: "Check the form",
+        description: "Please complete the security check",
+        variant: "destructive",
+      });
+      return;
+    }
     contactMutation.mutate(data);
   };
 
@@ -491,6 +514,27 @@ export default function Contact() {
                               <FormMessage />
                             </FormItem>
                           )}
+                        />
+
+                        <div
+                          className="absolute -left-[9999px] top-auto h-px w-px overflow-hidden"
+                          aria-hidden="true"
+                        >
+                          <label htmlFor="contactWebsite">Website</label>
+                          <input
+                            id="contactWebsite"
+                            name="website"
+                            type="text"
+                            tabIndex={-1}
+                            autoComplete="off"
+                            value={website}
+                            onChange={(e) => setWebsite(e.target.value)}
+                          />
+                        </div>
+
+                        <TurnstileCaptcha
+                          onToken={setCaptchaToken}
+                          resetSignal={captchaReset}
                         />
 
                         {/* Submit Button */}

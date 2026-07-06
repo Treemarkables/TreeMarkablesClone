@@ -1,3 +1,16 @@
+-- ============================================================================
+-- ⛔ SUPERSEDED — DO NOT RUN THIS FILE. ⛔
+-- The live runtime does NOT use Neon Authorize / JWT. It isolates tenants via a
+-- non-bypass `app_tenant` role + a per-request GUC (SET ROLE app_tenant +
+-- set_config('app.current_business', ...)) — see server/db.ts (acquireTenantDb).
+-- The policies below read `auth.session() ->> 'business_id'`, which is NULL under
+-- the app_tenant role, so applying this file makes EVERY tenant table match zero
+-- rows → app-wide outage (or fail-open, depending on role).
+--   ✅ The file that matches the live model is: INFLOW_PHASE2_FALLBACK_rls.sql
+--      (+ INFLOW_PHASE2_FALLBACK_grants.sql). Apply THOSE, never this one.
+-- Kept only as a historical record of the abandoned JWT/Neon-Authorize design.
+-- ============================================================================
+--
 -- INFLOW PHASE 2 — Row-Level Security (REVIEW ARTIFACT — DO NOT AUTO-RUN)
 -- Enables RLS + tenant-isolation policy + grants on all 127 tenant tables.
 -- Policy reads the tenant from the per-request JWT via Neon Authorize: auth.session() ->> 'business_id'.
