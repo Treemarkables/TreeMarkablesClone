@@ -156,6 +156,7 @@ import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
+import { queueJobPush, removeJobEvents, getConnectionForUser } from "./services/googleCalendarSync";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
 
@@ -2651,51 +2652,220 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Google Calendar status endpoint
+  // Google Calendar — per-user OAuth + two-way sync (unified calendar Phase C)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Status: returns connection info for the logged-in user.
   app.get('/api/google-calendar/status', async (req: Request, res: Response) => {
     try {
-      const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-      const xReplitToken = process.env.REPL_IDENTITY 
-        ? 'repl ' + process.env.REPL_IDENTITY 
-        : process.env.WEB_REPL_RENEWAL 
-        ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-        : null;
-
-      if (!xReplitToken || !hostname) {
-        return res.json({ 
-          connected: false,
-          message: 'Google Calendar connector not available'
-        });
-      }
-
-      const connectionSettings = await fetch(
-        'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-calendar',
-        {
-          headers: {
-            'Accept': 'application/json',
-            'X_REPLIT_TOKEN': xReplitToken
-          }
-        }
-      ).then(r => r.json()).then(data => data.items?.[0]);
-
-      if (!connectionSettings || !connectionSettings.settings?.access_token) {
-        return res.json({ 
-          connected: false,
-          message: 'Google Calendar not connected'
-        });
-      }
-
-      return res.json({ 
-        connected: true,
-        calendarEmail: connectionSettings.settings?.email || 'Connected'
-      });
-
-    } catch (error) {
-      console.error('Google Calendar status check error:', error);
+      const { getConnectionForUser: gcalGetConn } = await import('./services/googleCalendarSync');
+      const conn = await gcalGetConn(req.session.businessId, req.session.employeeId ?? '');
+      if (!conn) return res.json({ connected: false });
       return res.json({
-        connected: false,
-        message: 'Error checking Google Calendar status'
+        connected: true,
+        calendarEmail: conn.googleEmail || 'Connected',
+        calendarId: conn.calendarId,
+        lastSynced: conn.lastSyncedAt,
+        lastError: conn.lastError,
       });
+    } catch (error) {
+      console.error('Google Calendar status error:', error);
+      return res.json({ connected: false, message: 'Error checking status' });
+    }
+  });
+
+  // Auth start: redirect the user to Google's consent screen.
+  app.get('/api/google-calendar/auth', (req: Request, res: Response) => {
+    const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(503).json({ success: false, message: 'Google Calendar OAuth not configured' });
+    }
+    const { google } = require('googleapis');
+    const origin = process.env.NODE_ENV === 'production'
+      ? 'https://app.treemarkables.co.nz'
+      : `${req.protocol}://${req.get('host')}`;
+    const redirectUri = `${origin}/api/google-calendar/callback`;
+    const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    // State encodes the current session identifiers so the callback can associate
+    // the connection with the right employee without trusting POST body.
+    const state = Buffer.from(JSON.stringify({
+      businessId: req.session.businessId,
+      employeeId: req.session.employeeId,
+    })).toString('base64');
+    const url = oauth2.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: [
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/userinfo.email',
+      ],
+      state,
+    });
+    res.redirect(url);
+  });
+
+  // OAuth callback: exchange code, upsert connection, redirect to /integrations.
+  app.get('/api/google-calendar/callback', async (req: Request, res: Response) => {
+    const origin = process.env.NODE_ENV === 'production'
+      ? 'https://app.treemarkables.co.nz'
+      : `${req.protocol}://${req.get('host')}`;
+    try {
+      const code = typeof req.query.code === 'string' ? req.query.code : '';
+      const stateRaw = typeof req.query.state === 'string' ? req.query.state : '';
+      if (!code || !stateRaw) {
+        return res.redirect(`${origin}/integrations?gcal_error=missing_code`);
+      }
+      let stateParsed: { businessId?: string; employeeId?: string } = {};
+      try {
+        stateParsed = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8'));
+      } catch {
+        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+      }
+      const { businessId, employeeId } = stateParsed;
+      if (!businessId || !employeeId) {
+        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+      }
+
+      const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID!;
+      const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET!;
+      const redirectUri = `${origin}/api/google-calendar/callback`;
+      const { google } = require('googleapis');
+      const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+      const { tokens } = await oauth2.getToken(code);
+      oauth2.setCredentials(tokens);
+
+      // Fetch the connected email address via userinfo
+      let googleEmail: string | null = null;
+      try {
+        const oauth2Api = google.oauth2({ version: 'v2', auth: oauth2 });
+        const { data } = await oauth2Api.userinfo.get();
+        googleEmail = data.email ?? null;
+      } catch { /* non-fatal */ }
+
+      const { db } = await import('./db');
+      const { googleCalendarConnections } = await import('@shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+
+      // Upsert — one row per (business, user)
+      const existing = await db
+        .select()
+        .from(googleCalendarConnections)
+        .where(and(
+          eq(googleCalendarConnections.businessId, businessId),
+          eq(googleCalendarConnections.userId, employeeId),
+        ));
+
+      const connData = {
+        businessId,
+        userId: employeeId,
+        googleEmail,
+        accessToken: tokens.access_token ?? '',
+        refreshToken: tokens.refresh_token ?? '',
+        expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 50 * 60 * 1000),
+        scope: tokens.scope ?? null,
+        isActive: true,
+        lastError: null,
+        updatedAt: new Date(),
+      };
+
+      if (existing.length > 0) {
+        await db
+          .update(googleCalendarConnections)
+          .set(connData)
+          .where(eq(googleCalendarConnections.id, existing[0].id));
+      } else {
+        await db.insert(googleCalendarConnections).values(connData);
+      }
+
+      console.log(`✅ Google Calendar connected for employee ${employeeId} (${googleEmail})`);
+      res.redirect(`${origin}/integrations?gcal_connected=true`);
+    } catch (error) {
+      console.error('Google Calendar OAuth callback error:', error);
+      res.redirect(`${origin}/integrations?gcal_error=oauth_failed`);
+    }
+  });
+
+  // Disconnect: revoke token + deactivate the connection row.
+  app.delete('/api/google-calendar/connection', async (req: Request, res: Response) => {
+    try {
+      const { getConnectionForUser: gcalGetConn } = await import('./services/googleCalendarSync');
+      const conn = await gcalGetConn(req.session.businessId, req.session.employeeId ?? '');
+      if (!conn) return res.json({ success: true });
+
+      // Best-effort token revocation (don't fail if it errors)
+      try {
+        const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+        const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+        if (clientId && clientSecret) {
+          const { google } = require('googleapis');
+          const auth = new google.auth.OAuth2(clientId, clientSecret);
+          auth.setCredentials({ refresh_token: conn.refreshToken });
+          await auth.revokeCredentials();
+        }
+      } catch (revokeErr) {
+        console.warn('Google token revoke failed (ignored):', revokeErr);
+      }
+
+      const { db } = await import('./db');
+      const { googleCalendarConnections } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      await db
+        .update(googleCalendarConnections)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(googleCalendarConnections.id, conn.id));
+
+      console.log(`✅ Google Calendar disconnected for employee ${req.session.employeeId}`);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Google Calendar disconnect error:', error);
+      return res.status(500).json({ success: false, message: 'Error disconnecting Google Calendar' });
+    }
+  });
+
+  // Busy events for the calendar UI: returns external Google events as UTC intervals
+  // with the owning employee's userId so the calendar can render them in the right row.
+  app.get('/api/google-calendar/busy', async (req: Request, res: Response) => {
+    try {
+      const startStr = typeof req.query.start === 'string' ? req.query.start : '';
+      const endStr = typeof req.query.end === 'string' ? req.query.end : '';
+      if (!startStr || !endStr) {
+        return res.status(400).json({ success: false, message: 'start and end are required' });
+      }
+      const { db } = await import('./db');
+      const { googleBusyEvents, googleCalendarConnections } = await import('@shared/schema');
+      const { and, eq, gte, lte } = await import('drizzle-orm');
+      const businessId = req.session.businessId;
+      if (!businessId) return res.json({ success: true, data: [] });
+
+      const rows = await db
+        .select({
+          id: googleBusyEvents.id,
+          connectionId: googleBusyEvents.connectionId,
+          googleEventId: googleBusyEvents.googleEventId,
+          summary: googleBusyEvents.summary,
+          startTime: googleBusyEvents.startTime,
+          endTime: googleBusyEvents.endTime,
+          status: googleBusyEvents.status,
+          userId: googleCalendarConnections.userId,
+        })
+        .from(googleBusyEvents)
+        .innerJoin(
+          googleCalendarConnections,
+          eq(googleBusyEvents.connectionId, googleCalendarConnections.id),
+        )
+        .where(
+          and(
+            eq(googleBusyEvents.businessId, businessId),
+            lte(googleBusyEvents.startTime, new Date(endStr)),
+            gte(googleBusyEvents.endTime, new Date(startStr)),
+          ),
+        );
+      return res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('Google Calendar busy events error:', error);
+      return res.status(500).json({ success: false, message: 'Error fetching busy events' });
     }
   });
 
@@ -5625,6 +5795,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
+      // Queue Google Calendar push post-response (non-blocking)
+      queueJobPush(job.id);
     } catch (error) {
       console.error('Error creating job:', error);
       res.status(500).json({ success: false, message: 'Error creating job' });
@@ -6851,6 +7023,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       res.json({ success: true, data: job });
+      // Queue Google Calendar push post-response (non-blocking)
+      const cancelStatuses = new Set(['archived', 'unsuccessful', 'cancelled']);
+      if (job.status && cancelStatuses.has(job.status)) {
+        removeJobEvents(job.id).catch(err => console.error('❌ GCal remove error:', err));
+      } else {
+        queueJobPush(job.id);
+      }
     } catch (error) {
       console.error('Error updating job:', error);
       res.status(500).json({ success: false, message: 'Error updating job' });
@@ -7137,6 +7316,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
+      queueJobPush(job.id);
     } catch (error) {
       console.error('Error patching job:', error);
       res.status(500).json({ success: false, message: 'Error updating job' });
@@ -7207,6 +7387,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           console.error(`JOB_DELETE_AUDIT snapshot failed for id=${jobId}:`, auditErr);
         }
       }));
+
+      // Clean up Google Calendar events before deleting
+      await Promise.all(jobIds.map((jobId: string) =>
+        removeJobEvents(jobId).catch(err => console.error(`❌ GCal remove before delete failed for job ${jobId}:`, err))
+      ));
 
       // Delete jobs using storage layer
       const result = await storage.bulkDeleteJobs(jobIds);
@@ -17240,7 +17425,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Create staff assignments for a job (with conflict checking and notifications)
   app.post('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
     try {
-      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false, scheduleBookingReminders = false } = req.body;
+      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false, scheduleBookingReminders = false, checkConflicts = false, overrideConflicts = false } = req.body;
       const jobId = req.params.jobId;
 
       if (!staffAssignments || !Array.isArray(staffAssignments) || staffAssignments.length === 0) {
@@ -17307,6 +17492,42 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             endTime: new Date(assignment.endTime),
             role: assignment.role || null,
             notes: assignment.notes || null,
+          });
+        }
+      }
+
+      // Opt-in double-booking guard (defence in depth behind the client-side
+      // pre-drop check). Only callers that send checkConflicts:true get the
+      // 409 — existing GlobalJobCard / QuickAssign flows are unaffected.
+      // This job's own rows are excluded: they're replaced/deduped below.
+      if (checkConflicts && !overrideConflicts) {
+        const conflictRows: Array<{ employeeId: string; jobId: string; jobNumber: string | null; startTime: string; endTime: string }> = [];
+        for (const planned of allAssignmentsToCreate) {
+          const found = await storage.checkStaffConflicts(
+            [planned.employeeId],
+            planned.startTime,
+            planned.endTime,
+            jobId,
+          );
+          for (const f of found) {
+            for (const c of f.conflicts) {
+              const conflictJob = await storage.getJob(c.jobId);
+              conflictRows.push({
+                employeeId: f.employeeId,
+                jobId: c.jobId,
+                jobNumber: conflictJob?.jobNumber ?? null,
+                startTime: new Date(c.startTime).toISOString(),
+                endTime: new Date(c.endTime).toISOString(),
+              });
+            }
+          }
+        }
+        if (conflictRows.length > 0) {
+          return res.status(409).json({
+            success: false,
+            error: 'conflict',
+            message: 'One or more crew members are already booked in that window',
+            conflicts: conflictRows,
           });
         }
       }
@@ -17586,21 +17807,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           console.error('Diary error stack:', diaryError instanceof Error ? diaryError.stack : diaryError);
         }
 
-        try {
-          const calendarJob = { ...job } as any;
-          if (job.customerId) {
-            const customer = await storage.getCustomer(job.customerId);
-            if (customer) {
-              calendarJob.customerName = customer.name;
-            }
-          }
-          const googleEventId = await googleCalendarService.syncJobToCalendar(calendarJob, created);
-          if (googleEventId) {
-            console.log(`✅ Job synced to Google Calendar: ${googleEventId}`);
-          }
-        } catch (calendarError) {
-          console.error('❌ Error syncing to Google Calendar:', calendarError);
-        }
+        // Queue two-way Google Calendar push (debounced, non-blocking)
+        queueJobPush(jobId);
       });
     } catch (error) {
       console.error('Error creating staff assignments:', error);
@@ -17644,7 +17852,42 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Update a staff assignment (reschedule drag-and-drop)
   app.put('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {
-      const { startTime, endTime, employeeId, notes, status } = req.body;
+      const { startTime, endTime, employeeId, notes, status, checkConflicts = false, overrideConflicts = false } = req.body;
+
+      // Opt-in double-booking guard (same contract as the batch-create route).
+      // Excludes the moved assignment's own job so a within-job time tweak
+      // never conflicts with itself.
+      if (checkConflicts && !overrideConflicts) {
+        const existing = await storage.getJobStaffAssignment(req.params.id);
+        if (existing) {
+          const effEmployeeId = employeeId ?? existing.employeeId;
+          const effStart = startTime ? new Date(startTime) : new Date(existing.startTime);
+          const effEnd = endTime ? new Date(endTime) : new Date(existing.endTime);
+          const found = await storage.checkStaffConflicts([effEmployeeId], effStart, effEnd, existing.jobId);
+          const conflictRows: Array<{ employeeId: string; jobId: string; jobNumber: string | null; startTime: string; endTime: string }> = [];
+          for (const f of found) {
+            for (const c of f.conflicts) {
+              const conflictJob = await storage.getJob(c.jobId);
+              conflictRows.push({
+                employeeId: f.employeeId,
+                jobId: c.jobId,
+                jobNumber: conflictJob?.jobNumber ?? null,
+                startTime: new Date(c.startTime).toISOString(),
+                endTime: new Date(c.endTime).toISOString(),
+              });
+            }
+          }
+          if (conflictRows.length > 0) {
+            return res.status(409).json({
+              success: false,
+              error: 'conflict',
+              message: 'Crew member is already booked in that window',
+              conflicts: conflictRows,
+            });
+          }
+        }
+      }
+
       const updates: Record<string, unknown> = {};
       if (startTime) updates.startTime = new Date(startTime);
       if (endTime) updates.endTime = new Date(endTime);
@@ -17653,6 +17896,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (status) updates.status = status;
       const updated = await storage.updateJobStaffAssignment(req.params.id, updates as Parameters<typeof storage.updateJobStaffAssignment>[1]);
       res.json({ success: true, data: updated });
+      if (updated?.jobId) queueJobPush(updated.jobId);
     } catch (error) {
       console.error('Error updating staff assignment:', error);
       res.status(500).json({ success: false, message: 'Error updating staff assignment' });
@@ -17662,11 +17906,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Delete a staff assignment
   app.delete('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {
+      const assignment = await storage.getJobStaffAssignment(req.params.id);
       await storage.deleteJobStaffAssignment(req.params.id);
       res.json({
         success: true,
         message: 'Staff assignment deleted successfully'
       });
+      if (assignment?.jobId) queueJobPush(assignment.jobId);
     } catch (error) {
       console.error('Error deleting staff assignment:', error);
       res.status(500).json({
@@ -17716,6 +17962,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       } as any);
       if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
       res.json({ success: true, data: job });
+      removeJobEvents(req.params.jobId).catch(err => console.error('❌ GCal remove error on unschedule:', err));
     } catch (error) {
       console.error('Error unscheduling job:', error);
       res.status(500).json({ success: false, message: 'Error unscheduling job' });

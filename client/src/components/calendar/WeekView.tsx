@@ -1,6 +1,8 @@
 // Staff-row week grid — port of CalendarGrid's week mode for the unified
 // calendar. One row per crew member, one column per day; multi-day jobs render
-// in every scheduled day's cell via the shared data helpers.
+// in every scheduled day's cell via the shared data helpers. Blocks drag
+// (mouse or touch long-press) onto any staff/day cell to reassign; drops land
+// at 8 AM, matching the dispatch board's week-cell behaviour.
 import { useMemo } from "react";
 import {
   format,
@@ -13,8 +15,9 @@ import {
 import { Check, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { CalendarJob } from "./calendarMath";
-import { jobRevenue, formatNZD } from "./calendarMath";
+import { effectiveGanttMins, jobRevenue, formatNZD } from "./calendarMath";
 import type { CalendarData } from "./useCalendarData";
+import type { CalendarDnD } from "./useCalendarDnD";
 
 interface WeekViewProps {
   currentDate: Date;
@@ -22,6 +25,7 @@ interface WeekViewProps {
   onSelectDate: (date: Date) => void;
   onJobClick: (job: CalendarJob) => void;
   data: CalendarData;
+  dnd: CalendarDnD;
 }
 
 export function WeekView({
@@ -30,14 +34,16 @@ export function WeekView({
   onSelectDate,
   onJobClick,
   data,
+  dnd,
 }: WeekViewProps) {
   const {
     visibleEmployees,
-    getItemsForDate,
+    getDayGanttItems,
     getCustomerName,
     getJobColor,
     revenueForDate,
     DAY_TARGET,
+    getBusyBlocksForEmployee,
   } = data;
 
   const dateRange = useMemo(
@@ -56,6 +62,11 @@ export function WeekView({
     });
     return map;
   }, [dateRange, revenueForDate]);
+
+  const handleBlockClick = (job: CalendarJob) => {
+    if (dnd.consumeDragClick()) return;
+    onJobClick(job);
+  };
 
   return (
     <div className="flex-1 overflow-auto">
@@ -118,22 +129,44 @@ export function WeekView({
                 <span className="text-sm truncate">{employee.firstName}</span>
               </div>
               {dateRange.map((date) => {
-                const items = getItemsForDate(employee.id, date);
+                const dateKey = format(date, "yyyy-MM-dd");
+                const items = getDayGanttItems(employee.id, date);
+                const isOver =
+                  dnd.dropHover?.employeeId === employee.id &&
+                  dnd.dropHover?.dateStr === dateKey;
                 return (
                   <div
                     key={date.toISOString()}
-                    className="w-36 flex-shrink-0 border-r p-1 min-h-[80px]"
-                    data-testid={`slot-${employee.id}-${format(date, "yyyy-MM-dd")}`}
+                    className={`w-36 flex-shrink-0 border-r p-1 min-h-[80px] transition-colors duration-100 ${isOver ? "bg-blue-50 ring-2 ring-inset ring-blue-300" : ""}`}
+                    data-testid={`slot-${employee.id}-${dateKey}`}
+                    data-drop-employee={employee.id}
+                    data-drop-date={dateKey}
                   >
-                    {items.map((job) => {
+                    {isOver && (
+                      <div className="text-[10px] text-blue-500 font-medium text-center py-1 opacity-80">
+                        Drop to schedule
+                      </div>
+                    )}
+                    {items.map(({ job, assignment }) => {
                       const c = getJobColor(job.id);
                       const price = jobRevenue(job);
+                      const eff = effectiveGanttMins(job, assignment);
                       return (
                         <div
                           key={job.id}
-                          className="text-xs p-1.5 rounded border cursor-pointer mb-1"
+                          className="text-xs p-1.5 rounded border cursor-grab active:cursor-grabbing mb-1 select-none"
                           style={{ backgroundColor: c.bg, borderColor: c.border, color: c.text }}
-                          onClick={() => onJobClick(job)}
+                          onPointerDown={(e) =>
+                            dnd.startPointerDrag(e, {
+                              jobId: job.id,
+                              sourceEmployeeId: employee.id,
+                              assignmentId: assignment?.id ?? null,
+                              durationHours: Math.max(1, Math.round((eff.endMins - eff.startMins) / 60)),
+                              label: getCustomerName(job),
+                            })
+                          }
+                          onContextMenu={(e) => e.preventDefault()}
+                          onClick={() => handleBlockClick(job)}
                           data-testid={`job-block-${job.id}`}
                         >
                           <div className="flex items-center justify-between gap-1">
@@ -163,6 +196,21 @@ export function WeekView({
                         </div>
                       );
                     })}
+                    {/* Google Calendar busy blocks — gray chips, non-interactive */}
+                    {getBusyBlocksForEmployee(employee.id, dateKey).map((busy) => (
+                      <div
+                        key={busy.id}
+                        className="text-[10px] px-1.5 py-0.5 rounded mb-0.5 truncate pointer-events-none"
+                        title={`Google Calendar: ${busy.summary || 'Busy'}`}
+                        style={{
+                          background: 'repeating-linear-gradient(45deg,#e5e7eb 0px,#e5e7eb 3px,#f3f4f6 3px,#f3f4f6 6px)',
+                          border: '1px solid #9ca3af',
+                          color: '#6b7280',
+                        }}
+                      >
+                        {busy.summary || 'Busy'}
+                      </div>
+                    ))}
                   </div>
                 );
               })}

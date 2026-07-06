@@ -3061,6 +3061,67 @@ export const xeroConnections = pgTable("xero_connections", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Google Calendar — per business+user OAuth connection (two-way calendar sync)
+export const googleCalendarConnections = pgTable("google_calendar_connections", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(), // employees.id of the connecting user
+  googleEmail: text("google_email"),
+  calendarId: text("calendar_id").notNull().default("primary"),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  scope: text("scope"),
+  syncToken: text("sync_token"), // incremental events.list cursor (pull side)
+  isActive: boolean("is_active").default(true),
+  lastSyncedAt: timestamp("last_synced_at"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  businessUserUnique: unique("gcal_conn_business_user_unique").on(table.businessId, table.userId),
+}));
+
+// Google Calendar push-side state: one Google event per (job, connection, NZ day).
+// Multi-day jobs sync as one event per scheduled day so weekend carve-outs stay accurate.
+export const googleEventLinks = pgTable("google_event_links", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(),
+  connectionId: varchar("connection_id").notNull(),
+  nzDate: text("nz_date").notNull(), // YYYY-MM-DD the event covers
+  googleEventId: text("google_event_id").notNull(),
+  lastPushedHash: text("last_pushed_hash"), // skip no-op pushes
+  syncStatus: text("sync_status").notNull().default("synced"), // synced | error
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  jobConnDayUnique: unique("gcal_link_job_conn_day_unique").on(table.jobId, table.connectionId, table.nzDate),
+  jobIdx: index("gcal_links_job_idx").on(table.jobId),
+  connIdx: index("gcal_links_conn_idx").on(table.connectionId),
+}));
+
+// Google Calendar pull-side cache: external (non-Inflow) events as UTC busy intervals
+export const googleBusyEvents = pgTable("google_busy_events", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  connectionId: varchar("connection_id").notNull(),
+  googleEventId: text("google_event_id").notNull(),
+  summary: text("summary"),
+  startTime: timestamp("start_time").notNull(), // UTC
+  endTime: timestamp("end_time").notNull(), // UTC
+  status: text("status").default("confirmed"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  connEventUnique: unique("gcal_busy_conn_event_unique").on(table.connectionId, table.googleEventId),
+  timeIdx: index("gcal_busy_time_idx").on(table.businessId, table.startTime, table.endTime),
+}));
+
+export type GoogleCalendarConnection = typeof googleCalendarConnections.$inferSelect;
+export type GoogleEventLink = typeof googleEventLinks.$inferSelect;
+export type GoogleBusyEvent = typeof googleBusyEvents.$inferSelect;
+
 // Xero Settings - Configurable account codes and tax types
 export const xeroSettings = pgTable("xero_settings", {
   businessId: varchar("business_id"),

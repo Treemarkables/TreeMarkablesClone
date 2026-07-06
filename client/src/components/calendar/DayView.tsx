@@ -1,14 +1,11 @@
 // Day Gantt — port of CalendarGrid's day mode for the unified calendar.
 // Horizontal timeline with one row per crew member, an "Unassigned" swim lane
-// on top, and the daily revenue bar. Unassigned blocks can be dragged onto a
-// crew row to assign + time them (same HTML5 drag machinery as /dispatch;
-// Phase B unifies this on pointer events and adds touch + conflict warnings).
-import { useMemo, useRef, useState } from "react";
+// on top, and the daily revenue bar. All job blocks are draggable (mouse drag
+// or touch long-press via useCalendarDnD) onto any crew row to reassign and
+// retime; double-bookings surface the conflict dialog before saving.
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Check, MapPin, MessageSquare } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { nzTimeToUTC } from "@shared/dateUtils";
 import {
   GANTT_COL_W,
   GANTT_END_H,
@@ -31,18 +28,21 @@ import {
   revenueColor,
   type CalendarJob,
 } from "./calendarMath";
+import { toZonedTime } from "date-fns-tz";
+import { NZ_TZ } from "./calendarMath";
 import type { CalendarData } from "./useCalendarData";
+import type { CalendarDnD } from "./useCalendarDnD";
 
 interface DayViewProps {
   currentDate: Date;
   onJobClick: (job: CalendarJob) => void;
   data: CalendarData;
+  dnd: CalendarDnD;
 }
 
-export function DayView({ currentDate, onJobClick, data }: DayViewProps) {
+export function DayView({ currentDate, onJobClick, data, dnd }: DayViewProps) {
   const {
     visibleEmployees,
-    jobMap,
     getJobColor,
     getCustomerName,
     getDayGanttItems,
@@ -51,21 +51,12 @@ export function DayView({ currentDate, onJobClick, data }: DayViewProps) {
     getUniqueJobsForDate,
     revenueForDate,
     DAY_TARGET,
+    getBusyBlocksForEmployee,
   } = data;
 
-  const [dayViewDragOver, setDayViewDragOver] = useState<string | null>(null);
-  const [dayViewDragHour, setDayViewDragHour] = useState<{ employeeId: string; hour: number } | null>(null);
   const [showRevBreakdown, setShowRevBreakdown] = useState(false);
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
 
-  // Track internal drag state (job blocks dragged within the calendar)
-  const dragRef = useRef<{
-    jobId: string;
-    employeeId: string;
-    assignmentId: string | null;
-    durationHours: number;
-  } | null>(null);
+  const dateStr = format(currentDate, "yyyy-MM-dd");
 
   const unassignedJobsForDay = useMemo(
     () => unassignedJobsForDate(currentDate),
@@ -97,79 +88,9 @@ export function DayView({ currentDate, onJobClick, data }: DayViewProps) {
   const displayDayRevenue =
     dayRevenue >= 1000 ? Math.round(dayRevenue / 100) * 100 : Math.round(dayRevenue);
 
-  // ── Internal reschedule (drag within calendar) ────────────────────────────
-  const handleInternalReschedule = async (
-    jobId: string,
-    fromEmployeeId: string,
-    assignmentId: string | null,
-    durationHours: number,
-    toHour: number,
-    toEmployeeId: string,
-    toDate: Date,
-  ) => {
-    const job = jobMap.get(jobId);
-    if (!job) return;
-
-    const nzDateStr = toDate.toLocaleDateString("en-CA", {
-      timeZone: "Pacific/Auckland",
-    });
-    const endHour = Math.min(toHour + durationHours, 23);
-    const startTimeStr = `${String(toHour).padStart(2, "0")}:00`;
-    const endTimeStr = `${String(endHour).padStart(2, "0")}:00`;
-
-    const startDateTime = nzTimeToUTC(nzDateStr, startTimeStr);
-    const endDateTime = nzTimeToUTC(nzDateStr, endTimeStr);
-
-    try {
-      if (assignmentId) {
-        await fetch(`/api/staff-assignments/${assignmentId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            startTime: startDateTime.toISOString(),
-            endTime: endDateTime.toISOString(),
-            employeeId: toEmployeeId,
-          }),
-        });
-      } else {
-        // No assignment record — create one
-        await fetch(`/api/jobs/${jobId}/staff-assignments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            staffAssignments: [
-              {
-                employeeId: toEmployeeId,
-                startTime: startDateTime.toISOString(),
-                endTime: endDateTime.toISOString(),
-                notes: "",
-              },
-            ],
-            sendNotifications: false,
-            sendClientNotification: false,
-            addOnly: true,
-          }),
-        });
-      }
-
-      await fetch(`/api/jobs/${jobId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scheduledDate: startDateTime.toISOString() }),
-      });
-
-      queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/jobs?limit=10000&offset=0"],
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-    } catch {
-      toast({
-        title: "Reschedule failed",
-        description: "Could not update the job time.",
-        variant: "destructive",
-      });
-    }
+  const handleBlockClick = (job: CalendarJob) => {
+    if (dnd.consumeDragClick()) return;
+    onJobClick(job);
   };
 
   return (
@@ -285,9 +206,7 @@ export function DayView({ currentDate, onJobClick, data }: DayViewProps) {
                   </div>
                 </div>
                 {/* Timeline */}
-                <div
-                  className={`flex-1 relative transition-colors duration-100 ${dayViewDragOver === 'unassigned' ? 'bg-blue-50' : 'bg-muted/20'}`}
-                >
+                <div className="flex-1 relative bg-muted/20">
                   {/* Hour grid lines */}
                   <div className="absolute inset-0 flex pointer-events-none">
                     {ganttHourLabels.map((_, i) => (
@@ -310,21 +229,19 @@ export function DayView({ currentDate, onJobClick, data }: DayViewProps) {
                     return (
                       <button
                         key={job.id}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.effectAllowed = "move";
-                          const durationMins = eff.endMins - eff.startMins;
-                          dragRef.current = {
+                        onPointerDown={(e) =>
+                          dnd.startPointerDrag(e, {
                             jobId: job.id,
-                            employeeId: '',
+                            sourceEmployeeId: '',
                             assignmentId: null,
-                            durationHours: Math.max(1, Math.round(durationMins / 60)),
-                          };
-                        }}
-                        onDragEnd={() => setDayViewDragOver(null)}
-                        onClick={() => onJobClick(job)}
+                            durationHours: Math.max(1, Math.round((eff.endMins - eff.startMins) / 60)),
+                            label: custName,
+                          })
+                        }
+                        onContextMenu={(e) => e.preventDefault()}
+                        onClick={() => handleBlockClick(job)}
                         title={`${custName}${timeLabel ? ' — ' + timeLabel : ''} (unassigned — drag to assign crew)`}
-                        className="absolute rounded text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400 cursor-grab active:cursor-grabbing"
+                        className="absolute rounded text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400 cursor-grab active:cursor-grabbing select-none"
                         style={{
                           left: `${Math.max(0, startPct)}%`,
                           width: `${blockW}%`,
@@ -383,6 +300,7 @@ export function DayView({ currentDate, onJobClick, data }: DayViewProps) {
               return { id: job.id, startMins: eff.startMins, endMins: eff.endMins };
             });
             const empGanttLanes = assignGanttLanes(empGanttLaneInput);
+            const isDropTarget = dnd.dropHover?.employeeId === employee.id && dnd.dropHover?.dateStr === dateStr;
             return (
               <div
                 key={employee.id}
@@ -411,44 +329,14 @@ export function DayView({ currentDate, onJobClick, data }: DayViewProps) {
                   </div>
                 </div>
 
-                {/* Gantt timeline bar */}
+                {/* Gantt timeline bar — drop target for pointer drags */}
                 <div
-                  className={`flex-1 relative transition-colors duration-100 ${dayViewDragOver === employee.id ? 'ring-2 ring-inset ring-blue-400' : ''}`}
-                  style={{ backgroundColor: dayViewDragOver === employee.id ? gPalette.row : gPalette.row + "55" }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    setDayViewDragOver(employee.id);
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                    const mins = ganttStartH * 60 + pct * ganttHours * 60;
-                    const hour = Math.max(ganttStartH, Math.min(GANTT_END_H - 1, Math.floor(mins / 60)));
-                    setDayViewDragHour((prev) =>
-                      prev && prev.employeeId === employee.id && prev.hour === hour
-                        ? prev
-                        : { employeeId: employee.id, hour },
-                    );
-                  }}
-                  onDragLeave={(e) => {
-                    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
-                      setDayViewDragOver(null);
-                      setDayViewDragHour((prev) => (prev?.employeeId === employee.id ? null : prev));
-                    }
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDayViewDragOver(null);
-                    setDayViewDragHour(null);
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                    const mins = ganttStartH * 60 + pct * ganttHours * 60;
-                    const hour = Math.max(ganttStartH, Math.min(GANTT_END_H - 1, Math.floor(mins / 60)));
-                    const drag = dragRef.current;
-                    if (drag) {
-                      dragRef.current = null;
-                      handleInternalReschedule(drag.jobId, drag.employeeId, drag.assignmentId, drag.durationHours, hour, employee.id, currentDate);
-                    }
-                  }}
+                  className={`flex-1 relative transition-colors duration-100 ${isDropTarget ? 'ring-2 ring-inset ring-blue-400' : ''}`}
+                  style={{ backgroundColor: isDropTarget ? gPalette.row : gPalette.row + "55" }}
+                  data-drop-employee={employee.id}
+                  data-drop-date={dateStr}
+                  data-gantt-start={ganttStartH}
+                  data-gantt-end={GANTT_END_H}
                 >
                   {/* Hour grid lines */}
                   <div className="absolute inset-0 flex pointer-events-none">
@@ -457,9 +345,9 @@ export function DayView({ currentDate, onJobClick, data }: DayViewProps) {
                     ))}
                   </div>
                   {/* Drag-over preview block */}
-                  {dayViewDragHour?.employeeId === employee.id && (() => {
-                    const h = dayViewDragHour.hour;
-                    const durationHours = Math.max(0.25, dragRef.current?.durationHours ?? 1);
+                  {isDropTarget && dnd.dropHover && (() => {
+                    const h = dnd.dropHover.hour;
+                    const durationHours = Math.max(0.25, dnd.dragState?.item.durationHours ?? 1);
                     const startMins = h * 60;
                     const endMins = Math.min(startMins + durationHours * 60, GANTT_END_H * 60);
                     const leftPct = ((startMins - ganttStartH * 60) / (ganttHours * 60)) * 100;
@@ -480,6 +368,37 @@ export function DayView({ currentDate, onJobClick, data }: DayViewProps) {
                       </>
                     );
                   })()}
+                  {/* Google Calendar busy blocks (gray, hatched, non-interactive) */}
+                  {getBusyBlocksForEmployee(employee.id, dateStr).map((busy) => {
+                    const busyNzStart = toZonedTime(new Date(busy.startTime), NZ_TZ);
+                    const busyNzEnd = toZonedTime(new Date(busy.endTime), NZ_TZ);
+                    const startMins = busyNzStart.getHours() * 60 + busyNzStart.getMinutes();
+                    const endMins = busyNzEnd.getHours() * 60 + busyNzEnd.getMinutes();
+                    const startPct = ganttMinsToPercent(Math.max(startMins, ganttStartH * 60));
+                    const endPct = ganttMinsToPercent(Math.min(endMins, GANTT_END_H * 60));
+                    const blockW = Math.max(2, endPct - startPct);
+                    const label = busy.summary || 'Busy';
+                    return (
+                      <div
+                        key={busy.id}
+                        className="absolute pointer-events-none rounded overflow-hidden"
+                        title={`Google Calendar: ${label}`}
+                        style={{
+                          left: `${startPct}%`,
+                          width: `${blockW}%`,
+                          top: 4,
+                          bottom: 4,
+                          background: 'repeating-linear-gradient(45deg,#9ca3af33 0px,#9ca3af33 4px,#d1d5db22 4px,#d1d5db22 8px)',
+                          border: '1px solid #9ca3af66',
+                          minWidth: 8,
+                        }}
+                      >
+                        <span className="text-[9px] text-gray-500 px-1 truncate block leading-tight">
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })}
                   {/* Job blocks */}
                   {empDayItems.map(({ job, assignment }) => {
                     const eff = effectiveGanttMins(job, assignment);
@@ -496,9 +415,19 @@ export function DayView({ currentDate, onJobClick, data }: DayViewProps) {
                     return (
                       <button
                         key={job.id}
-                        onClick={() => onJobClick(job)}
+                        onPointerDown={(e) =>
+                          dnd.startPointerDrag(e, {
+                            jobId: job.id,
+                            sourceEmployeeId: employee.id,
+                            assignmentId: assignment?.id ?? null,
+                            durationHours: Math.max(1, Math.round((eff.endMins - eff.startMins) / 60)),
+                            label: custName,
+                          })
+                        }
+                        onContextMenu={(e) => e.preventDefault()}
+                        onClick={() => handleBlockClick(job)}
                         title={`${custName} — ${timeLabel}`}
-                        className="absolute rounded text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                        className="absolute rounded text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400 cursor-grab active:cursor-grabbing select-none"
                         style={{
                           left: `${Math.max(0, startPct)}%`,
                           width: `${blockW}%`,

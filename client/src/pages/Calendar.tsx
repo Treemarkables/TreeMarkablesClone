@@ -44,6 +44,8 @@ import {
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatNZTime, jobRunsOnNZDate } from "@shared/dateUtils";
 import { useCalendarData, type CalendarFilter } from "@/components/calendar/useCalendarData";
+import { useCalendarDnD } from "@/components/calendar/useCalendarDnD";
+import { ConflictWarningDialog, DragGhost } from "@/components/calendar/ConflictWarningDialog";
 import { CalendarFilterBar, loadStoredFilter } from "@/components/calendar/CalendarFilterBar";
 import { MonthView } from "@/components/calendar/MonthView";
 import { WeekView } from "@/components/calendar/WeekView";
@@ -79,6 +81,7 @@ export default function Calendar() {
 
   const data = useCalendarData(filter);
   const { isLoading, employees, allJobs, customerMap, jobPassesFilter, businessName } = data;
+  const dnd = useCalendarDnD(data);
 
   const setViewMode = (mode: ViewMode) => {
     setViewModeState(mode);
@@ -362,12 +365,14 @@ export default function Calendar() {
               onSelectDate={setSelectedDate}
               onJobClick={handleJobClick}
               data={data}
+              dnd={dnd}
             />
           ) : (
             <DayView
               currentDate={currentDate}
               onJobClick={handleJobClick}
               data={data}
+              dnd={dnd}
             />
           )}
         </div>
@@ -396,6 +401,15 @@ export default function Calendar() {
           onAddAppointment={() => setShowCreateJob(true)}
         />
       )}
+
+      {/* Drag ghost + double-booking dialog */}
+      <DragGhost dnd={dnd} />
+      <ConflictWarningDialog
+        pendingDrop={dnd.pendingDrop}
+        data={data}
+        onConfirm={dnd.confirmPendingDrop}
+        onCancel={dnd.cancelPendingDrop}
+      />
 
       {/* SMS Dialog */}
       <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>

@@ -1232,6 +1232,8 @@ The Treemarkables Team';
       startEmailReplyPolling();
       const { marketingScheduler } = await import('./services/marketingScheduler');
       marketingScheduler.start();
+      const { startGoogleCalendarPoller } = await import('./services/googleCalendarSync');
+      startGoogleCalendarPoller();
     } catch (err) {
       log(`⚠️ Background worker startup warning: ${(err as Error).message}`, "startup");
     }
