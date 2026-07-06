@@ -4470,13 +4470,26 @@ class DatabaseStorage implements IStorage {
     return updatedEmployee;
   }
 
+  // Scope to the current tenant when a business context is bound — either a logged-in
+  // session OR an owner-context handler wrapped in runWithBusiness (e.g. the SMS poller /
+  // inbound webhooks). Without this, those owner-path callers run on the BYPASSRLS owner
+  // connection and read EVERY tenant's employees — which made admin push notifications
+  // fan out to all tenants' admins. With no context (a true cron) it stays unscoped, as
+  // before. On RLS-pinned tenant connections RLS already scopes this; the filter is the
+  // backstop for the owner connection.
   async getAllEmployees(): Promise<Employee[]> {
-    return await db.select().from(schema.employees).orderBy(schema.employees.firstName, schema.employees.lastName);
+    const bid = currentBusinessId();
+    const base = db.select().from(schema.employees);
+    const scoped = bid ? base.where(eq(schema.employees.businessId, bid)) : base;
+    return await scoped.orderBy(schema.employees.firstName, schema.employees.lastName);
   }
 
   async getActiveEmployees(): Promise<Employee[]> {
+    const bid = currentBusinessId();
     return await db.select().from(schema.employees)
-      .where(eq(schema.employees.isActive, true))
+      .where(bid
+        ? and(eq(schema.employees.isActive, true), eq(schema.employees.businessId, bid))
+        : eq(schema.employees.isActive, true))
       .orderBy(schema.employees.firstName, schema.employees.lastName);
   }
 
