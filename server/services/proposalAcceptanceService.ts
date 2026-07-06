@@ -7,6 +7,7 @@
 // diary entry. Optionally records a deposit payment against the new job.
 
 import { storage } from '../storage';
+import { onLaneJobEvent } from './laneAutomationService';
 import type { Proposal } from '@shared/schema';
 
 export interface FinalizeProposalAcceptanceInput {
@@ -34,6 +35,12 @@ export async function finalizeProposalAcceptance(
 ): Promise<FinalizeProposalAcceptanceResult> {
   const { proposal, updatedTotalAmount, updatedSubtotal, depositPaid } = input;
 
+  // Quotes share this flow (a quote is a proposal with templateUsed === 'quote');
+  // only the customer/owner-facing wording differs.
+  const isQuote = proposal.templateUsed === 'quote';
+  const docWord = isQuote ? 'Quote' : 'Proposal';
+  const docWordLower = isQuote ? 'quote' : 'proposal';
+
   const depositAmount = depositPaid?.amount || 0;
   const balanceDue = Math.max(0, Math.round((updatedTotalAmount - depositAmount) * 100) / 100);
   const gstAmount = Math.max(0, updatedTotalAmount - updatedSubtotal);
@@ -42,8 +49,8 @@ export async function finalizeProposalAcceptance(
   let jobNumber: string;
 
   const baseJobFields = {
-    title: `Work Order from Proposal #${proposal.proposalNumber}`,
-    description: `Work based on accepted proposal #${proposal.proposalNumber}`,
+    title: `Work Order from ${docWord} #${proposal.proposalNumber}`,
+    description: `Work based on accepted ${docWordLower} #${proposal.proposalNumber}`,
     customerId: proposal.customerId,
     quoteId: proposal.quoteId,
     status: 'work_order',
@@ -107,11 +114,11 @@ export async function finalizeProposalAcceptance(
     : '';
 
   await storage.createNotification({
-    title: 'Proposal Accepted!',
+    title: `${docWord} Accepted!`,
     message:
-      `${customer?.name || 'Customer'} has accepted proposal #${proposal.proposalNumber} ` +
+      `${customer?.name || 'Customer'} has accepted ${docWordLower} #${proposal.proposalNumber} ` +
       `for ${formatNzd(updatedTotalAmount)}. Work order #${jobNumber} has been created.${depositCopy}`,
-    type: 'proposal_accepted',
+    type: isQuote ? 'quote_accepted' : 'proposal_accepted',
     priority: 'high',
     isRead: false,
     proposalId: proposal.id,
@@ -125,7 +132,7 @@ export async function finalizeProposalAcceptance(
   const email = customer?.email;
   const channel = phone ? 'sms' : email ? 'email' : 'sms';
   const holdingMsg =
-    `Hey ${firstName}, thanks for accepting our proposal. ` +
+    `Hey ${firstName}, thanks for accepting our ${docWordLower}. ` +
     `We'll be in touch within 24 hours to get your job scheduled.`;
 
   let pendingMessageId: string | null = null;
@@ -165,12 +172,12 @@ export async function finalizeProposalAcceptance(
         ? ` Deposit of ${formatNzd(depositAmount)} paid at acceptance.`
         : '';
       const acceptanceContent =
-        `${customer?.name || 'Customer'} accepted proposal ${proposal.proposalNumber} ` +
+        `${customer?.name || 'Customer'} accepted ${docWordLower} ${proposal.proposalNumber} ` +
         `for ${formatNzd(updatedTotalAmount)}. Job converted to work order.${depositLine}`;
       await storage.createJobDiaryEntry({
         jobId: job.id,
         entryType: 'system',
-        title: `Proposal Accepted: ${proposal.proposalNumber}`,
+        title: `${docWord} Accepted: ${proposal.proposalNumber}`,
         description: acceptanceContent,
         content: acceptanceContent,
         authorName: customer?.name || 'Customer',
@@ -180,12 +187,18 @@ export async function finalizeProposalAcceptance(
           proposalNumber: proposal.proposalNumber,
           totalAmount: proposal.totalAmount,
           depositAmount,
-          eventType: 'proposal_accepted',
+          eventType: isQuote ? 'quote_accepted' : 'proposal_accepted',
         },
       });
     } catch (diaryErr) {
       console.error('Failed to log proposal-accepted diary entry:', diaryErr);
     }
+  }
+
+  // Lanes: a lane can auto-remove the job from a follow-up bucket (or move it into a "Won" lane)
+  // when the quote is accepted. Best-effort; never block acceptance.
+  if (job?.id) {
+    onLaneJobEvent(job.id, 'quote_accepted').catch(err => console.error('[Lanes] quote-accepted trigger error:', err));
   }
 
   return { job, jobNumber, pendingMessageId };

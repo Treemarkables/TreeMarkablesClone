@@ -51,6 +51,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
+import { RecipientPicker } from "./RecipientPicker";
 import { format as formatDate } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { InvoiceTemplate } from "./InvoiceTemplate";
@@ -1496,6 +1497,17 @@ export function EmailComposerModal({
                   Tenant
                 </button>
               </div>
+              {/* Multi-select picker — tick any saved contacts to add them to the
+                  To line (one email, all recipients). */}
+              <RecipientPicker
+                channel="email"
+                customerId={customer?.id}
+                job={job}
+                customer={customer}
+                value={emailData.to}
+                onChange={(to) => setEmailData((prev) => ({ ...prev, to }))}
+                className="sm:col-span-11 sm:col-start-2"
+              />
             </div>
             <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
               <Label
@@ -1694,6 +1706,7 @@ export function EmailComposerModal({
               className="h-8 w-8"
               onClick={() => insertFormatting("bold")}
               data-testid="button-format-bold"
+              aria-label="Bold"
             >
               <Bold className="w-4 h-4" />
             </Button>
@@ -1704,6 +1717,7 @@ export function EmailComposerModal({
               className="h-8 w-8"
               onClick={() => insertFormatting("italic")}
               data-testid="button-format-italic"
+              aria-label="Italic"
             >
               <Italic className="w-4 h-4" />
             </Button>
@@ -1714,6 +1728,7 @@ export function EmailComposerModal({
               className="h-8 w-8"
               onClick={() => insertFormatting("link")}
               data-testid="button-format-link"
+              aria-label="Insert link"
             >
               <Link className="w-4 h-4" />
             </Button>
@@ -1725,6 +1740,7 @@ export function EmailComposerModal({
               className="h-8 w-8"
               onClick={() => {}}
               data-testid="button-format-list"
+              aria-label="Bulleted list"
             >
               <List className="w-4 h-4" />
             </Button>
@@ -1735,6 +1751,7 @@ export function EmailComposerModal({
               className="h-8 w-8"
               onClick={() => {}}
               data-testid="button-format-numbered-list"
+              aria-label="Numbered list"
             >
               <ListOrdered className="w-4 h-4" />
             </Button>
@@ -1747,6 +1764,7 @@ export function EmailComposerModal({
               onClick={() => setIsAvailabilityOpen(true)}
               title="Check your Google Calendar availability"
               data-testid="button-check-availability"
+              aria-label="Check calendar availability"
             >
               <CalendarIcon className="w-4 h-4" />
             </Button>
@@ -1757,6 +1775,7 @@ export function EmailComposerModal({
               className={`h-8 w-8 ${isListening ? "bg-red-500 hover:bg-red-600 text-white" : ""}`}
               onClick={toggleVoiceInput}
               data-testid="button-voice-input"
+              aria-label={isListening ? "Stop voice input" : "Start voice input"}
             >
               {isListening ? (
                 <MicOff className="w-4 h-4" />

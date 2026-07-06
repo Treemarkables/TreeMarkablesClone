@@ -119,11 +119,16 @@ export const PERMISSION_ENTITLEMENTS: Record<string, Entitlement> = {
   "profitability.view": "plan:crew",
   "staff.manage_permissions": "plan:crew",
   "settings.integrations": "plan:crew",
-  // Business tier — marketing/reputation + advanced analytics.
-  "reviews.view": "plan:business",
-  "reviews.respond": "plan:business",
-  "reporting.export": "plan:business",
-  "reporting.metrics": "plan:business",
+  // Advanced analytics & job costing — moved down to Crew (now on both paid
+  // tiers), per the 2026-06-22 plan revision.
+  "reporting.export": "plan:crew",
+  "reporting.metrics": "plan:crew",
+  // NOTE (2026-06-22): marketing/reputation removed from the offering, so
+  // reviews.* are no longer tier-gated here (the capability still exists in code
+  // for the comped Treemarkables tenant, just isn't a sold differentiator).
+  // With marketing gone and analytics moved to Crew, NO live permission key is
+  // gated to plan:business — Business now differs only by job cap, SMS/AI
+  // allowance, support, and card fee (none of which live in this map).
 };
 
 /**

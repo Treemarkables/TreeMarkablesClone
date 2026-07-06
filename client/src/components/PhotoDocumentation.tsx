@@ -308,6 +308,7 @@ export function PhotoDocumentation({
                     <img
                       src={photo.url}
                       alt={`${getTypeText(photo.type)} photo for ${photo.jobTitle}`}
+                      loading="lazy"
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         // Fallback to placeholder if image fails to load
@@ -447,6 +448,7 @@ export function PhotoDocumentation({
                       <img
                         src={photo.url}
                         alt={`${getTypeText(photo.type)} photo for ${photo.jobTitle}`}
+                        loading="lazy"
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           // Fallback to placeholder if image fails to load
@@ -509,6 +511,7 @@ export function PhotoDocumentation({
                         <img
                           src={photo.url}
                           alt={`${getTypeText(photo.type)} photo for ${photo.jobTitle}`}
+                          loading="lazy"
                           className="w-full h-full object-cover"
                           onError={(e) => {
                             // Fallback to placeholder if image fails to load

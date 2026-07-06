@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import HeaderV2 from "@/components/HeaderV2";
 import RedesignFooter from "@/components/RedesignFooter";
 import RedesignReviews from "@/components/RedesignReviews";
 import SEO from "@/components/SEO";
 import InquiryForm from "@/components/InquiryForm";
+import ContactFormModal from "@/components/ContactFormModal";
 import {
   Phone,
   Mail,
@@ -74,6 +75,7 @@ const galleryImages: [string, string][] = [
 ];
 
 export default function TreeRemoval() {
+  const [isQuoteOpen, setIsQuoteOpen] = useState(false);
   // Google tag event script for form submission tracking
   useEffect(() => {
     const script = document.createElement("script");
@@ -156,7 +158,7 @@ export default function TreeRemoval() {
               Gisborne's certified arborists for hazardous, storm-damaged and unwanted trees. Fully insured, fast response, and not a branch left behind.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <a href="#contact" className="inline-flex items-center gap-2 bg-neon text-black font-bold text-base px-7 py-4 rounded-full hover:brightness-95 transition-all shadow-[0_8px_30px_rgba(57,255,20,0.4)]">
+              <a href="#contact" onClick={(e) => { e.preventDefault(); setIsQuoteOpen(true); }} className="inline-flex items-center gap-2 bg-neon text-black font-bold text-base px-7 py-4 rounded-full hover:brightness-95 transition-all shadow-[0_8px_30px_rgba(57,255,20,0.4)]">
                 Get a free quote <ArrowRight className="h-5 w-5" />
               </a>
               <a href={`tel:${PHONE}`} onClick={handlePhoneClick} className="inline-flex items-center gap-2 text-white font-semibold text-base px-7 py-4 rounded-full border border-white/25 hover:bg-white/10 transition-colors backdrop-blur-sm">
@@ -229,7 +231,7 @@ export default function TreeRemoval() {
             <p className="text-mute mt-6 text-lg leading-relaxed">
               We'll come out, climb it, and tell you straight — does it need to come down, can a prune save it, or is it actually fine? No upsell, no scare tactics. If it's safe, we'll tell you that too, free of charge.
             </p>
-            <a href="#contact" className="inline-flex items-center gap-2 mt-8 bg-ink text-white font-bold px-7 py-4 rounded-full hover:bg-ink2 transition-colors">
+            <a href="#contact" onClick={(e) => { e.preventDefault(); setIsQuoteOpen(true); }} className="inline-flex items-center gap-2 mt-8 bg-ink text-white font-bold px-7 py-4 rounded-full hover:bg-ink2 transition-colors">
               Book a free assessment <ArrowRight className="h-5 w-5 text-neon" />
             </a>
           </div>
@@ -269,7 +271,7 @@ export default function TreeRemoval() {
           <div className="flex-1 flex flex-col justify-center px-8 py-14 md:py-0 md:pl-10 md:pr-16 lg:pl-14 lg:pr-24">
             <p className="font-display font-bold mb-8 text-neon" style={{ fontSize: "clamp(28px,3.5vw,52px)" }}>Get a free quote.</p>
             <div>
-              <a href="#contact" className="inline-block bg-neon hover:brightness-95 text-ink font-bold uppercase tracking-[0.12em] px-10 py-4 rounded-md transition text-sm shadow-[0_8px_30px_rgba(57,255,20,0.35)]">
+              <a href="#contact" onClick={(e) => { e.preventDefault(); setIsQuoteOpen(true); }} className="inline-block bg-neon hover:brightness-95 text-ink font-bold uppercase tracking-[0.12em] px-10 py-4 rounded-md transition text-sm shadow-[0_8px_30px_rgba(57,255,20,0.35)]">
                 Request a Quote
               </a>
             </div>
@@ -300,7 +302,7 @@ export default function TreeRemoval() {
                 </li>
               ))}
             </ul>
-            <a href="#contact" className="inline-flex items-center gap-2 mt-8 bg-ink text-white font-bold px-7 py-4 rounded-full hover:bg-ink2 transition-colors">
+            <a href="#contact" onClick={(e) => { e.preventDefault(); setIsQuoteOpen(true); }} className="inline-flex items-center gap-2 mt-8 bg-ink text-white font-bold px-7 py-4 rounded-full hover:bg-ink2 transition-colors">
               Get in touch <ArrowRight className="h-5 w-5 text-neon" />
             </a>
           </div>
@@ -395,6 +397,7 @@ export default function TreeRemoval() {
         </div>
       </section>
 
+      <ContactFormModal open={isQuoteOpen} onOpenChange={setIsQuoteOpen} />
       <RedesignFooter />
     </div>
   );

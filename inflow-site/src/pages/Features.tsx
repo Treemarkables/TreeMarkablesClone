@@ -46,7 +46,6 @@ const features: Feature[] = [
     bullets: [
       "Inbox + SMS + calls captured against the customer",
       "Pipeline view for opportunities and follow-ups",
-      "Automated review and reputation requests",
       "Property history — what we did and when",
     ],
     visual: "crm",
@@ -59,7 +58,7 @@ const features: Feature[] = [
     bullets: [
       "Roles and per-staff overrides",
       "Schedule + leave + availability in one calendar",
-      "Pay rates, time tracking and timesheet exports",
+      "Pay rates and time tracking",
       "Competency register — who's qualified for what",
     ],
     visual: "crew",
@@ -108,7 +107,7 @@ const detailFeatures: { title: string; body: string; tier: Feature["tier"] }[] =
   {
     title: "Job costing & back-costing",
     body: "Compare quoted vs actual labour, materials and supplier costs on every job — so you know exactly what made money.",
-    tier: "Business",
+    tier: "Crew & up",
   },
   {
     title: "Scheduling & dispatch",
@@ -129,11 +128,6 @@ const detailFeatures: { title: string; body: string; tier: Feature["tier"] }[] =
     title: "AI assist",
     body: "Smart dispatch, speech-to-quote, and lead capture from photos and messages — bundled on every paid plan.",
     tier: "Crew & up",
-  },
-  {
-    title: "Marketing & reputation",
-    body: "Campaign and social planning, plus automated Google and Facebook review requests to grow your name.",
-    tier: "Business",
   },
   {
     title: "Workflow automation",
@@ -166,18 +160,16 @@ const comparison: { group: string; rows: { label: string; values: [Cell, Cell, C
       { label: "Roles, permissions & time tracking", values: [false, true, true] },
       { label: "Communications, inbox & templates", values: [false, true, true] },
       { label: "AI assist — dispatch & speech-to-quote", values: [false, true, true] },
+      { label: "Advanced analytics & job costing", values: [false, true, true] },
       { label: "SMS / month included", values: ["—", "200", "800"] },
       { label: "Document builder", values: [false, true, true] },
-      { label: "Xero, Google Calendar & Gmail", values: [false, true, true] },
+      { label: "Xero, Google Calendar, Gmail & Mailchimp", values: [false, true, true] },
     ],
   },
   {
     group: "Business",
     rows: [
-      { label: "Marketing & reputation suite", values: [false, false, true] },
-      { label: "Advanced analytics & job costing", values: [false, false, true] },
       { label: "Workflow automation", values: [false, false, true] },
-      { label: "Mailchimp & Facebook integrations", values: [false, false, true] },
       { label: "Priority onboarding & support", values: [false, false, true] },
     ],
   },
@@ -425,9 +417,9 @@ function CardFrame({ children, label }: { children: React.ReactNode; label: stri
 function JobsVisual() {
   const cols = ["Today", "Tomorrow", "Friday"];
   const jobs = [
-    [{ t: "Macrocarpa removal", c: "Crew A", pill: "bg-lime" }, { t: "Hedge trim", c: "Crew B", pill: "bg-ink-100" }],
-    [{ t: "Storm clean-up", c: "Crew A", pill: "bg-ink-100" }, { t: "Stump grind ×3", c: "Crew C", pill: "bg-ink-100" }, { t: "Pruning", c: "Crew B", pill: "bg-ink-100" }],
-    [{ t: "Mulch delivery", c: "Crew A", pill: "bg-ink-100" }],
+    [{ t: "Switchboard upgrade", c: "Crew A", pill: "bg-lime" }, { t: "Blocked drain callout", c: "Crew B", pill: "bg-ink-100" }],
+    [{ t: "Storm damage repair", c: "Crew A", pill: "bg-ink-100" }, { t: "Bathroom re-fit", c: "Crew C", pill: "bg-ink-100" }, { t: "Hedge & tree trim", c: "Crew B", pill: "bg-ink-100" }],
+    [{ t: "Retaining wall repair", c: "Crew A", pill: "bg-ink-100" }],
   ];
   return (
     <CardFrame label="Schedule">
@@ -455,9 +447,9 @@ function JobsVisual() {
 
 function QuoteVisual() {
   const lines = [
-    { l: "Tree removal — macrocarpa, 14m", q: "1", p: "$1,840" },
-    { l: "Chip & cart away", q: "1", p: "$420" },
-    { l: "Traffic management", q: "1 day", p: "$580" },
+    { l: "Switchboard upgrade — 12 circuits", q: "1", p: "$1,840" },
+    { l: "Rewire garage sub-board", q: "1", p: "$420" },
+    { l: "Certificate of Compliance", q: "1", p: "$580" },
   ];
   return (
     <CardFrame label="Quote · #Q-2046">
@@ -490,7 +482,7 @@ function CrewVisual() {
   const people = [
     { n: "Sam", r: "Foreman", a: "On site" },
     { n: "Jess", r: "Operator", a: "On site" },
-    { n: "Mark", r: "Climber", a: "Leave" },
+    { n: "Mark", r: "Carpenter", a: "Leave" },
     { n: "Pri", r: "Apprentice", a: "Training" },
   ];
   return (
@@ -518,9 +510,9 @@ function CrewVisual() {
 function SafetyVisual() {
   const items = [
     { t: "Prestart — Truck 02", s: "Complete", ok: true },
-    { t: "JHA — Macrocarpa removal", s: "Signed off", ok: true },
+    { t: "JHA — Roof edge work", s: "Signed off", ok: true },
     { t: "Toolbox talk — Manual handling", s: "Due Friday", ok: false },
-    { t: "Equipment induction — Chipper", s: "Renew 14 days", ok: false },
+    { t: "Equipment induction — Scissor lift", s: "Renew 14 days", ok: false },
   ];
   return (
     <CardFrame label="Safety · Today">
@@ -549,7 +541,7 @@ function CrmVisual() {
     { t: "Site visit", s: "Photos uploaded ×6", w: "5 days" },
   ];
   return (
-    <CardFrame label="Te Whata · Wainui Rd">
+    <CardFrame label="Harper · Ormond Rd">
       <div className="space-y-3 border-l-2 border-ink-100 pl-5 ml-2">
         {events.map((e, i) => (
           <div key={i} className="relative">

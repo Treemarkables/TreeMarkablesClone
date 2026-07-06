@@ -349,8 +349,8 @@
   }
   
   .card-clean {
-    background: white;
-    border: 1px solid hsl(220 13% 91%);
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
     border-radius: 8px;
     box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
     transition: all 0.2s ease;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertEquipmentCheckoutSchema, insertEquipmentMaintenanceSchema } from "@shared/schema";
@@ -61,6 +61,9 @@ const equipmentFormSchema = z.object({
   dailyRentalCost: z.string().optional(),
   serialNumber: z.string().optional(),
   registrationNumber: z.string().optional(),
+  registrationExpiryDate: z.string().optional(),
+  cofExpiryDate: z.string().optional(),
+  nextMaintenanceDate: z.string().optional(),
   defaultInspectionTemplateId: z.string().optional(),
   requiresPreStart: z.boolean().default(false),
   notes: z.string().optional(),
@@ -316,6 +319,10 @@ export default function Equipment() {
     defaultValues: {
       status: "available",
       condition: "good",
+      registrationNumber: "",
+      registrationExpiryDate: "",
+      cofExpiryDate: "",
+      nextMaintenanceDate: "",
     },
   });
 
@@ -353,22 +360,42 @@ export default function Equipment() {
     },
   });
 
+  // Surface validation errors instead of failing silently — without this, a
+  // blocked submit (e.g. an invalid field scrolled off-screen on mobile) looks
+  // like "nothing happens" when you press Save. Shared across the equipment forms.
+  const onInvalid = (errors: FieldErrors) => {
+    const message = Object.values(errors)
+      .map((e) => (e && typeof e === "object" && "message" in e ? e.message : undefined))
+      .find(Boolean);
+    toast({
+      variant: "destructive",
+      title: "Couldn't save — please check the form",
+      description: String(message ?? "Some fields need attention."),
+    });
+  };
+
   const onSubmit = (data: EquipmentFormData) => {
     addEquipmentMutation.mutate(data);
   };
 
   const onEdit = (data: EquipmentFormData) => {
-    if (selectedEquipment) {
-      // Drizzle's auto-generated schema rejects "" on decimal columns
-      const payload = {
-        ...data,
-        purchasePrice: data.purchasePrice || undefined,
-        currentValue: data.currentValue || undefined,
-        dailyRentalCost: data.dailyRentalCost || undefined,
-        id: selectedEquipment.id,
-      };
-      editEquipmentMutation.mutate(payload);
+    if (!selectedEquipment) {
+      toast({
+        variant: "destructive",
+        title: "Couldn't save",
+        description: "No vehicle selected — please close and reopen the editor.",
+      });
+      return;
     }
+    // Drizzle's auto-generated schema rejects "" on decimal columns
+    const payload = {
+      ...data,
+      purchasePrice: data.purchasePrice || undefined,
+      currentValue: data.currentValue || undefined,
+      dailyRentalCost: data.dailyRentalCost || undefined,
+      id: selectedEquipment.id,
+    };
+    editEquipmentMutation.mutate(payload);
   };
 
   const handleEdit = (equipment: any) => {
@@ -387,6 +414,9 @@ export default function Equipment() {
       dailyRentalCost: equipment.dailyRentalCost || '',
       serialNumber: equipment.serialNumber || '',
       registrationNumber: equipment.registrationNumber || '',
+      registrationExpiryDate: equipment.registrationExpiryDate ? String(equipment.registrationExpiryDate).slice(0, 10) : '',
+      cofExpiryDate: equipment.cofExpiryDate ? String(equipment.cofExpiryDate).slice(0, 10) : '',
+      nextMaintenanceDate: equipment.nextMaintenanceDate ? String(equipment.nextMaintenanceDate).slice(0, 10) : '',
       defaultInspectionTemplateId: equipment.defaultInspectionTemplateId || '',
       requiresPreStart: equipment.requiresPreStart ?? false,
       notes: equipment.notes || '',
@@ -420,19 +450,26 @@ export default function Equipment() {
     }
   };
 
-  // Filter equipment
-  const filteredEquipment = equipment.filter((item: any) => {
-    const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.model?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || item.status === statusFilter;
-    const matchesType = typeFilter === "all" || item.type === typeFilter;
-    
-    return matchesSearch && matchesStatus && matchesType;
-  });
+  // Filter equipment. Memoized: these filter chains previously re-ran over
+  // the full equipment + checkout lists on every render (every search
+  // keystroke / dialog state change). "now" freshness rides on the query
+  // refetches giving `equipment`/`checkouts` new identities.
+  const filteredEquipment = useMemo(
+    () =>
+      equipment.filter((item: any) => {
+        const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             item.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             item.model?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === "all" || item.status === statusFilter;
+        const matchesType = typeFilter === "all" || item.type === typeFilter;
 
-  // Get overdue maintenance equipment (for now, using lastMaintenanceDate + intervalDays)
-  const getOverdueMaintenance = () => {
+        return matchesSearch && matchesStatus && matchesType;
+      }),
+    [equipment, searchTerm, statusFilter, typeFilter],
+  );
+
+  // Overdue maintenance equipment (lastMaintenanceDate + intervalDays)
+  const overdueMaintenance = useMemo(() => {
     const now = new Date();
     return equipment.filter((item: any) => {
       if (!item.lastMaintenanceDate || !item.maintenanceIntervalDays) return false;
@@ -440,29 +477,33 @@ export default function Equipment() {
       const nextDue = new Date(lastMaintenance.getTime() + (item.maintenanceIntervalDays * 24 * 60 * 60 * 1000));
       return nextDue < now;
     });
-  };
+  }, [equipment]);
 
-  const overdueMaintenance = getOverdueMaintenance();
-
-  // Get active checkouts for display
-  const activeCheckouts = checkouts.filter((checkout: any) => !checkout.actualReturnTime);
-  const overdueCheckouts = activeCheckouts.filter((checkout: any) => {
-    if (!checkout.expectedReturnTime) return false;
-    return new Date(checkout.expectedReturnTime) < new Date();
-  });
+  // Active checkouts for display
+  const { activeCheckouts, overdueCheckouts } = useMemo(() => {
+    const active = checkouts.filter((checkout: any) => !checkout.actualReturnTime);
+    const overdue = active.filter((checkout: any) => {
+      if (!checkout.expectedReturnTime) return false;
+      return new Date(checkout.expectedReturnTime) < new Date();
+    });
+    return { activeCheckouts: active, overdueCheckouts: overdue };
+  }, [checkouts]);
 
   // Calculate stats
-  const stats = {
-    total: equipment.length,
-    available: equipment.filter((e: any) => e.status === "available").length,
-    inUse: equipment.filter((e: any) => e.status === "in_use").length,
-    maintenance: equipment.filter((e: any) => e.status === "maintenance").length,
-    retired: equipment.filter((e: any) => e.status === "retired").length,
-    activeCheckouts: activeCheckouts.length,
-    overdueCheckouts: overdueCheckouts.length,
-    overdueMaintenance: overdueMaintenance.length,
-    maintenanceRecords: maintenanceRecords.length,
-  };
+  const stats = useMemo(
+    () => ({
+      total: equipment.length,
+      available: equipment.filter((e: any) => e.status === "available").length,
+      inUse: equipment.filter((e: any) => e.status === "in_use").length,
+      maintenance: equipment.filter((e: any) => e.status === "maintenance").length,
+      retired: equipment.filter((e: any) => e.status === "retired").length,
+      activeCheckouts: activeCheckouts.length,
+      overdueCheckouts: overdueCheckouts.length,
+      overdueMaintenance: overdueMaintenance.length,
+      maintenanceRecords: maintenanceRecords.length,
+    }),
+    [equipment, activeCheckouts, overdueCheckouts, overdueMaintenance, maintenanceRecords],
+  );
 
   // Handle checkout/checkin/maintenance actions
   const handleCheckout = (equipmentItem: any) => {
@@ -530,7 +571,7 @@ export default function Equipment() {
             </DialogHeader>
             
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-4">
+              <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -702,6 +743,67 @@ export default function Equipment() {
                   />
                 </div>
 
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Vehicle compliance (optional)</p>
+                    <p className="text-xs text-muted-foreground">Set these on vehicles to track them on the Today page — rego, Certificate of Fitness and next service surface there before they fall due.</p>
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="registrationNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Registration / plate</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. GHT483" {...field} value={field.value || ''} data-testid="input-equipment-rego" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="registrationExpiryDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rego expiry</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} data-testid="input-equipment-rego-expiry" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="cofExpiryDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>CoF expiry</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} data-testid="input-equipment-cof-expiry" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="nextMaintenanceDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Next service due</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} data-testid="input-equipment-next-service" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
                 <FormField
                   control={form.control}
                   name="defaultInspectionTemplateId"
@@ -790,7 +892,7 @@ export default function Equipment() {
             </DialogHeader>
             
             <Form {...editForm}>
-              <form onSubmit={editForm.handleSubmit(onEdit)} className="space-y-4 pb-4">
+              <form onSubmit={editForm.handleSubmit(onEdit, onInvalid)} className="space-y-4 pb-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={editForm.control}
@@ -959,6 +1061,67 @@ export default function Equipment() {
                       </FormItem>
                     )}
                   />
+                </div>
+
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Vehicle compliance (optional)</p>
+                    <p className="text-xs text-muted-foreground">Set these on vehicles to track them on the Today page — rego, Certificate of Fitness and next service surface there before they fall due.</p>
+                  </div>
+                  <FormField
+                    control={editForm.control}
+                    name="registrationNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Registration / plate</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. GHT483" {...field} value={field.value || ''} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="registrationExpiryDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rego expiry</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={editForm.control}
+                      name="cofExpiryDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>CoF expiry</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={editForm.control}
+                      name="nextMaintenanceDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Next service due</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
 
                 <FormField
@@ -1306,10 +1469,11 @@ export default function Equipment() {
                       Check Out
                     </Button>
                   ) : (
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size={isMobile ? "default" : "sm"}
                       className={isMobile ? "h-11" : ""}
+                      onClick={() => handleEdit(item)}
                       data-testid={`button-view-${item.id}`}
                     >
                       <Eye className="h-4 w-4 mr-2" />
@@ -1827,7 +1991,7 @@ export default function Equipment() {
 
       {/* Checkout Equipment Dialog */}
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Check Out Equipment</DialogTitle>
           </DialogHeader>
@@ -1840,7 +2004,7 @@ export default function Equipment() {
               </div>
 
               <Form {...checkoutForm}>
-                <form onSubmit={checkoutForm.handleSubmit(onCheckout)} className="space-y-4">
+                <form onSubmit={checkoutForm.handleSubmit(onCheckout, onInvalid)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={checkoutForm.control}
@@ -1950,7 +2114,7 @@ export default function Equipment() {
 
       {/* Checkin Equipment Dialog */}
       <Dialog open={isCheckinOpen} onOpenChange={setIsCheckinOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Check In Equipment</DialogTitle>
           </DialogHeader>
@@ -1964,7 +2128,7 @@ export default function Equipment() {
               </div>
 
               <Form {...checkinForm}>
-                <form onSubmit={checkinForm.handleSubmit(onCheckin)} className="space-y-4">
+                <form onSubmit={checkinForm.handleSubmit(onCheckin, onInvalid)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={checkinForm.control}
@@ -2062,7 +2226,7 @@ export default function Equipment() {
 
       {/* Maintenance Record Dialog */}
       <Dialog open={isMaintenanceOpen} onOpenChange={setIsMaintenanceOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Add Maintenance Record</DialogTitle>
           </DialogHeader>
@@ -2075,7 +2239,7 @@ export default function Equipment() {
               </div>
 
               <Form {...maintenanceForm}>
-                <form onSubmit={maintenanceForm.handleSubmit(onMaintenance)} className="space-y-4">
+                <form onSubmit={maintenanceForm.handleSubmit(onMaintenance, onInvalid)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={maintenanceForm.control}

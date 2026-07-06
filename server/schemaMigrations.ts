@@ -46,6 +46,7 @@ const MIGRATIONS: Migration[] = [
         key text NOT NULL UNIQUE, name text NOT NULL,
         stripe_price_id text, price_nzd numeric(10,2) NOT NULL DEFAULT 0,
         interval text NOT NULL DEFAULT 'month', active_job_cap integer,
+        sms_cap integer, ai_action_cap integer,
         is_active boolean NOT NULL DEFAULT true, sort_order integer NOT NULL DEFAULT 0,
         created_at timestamp DEFAULT now())`,
       `CREATE TABLE IF NOT EXISTS add_ons (
@@ -67,10 +68,10 @@ const MIGRATIONS: Migration[] = [
         add_on_id varchar REFERENCES add_ons(id),
         status text NOT NULL DEFAULT 'active', stripe_subscription_item_id text,
         activated_at timestamp DEFAULT now())`,
-      `INSERT INTO subscription_plans (key, name, stripe_price_id, price_nzd, active_job_cap, sort_order) VALUES
-        ('freemium','Freemium', NULL, 0, 15, 0),
-        ('crew','Crew', 'price_1Tf0Z6LboGXT31TYwrPjNonb', 89, 75, 1),
-        ('business','Business', 'price_1Tf0Z7LboGXT31TYR2GirPLw', 189, NULL, 2)
+      `INSERT INTO subscription_plans (key, name, stripe_price_id, price_nzd, active_job_cap, sms_cap, ai_action_cap, sort_order) VALUES
+        ('freemium','Freemium', NULL, 0, 15, 0, 0, 0),
+        ('crew','Crew', 'price_1Tf0Z6LboGXT31TYwrPjNonb', 89, 75, 200, 75, 1),
+        ('business','Business', 'price_1Tf0Z7LboGXT31TYR2GirPLw', 150, NULL, 600, 250, 2)
         ON CONFLICT (key) DO NOTHING`,
     ],
     postChecks: async (client) => {
