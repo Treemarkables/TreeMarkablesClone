@@ -2903,9 +2903,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 }}
                                 data-testid={`desktop-job-card-${job.id}`}
                               >
-                                <div className="flex items-start gap-3 p-4">
-                                  {/* Drag handle indicator */}
-                                  <div className="flex-shrink-0 flex items-center self-stretch opacity-30 hover:opacity-60 cursor-grab active:cursor-grabbing">
+                                <div className="relative flex items-start gap-2.5 py-4 pr-4 pl-6">
+                                  {/* Drag handle indicator — sits in the left gutter so it doesn't push content right */}
+                                  <div className="absolute left-0.5 top-1/2 -translate-y-1/2 opacity-30 hover:opacity-60 cursor-grab active:cursor-grabbing">
                                     <GripVertical className="h-4 w-4" />
                                   </div>
                                   {/* Customer Avatar - Large Circle */}
@@ -2946,8 +2946,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                     </div>
 
                                     {/* Row 2: Location + Status Badge */}
-                                    <div className="flex items-start justify-between gap-2 mb-1">
-                                      <div className="flex items-start gap-1.5 text-sm text-gray-500 min-w-0">
+                                    <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1 mb-1">
+                                      <div className="flex items-start gap-1.5 text-sm text-gray-500 min-w-0 grow shrink basis-36">
                                         <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
                                         <span className="whitespace-normal break-words min-w-0">
                                           {fullAddress || "No location"}
