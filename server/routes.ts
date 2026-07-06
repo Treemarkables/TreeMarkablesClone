@@ -1622,7 +1622,9 @@ async function generateInvoicePDFBuffer(
     const gstAmount = subtotal * 0.15;
     const totalAmount = subtotal + gstAmount;
 
-    const billingName = job?.billingNameOverride || invoiceData?.contactName || customer?.name || 'Customer';
+    // Per-invoice billing-name override (saved on the invoice) takes priority over the
+    // job-level billingNameOverride so "edit for this invoice only" actually sticks on render.
+    const billingName = invoiceData?.contactName || job?.billingNameOverride || customer?.name || 'Customer';
     const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
     const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
 
@@ -11122,7 +11124,9 @@ Draft the reply now.`;
           ? `${APP_URL}/invoice/${invoiceDetails.id}/view`
           : APP_URL;
 
-        const invCustomerName = job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'there';
+        // Per-invoice billing-name override (saved on the invoice) beats the job-level
+        // billingNameOverride so "edit for this invoice only" sticks in the email too.
+        const invCustomerName = invoiceDetails?.contactName || job?.billingNameOverride || customer?.name || 'there';
 
         invoiceHtml = renderInvoiceEmail({
           customerName: invCustomerName,

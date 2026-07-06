@@ -2174,7 +2174,7 @@ export function InvoiceBuilder({
                     customer={customer}
                     jobAddress={editableAddress}
                     jobNumber={job.jobNumber}
-                    billingName={job.billingNameOverride || undefined}
+                    billingName={editableContactName || job.billingNameOverride || undefined}
                     contactName={editableContactName}
                     template={invoiceTemplate}
                     lineItems={lineItems}
