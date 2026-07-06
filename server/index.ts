@@ -20,6 +20,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
+import { attachVoiceAgentWss } from "./services/voiceAgent";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
 if (!process.env.ALLOW_EMPLOYEE_ID_LOGIN) {
@@ -560,6 +561,10 @@ function startNotificationQueueWorker() {
         throw error;
       }
 
+      // Voice agent media stream (Twilio <Stream>) — path-filtered upgrade
+      // listener that coexists with Vite's HMR WebSocket on the same server.
+      attachVoiceAgentWss(devServer!);
+
       // In development, listen on the devServer (Vite's server)
       devServer!.listen(port, "0.0.0.0", () => {
         log(`Server successfully started on port ${port}`, "startup");
@@ -606,6 +611,13 @@ function startNotificationQueueWorker() {
         (globalThis as any).__launcherHandler = app;
       } else {
         currentHandler = app as any;
+      }
+
+      // Voice agent media stream (Twilio <Stream>) — attach to the pre-bound
+      // production server. Upgrades arriving in the boot window before this
+      // line are dropped; the IVR TwiML's <Redirect> fallback dials Jules.
+      if (productionHttpServer) {
+        attachVoiceAgentWss(productionHttpServer);
       }
       log(`Server fully initialised — Express app now active on port ${port}`, "startup");
       log(`Server ready to accept connections at http://0.0.0.0:${port}`, "startup");

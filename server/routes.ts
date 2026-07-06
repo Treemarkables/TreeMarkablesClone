@@ -18,6 +18,7 @@ declare module 'express-session' {
 import { storage, invoiceRevenueExGst } from "./storage";
 import { APP_URL } from "./config/appUrl";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
+import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
@@ -70,6 +71,7 @@ import multer from "multer";
 import Papa from "papaparse";
 import twilio from "twilio";
 import { getTwilioClient } from "./services/twilioClient";
+import { mintStreamToken } from "./services/voiceAgent";
 import jwt from "jsonwebtoken";
 import path from "path";
 import bcrypt from "bcrypt";
@@ -11889,16 +11891,22 @@ Draft the reply now.`;
     }
   });
 
-  // TwiML: answer the call → ring the iOS Capacitor app (Twilio Client) AND owner's phone simultaneously.
-  // First to answer wins. Records the entire conversation.
-  // iOS app receives the call via PushKit/CallKit even when backgrounded.
-  app.post('/api/webhooks/twilio-answer', async (req: Request, res: Response) => {
-    // Validate Twilio signature to prevent spoofed requests
-    if (!validateTwilioSignature(req)) {
-      console.error('❌ Invalid Twilio signature for answer webhook');
-      return res.status(403).send('Forbidden');
-    }
+  // Shared XML-text escaper for TwiML built in the answer/IVR webhooks.
+  const escapeTwimlXml = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
 
+  // Builds the inner TwiML verbs (everything between <Response> and </Response>)
+  // for the original "ring the iOS app + owner's phone simultaneously, record,
+  // voicemail on no-answer" flow. Extracted verbatim from the answer webhook so
+  // the IVR menu can fall through to the exact same behaviour on timeout /
+  // press-2, and so the voice-agent failure fallback (?mode=dial) reproduces
+  // today's flow byte-for-byte.
+  const buildDialJulesTwimlBody = async (req: Request): Promise<string> => {
     const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER;
     const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
     const hasClient = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
@@ -11906,11 +11914,8 @@ Draft the reply now.`;
     // Must have at least one destination — Client app OR phone number
     if (!hasClient && !ownerPhone) {
       console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or OWNER_PHONE_NUMBER)');
-      res.type('text/xml');
-      return res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="alice">Sorry, we are unable to take your call right now. Please try again later.</Say>
-</Response>`);
+      return `  <Say voice="alice">Sorry, we are unable to take your call right now. Please try again later.</Say>
+`;
     }
 
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
@@ -12053,10 +12058,7 @@ Draft the reply now.`;
 
     console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, connecting=${connectingTwiml ? 'on' : 'off'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
 
-    res.type('text/xml');
-    res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-${connectingTwiml}${disclosureTwiml}  <Dial
+    return `${connectingTwiml}${disclosureTwiml}  <Dial
     record="record-from-answer"
     answerOnBridge="true"
     recordingStatusCallback="${recordingCallbackUrl}"
@@ -12067,6 +12069,106 @@ ${connectingTwiml}${disclosureTwiml}  <Dial
 ${clientTarget}
 ${phoneTarget}
   </Dial>
+`;
+  };
+
+  // TwiML: answer the call. With the AI voice agent enabled, play an IVR menu
+  // ("press 1 for an AI quote, press 2 for Jules") — press 2, a wrong digit or
+  // no input all fall through to ringing the iOS app + owner's phone exactly
+  // as before (record, voicemail on no-answer). With the agent disabled — and
+  // on the ?mode=dial fallback re-entry used when the AI bridge fails — the
+  // response is byte-identical to the original behaviour.
+  app.post('/api/webhooks/twilio-answer', async (req: Request, res: Response) => {
+    // Validate Twilio signature to prevent spoofed requests
+    if (!validateTwilioSignature(req)) {
+      console.error('❌ Invalid Twilio signature for answer webhook');
+      return res.status(403).send('Forbidden');
+    }
+
+    let answerSettings: schema.BusinessSettings | null = null;
+    try {
+      answerSettings = await storage.getBusinessSettings();
+    } catch (settingsErr) {
+      // Settings unreadable → treat the agent as disabled; never block the call.
+      console.error('Voice-agent settings load failed — answering with dial flow:', settingsErr);
+    }
+
+    const dialBody = await buildDialJulesTwimlBody(req);
+    res.type('text/xml');
+
+    const voiceAgentOn = !!answerSettings?.voiceAgentEnabled && !!process.env.OPENAI_API_KEY;
+    if (!voiceAgentOn || req.query.mode === 'dial') {
+      return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+${dialBody}</Response>`);
+    }
+
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const baseUrl = `${protocol}://${host}`;
+    const inboundFrom = String(req.body?.ForwardedFrom || req.body?.From || '');
+    const inboundTo = String(req.body?.To || '');
+    const identity = getBusinessIdentity(answerSettings);
+    const greeting = (answerSettings?.voiceAgentGreeting ||
+      'Thanks for calling {businessName}. For a quick quote with our A.I. assistant, press 1. To speak to {ownerName}, press 2.')
+      .replace(/\{businessName\}/g, identity.name)
+      .replace(/\{ownerName\}/g, identity.ownerName);
+    // `&` between query params must be `&amp;` inside an XML attribute.
+    const ivrActionUrl =
+      `${baseUrl}/api/webhooks/twilio-ivr?callerFrom=${encodeURIComponent(inboundFrom)}&amp;calledTo=${encodeURIComponent(inboundTo)}`;
+
+    console.log(`📞 Twilio answer webhook — IVR menu (voice agent on), callerFrom=${inboundFrom || 'unknown'}`);
+    return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather input="dtmf" numDigits="1" timeout="5" action="${ivrActionUrl}" method="POST">
+    <Say voice="alice">${escapeTwimlXml(greeting)}</Say>
+  </Gather>
+${dialBody}</Response>`);
+  });
+
+  // IVR digit handler: 1 → bridge the caller to the AI voice agent over a
+  // Twilio Media Stream; anything else (press 2, wrong digit) → dial Jules as
+  // before. Timeout/no-input never reaches here — the menu TwiML falls through
+  // to the dial verbs inline after </Gather>.
+  app.post('/api/webhooks/twilio-ivr', async (req: Request, res: Response) => {
+    if (!validateTwilioSignature(req)) {
+      console.error('❌ Invalid Twilio signature for IVR webhook');
+      return res.status(403).send('Forbidden');
+    }
+
+    res.type('text/xml');
+    const digit = String(req.body?.Digits || '');
+    const callSid = String(req.body?.CallSid || '');
+    if (digit !== '1' || !callSid) {
+      const dialBody = await buildDialJulesTwimlBody(req);
+      return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+${dialBody}</Response>`);
+    }
+
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const baseUrl = `${protocol}://${host}`;
+    const callerPhone = String(req.query.callerFrom || req.body?.From || '');
+    // WS upgrades can't go through validateTwilioSignature, so the stream URL
+    // carries a short-lived HMAC token bound to this CallSid instead.
+    const streamToken = mintStreamToken(callSid);
+
+    // The verbs after </Connect> run whenever the stream ends with the call
+    // still alive — i.e. the OpenAI bridge failed to start or died mid-call.
+    // They route the caller to the normal dial-Jules flow via ?mode=dial. On a
+    // successful conversation the agent hangs up via the REST API, so the
+    // redirect never fires.
+    console.log(`📞 IVR: caller pressed 1 — bridging ${callerPhone || 'unknown'} to voice agent (call ${callSid})`);
+    return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="wss://${host}/api/voice-agent/stream?token=${streamToken}">
+      <Parameter name="callerPhone" value="${escapeTwimlXml(callerPhone)}"/>
+    </Stream>
+  </Connect>
+  <Say voice="alice">Sorry, our assistant is unavailable right now. Connecting you through.</Say>
+  <Redirect method="POST">${baseUrl}/api/webhooks/twilio-answer?mode=dial</Redirect>
 </Response>`);
   });
 
@@ -21216,12 +21318,16 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
       console.log('📝 Mobile Transcription:', transcriptText);
 
       // Step 2: Extract quote details using GPT-5
+      let __mobileQuoteKnowledge = '';
+      try {
+        __mobileQuoteKnowledge = buildBusinessKnowledgeBlock(await storage.getBusinessSettings());
+      } catch { /* knowledge is optional context */ }
       const extractionPrompt = `You are a quote assistant for a field-service business in New Zealand. 
 Extract the following information from this conversation transcription and return it as JSON:
 
 {
   "customerName": "customer's full name or null if not mentioned",
-  "customerPhone": "phone number or null if not mentioned", 
+  "customerPhone": "phone number or null if not mentioned",
   "customerEmail": "email or null if not mentioned",
   "address": "property address or null if not mentioned",
   "jobDescription": "detailed description of the work needed",
@@ -21230,7 +21336,7 @@ Extract the following information from this conversation transcription and retur
   "urgency": "urgent/normal/low based on conversation tone",
   "notes": "any additional important details"
 }
-
+${__mobileQuoteKnowledge}
 Transcription: ${transcriptText}`;
 
       const extractionResponse = await openai.chat.completions.create({
@@ -28878,12 +28984,16 @@ Formatted task list:`;
 
       // Step 2: Extract quote details using GPT-5 (full quote mode only)
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      let __webQuoteKnowledge = '';
+      try {
+        __webQuoteKnowledge = buildBusinessKnowledgeBlock(await storage.getBusinessSettings());
+      } catch { /* knowledge is optional context */ }
       const extractionPrompt = `You are a quote assistant for a field-service business in New Zealand. 
 Extract the following information from this conversation transcription and return it as JSON:
 
 {
   "customerName": "customer's full name or null if not mentioned",
-  "customerPhone": "phone number or null if not mentioned", 
+  "customerPhone": "phone number or null if not mentioned",
   "customerEmail": "email or null if not mentioned",
   "address": "property address or null if not mentioned",
   "jobDescription": "detailed description of the work needed",
@@ -28892,7 +29002,7 @@ Extract the following information from this conversation transcription and retur
   "urgency": "urgent/normal/low based on conversation tone",
   "notes": "any additional important details"
 }
-
+${__webQuoteKnowledge}
 Transcription: ${transcriptText}`;
 
       const extractionResponse = await openai.chat.completions.create({

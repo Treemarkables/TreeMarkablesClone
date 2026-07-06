@@ -36,6 +36,8 @@ import {
   Receipt,
   FileStack,
   CreditCard,
+  PhoneCall,
+  BookOpen,
   Search,
   Rocket,
   type LucideIcon
@@ -276,6 +278,20 @@ const settingsSections: SettingSection[] = [
         path: "/settings/quote-followup"
       },
       {
+        id: "voice-agent",
+        title: "AI Phone Assistant",
+        description: "Inbound call menu — callers can get a quick quote with the AI assistant",
+        icon: PhoneCall,
+        path: "/settings/voice-agent"
+      },
+      {
+        id: "ai-knowledge",
+        title: "AI Knowledge",
+        description: "Business facts every AI feature reads — services, service area, policies",
+        icon: BookOpen,
+        path: "/settings/ai-knowledge"
+      },
+      {
         id: "booking-reminders",
         title: "Booking Reminders",
         description: "Customer email/SMS reminders before scheduled jobs",
@@ -378,6 +394,8 @@ const settingsSections: SettingSection[] = [
 // Maps each setting to its 3D illustration in client/public/settings-icons/.
 // Kept separate from the option id so several settings can share an illustration.
 const SETTING_IMAGES: Record<string, string> = {
+  "voice-agent": "calls",
+  "ai-knowledge": "preferences",
   company: "company",
   billing: "billing",
   account: "account",

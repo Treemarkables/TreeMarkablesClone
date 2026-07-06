@@ -1482,6 +1482,18 @@ export const businessSettings = pgTable("business_settings", {
   inquiryAutoReplyEmailMessage: text("inquiry_auto_reply_email_message").default("Hi {customerName},\n\nThanks for getting in touch with Treemarkables. We've received your inquiry and Jules will be in touch within 24 hours to schedule in your quote.\n\nIf it's urgent, feel free to reply to this email or give us a call.\n\nThanks,\nThe Treemarkables Team"),
   inquiryAutoReplySmsMessage: text("inquiry_auto_reply_sms_message").default("Hi {firstName}, thanks for your inquiry with Treemarkables. Jules will be in touch within 24 hours to schedule in your quote."),
 
+  // AI Voice Agent (inbound quote triage: IVR menu + OpenAI Realtime over Twilio Media Streams)
+  voiceAgentEnabled: boolean("voice_agent_enabled").default(false),
+  voiceAgentGreeting: text("voice_agent_greeting").default("Thanks for calling {businessName}. For a quick quote with our A.I. assistant, press 1. To speak to {ownerName}, press 2."),
+  voiceAgentVoice: text("voice_agent_voice").default("marin"), // OpenAI Realtime voice id
+  voiceAgentExtraInstructions: text("voice_agent_extra_instructions").default(""),
+  voiceAgentMaxMinutes: integer("voice_agent_max_minutes").default(10),
+
+  // Shared AI knowledge document — business facts (services, service area,
+  // policies, FAQs) injected into every AI prompt via buildBusinessKnowledgeBlock()
+  // (server/aiKnowledge.ts): voice agent, speech-to-quote, and future surfaces.
+  aiKnowledge: text("ai_knowledge").default(""),
+
   // Metadata
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -1528,6 +1540,10 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
   inquiryAutoReplyEmailSubject: z.string().max(200).optional(),
   inquiryAutoReplyEmailMessage: z.string().max(5000).optional(),
   inquiryAutoReplySmsMessage: z.string().max(306).optional(),
+  voiceAgentGreeting: z.string().max(500).optional(),
+  voiceAgentExtraInstructions: z.string().max(2000).optional(),
+  voiceAgentMaxMinutes: z.number().int().min(2).max(30).optional(),
+  aiKnowledge: z.string().max(20000).optional(),
 });
 
 // Business Settings Update Schema - partial with same constraints
