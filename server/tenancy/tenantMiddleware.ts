@@ -71,6 +71,11 @@ const OWNER_PATH_PATTERNS: RegExp[] = [
   // the proposal/quote viewer links above.
   /^\/api\/invoices\/[^/]+\/pdf$/,
   /^\/api\/invoices\/[^/]+\/payment-checkout$/,
+  // "Book another job" on the public invoice page (#268) — anonymous POST that
+  // looks the invoice up by id, then self-scopes writes to the invoice's tenant
+  // via runWithBusiness. Same anonymous-single-resource-by-id class as above;
+  // without this the empty-GUC connection reads zero rows → 404 for customers.
+  /^\/api\/invoices\/[^/]+\/request-service$/,
   /^\/api\/videos\/[^/]+\/public$/,
   /^\/api\/jobs\/[^/]+\/videos\/public$/,
   /^\/api\/photos\/public$/,
