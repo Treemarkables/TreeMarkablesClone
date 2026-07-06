@@ -3,6 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { type LeadSource } from "@shared/schema";
+import TurnstileCaptcha, {
+  useCaptchaConfig,
+} from "@/components/TurnstileCaptcha";
 
 // Declare gtag for TypeScript
 declare global {
@@ -30,6 +33,10 @@ export default function ContactSection() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [leadSource, setLeadSource] = useState<LeadSource | null>(null);
+  const [website, setWebsite] = useState(""); // honeypot — humans never fill this
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const { enabled: captchaEnabled } = useCaptchaConfig();
   const { toast } = useToast();
 
   // Capture lead source data on component mount
@@ -142,6 +149,9 @@ export default function ContactSection() {
     if (!formData.message.trim()) {
       return "Please enter a message";
     }
+    if (captchaEnabled && !captchaToken) {
+      return "Please complete the security check";
+    }
 
     return null;
   };
@@ -175,6 +185,8 @@ export default function ContactSection() {
           hearAbout: formData.hearAbout,
           message: formData.message.trim(),
           leadSource: leadSource,
+          website,
+          captchaToken,
         }),
       });
 
@@ -252,6 +264,8 @@ export default function ContactSection() {
       });
     } finally {
       setIsSubmitting(false);
+      // Turnstile tokens are single-use — get a fresh one for the next submit.
+      setCaptchaReset((c) => c + 1);
     }
   };
 
@@ -379,6 +393,27 @@ export default function ContactSection() {
                   />
                 </div>
 
+                <div
+                  className="absolute -left-[9999px] top-auto h-px w-px overflow-hidden"
+                  aria-hidden="true"
+                >
+                  <label htmlFor="contactSectionWebsite">Website</label>
+                  <input
+                    id="contactSectionWebsite"
+                    name="website"
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                  />
+                </div>
+
+                <TurnstileCaptcha
+                  onToken={setCaptchaToken}
+                  resetSignal={captchaReset}
+                />
+
                 {/* Success message */}
                 {isSubmitted && (
                   <div
@@ -387,7 +422,7 @@ export default function ContactSection() {
                     role="status"
                   >
                     <div className="text-lg font-semibold mb-1">
-                      ✅ Quote Request Sent!
+                      Quote Request Sent!
                     </div>
                     <div className="text-sm">
                       Thank you! We'll respond within 24 hours with your

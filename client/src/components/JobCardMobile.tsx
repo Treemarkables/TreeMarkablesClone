@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useJobActions } from "@/hooks/useJobActions";
 import { useToast } from "@/hooks/use-toast";
+import { getJobStatusBadge } from "@/lib/jobStatusColors";
 import {
   X as XIcon,
   Camera,
@@ -125,16 +126,6 @@ export interface JobCardMobileProps {
   };
 }
 
-// Map job status → badge colour. Mirrors the colour scheme used by
-// GlobalJobCard so the badge looks consistent across mobile/desktop.
-const STATUS_BADGE: Record<string, { label: string; bg: string }> = {
-  lead: { label: "Lead", bg: "#f59e0b" },
-  quote: { label: "Quote", bg: "#f59e0b" },
-  work_order: { label: "Work Order", bg: "#2563eb" },
-  completed: { label: "Completed", bg: "#16a34a" },
-  unsuccessful: { label: "Unsuccessful", bg: "#ef4444" },
-};
-
 const TABS: { id: JobCardMobileTab; label: string }[] = [
   { id: "details", label: "Details" },
   { id: "billing", label: "Billing" },
@@ -219,7 +210,7 @@ export function JobCardMobile({
 
   const jobNumber = (job?.jobNumber as number | undefined) ?? undefined;
   const status = (job?.status as string | undefined) ?? "lead";
-  const badge = STATUS_BADGE[status] ?? { label: status, bg: "#64748b" };
+  const badge = getJobStatusBadge(status);
   // Header price — mirrors the desktop GlobalJobCard header (lines 4582-4613)
   // so the same number appears in both UIs. Previously read three made-up
   // field names (jobPrice / totalValue / estimatedValue) that don't exist
@@ -487,7 +478,7 @@ export function JobCardMobile({
             </SheetHeader>
 
             <div className="overflow-y-auto px-5 py-5">
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-4 gap-x-3 gap-y-4">
                 <ActionTile label="Speech to Quote" icon={Mic} colour="purple" onClick={actions?.speechToQuote ?? actionStub("Speech to Quote")} />
                 <ActionTile label="Schedule" icon={Calendar} colour="blue" onClick={actions?.schedule ?? actionStub("Schedule")} />
                 <ActionTile label="Quote" icon={FileText} colour="amber" onClick={actions?.quote ?? actionStub("Quote")} />
@@ -512,7 +503,9 @@ export function JobCardMobile({
                   disabled={markComplete.isPending || job?.status === "completed"}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
                 >
-                  <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                  <span className="w-9 h-9 rounded-[10px] bg-gradient-to-b from-emerald-400 to-emerald-600 grid place-items-center flex-shrink-0 shadow-sm">
+                    <CheckCircle className="w-[18px] h-[18px] text-white" strokeWidth={2.25} />
+                  </span>
                   <span className="text-[15px] font-semibold text-slate-900">
                     {job?.status === "completed" ? "Already complete" : "Mark job as complete"}
                   </span>
@@ -524,7 +517,9 @@ export function JobCardMobile({
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
                   data-testid="btn-duplicate-job"
                 >
-                  <Copy className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                  <span className="w-9 h-9 rounded-[10px] bg-gradient-to-b from-blue-400 to-blue-600 grid place-items-center flex-shrink-0 shadow-sm">
+                    <Copy className="w-[18px] h-[18px] text-white" strokeWidth={2.25} />
+                  </span>
                   <span className="text-[15px] font-semibold text-slate-900">
                     {duplicateJob.isPending ? "Duplicating..." : "Duplicate job"}
                   </span>
@@ -535,7 +530,9 @@ export function JobCardMobile({
                   disabled={deleteJob.isPending}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-red-50 hover:bg-red-100 disabled:opacity-50"
                 >
-                  <Trash2 className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <span className="w-9 h-9 rounded-[10px] bg-gradient-to-b from-red-400 to-red-600 grid place-items-center flex-shrink-0 shadow-sm">
+                    <Trash2 className="w-[18px] h-[18px] text-white" strokeWidth={2.25} />
+                  </span>
                   <span className="text-[15px] font-semibold text-red-700">Delete job</span>
                 </button>
               </div>
@@ -637,19 +634,20 @@ export function JobCardMobile({
   );
 }
 
-// Coloured action tile shown in the Actions sheet. iOS-style: rounded square
-// tinted background, lucide icon, label below.
+// Coloured action tile shown in the Actions sheet. iOS app-icon style:
+// gradient squircle, white lucide glyph, glossy top highlight, soft
+// colour-matched shadow. Label below.
 type TileColour = "purple" | "blue" | "amber" | "green" | "red" | "orange" | "cyan" | "indigo" | "slate";
-const TILE_COLOURS: Record<TileColour, { bg: string; icon: string }> = {
-  purple: { bg: "bg-purple-100", icon: "text-purple-600" },
-  blue:   { bg: "bg-blue-100",   icon: "text-blue-600" },
-  amber:  { bg: "bg-amber-100",  icon: "text-amber-600" },
-  green:  { bg: "bg-emerald-100", icon: "text-emerald-600" },
-  red:    { bg: "bg-red-100",    icon: "text-red-600" },
-  orange: { bg: "bg-orange-100", icon: "text-orange-600" },
-  cyan:   { bg: "bg-cyan-100",   icon: "text-cyan-600" },
-  indigo: { bg: "bg-indigo-100", icon: "text-indigo-600" },
-  slate:  { bg: "bg-slate-100",  icon: "text-slate-400" },
+const TILE_COLOURS: Record<TileColour, { grad: string; shadow: string }> = {
+  purple: { grad: "from-purple-400 to-purple-600",   shadow: "shadow-purple-500/30" },
+  blue:   { grad: "from-blue-400 to-blue-600",       shadow: "shadow-blue-500/30" },
+  amber:  { grad: "from-amber-400 to-orange-500",    shadow: "shadow-amber-500/30" },
+  green:  { grad: "from-emerald-400 to-emerald-600", shadow: "shadow-emerald-500/30" },
+  red:    { grad: "from-red-400 to-red-600",         shadow: "shadow-red-500/30" },
+  orange: { grad: "from-orange-400 to-orange-600",   shadow: "shadow-orange-500/30" },
+  cyan:   { grad: "from-cyan-400 to-cyan-600",       shadow: "shadow-cyan-500/30" },
+  indigo: { grad: "from-indigo-400 to-indigo-600",   shadow: "shadow-indigo-500/30" },
+  slate:  { grad: "from-slate-400 to-slate-600",     shadow: "shadow-slate-500/30" },
 };
 
 function ActionTile({
@@ -674,8 +672,12 @@ function ActionTile({
       className="flex flex-col items-center gap-1.5 group disabled:opacity-50"
       data-testid={`action-tile-${label.toLowerCase().replace(/\s+/g, "-")}`}
     >
-      <div className={`w-16 h-16 rounded-2xl ${c.bg} grid place-items-center shadow-sm group-active:scale-95 transition-transform`}>
-        <Icon className={`w-7 h-7 ${c.icon}`} />
+      <div
+        className={`relative w-16 h-16 rounded-[1.25rem] bg-gradient-to-b ${c.grad} grid place-items-center overflow-hidden shadow-lg ${c.shadow} group-active:scale-95 transition-transform`}
+      >
+        {/* glossy top highlight — light falls from above, like a native app icon */}
+        <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-white/30 via-white/5 to-transparent" />
+        <Icon className="relative w-7 h-7 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]" strokeWidth={2} />
       </div>
       <div className="text-[11.5px] font-semibold text-slate-900 leading-tight text-center max-w-[72px]">
         {label}

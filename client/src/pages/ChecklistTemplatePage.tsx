@@ -47,7 +47,7 @@ export default function ChecklistTemplatePage() {
     <div className="flex flex-col h-full p-4 md:p-6 space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center gap-3">
         <Link href="/settings">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" aria-label="Back to settings">
             <ArrowLeft className="w-5 h-5" />
           </Button>
         </Link>
@@ -89,6 +89,7 @@ export default function ChecklistTemplatePage() {
                 className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600"
                 onClick={() => deleteMutation.mutate(item.id)}
                 disabled={deleteMutation.isPending}
+                aria-label="Delete checklist item"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>

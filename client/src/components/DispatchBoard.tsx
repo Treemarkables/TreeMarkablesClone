@@ -836,6 +836,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     error: jobsError,
   } = useQuery({
     queryKey: [JOBS_QUERY_KEY],
+    // Live board: poll explicitly. SSE broadcasts invalidate ['/api/jobs'],
+    // which does not match this parameterized key, so without an interval the
+    // board would only refresh on focus/navigation.
+    refetchInterval: 30_000,
   });
 
   // Check for pending job data from conversations on mount
@@ -1672,7 +1676,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, jobs, jobsLoading, isDeepSearchActive, isDeepSearchLoading]);
 
-  const getTodaysJobs = () => {
+  // Memoized: this runs a 4-pass filter + dedup + sort over up to 500 jobs
+  // (with per-job date parsing). Unmemoized it re-ran on every render of this
+  // component — including every search keystroke — twice the work when both
+  // call sites hit. Deps cover every input the pipeline reads; `jobs` gets a
+  // fresh identity from the 30s poll, so the "today" date window stays fresh.
+  const todaysJobs = useMemo(() => {
     // If deep search is active, return deep search results
     if (isDeepSearchActive) {
       return deepSearchResults;
@@ -1854,23 +1863,27 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     });
 
     return sorted;
-  };
+  }, [
+    jobs,
+    isDeepSearchActive,
+    deepSearchResults,
+    searchQuery,
+    laneFilter,
+    jobFilter,
+    onlyUnconfirmed,
+  ]);
 
-  const getUnscheduledJobs = () => {
-    return jobs
-      .filter(
-        (job) =>
-          job.status === "quote" ||
-          job.status === "lead" ||
-          !job.startTime ||
-          job.startTime.includes("0000-00-00"),
-      )
-      .sort((a, b) => {
-        const jobNumberA = parseInt(a.jobNumber || "0", 10);
-        const jobNumberB = parseInt(b.jobNumber || "0", 10);
-        return jobNumberB - jobNumberA;
-      });
-  };
+  // Shim so the six existing call sites keep working unchanged.
+  const getTodaysJobs = () => todaysJobs;
+
+  // Per-day price share per job — calculateDailyTotal parses the job's NZ
+  // scheduled-date set on every call, so compute once per jobs refresh
+  // instead of per row per render.
+  const dailyTotalByJobId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const job of todaysJobs) m.set(job.id, calculateDailyTotal(job));
+    return m;
+  }, [todaysJobs]);
 
   // Job Mutations
   const createJobMutation = useMutation({
@@ -2369,9 +2382,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       specialInstructions: schedulingData.notes,
     };
 
-    // Booking-driven status transition: lead → quote (site visit), quote
-    // or work_order → scheduled (work crew). statusAfterBooking returns
-    // null when the current status shouldn't change.
+    // Booking-driven status transition: scheduling a quote advances it to
+    // work_order (booking = committing to the work). statusAfterBooking
+    // returns null for every other status, leaving it unchanged.
     if (jobToSchedule) {
       const next = statusAfterBooking(jobToSchedule.status);
       if (next && next !== jobToSchedule.status) {
@@ -2606,7 +2619,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     );
   }
 
-  const todaysJobs = getTodaysJobs();
   const unconfirmedCount = countUnconfirmed(todaysJobs);
 
   return (
@@ -2772,7 +2784,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           {getTodaysJobs().map((job) => {
                             const customerName =
                               job.customerName || "Unknown Customer";
-                            const total = calculateDailyTotal(job);
+                            const total = dailyTotalByJobId.get(job.id) ?? calculateDailyTotal(job);
                             const fullAddress = job.address?.trim() || "";
 
                             // Get status badge styling - same as mobile
@@ -2836,7 +2848,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             return (
                               <div
                                 key={job.id}
-                                className="bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+                                className="bg-white hover:bg-gray-50 cursor-pointer transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_120px]"
                                 style={(() => {
                                   const firstId = job.assignedTeam?.[0];
                                   const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
@@ -2879,6 +2891,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   )
                                     return;
                                   handleEditJob(job);
+                                }}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.target !== e.currentTarget) return;
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    handleEditJob(job);
+                                  }
                                 }}
                                 data-testid={`desktop-job-card-${job.id}`}
                               >
@@ -3127,6 +3148,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           setDeepSearchResults([]);
                         }}
                         data-testid="btn-clear-search-mobile"
+                        aria-label="Clear search"
                       >
                         <X className="h-3.5 w-3.5" />
                       </Button>
@@ -3199,7 +3221,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <div className="divide-y divide-gray-100 w-full">
               {getTodaysJobs().map((job: any) => {
                 const customerName = job.customerName || "Unknown Customer";
-                const total = calculateDailyTotal(job);
+                const total = dailyTotalByJobId.get(job.id) ?? calculateDailyTotal(job);
                 const suburb = job.address?.split(",")[0]?.trim() || "";
 
                 // Get status badge styling
@@ -3302,13 +3324,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 return (
                   <div
                     key={job.id}
-                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
+                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_130px]"
                     style={(() => {
                       const firstId = job.assignedTeam?.[0];
                       const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
                       return pal ? { borderLeft: `3px solid ${pal.dot}` } : {};
                     })()}
                     onClick={() => handleEditJob(job)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleEditJob(job);
+                      }
+                    }}
                     data-testid={`job-card-${job.id}`}
                   >
                     <div className="flex items-start gap-3 p-4 min-w-0 overflow-hidden">

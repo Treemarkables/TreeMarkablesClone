@@ -157,7 +157,6 @@ export default function SettingsCompany() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates/default/invoice"] });
       queryClient.invalidateQueries({ queryKey: ["/api/business-settings"] });
-      toast({ title: "Company info saved" });
     },
     onError: () => {
       toast({ title: "Failed to save", variant: "destructive" });
@@ -271,7 +270,7 @@ export default function SettingsCompany() {
     <div className="max-w-2xl mx-auto p-6 space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/settings">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" aria-label="Back to settings">
             <ChevronLeft className="w-4 h-4" />
           </Button>
         </Link>

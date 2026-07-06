@@ -551,6 +551,7 @@ export default function DailyBriefing() {
           size="icon"
           variant="ghost"
           onClick={() => setDate(addDays(date, -1))}
+          aria-label="Previous day"
         >
           <ChevronLeft className="w-4 h-4" />
         </Button>
@@ -568,6 +569,7 @@ export default function DailyBriefing() {
           size="icon"
           variant="ghost"
           onClick={() => setDate(addDays(date, 1))}
+          aria-label="Next day"
         >
           <ChevronRight className="w-4 h-4" />
         </Button>
@@ -590,6 +592,7 @@ export default function DailyBriefing() {
             {isAdmin && !editingDayNote && (
               <button
                 onClick={startEditDayNote}
+                aria-label="Edit day note"
                 className="text-gray-400 hover:text-white transition-colors"
               >
                 <Pencil className="w-3.5 h-3.5" />

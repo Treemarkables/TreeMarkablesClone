@@ -4,7 +4,7 @@ import { Webhook as SvixWebhook } from 'svix';
 import { addClient, removeClient, broadcast } from "./sseManager";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
-import { randomUUID, randomBytes, createHash } from 'crypto';
+import { randomUUID, randomBytes, createHash, createHmac, timingSafeEqual } from 'crypto';
 import { z } from "zod";
 import { fromZonedTime } from 'date-fns-tz';
 
@@ -198,7 +198,18 @@ const imageUpload = multer({
     files: 100 // Maximum 100 files at once
   },
   fileFilter: (req, file, cb) => {
-    // Accept all file types - no restrictions
+    // Accept images/PDFs/documents/audio/video, but reject script-capable types
+    // (defence-in-depth against stored XSS; the serve layer also neutralises
+    // these). HTML/SVG/XML/JS have no legitimate use as a job photo/document.
+    const mt = (file.mimetype || '').toLowerCase();
+    const blocked = [
+      'text/html', 'application/xhtml+xml', 'image/svg+xml',
+      'application/xml', 'text/xml', 'text/javascript', 'application/javascript',
+    ];
+    if (blocked.some((t) => mt.startsWith(t))) {
+      cb(new Error('Unsupported file type'));
+      return;
+    }
     cb(null, true);
   }
 });
@@ -641,8 +652,14 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
 function validateTwilioSignature(req: Request): boolean {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!authToken) {
-    console.warn('⚠️ TWILIO_AUTH_TOKEN not set - skipping signature validation');
-    return true; // Allow in development if not configured
+    // Fail CLOSED in production — an unset token must never mean "accept any
+    // forged callback". Only allow the skip in non-production for local dev.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ TWILIO_AUTH_TOKEN not set in production - rejecting webhook');
+      return false;
+    }
+    console.warn('⚠️ TWILIO_AUTH_TOKEN not set - skipping signature validation (dev only)');
+    return true;
   }
 
   const signature = req.headers['x-twilio-signature'] as string;
@@ -669,6 +686,35 @@ function validateTwilioSignature(req: Request): boolean {
   }
 
   return validator;
+}
+
+// Verify Meta/Facebook's X-Hub-Signature-256 header: HMAC-SHA256 of the RAW
+// request body keyed with the app secret. Fails closed when FACEBOOK_APP_SECRET
+// is unset (Facebook inbound is otherwise dropped, so rejecting is correct).
+function verifyFacebookSignature(req: Request): boolean {
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
+  if (!appSecret) {
+    console.warn('⚠️ FACEBOOK_APP_SECRET not set - rejecting Messenger webhook');
+    return false;
+  }
+  const header = (req.headers['x-hub-signature-256'] || req.headers['x-hub-signature']) as string | undefined;
+  if (!header || !header.startsWith('sha256=')) {
+    console.error('❌ Missing/invalid X-Hub-Signature-256 header');
+    return false;
+  }
+  const rawBody = (req as any).rawBody as Buffer | undefined;
+  if (!rawBody) {
+    console.error('❌ Raw body unavailable for Facebook signature check');
+    return false;
+  }
+  const expected = 'sha256=' + createHmac('sha256', appSecret).update(rawBody).digest('hex');
+  try {
+    const a = Buffer.from(header);
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
 
 // ========================================
@@ -915,6 +961,50 @@ async function requirePlatformAdmin(req: Request, res: Response, next: express.N
   }
 }
 
+// Dunning: when a subscriber's billing slips into a payment-problem state, the in-app
+// BillingBanner already warns them — but only once they open the app. This adds an
+// off-app nudge: a high-priority bell entry + an email to the business's own address,
+// so they fix their card before the grace period lapses and resolveEntitlements drops
+// them to freemium. Called only on the TRANSITION into a problem status (see the webhook),
+// so retries/resyncs don't re-spam. Runs from the Stripe webhook (owner connection, no
+// request tenant): the bell write is scoped via runWithBusiness so RLS stamps the owning
+// business; the email is a platform→tenant message (from "Inflow"), sent outside that
+// scope. Never throws — dunning is best-effort and must not 500 the webhook.
+async function notifyBillingProblem(businessId: string, status: string): Promise<void> {
+  const billingUrl = `${APP_URL}/settings/billing`;
+  const human = status.replace(/_/g, ' ');
+  try {
+    await runWithBusiness(businessId, async () => {
+      await storage.createNotification({
+        title: 'Payment problem — update your card',
+        message: "Your subscription payment didn't go through. Update your payment method to keep your plan.",
+        type: 'billing_problem',
+        priority: 'high',
+        isRead: false,
+        actionUrl: '/settings/billing',
+      });
+    });
+  } catch (e) {
+    console.error('[dunning] bell notification failed:', (e as Error).message);
+  }
+  try {
+    const settings = await storage.getBusinessSettingsForBusiness(businessId);
+    const to = (settings?.businessEmail || '').trim();
+    if (to) {
+      await emailService.sendEmail({
+        to,
+        fromName: 'Inflow',
+        subject: 'Action needed: update your payment method',
+        text: `Hi,\n\nYour latest subscription payment didn't go through, so your account is now ${human}. Update your payment method to avoid losing access:\n\n${billingUrl}\n\nAlready updated it? You can ignore this message.\n\nThanks,\nInflow`,
+        html: `<p>Hi,</p><p>Your latest subscription payment didn't go through, so your account is now <strong>${human}</strong>. Update your payment method to avoid losing access.</p><p><a href="${billingUrl}">Update payment method</a></p><p>Already updated it? You can ignore this message.</p><p>Thanks,<br>Inflow</p>`,
+      });
+      console.log(`[dunning] emailed ${businessId} (${status}) -> ${to}`);
+    }
+  } catch (e) {
+    console.error('[dunning] email failed:', (e as Error).message);
+  }
+}
+
 // Shared builder for the onboarding setup checklist (used by the per-tenant
 // /api/onboarding/checklist and the concierge subscriber views). Aggregates the
 // bring-your-own setup fields for ONE business into a progress list. Reads via
@@ -1024,6 +1114,34 @@ async function generateProposalPDFBuffer(
   const sections = await storage.getProposalSectionsByProposal(proposalId);
   const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
 
+  // Pre-fetch + re-encode the photos attached to sections (builder photo blocks
+  // store them in proposal_sections.images). Done up-front because the PDFKit
+  // Promise executor below is synchronous; re-encoded to JPEG because PDFKit
+  // only accepts JPEG/PNG (uploads can be webp/heic) — same pattern as the
+  // invoice PDF's photo embed. Keyed by URL so each section renders its own.
+  const sectionPhotoBuffers = new Map<string, Buffer>();
+  {
+    const sectionImageUrls = sections.flatMap((s: any) => (Array.isArray(s.images) ? s.images : []));
+    if (sectionImageUrls.length > 0) {
+      const photoStorageSvc = new PhotoStorageService();
+      for (const imgUrl of sectionImageUrls) {
+        if (!isSupportedPhotoUrl(imgUrl) || sectionPhotoBuffers.has(imgUrl)) continue;
+        try {
+          const photoData = await loadPhotoBytesForAttachment(imgUrl, photoStorageSvc);
+          if (!photoData?.buffer) continue;
+          const jpegBuffer = await sharp(photoData.buffer)
+            .rotate()
+            .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+          sectionPhotoBuffers.set(imgUrl, jpegBuffer);
+        } catch (err) {
+          console.warn(`⚠️ Could not load section photo for quote/proposal PDF: ${imgUrl}`, err);
+        }
+      }
+    }
+  }
+
   // Featured (curated) reviews to render under the totals block. Same filter as
   // GET /api/reviews/featured so the builder preview and the PDF show the same
   // pool. Flattened to individual photo URLs; limit to 6 to keep the PDF compact.
@@ -1117,11 +1235,15 @@ async function generateProposalPDFBuffer(
     // Section content + line items. The builder stores the typed job description
     // as per-section content (proposals.introduction is legacy), so description-only
     // sections must render too — skipping them drops the description from the PDF.
+    // Section photos (proposal_sections.images, pre-fetched above) render as a
+    // two-up grid under the section's text, mirroring the online viewer.
     for (const section of sections) {
-      if (section.sectionType === 'photos') continue;
       const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
       const sectionContent = (section.content || '').trim();
-      if (items.length === 0 && !sectionContent) continue;
+      const sectionImages: Buffer[] = (Array.isArray((section as any).images) ? (section as any).images : [])
+        .map((u: string) => sectionPhotoBuffers.get(u))
+        .filter((b: Buffer | undefined): b is Buffer => !!b);
+      if (items.length === 0 && !sectionContent && sectionImages.length === 0) continue;
 
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text(section.title, 50, doc.y, { width: pageW });
       doc.moveDown(0.3);
@@ -1129,6 +1251,31 @@ async function generateProposalPDFBuffer(
       if (sectionContent) {
         doc.fontSize(9).font('Helvetica').fillColor('#374151').text(sectionContent, 50, doc.y, { width: pageW });
         doc.moveDown(0.5);
+      }
+
+      if (sectionImages.length > 0) {
+        const pageBottom = doc.page.height - 90; // leave room above the footer rule
+        const gap = 12;
+        const cellW = Math.floor((pageW - gap) / 2);
+        const cellH = Math.round(cellW * 0.75); // 4:3
+        for (let i = 0; i < sectionImages.length; i += 2) {
+          if (doc.y + cellH > pageBottom) doc.addPage();
+          const rowY = doc.y;
+          try {
+            doc.image(sectionImages[i], 50, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+          } catch (err) {
+            console.warn('⚠️ Failed to embed section photo into PDF (left cell):', err);
+          }
+          if (sectionImages[i + 1]) {
+            try {
+              doc.image(sectionImages[i + 1], 50 + cellW + gap, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+            } catch (err) {
+              console.warn('⚠️ Failed to embed section photo into PDF (right cell):', err);
+            }
+          }
+          doc.y = rowY + cellH + 10;
+        }
+        doc.moveDown(0.3);
       }
 
       if (items.length > 0) {
@@ -1893,8 +2040,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!employee) {
         return res.status(404).json({ success: false, message: 'Test user not found' });
       }
-      (req.session as any).userId = employee.id;
-      (req.session as any).userRole = employee.role;
+      req.session.employeeId = employee.id;
+      req.session.businessId = employee.businessId ?? undefined;
       req.session.save(() => {
         res.json({ success: true, data: { id: employee.id, role: employee.role } });
       });
@@ -3003,10 +3150,29 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
   });
 
 
+  // Public captcha config — tells the marketing-site forms whether to render the
+  // Cloudflare Turnstile widget. Enabled by setting BOTH TURNSTILE_SITE_KEY and
+  // TURNSTILE_SECRET_KEY (via the DO dashboard); unset = widget hidden and no
+  // server-side check, so the forms keep working with zero config.
+  app.get('/api/captcha/config', (_req: Request, res: Response) => {
+    const siteKey = process.env.TURNSTILE_SITE_KEY?.trim();
+    const secretKey = process.env.TURNSTILE_SECRET_KEY?.trim();
+    if (siteKey && secretKey) {
+      res.json({ provider: 'turnstile', siteKey });
+    } else {
+      res.json({ provider: null });
+    }
+  });
+
+  // Per-IP rate limit for the public contact form (in-memory, resets on deploy).
+  const contactFormRateLimit = new Map<string, { count: number; resetTime: number }>();
+  const CONTACT_FORM_MAX_PER_WINDOW = 5;
+  const CONTACT_FORM_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
   // Contact form submission endpoint
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
-      const { name, email, phone, hearAbout, message, captchaToken, leadSource } = req.body;
+      const { name, email, phone, hearAbout, message, captchaToken, leadSource, website } = req.body;
 
       // Validate contact form data
       const contactValidation = contactFormSchema.safeParse({
@@ -3034,6 +3200,70 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       // Capture server-side data
       const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
       const userAgent = req.get('User-Agent') || 'unknown';
+
+      // Honeypot: hidden "website" field real users never see. Bots that fill it
+      // get a fake success (so they don't learn to adapt) and nothing is created.
+      if (typeof website === 'string' && website.trim() !== '') {
+        console.log(`[contact-spam] Honeypot tripped by ${clientIp}`);
+        return res.json({
+          success: true,
+          message: 'Thank you! We will contact you within 24 hours for your free quote.'
+        });
+      }
+
+      // Per-IP rate limit — a real customer never needs more than a few
+      // submissions; a spam blast from one IP gets cut off.
+      const rlNow = Date.now();
+      const rlEntry = contactFormRateLimit.get(clientIp);
+      if (rlEntry && rlNow < rlEntry.resetTime) {
+        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
+          console.log(`[contact-spam] Rate limit hit by ${clientIp}`);
+          return res.status(429).json({
+            success: false,
+            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
+          });
+        }
+        rlEntry.count++;
+      } else {
+        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
+      }
+      if (contactFormRateLimit.size > 10000) contactFormRateLimit.clear(); // memory backstop
+
+      // Cloudflare Turnstile — enforced only when BOTH keys are configured, matching
+      // /api/captcha/config so the widget and the server check turn on together
+      // (secret-only would 400 every submission while the widget stays hidden).
+      const turnstileSecret = process.env.TURNSTILE_SECRET_KEY?.trim();
+      const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY?.trim();
+      if (turnstileSecret && turnstileSiteKey) {
+        if (!captchaToken) {
+          return res.status(400).json({
+            success: false,
+            message: 'Please complete the security check.'
+          });
+        }
+        try {
+          const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              secret: turnstileSecret,
+              response: String(captchaToken),
+              remoteip: clientIp,
+            }).toString(),
+          });
+          const verifyData = await verifyResponse.json();
+          if (!verifyData.success) {
+            console.log(`[contact-spam] Turnstile rejected ${clientIp}:`, verifyData['error-codes']);
+            return res.status(400).json({
+              success: false,
+              message: 'Security check failed. Please try again.'
+            });
+          }
+        } catch (verifyErr) {
+          // A siteverify outage must not cost a genuine lead — allow and log loud.
+          console.error('[contact-spam] Turnstile siteverify unreachable — allowing submission:', verifyErr);
+        }
+      }
 
       // CAPTCHA validation — opt-in. Set REQUIRE_CAPTCHA=1 to enable once
       // the frontend reCAPTCHA integration is wired up. Default is off.
@@ -3091,18 +3321,18 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         userAgent
       };
 
-      // Auto-create a job/lead directly from the contact form. The customer
-      // explicitly asked for a quote, so we skip the manual "convert conversation
-      // to lead" step and notify the operator about the new lead immediately.
+      // Conversation-first: the inquiry lands in the Inbox/Opportunities pages as an
+      // open conversation only — NO auto-created job card or customer record. Too much
+      // form spam was polluting the jobs pipeline, so the operator now triages in the
+      // conversation view and clicks "Create Job from Lead" (ConversationDetail) to
+      // convert a real inquiry; that flow find-or-creates the customer itself.
       const trimmedName = name.trim();
       const lowerEmail = email.trim().toLowerCase();
       const cleanPhone = (phone || '').trim().replace(/-/g, '').replace(/\s/g, '');
       const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
 
-      // Step 1: find or create the customer up front so the conversation, job,
-      // and notification can all be linked to the same record. Try phone first
-      // (indexed), then fall back to email so an existing client emailing in
-      // (or with a slightly different phone) doesn't get a duplicate record.
+      // Step 1: look up an existing customer so a repeat inquiry threads onto their
+      // record. Try phone first (indexed), then fall back to email.
       // Resolve the owning business for this public, session-less submission so every
       // write below is tenant-stamped. Inbound contact forms run on the owner
       // (BYPASSRLS) connection with no tenant context; without this stamp the
@@ -3118,9 +3348,9 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         console.error('[contact] Failed to resolve business for tenant stamping:', bizErr);
       }
 
-      // Hoisted above runWithBusiness so the auto-reply block can attach a receipt to
-      // the created job once the confirmation email/SMS is sent.
-      let createdJob: any = undefined;
+      // Hoisted above runWithBusiness so the auto-reply block can log its receipt
+      // onto the conversation thread once the confirmation email/SMS is sent.
+      let contactConversation: any = undefined;
 
       // Reuse an existing customer to de-duplicate, but ONLY when the submitted name
       // plausibly belongs to the matched record. The business's own advertised number
@@ -3152,25 +3382,13 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         } else if (matched) {
           console.log(`[contact] phone/email matched existing customer "${matched.name}" but submitted name "${trimmedName}" differs — creating a new lead instead of reusing it`);
         }
-        if (!customer) {
-          customer = await storage.createCustomer({
-            name: trimmedName || 'Unknown',
-            email: lowerEmail,
-            phone: cleanPhone,
-            address: '',
-            contactPreference: 'email' as const,
-            notes: '',
-          });
-        }
-        if (isMobileNumber && cleanPhone && customer?.id) {
-          try {
-            await storage.updateCustomer(customer.id, { mobile: cleanPhone });
-          } catch {
-            // non-critical
-          }
-        }
+        // Conversation-first: do NOT create a customer record for unknown senders —
+        // spam submissions were polluting the Clients list alongside the jobs
+        // pipeline. A matched existing customer is still linked so repeat inquiries
+        // thread onto their record; for new leads the "Create Job from Lead" convert
+        // flow find-or-creates the customer (POST /api/customers dedupes by name).
       } catch (customerErr) {
-        console.error('Error finding/creating customer for contact form:', customerErr);
+        console.error('Error matching existing customer for contact form:', customerErr);
       }
 
       try {
@@ -3210,77 +3428,14 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
           platform: 'web_form'
         });
 
-        // Step 4: auto-create a job with 'lead' status (the canonical first
-        // state in the jobs.status enum). If the customer already has an open
-        // lead-status job, reuse it instead of creating a duplicate — repeat
-        // form submissions should refresh the existing lead, not pile up.
-        let reusedExistingJob = false;
-        if (customer?.id) {
-          try {
-            const existingJobs = await storage.getJobsByCustomer(customer.id);
-            const existingLeadJob = existingJobs.find(j => j.status === 'lead');
-            if (existingLeadJob) {
-              createdJob = existingLeadJob;
-              reusedExistingJob = true;
-              console.log(`✅ Reusing existing lead-status job #${existingLeadJob.jobNumber} (${existingLeadJob.id}) for customer ${customer.id} — repeat contact form submission`);
-            } else {
-              const jobNumber = await storage.getNextJobNumber();
-              createdJob = await storage.createJob({
-                customerId: customer.id,
-                jobNumber,
-                title: `Lead from ${trimmedName || 'website'}`,
-                description: message.trim(),
-                address: 'Address not specified',
-                status: 'lead',
-                priority: 'medium' as const,
-                leadSource: 'website' as const,
-                totalAmount: '0.00',
-                metricsEligible: true,
-                metricsStartDate: new Date(),
-                jobContactPhone: isMobileNumber ? '' : cleanPhone,
-                jobContactMobile: isMobileNumber ? cleanPhone : '',
-              });
-              console.log(`✅ Auto-created job #${jobNumber} (${createdJob.id}) from contact form for customer ${customer.id}`);
+        contactConversation = conversation;
 
-              if (isNewConversation) {
-                try {
-                  await storage.updateConversation(conversation.id, {
-                    status: 'converted',
-                    conversionDate: new Date(),
-                  });
-                } catch {
-                  // non-critical
-                }
-              }
-            }
-          } catch (autoJobErr) {
-            console.error('Error auto-creating job lead from contact form:', autoJobErr);
-          }
-        }
-
-        // Step 5: notify operators. Brand new lead → new-lead notification
-        // (deep-links to the job's diary). Repeat submission on an existing
-        // open lead → follow-up notification so it reads as "they pinged us
-        // again" rather than a duplicate lead. Fallbacks cover the rare case
-        // where job creation failed entirely.
-        if (createdJob && customer?.id && !reusedExistingJob) {
-          await notificationHelper.createNewLeadNotification({
-            jobId: createdJob.id,
-            jobNumber: createdJob.jobNumber,
-            customerId: customer.id,
-            customerName: trimmedName || 'Website visitor',
-            customerEmail: lowerEmail,
-            customerPhone: cleanPhone,
-            sourceLabel: 'website',
-            messagePreview: message.trim(),
-            conversationId: conversation.id,
-          });
-        } else if (createdJob && customer?.id && reusedExistingJob) {
-          await notificationHelper.notifyConversationReply(
-            { id: conversation.id, title: conversation.title, source: 'web_form', customerName: trimmedName },
-            message.trim()
-          );
-        } else if (isNewConversation) {
+        // Step 4: notify operators. Brand new conversation → new-inquiry
+        // notification (deep-links to /conversation/:id where the operator can
+        // triage and hit "Create Job from Lead"). Repeat submission on an open
+        // conversation → follow-up notification so it reads as "they pinged us
+        // again" rather than a duplicate inquiry. No job is auto-created here.
+        if (isNewConversation) {
           await notificationHelper.createConversationNotification(conversation);
         } else {
           await notificationHelper.notifyConversationReply(
@@ -3395,21 +3550,21 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
               html: emailBodyHtml,
             })
               .then(async () => {
-                if (createdJob?.id) {
+                if (contactConversation?.id) {
                   try {
-                    await storage.createJobDiaryEntry({
-                      jobId: createdJob.id,
-                      entryType: 'email',
-                      title: `Auto-reply sent: ${emailSubject}`,
-                      description: `Auto-reply email sent to ${lowerEmail}\n\nSubject: ${emailSubject}\n\nMessage:\n${emailBodyText}`,
-                      authorName: 'System',
-                      authorRole: 'system',
-                      tags: ['communication', 'email', 'auto-reply'],
-                      metadata: { emailAddress: lowerEmail },
+                    await storage.createConversationMessage({
+                      conversationId: contactConversation.id,
+                      type: 'email',
+                      content: `Auto-reply email sent to ${lowerEmail}\n\nSubject: ${emailSubject}\n\n${emailBodyText}`,
+                      direction: 'outbound',
+                      fromName: 'System',
+                      toContact: lowerEmail,
+                      subject: emailSubject,
+                      platform: 'email',
+                      metadata: { autoReply: true },
                     });
-                    await storage.updateJob(createdJob.id, { lastActivityAt: new Date() });
-                  } catch (diaryErr) {
-                    console.error('[contact] Failed to record auto-reply email receipt:', diaryErr);
+                  } catch (receiptErr) {
+                    console.error('[contact] Failed to record auto-reply email receipt:', receiptErr);
                   }
                 }
               })
@@ -3421,21 +3576,20 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
             if (smsBody.trim()) {
               smsService.sendSMS({ to: cleanPhone, message: smsBody })
                 .then(async () => {
-                  if (createdJob?.id) {
+                  if (contactConversation?.id) {
                     try {
-                      await storage.createJobDiaryEntry({
-                        jobId: createdJob.id,
-                        entryType: 'sms',
-                        title: 'Auto-reply SMS sent',
-                        description: `Auto-reply SMS sent to ${cleanPhone}\n\nMessage:\n${smsBody}`,
-                        authorName: 'System',
-                        authorRole: 'system',
-                        tags: ['communication', 'sms', 'auto-reply'],
-                        metadata: { phoneNumber: cleanPhone },
+                      await storage.createConversationMessage({
+                        conversationId: contactConversation.id,
+                        type: 'sms',
+                        content: `Auto-reply SMS sent to ${cleanPhone}\n\n${smsBody}`,
+                        direction: 'outbound',
+                        fromName: 'System',
+                        toContact: cleanPhone,
+                        platform: 'sms',
+                        metadata: { autoReply: true },
                       });
-                      await storage.updateJob(createdJob.id, { lastActivityAt: new Date() });
-                    } catch (diaryErr) {
-                      console.error('[contact] Failed to record auto-reply SMS receipt:', diaryErr);
+                    } catch (receiptErr) {
+                      console.error('[contact] Failed to record auto-reply SMS receipt:', receiptErr);
                     }
                   }
                 })
@@ -6576,6 +6730,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         console.log(`🔄 Clearing unsuccessful data for job ${req.params.id} - status changing to ${validation.data.status}`);
       }
 
+      // Auto-advance a quote to 'work_order' when it gets scheduled. Scheduling
+      // a quote means committing to do the work (owner's chosen workflow). Only
+      // fires on the null → set transition so editing an already-scheduled job
+      // never re-flips, and we don't override an explicit status in this request.
+      {
+        const effectiveStatus = validation.data.status ?? oldJob?.status;
+        const hadSchedule = !!(oldJob as any)?.scheduledDate;
+        const nowScheduled = !!(validation.data as any).scheduledDate;
+        if (effectiveStatus === 'quote' && nowScheduled && !hadSchedule) {
+          (validation.data as any).status = 'work_order';
+          console.log(`📅 Job ${req.params.id} scheduled → status quote → work_order`);
+        }
+      }
+
       // Debug logging for job update
       console.log('🔍 JOB UPDATE SERVER DEBUG:', {
         jobId: req.params.id,
@@ -7005,6 +7173,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         if (!updateData.completedDate) {
           updateData.completedDate = new Date();
           console.log(`✅ Auto-setting completedDate for job ${req.params.id} (PATCH status → completed)`);
+        }
+      }
+
+      // Auto-advance a quote to 'work_order' when it gets scheduled (mirrors the
+      // PUT handler). Only on the null → set transition; never overrides an
+      // explicit status sent in this request.
+      {
+        const effectiveStatus = updateData.status ?? oldJob?.status;
+        const hadSchedule = !!(oldJob as any)?.scheduledDate;
+        const nowScheduled = !!(updateData as any).scheduledDate;
+        if (effectiveStatus === 'quote' && nowScheduled && !hadSchedule) {
+          updateData.status = 'work_order';
+          console.log(`📅 Job ${req.params.id} scheduled → status quote → work_order (PATCH)`);
         }
       }
 
@@ -8339,6 +8520,18 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
   // Standalone video upload (Videos library) — no job card required. The job
   // can be linked later via PATCH /api/videos/:id { jobId }.
+  // Knowledge (how-to) videos are GLOBAL platform content shown to every subscriber
+  // (stored business_id NULL, served via the owner client — see storage.getVideos).
+  // Only allowlisted businesses may publish/manage them, so a stray tenant admin
+  // can't inject into the shared help library. Empty allowlist = fail closed (nobody).
+  // Set INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS to TM + the content/demo tenant ids.
+  const CONTENT_PUBLISHER_BUSINESS_IDS = new Set(
+    (process.env.INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS ?? "")
+      .split(",").map((s) => s.trim()).filter(Boolean),
+  );
+  const isContentPublisher = (businessId: string | undefined): boolean =>
+    !!businessId && CONTENT_PUBLISHER_BUSINESS_IDS.has(businessId);
+
   app.post('/api/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -8360,6 +8553,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       }
 
       const kind = req.body.kind === 'knowledge' ? 'knowledge' : 'job';
+      // Publishing into the global how-to library is restricted to content publishers.
+      if (kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to publish knowledge videos.' });
+      }
       const showToCustomer = req.body.showToCustomer === undefined
         ? true
         : req.body.showToCustomer === 'true' || req.body.showToCustomer === true;
@@ -8460,6 +8657,13 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       // and sync the corresponding link in jobs.description after the update.
       const priorVideo = await storage.getVideo(req.params.id);
 
+      // Editing a global knowledge video — or re-tagging a job video INTO the
+      // knowledge library — touches shared platform content; gate to publishers.
+      if ((priorVideo?.kind === 'knowledge' || req.body.kind === 'knowledge')
+        && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
+      }
+
       const updates: schema.UpdateVideo = {};
       if (req.body.title !== undefined) updates.title = req.body.title;
       if (req.body.description !== undefined) updates.description = req.body.description;
@@ -8521,6 +8725,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       const video = await storage.getVideo(req.params.id);
       if (!video) {
         return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      // Deleting from the global how-to library is restricted to content publishers.
+      if (video.kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
       }
       await storage.deleteVideo(req.params.id);
       await videoStorage.deleteVideoObject(video.url);
@@ -11695,7 +11903,13 @@ Draft the reply now.`;
           // Indexed/DB-side lookup rather than loading the entire customer
           // table on every inbound call — keeps the answer webhook fast so
           // the caller reaches the greeting sooner (less pre-answer ringback).
-          const match = await storage.findCustomerByPhoneLast8(key);
+          // Owner-context path: scope the lookup to the tenant that owns the
+          // dialled line, so a last-8 collision can't surface another tenant's
+          // customer NAME on the caller ID. Unmapped line → undefined → prior
+          // single-tenant behaviour. findCustomerByPhoneLast8 self-scopes to
+          // the ambient businessId set here.
+          const inboundBizId = await resolveBusinessIdByChannel('phone', inboundTo);
+          const match = await runWithBusiness(inboundBizId, () => storage.findCustomerByPhoneLast8(key));
           if (match?.name) callerName = String(match.name);
         }
       } catch (lookupErr) {
@@ -12778,7 +12992,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
       
       const updateData = validationResult.data;
-      
+      // Never let an update move the invoice to another tenant. (Marking paid /
+      // setting paidAt stays allowed — it's the legitimate manual-payment flow.)
+      delete (updateData as any).businessId;
+
       const invoice = await storage.getInvoice(id);
       if (!invoice) {
         return res.status(404).json({ success: false, message: 'Invoice not found' });
@@ -13047,7 +13264,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       const customer = invoice.customerId ? await storage.getCustomer(invoice.customerId) : null;
-      const settings = await storage.getBusinessSettings().catch(() => null);
+      // Owner-context (public) path — scope settings to the invoice's tenant so
+      // the Stripe page shows the right business name (unscoped getBusinessSettings()
+      // returns an arbitrary tenant's row across all businesses).
+      const settings = invoice.businessId
+        ? await storage.getBusinessSettingsForBusiness(invoice.businessId).catch(() => null)
+        : await storage.getBusinessSettings().catch(() => null);
 
       const origin =
         process.env.NODE_ENV === 'production'
@@ -16461,28 +16683,37 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Create new employee
-  app.post('/api/employees', async (req: Request, res: Response) => {
+  // Create new employee (admin only — creates staff incl. role/permissions)
+  app.post('/api/employees', requireAdmin, async (req: Request, res: Response) => {
     try {
       // Convert hourlyRate to string if it's a number
       const bodyData = { ...req.body };
       if (typeof bodyData.hourlyRate === 'number') {
         bodyData.hourlyRate = bodyData.hourlyRate.toString();
       }
-      
+
+      // Never trust a client-supplied businessId — withTenant() stamps the
+      // session's tenant on create. Strip defensively.
+      delete bodyData.businessId;
+
       // Convert empty strings to undefined for all fields
       Object.keys(bodyData).forEach(key => {
         if (bodyData[key] === '' || bodyData[key] === 'dd/mm/yyyy') {
           bodyData[key] = undefined;
         }
       });
-      
+
       // Convert hireDate if it's a string (and not empty/undefined)
       if (bodyData.hireDate && typeof bodyData.hireDate === 'string') {
         bodyData.hireDate = new Date(bodyData.hireDate);
       }
-      
+
       const validatedData = insertEmployeeSchema.parse(bodyData);
+      // Never store a plaintext password — hash if one was supplied. (The
+      // dedicated PATCH /:id/password route is the normal path.)
+      if (validatedData.password) {
+        validatedData.password = await bcrypt.hash(validatedData.password, 10);
+      }
       const employee = await storage.createEmployee(validatedData);
       res.json({
         success: true,
@@ -16498,30 +16729,60 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Update employee
+  // Update employee. Admins may edit anyone in their tenant; a non-admin may
+  // edit ONLY their own record and may NOT change privileged fields (role,
+  // permissions, active-state, tenant, password). Prevents crew->admin
+  // self-escalation and cross-tenant record moves via mass assignment.
   app.put('/api/employees/:id', async (req: Request, res: Response) => {
     try {
+      const callerId = req.session.employeeId;
+      if (!callerId) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      const caller = await storage.getEmployee(callerId);
+      if (!caller) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      const isAdmin = caller.role === 'admin';
+      if (!isAdmin && req.params.id !== callerId) {
+        return res.status(403).json({ success: false, message: 'You can only edit your own profile' });
+      }
+
       const validatedData = updateEmployeeSchema.parse(req.body);
-      
+
       // Convert all timestamp fields from strings to Date objects
       const dataToUpdate: any = { ...validatedData };
-      
+
+      // Never accept a client businessId (would move the record cross-tenant),
+      // and never take a password here (use PATCH /:id/password, which hashes).
+      delete dataToUpdate.businessId;
+      delete dataToUpdate.password;
+
+      // Privileged fields are admin-only. A non-admin editing their own profile
+      // cannot promote themselves or flip their active/tenant state.
+      if (!isAdmin) {
+        delete dataToUpdate.role;
+        delete dataToUpdate.roleTierId;
+        delete dataToUpdate.permissionOverrides;
+        delete dataToUpdate.isActive;
+      }
+
       // Convert empty strings to undefined for all fields
       Object.keys(dataToUpdate).forEach(key => {
         if (dataToUpdate[key] === '') {
           dataToUpdate[key] = undefined;
         }
       });
-      
+
       // Convert hireDate if it's a string (and not empty)
       if (dataToUpdate.hireDate && typeof dataToUpdate.hireDate === 'string') {
         dataToUpdate.hireDate = new Date(dataToUpdate.hireDate);
       }
-      
+
       // Remove auto-managed timestamp fields - they should not be updated manually
       delete dataToUpdate.createdAt;
       delete dataToUpdate.updatedAt;
-      
+
       const employee = await storage.updateEmployee(req.params.id, dataToUpdate);
       res.json({
         success: true,
@@ -16537,8 +16798,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Delete employee
-  app.delete('/api/employees/:id', async (req: Request, res: Response) => {
+  // Delete employee (admin only)
+  app.delete('/api/employees/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
       await storage.deleteEmployee(req.params.id);
       res.json({
@@ -16554,11 +16815,25 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Set employee password
+  // Set employee password. A user may set their own; an admin may set anyone's
+  // in the tenant. Prevents any authenticated user resetting a colleague's
+  // (incl. the admin's) password.
   app.patch('/api/employees/:id/password', async (req: Request, res: Response) => {
     try {
+      const callerId = req.session.employeeId;
+      if (!callerId) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      const caller = await storage.getEmployee(callerId);
+      if (!caller) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      if (caller.role !== 'admin' && req.params.id !== callerId) {
+        return res.status(403).json({ success: false, message: 'You can only change your own password' });
+      }
+
       const { password } = req.body;
-      
+
       // Validate password
       const passwordSchema = z.object({
         password: z.string().min(8, 'Password must be at least 8 characters')
@@ -16828,7 +17103,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Emergency password reset (for recovery purposes)
-  app.post('/api/employees/emergency-password-reset', async (req: Request, res: Response) => {
+  app.post('/api/employees/emergency-password-reset', requireAdmin, async (req: Request, res: Response) => {
     try {
       const { email, newPassword } = req.body;
       
@@ -16871,7 +17146,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Admin-only: Clean up duplicate employee emails (prioritize admin role)
-  app.post('/api/employees/cleanup-duplicates', async (req: Request, res: Response) => {
+  app.post('/api/employees/cleanup-duplicates', requireAdmin, async (req: Request, res: Response) => {
     try {
       // Get all employees
       const allEmployees = await storage.getAllEmployees();
@@ -18668,7 +18943,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Update business settings
-  app.put('/api/business-settings', async (req: Request, res: Response) => {
+  app.put('/api/business-settings', requireAdmin, async (req: Request, res: Response) => {
     try {
       // Pre-process values to match Zod schema expectations before validation
       const rawBody = { ...req.body };
@@ -18739,7 +19014,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Reset business settings to defaults
-  app.post('/api/business-settings/reset', async (req: Request, res: Response) => {
+  app.post('/api/business-settings/reset', requireAdmin, async (req: Request, res: Response) => {
     try {
       const settings = await storage.resetBusinessSettings();
       
@@ -21055,24 +21330,38 @@ Transcription: ${transcriptText}`;
       if (isResendWebhook) {
         console.log(`📧 Resend webhook received: ${req.body.type}`);
         
-        // Verify Resend webhook signature (Svix) if secret is configured
-        const signature = req.headers['svix-signature'] as string;
+        // Verify the Resend/Svix signature. Inbound email drives lead creation,
+        // conversation threading and the "I accept quote Q-*" reply flow, so an
+        // unverified payload lets an attacker forge inbound customer emails.
+        // Verify with the Svix SDK (same as /api/webhooks/resend-events).
         const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
-        
         if (webhookSecret) {
-          if (!signature) {
-            console.error(`🔐 Missing webhook signature - rejecting unauthenticated request`);
-            return res.status(401).json({ 
-              success: false, 
-              message: 'Missing webhook signature' 
-            });
+          const svixId        = req.headers['svix-id'] as string;
+          const svixTimestamp = req.headers['svix-timestamp'] as string;
+          const svixSignature = req.headers['svix-signature'] as string;
+          if (!svixId || !svixTimestamp || !svixSignature) {
+            console.error(`🔐 Inbound email webhook: missing Svix headers — rejecting`);
+            return res.status(401).json({ success: false, message: 'Missing webhook signature headers' });
           }
-          
-          // TODO: Implement Svix signature verification using svix SDK
-          // For now, require the signature header to be present
-          console.log(`🔐 Webhook signature present (verification pending Svix SDK integration)`);
+          try {
+            const wh = new SvixWebhook(webhookSecret);
+            const rawBody = (req as any).rawBody as Buffer | undefined;
+            const payloadStr = rawBody ? rawBody.toString('utf-8') : JSON.stringify(req.body);
+            wh.verify(payloadStr, {
+              'svix-id':        svixId,
+              'svix-timestamp': svixTimestamp,
+              'svix-signature': svixSignature,
+            });
+          } catch (verifyErr) {
+            console.error(`🔐 Inbound email webhook: invalid Svix signature — rejecting`);
+            return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
+          }
+        } else if (process.env.NODE_ENV === 'production') {
+          // Fail closed in production rather than process an unverified payload.
+          console.error(`⚠️ RESEND_WEBHOOK_SECRET not set in production — rejecting inbound email webhook`);
+          return res.status(401).json({ success: false, message: 'Webhook verification not configured' });
         } else {
-          console.warn(`⚠️ RESEND_WEBHOOK_SECRET not set - webhook signatures not verified (security risk)`);
+          console.warn(`⚠️ RESEND_WEBHOOK_SECRET not set - inbound email signature not verified (dev only)`);
         }
         
         // Extract email metadata from Resend webhook
@@ -22072,6 +22361,10 @@ Transcription: ${transcriptText}`;
       console.log('💬 Facebook Messenger inbound disabled — acked and skipped');
       res.sendStatus(200);
       return;
+    }
+    // When re-enabled, still require a valid Meta signature before processing.
+    if (!verifyFacebookSignature(req)) {
+      return res.status(403).json({ error: 'Invalid webhook signature' });
     }
     try {
       const { entry } = req.body;
@@ -25452,6 +25745,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           // store the CURRENT status regardless of event order (the Stripe-
           // recommended pattern). subscription.deleted → the fetch returns
           // status=canceled. Fall back to the event snapshot if the fetch fails.
+          // Capture the status we had BEFORE this sync, so dunning fires only on the
+          // transition into a payment problem — not on every resync/retry of the same state.
+          const prevStatus = (await storage.getSubscriptionForBusiness(businessId).catch(() => undefined))?.status;
           let fresh = sub;
           try {
             fresh = await retrieveStripeSubscription(sub.id);
@@ -25460,6 +25756,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           }
           await billing.syncFromStripeSubscription(businessId, fresh);
           console.log(`Stripe webhook: synced subscription ${sub.id} for business ${businessId} -> ${fresh.status}`);
+          // Dunning: payment slipped into a problem state — nudge the owner off-app (bell +
+          // email) to fix their card. Only on the transition, so retries don't re-spam.
+          const PAYMENT_PROBLEM = new Set(['past_due', 'unpaid', 'incomplete_expired']);
+          if (PAYMENT_PROBLEM.has(fresh.status) && fresh.status !== prevStatus) {
+            await notifyBillingProblem(businessId, fresh.status);
+          }
         }
         return res.json({ received: true });
       }
@@ -26596,7 +26898,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // POST /api/admin/clear-data - Clear all jobs and customers (for fresh imports)
-  app.post('/api/admin/clear-data', async (req: Request, res: Response) => {
+  app.post('/api/admin/clear-data', requirePlatformAdmin, async (req: Request, res: Response) => {
     try {
       // Delete all jobs first (due to foreign key constraints)
       const deletedJobs = await storage.clearAllJobs();
@@ -29843,7 +30145,7 @@ Transcription: ${transcriptText}`;
   // ========================================
 
   // One-time sync: Update all jobs' totalAmount from their invoices
-  app.post("/api/admin/sync-invoice-amounts", async (req, res) => {
+  app.post("/api/admin/sync-invoice-amounts", requirePlatformAdmin, async (req, res) => {
     try {
       console.log('🔄 Starting invoice-to-job amount sync...');
       
@@ -30344,6 +30646,14 @@ Transcription: ${transcriptText}`;
 
   // POST: Facebook sends message events here (both paths — /facebook/messenger is canonical, /messenger is alias)
   app.post(['/api/webhooks/facebook/messenger', '/api/webhooks/messenger'], async (req: Request, res: Response) => {
+    // Verify Meta's X-Hub-Signature-256 (HMAC-SHA256 of the raw body with the
+    // app secret) BEFORE doing anything. Without this, anyone can forge a
+    // payload to inject leads, burn a GPT call per request, and trigger an
+    // outbound Graph API reply. Fail closed when the secret is unset.
+    if (!verifyFacebookSignature(req)) {
+      return res.status(403).json({ error: 'Invalid webhook signature' });
+    }
+
     // Acknowledge immediately so Facebook doesn't retry
     res.sendStatus(200);
 

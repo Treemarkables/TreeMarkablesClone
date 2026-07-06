@@ -86,11 +86,20 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: 30000,
-      refetchOnWindowFocus: false,
+      // No background polling by default. Freshness comes from (1) SSE
+      // invalidations (useSSE), (2) mutation onSuccess invalidations, and
+      // (3) refetch-on-focus below. Screens that genuinely need a live tick
+      // (Dispatch, Calendar, Staff Schedule, notifications…) opt in with an
+      // explicit per-query refetchInterval. The old global 30s interval kept
+      // every cached query polling forever — battery + bandwidth drain in the
+      // iOS webview and constant background load for no freshness gain.
+      refetchInterval: false,
+      // Refetch stale queries when the app regains focus (tab switch, iOS
+      // webview resume) so returning users see fresh data without polling.
+      refetchOnWindowFocus: true,
       // Treat data as fresh for a minute so navigating back to an
       // already-loaded screen renders instantly instead of re-flashing a
-      // skeleton. Background freshness is still handled by refetchInterval.
+      // skeleton (this also throttles focus refetches to once a minute).
       staleTime: 60_000,
       // During a background refetch (e.g. switching customers/jobs), keep the
       // previously rendered data on screen instead of dropping to an empty

@@ -340,6 +340,7 @@ export default function FollowUpQueue() {
               variant="outline"
               size="icon"
               onClick={() => refetch()}
+              aria-label="Refresh queue"
               data-testid="button-refresh-queue"
             >
               <RefreshCw className="h-4 w-4" />
@@ -441,6 +442,7 @@ export default function FollowUpQueue() {
                           e.stopPropagation();
                           window.location.href = `tel:${quote.customer?.phone}`;
                         }}
+                        aria-label="Call customer"
                         data-testid={`button-call-${quote.id}`}
                       >
                         <Phone className="h-4 w-4" />
@@ -455,6 +457,7 @@ export default function FollowUpQueue() {
                           e.stopPropagation();
                           window.location.href = `sms:${quote.customer?.phone}`;
                         }}
+                        aria-label="Text customer"
                         data-testid={`button-sms-${quote.id}`}
                       >
                         <MessageSquare className="h-4 w-4" />
@@ -469,6 +472,7 @@ export default function FollowUpQueue() {
                           e.stopPropagation();
                           window.location.href = `mailto:${quote.customer?.email}`;
                         }}
+                        aria-label="Email customer"
                         data-testid={`button-email-${quote.id}`}
                       >
                         <Mail className="h-4 w-4" />

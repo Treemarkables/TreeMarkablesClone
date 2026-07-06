@@ -9,6 +9,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.ts";
 import { APP_URL } from "./config/appUrl";
 import { tenantContextMiddleware } from "./tenancy/tenantMiddleware";
+import { requireApiAuth } from "./tenancy/requireApiAuth";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
 import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
@@ -143,6 +144,14 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 const PgSession = connectPgSimple(session);
 const isDevelopment = process.env.NODE_ENV === 'development';
 
+// SESSION_SECRET signs the session cookie. If it's ever unset in production the
+// cookie would be signed with a public literal from the repo — an attacker could
+// then forge a valid session for any employee/business (defeating RLS too). Fail
+// fast at boot rather than silently shipping a forgeable secret.
+if (!isDevelopment && !process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET must be set in production — refusing to start with a default signing secret');
+}
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
@@ -182,6 +191,11 @@ console.log('✅ Session store: PostgreSQL (sessions persist across server resta
 // Postgres RLS enforces read isolation. Must come after session middleware. With the
 // flag off this only sets businessId (no pooled connection) — exact current behaviour.
 app.use(tenantContextMiddleware);
+
+// Global API auth backstop — 401 for unauthenticated /api/* calls that aren't on
+// the public allowlist, so authorization no longer depends solely on RLS. Flag-
+// gated (API_AUTH_ENFORCED, default off); roll out + smoke-test like RLS.
+app.use(requireApiAuth);
 
 // Runtime static file serving with path resolution
 function resolveAndServeStatic(appInstance: express.Express) {
