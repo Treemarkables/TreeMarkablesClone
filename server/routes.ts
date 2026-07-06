@@ -156,6 +156,7 @@ import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
+import { queueJobPush, removeJobEvents, getConnectionForUser } from "./services/googleCalendarSync";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
 
@@ -961,6 +962,50 @@ async function requirePlatformAdmin(req: Request, res: Response, next: express.N
   }
 }
 
+// Dunning: when a subscriber's billing slips into a payment-problem state, the in-app
+// BillingBanner already warns them — but only once they open the app. This adds an
+// off-app nudge: a high-priority bell entry + an email to the business's own address,
+// so they fix their card before the grace period lapses and resolveEntitlements drops
+// them to freemium. Called only on the TRANSITION into a problem status (see the webhook),
+// so retries/resyncs don't re-spam. Runs from the Stripe webhook (owner connection, no
+// request tenant): the bell write is scoped via runWithBusiness so RLS stamps the owning
+// business; the email is a platform→tenant message (from "Inflow"), sent outside that
+// scope. Never throws — dunning is best-effort and must not 500 the webhook.
+async function notifyBillingProblem(businessId: string, status: string): Promise<void> {
+  const billingUrl = `${APP_URL}/settings/billing`;
+  const human = status.replace(/_/g, ' ');
+  try {
+    await runWithBusiness(businessId, async () => {
+      await storage.createNotification({
+        title: 'Payment problem — update your card',
+        message: "Your subscription payment didn't go through. Update your payment method to keep your plan.",
+        type: 'billing_problem',
+        priority: 'high',
+        isRead: false,
+        actionUrl: '/settings/billing',
+      });
+    });
+  } catch (e) {
+    console.error('[dunning] bell notification failed:', (e as Error).message);
+  }
+  try {
+    const settings = await storage.getBusinessSettingsForBusiness(businessId);
+    const to = (settings?.businessEmail || '').trim();
+    if (to) {
+      await emailService.sendEmail({
+        to,
+        fromName: 'Inflow',
+        subject: 'Action needed: update your payment method',
+        text: `Hi,\n\nYour latest subscription payment didn't go through, so your account is now ${human}. Update your payment method to avoid losing access:\n\n${billingUrl}\n\nAlready updated it? You can ignore this message.\n\nThanks,\nInflow`,
+        html: `<p>Hi,</p><p>Your latest subscription payment didn't go through, so your account is now <strong>${human}</strong>. Update your payment method to avoid losing access.</p><p><a href="${billingUrl}">Update payment method</a></p><p>Already updated it? You can ignore this message.</p><p>Thanks,<br>Inflow</p>`,
+      });
+      console.log(`[dunning] emailed ${businessId} (${status}) -> ${to}`);
+    }
+  } catch (e) {
+    console.error('[dunning] email failed:', (e as Error).message);
+  }
+}
+
 // Shared builder for the onboarding setup checklist (used by the per-tenant
 // /api/onboarding/checklist and the concierge subscriber views). Aggregates the
 // bring-your-own setup fields for ONE business into a progress list. Reads via
@@ -1070,6 +1115,34 @@ async function generateProposalPDFBuffer(
   const sections = await storage.getProposalSectionsByProposal(proposalId);
   const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
 
+  // Pre-fetch + re-encode the photos attached to sections (builder photo blocks
+  // store them in proposal_sections.images). Done up-front because the PDFKit
+  // Promise executor below is synchronous; re-encoded to JPEG because PDFKit
+  // only accepts JPEG/PNG (uploads can be webp/heic) — same pattern as the
+  // invoice PDF's photo embed. Keyed by URL so each section renders its own.
+  const sectionPhotoBuffers = new Map<string, Buffer>();
+  {
+    const sectionImageUrls = sections.flatMap((s: any) => (Array.isArray(s.images) ? s.images : []));
+    if (sectionImageUrls.length > 0) {
+      const photoStorageSvc = new PhotoStorageService();
+      for (const imgUrl of sectionImageUrls) {
+        if (!isSupportedPhotoUrl(imgUrl) || sectionPhotoBuffers.has(imgUrl)) continue;
+        try {
+          const photoData = await loadPhotoBytesForAttachment(imgUrl, photoStorageSvc);
+          if (!photoData?.buffer) continue;
+          const jpegBuffer = await sharp(photoData.buffer)
+            .rotate()
+            .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+          sectionPhotoBuffers.set(imgUrl, jpegBuffer);
+        } catch (err) {
+          console.warn(`⚠️ Could not load section photo for quote/proposal PDF: ${imgUrl}`, err);
+        }
+      }
+    }
+  }
+
   // Featured (curated) reviews to render under the totals block. Same filter as
   // GET /api/reviews/featured so the builder preview and the PDF show the same
   // pool. Flattened to individual photo URLs; limit to 6 to keep the PDF compact.
@@ -1163,11 +1236,15 @@ async function generateProposalPDFBuffer(
     // Section content + line items. The builder stores the typed job description
     // as per-section content (proposals.introduction is legacy), so description-only
     // sections must render too — skipping them drops the description from the PDF.
+    // Section photos (proposal_sections.images, pre-fetched above) render as a
+    // two-up grid under the section's text, mirroring the online viewer.
     for (const section of sections) {
-      if (section.sectionType === 'photos') continue;
       const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
       const sectionContent = (section.content || '').trim();
-      if (items.length === 0 && !sectionContent) continue;
+      const sectionImages: Buffer[] = (Array.isArray((section as any).images) ? (section as any).images : [])
+        .map((u: string) => sectionPhotoBuffers.get(u))
+        .filter((b: Buffer | undefined): b is Buffer => !!b);
+      if (items.length === 0 && !sectionContent && sectionImages.length === 0) continue;
 
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text(section.title, 50, doc.y, { width: pageW });
       doc.moveDown(0.3);
@@ -1175,6 +1252,31 @@ async function generateProposalPDFBuffer(
       if (sectionContent) {
         doc.fontSize(9).font('Helvetica').fillColor('#374151').text(sectionContent, 50, doc.y, { width: pageW });
         doc.moveDown(0.5);
+      }
+
+      if (sectionImages.length > 0) {
+        const pageBottom = doc.page.height - 90; // leave room above the footer rule
+        const gap = 12;
+        const cellW = Math.floor((pageW - gap) / 2);
+        const cellH = Math.round(cellW * 0.75); // 4:3
+        for (let i = 0; i < sectionImages.length; i += 2) {
+          if (doc.y + cellH > pageBottom) doc.addPage();
+          const rowY = doc.y;
+          try {
+            doc.image(sectionImages[i], 50, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+          } catch (err) {
+            console.warn('⚠️ Failed to embed section photo into PDF (left cell):', err);
+          }
+          if (sectionImages[i + 1]) {
+            try {
+              doc.image(sectionImages[i + 1], 50 + cellW + gap, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+            } catch (err) {
+              console.warn('⚠️ Failed to embed section photo into PDF (right cell):', err);
+            }
+          }
+          doc.y = rowY + cellH + 10;
+        }
+        doc.moveDown(0.3);
       }
 
       if (items.length > 0) {
@@ -2550,51 +2652,220 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Google Calendar status endpoint
+  // Google Calendar — per-user OAuth + two-way sync (unified calendar Phase C)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Status: returns connection info for the logged-in user.
   app.get('/api/google-calendar/status', async (req: Request, res: Response) => {
     try {
-      const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-      const xReplitToken = process.env.REPL_IDENTITY 
-        ? 'repl ' + process.env.REPL_IDENTITY 
-        : process.env.WEB_REPL_RENEWAL 
-        ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-        : null;
-
-      if (!xReplitToken || !hostname) {
-        return res.json({ 
-          connected: false,
-          message: 'Google Calendar connector not available'
-        });
-      }
-
-      const connectionSettings = await fetch(
-        'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-calendar',
-        {
-          headers: {
-            'Accept': 'application/json',
-            'X_REPLIT_TOKEN': xReplitToken
-          }
-        }
-      ).then(r => r.json()).then(data => data.items?.[0]);
-
-      if (!connectionSettings || !connectionSettings.settings?.access_token) {
-        return res.json({ 
-          connected: false,
-          message: 'Google Calendar not connected'
-        });
-      }
-
-      return res.json({ 
-        connected: true,
-        calendarEmail: connectionSettings.settings?.email || 'Connected'
-      });
-
-    } catch (error) {
-      console.error('Google Calendar status check error:', error);
+      const { getConnectionForUser: gcalGetConn } = await import('./services/googleCalendarSync');
+      const conn = await gcalGetConn(req.session.businessId, req.session.employeeId ?? '');
+      if (!conn) return res.json({ connected: false });
       return res.json({
-        connected: false,
-        message: 'Error checking Google Calendar status'
+        connected: true,
+        calendarEmail: conn.googleEmail || 'Connected',
+        calendarId: conn.calendarId,
+        lastSynced: conn.lastSyncedAt,
+        lastError: conn.lastError,
       });
+    } catch (error) {
+      console.error('Google Calendar status error:', error);
+      return res.json({ connected: false, message: 'Error checking status' });
+    }
+  });
+
+  // Auth start: redirect the user to Google's consent screen.
+  app.get('/api/google-calendar/auth', (req: Request, res: Response) => {
+    const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(503).json({ success: false, message: 'Google Calendar OAuth not configured' });
+    }
+    const { google } = require('googleapis');
+    const origin = process.env.NODE_ENV === 'production'
+      ? 'https://app.treemarkables.co.nz'
+      : `${req.protocol}://${req.get('host')}`;
+    const redirectUri = `${origin}/api/google-calendar/callback`;
+    const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    // State encodes the current session identifiers so the callback can associate
+    // the connection with the right employee without trusting POST body.
+    const state = Buffer.from(JSON.stringify({
+      businessId: req.session.businessId,
+      employeeId: req.session.employeeId,
+    })).toString('base64');
+    const url = oauth2.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: [
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/userinfo.email',
+      ],
+      state,
+    });
+    res.redirect(url);
+  });
+
+  // OAuth callback: exchange code, upsert connection, redirect to /integrations.
+  app.get('/api/google-calendar/callback', async (req: Request, res: Response) => {
+    const origin = process.env.NODE_ENV === 'production'
+      ? 'https://app.treemarkables.co.nz'
+      : `${req.protocol}://${req.get('host')}`;
+    try {
+      const code = typeof req.query.code === 'string' ? req.query.code : '';
+      const stateRaw = typeof req.query.state === 'string' ? req.query.state : '';
+      if (!code || !stateRaw) {
+        return res.redirect(`${origin}/integrations?gcal_error=missing_code`);
+      }
+      let stateParsed: { businessId?: string; employeeId?: string } = {};
+      try {
+        stateParsed = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8'));
+      } catch {
+        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+      }
+      const { businessId, employeeId } = stateParsed;
+      if (!businessId || !employeeId) {
+        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+      }
+
+      const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID!;
+      const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET!;
+      const redirectUri = `${origin}/api/google-calendar/callback`;
+      const { google } = require('googleapis');
+      const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+      const { tokens } = await oauth2.getToken(code);
+      oauth2.setCredentials(tokens);
+
+      // Fetch the connected email address via userinfo
+      let googleEmail: string | null = null;
+      try {
+        const oauth2Api = google.oauth2({ version: 'v2', auth: oauth2 });
+        const { data } = await oauth2Api.userinfo.get();
+        googleEmail = data.email ?? null;
+      } catch { /* non-fatal */ }
+
+      const { db } = await import('./db');
+      const { googleCalendarConnections } = await import('@shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+
+      // Upsert — one row per (business, user)
+      const existing = await db
+        .select()
+        .from(googleCalendarConnections)
+        .where(and(
+          eq(googleCalendarConnections.businessId, businessId),
+          eq(googleCalendarConnections.userId, employeeId),
+        ));
+
+      const connData = {
+        businessId,
+        userId: employeeId,
+        googleEmail,
+        accessToken: tokens.access_token ?? '',
+        refreshToken: tokens.refresh_token ?? '',
+        expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 50 * 60 * 1000),
+        scope: tokens.scope ?? null,
+        isActive: true,
+        lastError: null,
+        updatedAt: new Date(),
+      };
+
+      if (existing.length > 0) {
+        await db
+          .update(googleCalendarConnections)
+          .set(connData)
+          .where(eq(googleCalendarConnections.id, existing[0].id));
+      } else {
+        await db.insert(googleCalendarConnections).values(connData);
+      }
+
+      console.log(`✅ Google Calendar connected for employee ${employeeId} (${googleEmail})`);
+      res.redirect(`${origin}/integrations?gcal_connected=true`);
+    } catch (error) {
+      console.error('Google Calendar OAuth callback error:', error);
+      res.redirect(`${origin}/integrations?gcal_error=oauth_failed`);
+    }
+  });
+
+  // Disconnect: revoke token + deactivate the connection row.
+  app.delete('/api/google-calendar/connection', async (req: Request, res: Response) => {
+    try {
+      const { getConnectionForUser: gcalGetConn } = await import('./services/googleCalendarSync');
+      const conn = await gcalGetConn(req.session.businessId, req.session.employeeId ?? '');
+      if (!conn) return res.json({ success: true });
+
+      // Best-effort token revocation (don't fail if it errors)
+      try {
+        const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+        const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+        if (clientId && clientSecret) {
+          const { google } = require('googleapis');
+          const auth = new google.auth.OAuth2(clientId, clientSecret);
+          auth.setCredentials({ refresh_token: conn.refreshToken });
+          await auth.revokeCredentials();
+        }
+      } catch (revokeErr) {
+        console.warn('Google token revoke failed (ignored):', revokeErr);
+      }
+
+      const { db } = await import('./db');
+      const { googleCalendarConnections } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      await db
+        .update(googleCalendarConnections)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(googleCalendarConnections.id, conn.id));
+
+      console.log(`✅ Google Calendar disconnected for employee ${req.session.employeeId}`);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Google Calendar disconnect error:', error);
+      return res.status(500).json({ success: false, message: 'Error disconnecting Google Calendar' });
+    }
+  });
+
+  // Busy events for the calendar UI: returns external Google events as UTC intervals
+  // with the owning employee's userId so the calendar can render them in the right row.
+  app.get('/api/google-calendar/busy', async (req: Request, res: Response) => {
+    try {
+      const startStr = typeof req.query.start === 'string' ? req.query.start : '';
+      const endStr = typeof req.query.end === 'string' ? req.query.end : '';
+      if (!startStr || !endStr) {
+        return res.status(400).json({ success: false, message: 'start and end are required' });
+      }
+      const { db } = await import('./db');
+      const { googleBusyEvents, googleCalendarConnections } = await import('@shared/schema');
+      const { and, eq, gte, lte } = await import('drizzle-orm');
+      const businessId = req.session.businessId;
+      if (!businessId) return res.json({ success: true, data: [] });
+
+      const rows = await db
+        .select({
+          id: googleBusyEvents.id,
+          connectionId: googleBusyEvents.connectionId,
+          googleEventId: googleBusyEvents.googleEventId,
+          summary: googleBusyEvents.summary,
+          startTime: googleBusyEvents.startTime,
+          endTime: googleBusyEvents.endTime,
+          status: googleBusyEvents.status,
+          userId: googleCalendarConnections.userId,
+        })
+        .from(googleBusyEvents)
+        .innerJoin(
+          googleCalendarConnections,
+          eq(googleBusyEvents.connectionId, googleCalendarConnections.id),
+        )
+        .where(
+          and(
+            eq(googleBusyEvents.businessId, businessId),
+            lte(googleBusyEvents.startTime, new Date(endStr)),
+            gte(googleBusyEvents.endTime, new Date(startStr)),
+          ),
+        );
+      return res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('Google Calendar busy events error:', error);
+      return res.status(500).json({ success: false, message: 'Error fetching busy events' });
     }
   });
 
@@ -5524,170 +5795,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
+      // Queue Google Calendar push post-response (non-blocking)
+      queueJobPush(job.id);
     } catch (error) {
       console.error('Error creating job:', error);
       res.status(500).json({ success: false, message: 'Error creating job' });
     }
   });
-
-  // Enhanced tree service description processing
-  function processTreeServiceDescription(sources: string[]): string {
-    // Combine all sources and clean them
-    const combinedText = sources.join(' | ').toLowerCase();
-    
-    // Remove common ServiceM8 artifacts and invalid data
-    let cleaned = combinedText
-      .replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/g, '') // Timestamps
-      .replace(/0000-00-00 00:00:00/g, '') // Invalid dates
-      .replace(/\{\{[^}]*\}\}/g, '') // Template placeholders
-      .replace(/\[.*?\]/g, '') // Bracketed codes
-      .replace(/\b(servicem8|sm8|job|#)\b/gi, '') // ServiceM8 references
-      .replace(/\s+/g, ' ') // Multiple spaces
-      .trim();
-    
-    if (!cleaned || cleaned.length < 5) {
-      return '';
-    }
-    
-    // Tree service standardization patterns
-    const treeServicePatterns = [
-      // Tree removal variations
-      { pattern: /tree\s*remov/i, replacement: 'Tree Removal' },
-      { pattern: /remove\s*tree/i, replacement: 'Tree Removal' },
-      { pattern: /take\s*down\s*tree/i, replacement: 'Tree Removal' },
-      { pattern: /cut\s*down\s*tree/i, replacement: 'Tree Removal' },
-      { pattern: /fell\s*tree/i, replacement: 'Tree Removal' },
-      
-      // Tree trimming/pruning
-      { pattern: /tree\s*trim/i, replacement: 'Tree Trimming' },
-      { pattern: /tree\s*prun/i, replacement: 'Tree Pruning' },
-      { pattern: /prune\s*tree/i, replacement: 'Tree Pruning' },
-      { pattern: /trim\s*tree/i, replacement: 'Tree Trimming' },
-      { pattern: /shape\s*tree/i, replacement: 'Tree Shaping' },
-      
-      // Stump services
-      { pattern: /stump\s*grind/i, replacement: 'Stump Grinding' },
-      { pattern: /grind\s*stump/i, replacement: 'Stump Grinding' },
-      { pattern: /stump\s*remov/i, replacement: 'Stump Removal' },
-      { pattern: /remove\s*stump/i, replacement: 'Stump Removal' },
-      
-      // Emergency services
-      { pattern: /emergency.*tree/i, replacement: 'Emergency Tree Service' },
-      { pattern: /urgent.*tree/i, replacement: 'Emergency Tree Service' },
-      { pattern: /storm.*damage/i, replacement: 'Storm Damage Cleanup' },
-      { pattern: /fallen.*tree/i, replacement: 'Fallen Tree Removal' },
-      
-      // Maintenance services
-      { pattern: /tree\s*maint/i, replacement: 'Tree Maintenance' },
-      { pattern: /hedge\s*trim/i, replacement: 'Hedge Trimming' },
-      { pattern: /garden\s*clean/i, replacement: 'Garden Cleanup' },
-      { pattern: /branch\s*remov/i, replacement: 'Branch Removal' },
-      { pattern: /deadwood/i, replacement: 'Deadwood Removal' },
-      
-      // Specialized services
-      { pattern: /palm\s*clean/i, replacement: 'Palm Tree Cleaning' },
-      { pattern: /palm\s*trim/i, replacement: 'Palm Tree Trimming' },
-      { pattern: /fruit\s*tree/i, replacement: 'Fruit Tree Service' },
-      { pattern: /cable.*brac/i, replacement: 'Tree Cabling & Bracing' },
-    ];
-    
-    // Apply tree service patterns
-    let standardized = cleaned;
-    for (const { pattern, replacement } of treeServicePatterns) {
-      if (pattern.test(standardized)) {
-        standardized = standardized.replace(pattern, replacement);
-        break; // Use first match for primary service type
-      }
-    }
-    
-    // Extract key details and build structured description
-    const details = extractServiceDetails(standardized);
-    const structuredDescription = buildStructuredDescription(details);
-    
-    // Clean up final result
-    return structuredDescription
-      .split('|')[0] // Take first part if multiple services
-      .replace(/\s+/g, ' ')
-      .trim()
-      .split('')
-      .map((char, i) => i === 0 ? char.toUpperCase() : char)
-      .join('')
-      .substring(0, 200); // Reasonable length limit
-  }
-  
-  function extractServiceDetails(text: string): any {
-    const details: any = {
-      serviceType: '',
-      treeCount: null,
-      size: '',
-      location: '',
-      urgency: '',
-      additionalNotes: ''
-    };
-    
-    // Extract tree count
-    const countMatch = text.match(/(\d+)\s*tree/i);
-    if (countMatch) {
-      details.treeCount = parseInt(countMatch[1]);
-    }
-    
-    // Extract size descriptions
-    const sizePatterns = ['large', 'small', 'medium', 'huge', 'massive', 'tall', 'big'];
-    for (const size of sizePatterns) {
-      if (text.includes(size)) {
-        details.size = size;
-        break;
-      }
-    }
-    
-    // Extract location context
-    const locationPatterns = ['front yard', 'back yard', 'backyard', 'driveway', 'near house', 'fence line'];
-    for (const location of locationPatterns) {
-      if (text.includes(location)) {
-        details.location = location;
-        break;
-      }
-    }
-    
-    // Extract urgency
-    if (text.match(/urgent|emergency|asap|immediate/i)) {
-      details.urgency = 'urgent';
-    }
-    
-    return details;
-  }
-  
-  function buildStructuredDescription(details: any): string {
-    let parts = [];
-    
-    // Add count if specified
-    if (details.treeCount && details.treeCount > 1) {
-      parts.push(`${details.treeCount} trees`);
-    } else if (details.treeCount === 1) {
-      parts.push('1 tree');
-    }
-    
-    // Add size description
-    if (details.size) {
-      parts.push(details.size);
-    }
-    
-    // Add location context
-    if (details.location) {
-      parts.push(`in ${details.location}`);
-    }
-    
-    // Build final description
-    let description = parts.length > 0 ? parts.join(' ') : 'Tree service';
-    
-    // Add urgency flag
-    if (details.urgency === 'urgent') {
-      description = `URGENT: ${description}`;
-    }
-    
-    return description;
-  }
-
 
   // Fix fake job descriptions with real ServiceM8 data
   app.post('/api/jobs/fix-fake-descriptions', async (req: Request, res: Response) => {
@@ -6629,6 +6743,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         console.log(`🔄 Clearing unsuccessful data for job ${req.params.id} - status changing to ${validation.data.status}`);
       }
 
+      // Auto-advance a quote to 'work_order' when it gets scheduled. Scheduling
+      // a quote means committing to do the work (owner's chosen workflow). Only
+      // fires on the null → set transition so editing an already-scheduled job
+      // never re-flips, and we don't override an explicit status in this request.
+      {
+        const effectiveStatus = validation.data.status ?? oldJob?.status;
+        const hadSchedule = !!(oldJob as any)?.scheduledDate;
+        const nowScheduled = !!(validation.data as any).scheduledDate;
+        if (effectiveStatus === 'quote' && nowScheduled && !hadSchedule) {
+          (validation.data as any).status = 'work_order';
+          console.log(`📅 Job ${req.params.id} scheduled → status quote → work_order`);
+        }
+      }
+
       // Debug logging for job update
       console.log('🔍 JOB UPDATE SERVER DEBUG:', {
         jobId: req.params.id,
@@ -6895,6 +7023,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       res.json({ success: true, data: job });
+      // Queue Google Calendar push post-response (non-blocking)
+      const cancelStatuses = new Set(['archived', 'unsuccessful', 'cancelled']);
+      if (job.status && cancelStatuses.has(job.status)) {
+        removeJobEvents(job.id).catch(err => console.error('❌ GCal remove error:', err));
+      } else {
+        queueJobPush(job.id);
+      }
     } catch (error) {
       console.error('Error updating job:', error);
       res.status(500).json({ success: false, message: 'Error updating job' });
@@ -7061,6 +7196,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       }
 
+      // Auto-advance a quote to 'work_order' when it gets scheduled (mirrors the
+      // PUT handler). Only on the null → set transition; never overrides an
+      // explicit status sent in this request.
+      {
+        const effectiveStatus = updateData.status ?? oldJob?.status;
+        const hadSchedule = !!(oldJob as any)?.scheduledDate;
+        const nowScheduled = !!(updateData as any).scheduledDate;
+        if (effectiveStatus === 'quote' && nowScheduled && !hadSchedule) {
+          updateData.status = 'work_order';
+          console.log(`📅 Job ${req.params.id} scheduled → status quote → work_order (PATCH)`);
+        }
+      }
+
       // Stamp customerConfirmedAt + method when the confirmation flag transitions.
       if ('customerConfirmed' in updateData) {
         const was = !!oldJob?.customerConfirmed;
@@ -7168,6 +7316,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
+      queueJobPush(job.id);
     } catch (error) {
       console.error('Error patching job:', error);
       res.status(500).json({ success: false, message: 'Error updating job' });
@@ -7238,6 +7387,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           console.error(`JOB_DELETE_AUDIT snapshot failed for id=${jobId}:`, auditErr);
         }
       }));
+
+      // Clean up Google Calendar events before deleting
+      await Promise.all(jobIds.map((jobId: string) =>
+        removeJobEvents(jobId).catch(err => console.error(`❌ GCal remove before delete failed for job ${jobId}:`, err))
+      ));
 
       // Delete jobs using storage layer
       const result = await storage.bulkDeleteJobs(jobIds);
@@ -8392,6 +8546,18 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
   // Standalone video upload (Videos library) — no job card required. The job
   // can be linked later via PATCH /api/videos/:id { jobId }.
+  // Knowledge (how-to) videos are GLOBAL platform content shown to every subscriber
+  // (stored business_id NULL, served via the owner client — see storage.getVideos).
+  // Only allowlisted businesses may publish/manage them, so a stray tenant admin
+  // can't inject into the shared help library. Empty allowlist = fail closed (nobody).
+  // Set INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS to TM + the content/demo tenant ids.
+  const CONTENT_PUBLISHER_BUSINESS_IDS = new Set(
+    (process.env.INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS ?? "")
+      .split(",").map((s) => s.trim()).filter(Boolean),
+  );
+  const isContentPublisher = (businessId: string | undefined): boolean =>
+    !!businessId && CONTENT_PUBLISHER_BUSINESS_IDS.has(businessId);
+
   app.post('/api/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -8413,6 +8579,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       }
 
       const kind = req.body.kind === 'knowledge' ? 'knowledge' : 'job';
+      // Publishing into the global how-to library is restricted to content publishers.
+      if (kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to publish knowledge videos.' });
+      }
       const showToCustomer = req.body.showToCustomer === undefined
         ? true
         : req.body.showToCustomer === 'true' || req.body.showToCustomer === true;
@@ -8513,6 +8683,13 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       // and sync the corresponding link in jobs.description after the update.
       const priorVideo = await storage.getVideo(req.params.id);
 
+      // Editing a global knowledge video — or re-tagging a job video INTO the
+      // knowledge library — touches shared platform content; gate to publishers.
+      if ((priorVideo?.kind === 'knowledge' || req.body.kind === 'knowledge')
+        && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
+      }
+
       const updates: schema.UpdateVideo = {};
       if (req.body.title !== undefined) updates.title = req.body.title;
       if (req.body.description !== undefined) updates.description = req.body.description;
@@ -8574,6 +8751,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       const video = await storage.getVideo(req.params.id);
       if (!video) {
         return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      // Deleting from the global how-to library is restricted to content publishers.
+      if (video.kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
       }
       await storage.deleteVideo(req.params.id);
       await videoStorage.deleteVideoObject(video.url);
@@ -13046,6 +13227,89 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Public: request another job from the public invoice page (no login).
+  // We already know who the customer is (they came in via their invoice), so
+  // this creates a proper 'lead' job pre-filled with their details + fires the
+  // bell notification and admin push. Everything is derived from the invoice
+  // itself and scoped to the invoice's tenant.
+  app.post('/api/invoices/:invoiceId/request-service', async (req: Request, res: Response) => {
+    try {
+      const invoice = await storage.getInvoice(req.params.invoiceId);
+      if (!invoice || !invoice.customerId) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+
+      const customer = await storage.getCustomer(invoice.customerId);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: 'Customer not found' });
+      }
+
+      const description = (req.body.description || '').trim();
+      if (!description) {
+        return res.status(400).json({ success: false, message: 'A description is required' });
+      }
+      const preferredDate = (req.body.preferredDate || '').trim();
+      const fullDescription = preferredDate
+        ? `${description}\n\nPreferred date: ${preferredDate}`
+        : description;
+
+      const address =
+        (req.body.address || '').trim() ||
+        invoice.address ||
+        customer.address ||
+        'Address not specified';
+
+      // customers store a single `name`; split it for the job contact fields.
+      const nameParts = (customer.name || '').trim().split(/\s+/).filter(Boolean);
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ');
+
+      const businessId = invoice.businessId ?? undefined;
+
+      // Create the lead + notify inside the invoice's tenant context so the
+      // job is stamped correctly and the push/bell reach that business's admins.
+      const job = await runWithBusiness(businessId, async () => {
+        const jobNumber = await storage.getNextJobNumber();
+        const createdJob = await storage.createJob({
+          customerId: customer.id,
+          jobNumber,
+          title: `New request from ${customer.name || 'customer'}`,
+          description: fullDescription,
+          address,
+          status: 'lead',
+          priority: 'medium',
+          leadSource: 'repeat', // existing customer returning via their invoice
+          totalAmount: '0.00',
+          metricsEligible: true,
+          metricsStartDate: new Date(),
+          jobContactFirstName: firstName,
+          jobContactLastName: lastName,
+          jobContactEmail: customer.email || '',
+          jobContactPhone: customer.phone || '',
+          jobContactMobile: customer.mobile || '',
+        });
+
+        await notificationHelper.createNewLeadNotification({
+          jobId: createdJob.id,
+          jobNumber: createdJob.jobNumber,
+          customerId: customer.id,
+          customerName: customer.name || 'Customer',
+          customerEmail: customer.email || undefined,
+          customerPhone: customer.mobile || customer.phone || undefined,
+          sourceLabel: `Invoice #${invoice.invoiceNumber}`,
+          messagePreview: description,
+        });
+
+        return createdJob;
+      });
+
+      res.json({ success: true, data: { id: job.id, jobNumber: job.jobNumber } });
+    } catch (error) {
+      console.error('Error creating lead from invoice:', error);
+      res.status(500).json({ success: false, message: 'Error creating request' });
+    }
+  });
+
   // Public: create a Stripe Checkout session to pay an invoice online. Mirrors
   // the proposal deposit-checkout endpoint. Charges the GST-inclusive
   // outstanding balance (invoice total computed the same way as the email /
@@ -17161,7 +17425,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Create staff assignments for a job (with conflict checking and notifications)
   app.post('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
     try {
-      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false, scheduleBookingReminders = false } = req.body;
+      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false, scheduleBookingReminders = false, checkConflicts = false, overrideConflicts = false } = req.body;
       const jobId = req.params.jobId;
 
       if (!staffAssignments || !Array.isArray(staffAssignments) || staffAssignments.length === 0) {
@@ -17228,6 +17492,42 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             endTime: new Date(assignment.endTime),
             role: assignment.role || null,
             notes: assignment.notes || null,
+          });
+        }
+      }
+
+      // Opt-in double-booking guard (defence in depth behind the client-side
+      // pre-drop check). Only callers that send checkConflicts:true get the
+      // 409 — existing GlobalJobCard / QuickAssign flows are unaffected.
+      // This job's own rows are excluded: they're replaced/deduped below.
+      if (checkConflicts && !overrideConflicts) {
+        const conflictRows: Array<{ employeeId: string; jobId: string; jobNumber: string | null; startTime: string; endTime: string }> = [];
+        for (const planned of allAssignmentsToCreate) {
+          const found = await storage.checkStaffConflicts(
+            [planned.employeeId],
+            planned.startTime,
+            planned.endTime,
+            jobId,
+          );
+          for (const f of found) {
+            for (const c of f.conflicts) {
+              const conflictJob = await storage.getJob(c.jobId);
+              conflictRows.push({
+                employeeId: f.employeeId,
+                jobId: c.jobId,
+                jobNumber: conflictJob?.jobNumber ?? null,
+                startTime: new Date(c.startTime).toISOString(),
+                endTime: new Date(c.endTime).toISOString(),
+              });
+            }
+          }
+        }
+        if (conflictRows.length > 0) {
+          return res.status(409).json({
+            success: false,
+            error: 'conflict',
+            message: 'One or more crew members are already booked in that window',
+            conflicts: conflictRows,
           });
         }
       }
@@ -17507,21 +17807,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           console.error('Diary error stack:', diaryError instanceof Error ? diaryError.stack : diaryError);
         }
 
-        try {
-          const calendarJob = { ...job } as any;
-          if (job.customerId) {
-            const customer = await storage.getCustomer(job.customerId);
-            if (customer) {
-              calendarJob.customerName = customer.name;
-            }
-          }
-          const googleEventId = await googleCalendarService.syncJobToCalendar(calendarJob, created);
-          if (googleEventId) {
-            console.log(`✅ Job synced to Google Calendar: ${googleEventId}`);
-          }
-        } catch (calendarError) {
-          console.error('❌ Error syncing to Google Calendar:', calendarError);
-        }
+        // Queue two-way Google Calendar push (debounced, non-blocking)
+        queueJobPush(jobId);
       });
     } catch (error) {
       console.error('Error creating staff assignments:', error);
@@ -17565,7 +17852,42 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Update a staff assignment (reschedule drag-and-drop)
   app.put('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {
-      const { startTime, endTime, employeeId, notes, status } = req.body;
+      const { startTime, endTime, employeeId, notes, status, checkConflicts = false, overrideConflicts = false } = req.body;
+
+      // Opt-in double-booking guard (same contract as the batch-create route).
+      // Excludes the moved assignment's own job so a within-job time tweak
+      // never conflicts with itself.
+      if (checkConflicts && !overrideConflicts) {
+        const existing = await storage.getJobStaffAssignment(req.params.id);
+        if (existing) {
+          const effEmployeeId = employeeId ?? existing.employeeId;
+          const effStart = startTime ? new Date(startTime) : new Date(existing.startTime);
+          const effEnd = endTime ? new Date(endTime) : new Date(existing.endTime);
+          const found = await storage.checkStaffConflicts([effEmployeeId], effStart, effEnd, existing.jobId);
+          const conflictRows: Array<{ employeeId: string; jobId: string; jobNumber: string | null; startTime: string; endTime: string }> = [];
+          for (const f of found) {
+            for (const c of f.conflicts) {
+              const conflictJob = await storage.getJob(c.jobId);
+              conflictRows.push({
+                employeeId: f.employeeId,
+                jobId: c.jobId,
+                jobNumber: conflictJob?.jobNumber ?? null,
+                startTime: new Date(c.startTime).toISOString(),
+                endTime: new Date(c.endTime).toISOString(),
+              });
+            }
+          }
+          if (conflictRows.length > 0) {
+            return res.status(409).json({
+              success: false,
+              error: 'conflict',
+              message: 'Crew member is already booked in that window',
+              conflicts: conflictRows,
+            });
+          }
+        }
+      }
+
       const updates: Record<string, unknown> = {};
       if (startTime) updates.startTime = new Date(startTime);
       if (endTime) updates.endTime = new Date(endTime);
@@ -17574,6 +17896,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (status) updates.status = status;
       const updated = await storage.updateJobStaffAssignment(req.params.id, updates as Parameters<typeof storage.updateJobStaffAssignment>[1]);
       res.json({ success: true, data: updated });
+      if (updated?.jobId) queueJobPush(updated.jobId);
     } catch (error) {
       console.error('Error updating staff assignment:', error);
       res.status(500).json({ success: false, message: 'Error updating staff assignment' });
@@ -17583,11 +17906,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Delete a staff assignment
   app.delete('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {
+      const assignment = await storage.getJobStaffAssignment(req.params.id);
       await storage.deleteJobStaffAssignment(req.params.id);
       res.json({
         success: true,
         message: 'Staff assignment deleted successfully'
       });
+      if (assignment?.jobId) queueJobPush(assignment.jobId);
     } catch (error) {
       console.error('Error deleting staff assignment:', error);
       res.status(500).json({
@@ -17637,6 +17962,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       } as any);
       if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
       res.json({ success: true, data: job });
+      removeJobEvents(req.params.jobId).catch(err => console.error('❌ GCal remove error on unschedule:', err));
     } catch (error) {
       console.error('Error unscheduling job:', error);
       res.status(500).json({ success: false, message: 'Error unscheduling job' });
@@ -18806,6 +19132,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
       if (typeof rawBody.dailyRevenueTarget === 'number') {
         rawBody.dailyRevenueTarget = String(rawBody.dailyRevenueTarget);
+      }
+      if (typeof rawBody.defaultDepositValue === 'number') {
+        rawBody.defaultDepositValue = String(rawBody.defaultDepositValue);
       }
 
       const validationResult = updateBusinessSettingsSchema.safeParse(rawBody);
@@ -25590,6 +25919,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           // store the CURRENT status regardless of event order (the Stripe-
           // recommended pattern). subscription.deleted → the fetch returns
           // status=canceled. Fall back to the event snapshot if the fetch fails.
+          // Capture the status we had BEFORE this sync, so dunning fires only on the
+          // transition into a payment problem — not on every resync/retry of the same state.
+          const prevStatus = (await storage.getSubscriptionForBusiness(businessId).catch(() => undefined))?.status;
           let fresh = sub;
           try {
             fresh = await retrieveStripeSubscription(sub.id);
@@ -25598,6 +25930,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           }
           await billing.syncFromStripeSubscription(businessId, fresh);
           console.log(`Stripe webhook: synced subscription ${sub.id} for business ${businessId} -> ${fresh.status}`);
+          // Dunning: payment slipped into a problem state — nudge the owner off-app (bell +
+          // email) to fix their card. Only on the transition, so retries don't re-spam.
+          const PAYMENT_PROBLEM = new Set(['past_due', 'unpaid', 'incomplete_expired']);
+          if (PAYMENT_PROBLEM.has(fresh.status) && fresh.status !== prevStatus) {
+            await notifyBillingProblem(businessId, fresh.status);
+          }
         }
         return res.json({ received: true });
       }

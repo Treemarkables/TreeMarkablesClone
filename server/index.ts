@@ -1234,6 +1234,8 @@ The Treemarkables Team';
       marketingScheduler.start();
       const { startHealthCheckWorker } = await import('./services/healthCheck');
       startHealthCheckWorker();
+      const { startGoogleCalendarPoller } = await import('./services/googleCalendarSync');
+      startGoogleCalendarPoller();
     } catch (err) {
       log(`⚠️ Background worker startup warning: ${(err as Error).message}`, "startup");
     }
