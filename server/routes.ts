@@ -13042,6 +13042,89 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Public: request another job from the public invoice page (no login).
+  // We already know who the customer is (they came in via their invoice), so
+  // this creates a proper 'lead' job pre-filled with their details + fires the
+  // bell notification and admin push. Everything is derived from the invoice
+  // itself and scoped to the invoice's tenant.
+  app.post('/api/invoices/:invoiceId/request-service', async (req: Request, res: Response) => {
+    try {
+      const invoice = await storage.getInvoice(req.params.invoiceId);
+      if (!invoice || !invoice.customerId) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+
+      const customer = await storage.getCustomer(invoice.customerId);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: 'Customer not found' });
+      }
+
+      const description = (req.body.description || '').trim();
+      if (!description) {
+        return res.status(400).json({ success: false, message: 'A description is required' });
+      }
+      const preferredDate = (req.body.preferredDate || '').trim();
+      const fullDescription = preferredDate
+        ? `${description}\n\nPreferred date: ${preferredDate}`
+        : description;
+
+      const address =
+        (req.body.address || '').trim() ||
+        invoice.address ||
+        customer.address ||
+        'Address not specified';
+
+      // customers store a single `name`; split it for the job contact fields.
+      const nameParts = (customer.name || '').trim().split(/\s+/).filter(Boolean);
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ');
+
+      const businessId = invoice.businessId ?? undefined;
+
+      // Create the lead + notify inside the invoice's tenant context so the
+      // job is stamped correctly and the push/bell reach that business's admins.
+      const job = await runWithBusiness(businessId, async () => {
+        const jobNumber = await storage.getNextJobNumber();
+        const createdJob = await storage.createJob({
+          customerId: customer.id,
+          jobNumber,
+          title: `New request from ${customer.name || 'customer'}`,
+          description: fullDescription,
+          address,
+          status: 'lead',
+          priority: 'medium',
+          leadSource: 'repeat', // existing customer returning via their invoice
+          totalAmount: '0.00',
+          metricsEligible: true,
+          metricsStartDate: new Date(),
+          jobContactFirstName: firstName,
+          jobContactLastName: lastName,
+          jobContactEmail: customer.email || '',
+          jobContactPhone: customer.phone || '',
+          jobContactMobile: customer.mobile || '',
+        });
+
+        await notificationHelper.createNewLeadNotification({
+          jobId: createdJob.id,
+          jobNumber: createdJob.jobNumber,
+          customerId: customer.id,
+          customerName: customer.name || 'Customer',
+          customerEmail: customer.email || undefined,
+          customerPhone: customer.mobile || customer.phone || undefined,
+          sourceLabel: `Invoice #${invoice.invoiceNumber}`,
+          messagePreview: description,
+        });
+
+        return createdJob;
+      });
+
+      res.json({ success: true, data: { id: job.id, jobNumber: job.jobNumber } });
+    } catch (error) {
+      console.error('Error creating lead from invoice:', error);
+      res.status(500).json({ success: false, message: 'Error creating request' });
+    }
+  });
+
   // Public: create a Stripe Checkout session to pay an invoice online. Mirrors
   // the proposal deposit-checkout endpoint. Charges the GST-inclusive
   // outstanding balance (invoice total computed the same way as the email /
