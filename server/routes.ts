@@ -8082,24 +8082,36 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         const beforeFile = photos[beforeIndex];
         const afterFile = photos[afterIndex];
 
-        // Brand the composite from the tenant's own settings: wordmark strip =
-        // business name (+ tagline), colours = brand palette. Blank name → no
-        // strip; colour defaults reproduce the original black/neon look.
+        // Brand the composite. Treemarkables (tenant #1) is PINNED to its
+        // original wordmark + black/neon palette per owner instruction — its
+        // composites never change with settings edits. Every other tenant gets
+        // its own settings: wordmark strip = business name (+ tagline), colours
+        // = brand palette. Blank name → no strip (never another business's
+        // identity); colour defaults reproduce the same black/neon look.
+        const baBusinessId = currentBusinessId();
         let branding: BeforeAfterBranding | undefined;
-        try {
-          const baSettings = await storage.getBusinessSettings();
-          const baIdentity = getBusinessIdentity(baSettings);
-          const baColors = getBrandColors(baSettings);
+        if (baBusinessId && TREEMARKABLES_BUSINESS_IDS.includes(baBusinessId)) {
           branding = {
-            footerText: [baIdentity.name, baIdentity.tagline]
-              .filter(Boolean)
-              .join(" • ")
-              .toUpperCase(),
-            accentColor: baColors.accentColor,
-            headerColor: baColors.headerColor,
+            footerText: 'TREEMARKABLES • GISBORNE TREE CARE',
+            accentColor: '#39FF14',
+            headerColor: '#000000',
           };
-        } catch (settingsError) {
-          console.warn('Before/after branding lookup failed, composing unbranded:', settingsError);
+        } else {
+          try {
+            const baSettings = await storage.getBusinessSettings();
+            const baIdentity = getBusinessIdentity(baSettings);
+            const baColors = getBrandColors(baSettings);
+            branding = {
+              footerText: [baIdentity.name, baIdentity.tagline]
+                .filter(Boolean)
+                .join(" • ")
+                .toUpperCase(),
+              accentColor: baColors.accentColor,
+              headerColor: baColors.headerColor,
+            };
+          } catch (settingsError) {
+            console.warn('Before/after branding lookup failed, composing unbranded:', settingsError);
+          }
         }
 
         // Stitch BEFORE + AFTER into a single labelled side-by-side JPEG so the
