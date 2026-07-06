@@ -3679,7 +3679,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
             (s || '').toLowerCase().replace(/(^|[\s'’-])([a-z])/g, (_m, sep, ch) => sep + ch.toUpperCase());
           const displayName = titleCaseName(trimmedName) || 'there';
           const firstName = displayName.split(/\s+/)[0] || displayName;
-          const subject = bizSettings.inquiryAutoReplyEmailSubject || "We've received your inquiry — Treemarkables";
+          const subject = bizSettings.inquiryAutoReplyEmailSubject || "We've received your inquiry — {businessName}";
           const emailTemplate = bizSettings.inquiryAutoReplyEmailMessage || '';
           const smsTemplate = bizSettings.inquiryAutoReplySmsMessage || '';
 
@@ -3687,7 +3687,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
             s
               .replace(/\{customerName\}/g, displayName)
               .replace(/\{firstName\}/g, firstName)
-              .replace(/\{businessName\}/g, bizSettings.businessName || 'Treemarkables')
+              .replace(/\{businessName\}/g, bizSettings.businessName || '')
               .replace(/\{businessPhone\}/g, bizSettings.businessPhone || '');
 
           if ((channel === 'email' || channel === 'both') && lowerEmail) {
