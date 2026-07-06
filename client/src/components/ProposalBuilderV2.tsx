@@ -1433,19 +1433,20 @@ export function ProposalBuilderV2({
         }));
         const sectionDesc = s.description || "";
         const inferredType = inferBlockType({ description: sectionDesc, photos, lineItems });
-        // For a description block, prefer the live job.description over the
-        // proposal's saved section content. The saved content was originally
-        // a snapshot of job.description at creation time (auto-created from a
-        // lead, etc.), so when the user updates the job description they
-        // expect the proposal to reflect it. Fall back to the saved sectionDesc
-        // only when no live job description is available.
+        // A non-empty saved section description wins. Preferring the live
+        // job.description here (the previous behaviour) silently clobbered
+        // description edits made inside the builder every time this init
+        // re-ran (reopen, or the line-item re-init below), so the customer's
+        // emailed PDF carried the job's old description instead of the edit.
+        // The live job.description only seeds description blocks that have
+        // no saved content of their own.
         const liveJobDesc =
           jobDescription ||
           (job as { description?: string } | null)?.description ||
           "";
         const effectiveDesc =
-          inferredType === "description"
-            ? (liveJobDesc || sectionDesc)
+          inferredType === "description" && !sectionDesc.trim()
+            ? liveJobDesc
             : sectionDesc;
         return {
           id: s.id || `block-${idx}`,
