@@ -9,6 +9,7 @@ import { randomUUID } from "crypto";
 import { Response } from "express";
 import heicConvert from "heic-convert";
 import sharp from "sharp";
+import { contrastRatio, readableOn } from "./emailTemplates";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
@@ -49,7 +50,7 @@ export type PhotoLabel = "BEFORE" | "AFTER";
 async function burnLabel(
   buffer: Buffer,
   label: PhotoLabel,
-  opts?: { topInset?: number },
+  opts?: { topInset?: number; accentColor?: string },
 ): Promise<Buffer> {
   const meta = await sharp(buffer).metadata();
   const w = meta.width ?? 1200;
@@ -65,10 +66,12 @@ async function burnLabel(
   const offset = Math.round(fontSize * 0.5);
   const strokeW = Math.max(3, Math.round(fontSize / 16));
   const inset = strokeW / 2;
+  const badgeFill = opts?.accentColor || "#39FF14";
+  const badgeText = readableOn(badgeFill);
   const svg = `<svg width="${boxW}" height="${boxH}" xmlns="http://www.w3.org/2000/svg">
-    <rect x="${inset}" y="${inset}" width="${boxW - strokeW}" height="${boxH - strokeW}" rx="${Math.round((boxH - strokeW) / 2)}" fill="#39FF14" stroke="black" stroke-width="${strokeW}"/>
+    <rect x="${inset}" y="${inset}" width="${boxW - strokeW}" height="${boxH - strokeW}" rx="${Math.round((boxH - strokeW) / 2)}" fill="${badgeFill}" stroke="black" stroke-width="${strokeW}"/>
     <text x="${padX}" y="${Math.round(fontSize + padY * 0.7)}" font-family="Inter, Arial, sans-serif"
-          font-size="${fontSize}" font-weight="800" fill="black" letter-spacing="${letterSpacing}">${label}</text>
+          font-size="${fontSize}" font-weight="800" fill="${badgeText}" letter-spacing="${letterSpacing}">${label}</text>
   </svg>`;
   // Keep the badge clear of the left edge so it isn't clipped by FB ad / Reels
   // safe zones — ~4% of frame width sits inside the recommended margin.
@@ -80,13 +83,29 @@ async function burnLabel(
     .toBuffer();
 }
 
+// Branding burned into the before/after composite. All optional: colours fall
+// back to the default black/neon palette (matching business_settings column
+// defaults), and a blank footerText drops the branding strip entirely so an
+// unbranded tenant shows nothing rather than another business's identity.
+export interface BeforeAfterBranding {
+  footerText?: string;   // wordmark strip at the foot, e.g. "TREEMARKABLES • GISBORNE TREE CARE"
+  accentColor?: string;  // divider band + BEFORE/AFTER badge fill
+  headerColor?: string;  // footer strip background
+}
+
+const escapeXml = (s: string): string =>
+  s.replace(/[<>&'"]/g, (c) =>
+    ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[c] as string,
+  );
+
 // Stitch two images into a vertical 9:16 BEFORE-on-top / AFTER-on-bottom JPEG
 // sized for mobile Facebook feed posts. Each photo cover-fits its half, a thin
-// neon-green band divides them, and a black branding strip with "TREEMARKABLES
-// • GISBORNE TREE CARE" sits at the foot. HEIC/HEIF inputs become JPEG first.
+// accent-coloured band divides them, and the tenant's wordmark strip sits at
+// the foot. HEIC/HEIF inputs become JPEG first.
 export async function composeBeforeAfter(
   beforeInput: { buffer: Buffer; mimeType: string; filename: string },
   afterInput: { buffer: Buffer; mimeType: string; filename: string },
+  branding?: BeforeAfterBranding,
 ): Promise<Buffer> {
   const toJpegBuffer = async (input: { buffer: Buffer; mimeType: string; filename: string }) => {
     const ext = input.filename.split(".").pop()?.toLowerCase() || "";
@@ -102,10 +121,14 @@ export async function composeBeforeAfter(
 
   const [beforeJpeg, afterJpeg] = await Promise.all([toJpegBuffer(beforeInput), toJpegBuffer(afterInput)]);
 
+  const accent = branding?.accentColor || "#39FF14";
+  const footerBg = branding?.headerColor || "#0b0b0b";
+  const footerText = (branding?.footerText || "").trim();
+
   const targetW = 1080;
   const targetH = 1920;
   const dividerH = 8;
-  const footerH = 90;
+  const footerH = footerText ? 90 : 0;
   const halfH = Math.floor((targetH - dividerH - footerH) / 2);
 
   // Resize first, then burn the labels onto the cropped halves — burning before
@@ -126,31 +149,44 @@ export async function composeBeforeAfter(
   // position inside their respective halves.
   const labelTopInset = Math.round(targetH * 0.12);
   const [topBuf, bottomBuf] = await Promise.all([
-    burnLabel(topResized, "BEFORE", { topInset: labelTopInset }),
-    burnLabel(bottomResized, "AFTER", { topInset: labelTopInset }),
+    burnLabel(topResized, "BEFORE", { topInset: labelTopInset, accentColor: accent }),
+    burnLabel(bottomResized, "AFTER", { topInset: labelTopInset, accentColor: accent }),
   ]);
 
-  const footerFontSize = 34;
-  const footerSvg = `<svg width="${targetW}" height="${footerH}" xmlns="http://www.w3.org/2000/svg">
-    <rect width="${targetW}" height="${footerH}" fill="black"/>
+  const composites: sharp.OverlayOptions[] = [
+    { input: topBuf, left: 0, top: 0 },
+    { input: bottomBuf, left: 0, top: halfH + dividerH },
+  ];
+
+  if (footerText) {
+    // Wordmark in the accent when it stands out against the strip; if a tenant
+    // sets header ≈ accent, fall back to readable mono so the name never vanishes.
+    const footerTextColor =
+      contrastRatio(accent, footerBg) >= 2.5 ? accent : readableOn(footerBg);
+    // Shrink the wordmark for long names so it never overflows the strip
+    // (~0.62em average glyph width + the 4px letter-spacing per character).
+    const footerFontSize = Math.max(
+      18,
+      Math.min(34, Math.floor(((targetW - 64) / footerText.length - 4) / 0.62)),
+    );
+    const footerSvg = `<svg width="${targetW}" height="${footerH}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${targetW}" height="${footerH}" fill="${footerBg}"/>
     <text x="${targetW / 2}" y="${Math.round(footerH / 2 + footerFontSize / 3)}" font-family="Inter, Arial, sans-serif"
-          font-size="${footerFontSize}" font-weight="700" letter-spacing="4" fill="#39FF14" text-anchor="middle">TREEMARKABLES &#8226; GISBORNE TREE CARE</text>
+          font-size="${footerFontSize}" font-weight="700" letter-spacing="4" fill="${footerTextColor}" text-anchor="middle">${escapeXml(footerText)}</text>
   </svg>`;
-  const footerBuf = await sharp(Buffer.from(footerSvg)).png().toBuffer();
+    const footerBuf = await sharp(Buffer.from(footerSvg)).png().toBuffer();
+    composites.push({ input: footerBuf, left: 0, top: halfH * 2 + dividerH });
+  }
 
   return sharp({
     create: {
       width: targetW,
       height: targetH,
       channels: 3,
-      background: { r: 0x39, g: 0xff, b: 0x14 },
+      background: accent,
     },
   })
-    .composite([
-      { input: topBuf, left: 0, top: 0 },
-      { input: bottomBuf, left: 0, top: halfH + dividerH },
-      { input: footerBuf, left: 0, top: halfH * 2 + dividerH },
-    ])
+    .composite(composites)
     .jpeg({ quality: 88 })
     .toBuffer();
 }

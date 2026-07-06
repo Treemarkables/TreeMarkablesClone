@@ -69,14 +69,14 @@ function relLuminance(hex: string): number {
   return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
 }
 
-function contrastRatio(a: string, b: string): number {
+export function contrastRatio(a: string, b: string): number {
   const hi = Math.max(relLuminance(a), relLuminance(b));
   const lo = Math.min(relLuminance(a), relLuminance(b));
   return (hi + 0.05) / (lo + 0.05);
 }
 
 /** Pick black or white — whichever reads better on `bg`. */
-function readableOn(bg: string): string {
+export function readableOn(bg: string): string {
   return contrastRatio('#ffffff', bg) >= contrastRatio('#0b0b0b', bg) ? '#ffffff' : '#0b0b0b';
 }
 
