@@ -152,7 +152,7 @@ import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
 import { renderBrandedEmail, renderInvoiceEmail } from "./emailTemplates";
 import { manHoursService } from "./manHoursService";
-import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./photoStorage";
+import { PhotoStorageService, objectStorageClient, composeBeforeAfter, type BeforeAfterBranding } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
@@ -8082,11 +8082,32 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         const beforeFile = photos[beforeIndex];
         const afterFile = photos[afterIndex];
 
+        // Brand the composite from the tenant's own settings: wordmark strip =
+        // business name (+ tagline), colours = brand palette. Blank name → no
+        // strip; colour defaults reproduce the original black/neon look.
+        let branding: BeforeAfterBranding | undefined;
+        try {
+          const baSettings = await storage.getBusinessSettings();
+          const baIdentity = getBusinessIdentity(baSettings);
+          const baColors = getBrandColors(baSettings);
+          branding = {
+            footerText: [baIdentity.name, baIdentity.tagline]
+              .filter(Boolean)
+              .join(" • ")
+              .toUpperCase(),
+            accentColor: baColors.accentColor,
+            headerColor: baColors.headerColor,
+          };
+        } catch (settingsError) {
+          console.warn('Before/after branding lookup failed, composing unbranded:', settingsError);
+        }
+
         // Stitch BEFORE + AFTER into a single labelled side-by-side JPEG so the
         // diary shows one tile, one image to share, instead of two separate cards.
         const compositeBuffer = await composeBeforeAfter(
           { buffer: beforeFile.buffer, mimeType: beforeFile.mimetype, filename: beforeFile.originalname },
           { buffer: afterFile.buffer, mimeType: afterFile.mimetype, filename: afterFile.originalname },
+          branding,
         );
 
         const photoStorage = new PhotoStorageService();
