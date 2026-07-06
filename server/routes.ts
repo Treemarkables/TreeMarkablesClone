@@ -1070,6 +1070,34 @@ async function generateProposalPDFBuffer(
   const sections = await storage.getProposalSectionsByProposal(proposalId);
   const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
 
+  // Pre-fetch + re-encode the photos attached to sections (builder photo blocks
+  // store them in proposal_sections.images). Done up-front because the PDFKit
+  // Promise executor below is synchronous; re-encoded to JPEG because PDFKit
+  // only accepts JPEG/PNG (uploads can be webp/heic) — same pattern as the
+  // invoice PDF's photo embed. Keyed by URL so each section renders its own.
+  const sectionPhotoBuffers = new Map<string, Buffer>();
+  {
+    const sectionImageUrls = sections.flatMap((s: any) => (Array.isArray(s.images) ? s.images : []));
+    if (sectionImageUrls.length > 0) {
+      const photoStorageSvc = new PhotoStorageService();
+      for (const imgUrl of sectionImageUrls) {
+        if (!isSupportedPhotoUrl(imgUrl) || sectionPhotoBuffers.has(imgUrl)) continue;
+        try {
+          const photoData = await loadPhotoBytesForAttachment(imgUrl, photoStorageSvc);
+          if (!photoData?.buffer) continue;
+          const jpegBuffer = await sharp(photoData.buffer)
+            .rotate()
+            .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+          sectionPhotoBuffers.set(imgUrl, jpegBuffer);
+        } catch (err) {
+          console.warn(`⚠️ Could not load section photo for quote/proposal PDF: ${imgUrl}`, err);
+        }
+      }
+    }
+  }
+
   // Featured (curated) reviews to render under the totals block. Same filter as
   // GET /api/reviews/featured so the builder preview and the PDF show the same
   // pool. Flattened to individual photo URLs; limit to 6 to keep the PDF compact.
@@ -1163,11 +1191,15 @@ async function generateProposalPDFBuffer(
     // Section content + line items. The builder stores the typed job description
     // as per-section content (proposals.introduction is legacy), so description-only
     // sections must render too — skipping them drops the description from the PDF.
+    // Section photos (proposal_sections.images, pre-fetched above) render as a
+    // two-up grid under the section's text, mirroring the online viewer.
     for (const section of sections) {
-      if (section.sectionType === 'photos') continue;
       const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
       const sectionContent = (section.content || '').trim();
-      if (items.length === 0 && !sectionContent) continue;
+      const sectionImages: Buffer[] = (Array.isArray((section as any).images) ? (section as any).images : [])
+        .map((u: string) => sectionPhotoBuffers.get(u))
+        .filter((b: Buffer | undefined): b is Buffer => !!b);
+      if (items.length === 0 && !sectionContent && sectionImages.length === 0) continue;
 
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text(section.title, 50, doc.y, { width: pageW });
       doc.moveDown(0.3);
@@ -1175,6 +1207,31 @@ async function generateProposalPDFBuffer(
       if (sectionContent) {
         doc.fontSize(9).font('Helvetica').fillColor('#374151').text(sectionContent, 50, doc.y, { width: pageW });
         doc.moveDown(0.5);
+      }
+
+      if (sectionImages.length > 0) {
+        const pageBottom = doc.page.height - 90; // leave room above the footer rule
+        const gap = 12;
+        const cellW = Math.floor((pageW - gap) / 2);
+        const cellH = Math.round(cellW * 0.75); // 4:3
+        for (let i = 0; i < sectionImages.length; i += 2) {
+          if (doc.y + cellH > pageBottom) doc.addPage();
+          const rowY = doc.y;
+          try {
+            doc.image(sectionImages[i], 50, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+          } catch (err) {
+            console.warn('⚠️ Failed to embed section photo into PDF (left cell):', err);
+          }
+          if (sectionImages[i + 1]) {
+            try {
+              doc.image(sectionImages[i + 1], 50 + cellW + gap, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+            } catch (err) {
+              console.warn('⚠️ Failed to embed section photo into PDF (right cell):', err);
+            }
+          }
+          doc.y = rowY + cellH + 10;
+        }
+        doc.moveDown(0.3);
       }
 
       if (items.length > 0) {
