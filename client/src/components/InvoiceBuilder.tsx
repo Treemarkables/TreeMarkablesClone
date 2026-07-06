@@ -1832,22 +1832,35 @@ export function InvoiceBuilder({
                     })}
 
                     {/* Search or add new — collapses into a normal item row
-                        once the user starts editing it. */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newId = Math.random().toString();
-                        setLineItems((prev) => [
-                          ...prev,
-                          { id: newId, description: "", quantity: 1, unitPrice: 0, total: 0, category: "other" },
-                        ]);
-                        setEditingInvoiceItemId(newId);
-                      }}
-                      className={`w-full text-left text-[15px] text-gray-400 hover:text-blue-600 transition-colors px-4 py-3 ${lineItems.length === 0 ? "" : "border-t border-gray-100"}`}
-                      data-testid="button-add-line-item"
-                    >
-                      Search or add new...
-                    </button>
+                        once the user starts editing it. The "Add row" button
+                        beside it appends blank rows fast (click N times → N rows). */}
+                    <div className={`flex items-center ${lineItems.length === 0 ? "" : "border-t border-gray-100"}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newId = Math.random().toString();
+                          setLineItems((prev) => [
+                            ...prev,
+                            { id: newId, description: "", quantity: 1, unitPrice: 0, total: 0, category: "other" },
+                          ]);
+                          setEditingInvoiceItemId(newId);
+                        }}
+                        className="flex-1 text-left text-[15px] text-gray-400 hover:text-blue-600 transition-colors px-4 py-3"
+                        data-testid="button-add-line-item"
+                      >
+                        Search or add new...
+                      </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => addLineItem()}
+                        className="mr-2 text-gray-500 flex-shrink-0"
+                        data-testid="button-quick-add-line-item"
+                      >
+                        <Plus className="w-4 h-4 mr-1" /> Add row
+                      </Button>
+                    </div>
 
                     {/* Totals footer — single source of truth for totals */}
                     <div className="border-t border-border bg-muted/40 px-4 py-3 space-y-1">
