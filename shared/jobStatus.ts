@@ -1,19 +1,23 @@
 import type { JobStatusType } from "./schema";
 
-// Bookings are pure calendar actions. Assigning a date or crew to a job
-// updates its scheduling fields but never changes its status. Owners drive
-// status changes explicitly via the job card (Lead → Quote → Work Order →
-// Completed / Unsuccessful).
+// Returns the status a job should move to when it gets "booked in" (a calendar
+// date / crew is assigned), or null to leave the current status alone.
 //
-// Pre-2026-05 this function moved jobs between statuses on booking
-// (lead → quote, work_order → scheduled) and `'scheduled'` was a real
-// status value. Both were retired in 2026-05 because the auto-transition
-// confused users — once a job became `'scheduled'` it didn't cleanly come
-// back to `'work_order'` when the booking was changed, and a lead picking
-// up a quote site-visit booking became a quote even when it shouldn't.
+// A 'quote' that gets scheduled is treated as committing to do the work, so it
+// advances to 'work_order'. (This is the owner's chosen workflow: scheduling a
+// quote = the job is booked. Re-added 2026-06 after being disabled in 2026-05.)
 //
-// The export stays so callers compile without churn; it now always returns
-// null. Any remaining call sites can be removed when convenient.
-export function statusAfterBooking(_current?: string | null): JobStatusType | null {
-  return null;
+// History: pre-2026-05 this also did lead → quote and work_order → 'scheduled',
+// with `'scheduled'` as a real status. Both were retired because they confused
+// users — a 'scheduled' job didn't cleanly return to 'work_order' when the
+// booking changed, and a lead picking up a quoting site-visit booking became a
+// quote when it shouldn't. We do NOT reintroduce either of those; `'scheduled'`
+// remains a dead status. Only the quote → work_order transition is active.
+export function statusAfterBooking(current?: string | null): JobStatusType | null {
+  switch (current) {
+    case "quote":
+      return "work_order";
+    default:
+      return null;
+  }
 }

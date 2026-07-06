@@ -6629,6 +6629,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         console.log(`🔄 Clearing unsuccessful data for job ${req.params.id} - status changing to ${validation.data.status}`);
       }
 
+      // Auto-advance a quote to 'work_order' when it gets scheduled. Scheduling
+      // a quote means committing to do the work (owner's chosen workflow). Only
+      // fires on the null → set transition so editing an already-scheduled job
+      // never re-flips, and we don't override an explicit status in this request.
+      {
+        const effectiveStatus = validation.data.status ?? oldJob?.status;
+        const hadSchedule = !!(oldJob as any)?.scheduledDate;
+        const nowScheduled = !!(validation.data as any).scheduledDate;
+        if (effectiveStatus === 'quote' && nowScheduled && !hadSchedule) {
+          (validation.data as any).status = 'work_order';
+          console.log(`📅 Job ${req.params.id} scheduled → status quote → work_order`);
+        }
+      }
+
       // Debug logging for job update
       console.log('🔍 JOB UPDATE SERVER DEBUG:', {
         jobId: req.params.id,
@@ -7058,6 +7072,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         if (!updateData.completedDate) {
           updateData.completedDate = new Date();
           console.log(`✅ Auto-setting completedDate for job ${req.params.id} (PATCH status → completed)`);
+        }
+      }
+
+      // Auto-advance a quote to 'work_order' when it gets scheduled (mirrors the
+      // PUT handler). Only on the null → set transition; never overrides an
+      // explicit status sent in this request.
+      {
+        const effectiveStatus = updateData.status ?? oldJob?.status;
+        const hadSchedule = !!(oldJob as any)?.scheduledDate;
+        const nowScheduled = !!(updateData as any).scheduledDate;
+        if (effectiveStatus === 'quote' && nowScheduled && !hadSchedule) {
+          updateData.status = 'work_order';
+          console.log(`📅 Job ${req.params.id} scheduled → status quote → work_order (PATCH)`);
         }
       }
 

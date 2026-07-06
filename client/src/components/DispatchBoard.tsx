@@ -2382,9 +2382,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       specialInstructions: schedulingData.notes,
     };
 
-    // Booking-driven status transition: lead → quote (site visit), quote
-    // or work_order → scheduled (work crew). statusAfterBooking returns
-    // null when the current status shouldn't change.
+    // Booking-driven status transition: scheduling a quote advances it to
+    // work_order (booking = committing to the work). statusAfterBooking
+    // returns null for every other status, leaving it unchanged.
     if (jobToSchedule) {
       const next = statusAfterBooking(jobToSchedule.status);
       if (next && next !== jobToSchedule.status) {
