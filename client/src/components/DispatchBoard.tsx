@@ -1,4 +1,4 @@
-import { useJobFilter, useLaneFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
+import { useJobFilters, useLaneFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -685,7 +685,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     useState<boolean>(false);
   const [assignmentMode, setAssignmentMode] =
     useState<AssignmentMode>("individual");
-  const [jobFilter, setJobFilter] = useJobFilter();
+  const [jobFilters, setJobFilters] = useJobFilters();
   const [laneFilter] = useLaneFilter();
   const [onlyUnconfirmed, setOnlyUnconfirmed] = useOnlyUnconfirmed();
 
@@ -719,9 +719,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     lead: { title: "Leads", subtitle: "Enquiries & unqualified leads" },
     queue: { title: "Dispatch Queue", subtitle: "Jobs parked and waiting" },
     quote: { title: "Quotes", subtitle: "Quote status" },
+    mulch: { title: "Mulch", subtitle: "Mulch status" },
     work_order: { title: "Work Orders", subtitle: "Work order status" },
     scheduled: { title: "Scheduled", subtitle: "Scheduled status" },
   };
+
+  // Panel title for the active multi-select filter set ([] = All).
+  const panelTitle =
+    jobFilters.length === 0
+      ? "Active Jobs"
+      : jobFilters.map((f) => filterMeta[f]?.title ?? f).join(" + ");
+
+  // The awaiting-confirmation badge/toggle only makes sense on views that can
+  // contain unconfirmed work orders: All, or any selection including W/O or Scheduled.
+  const showUnconfirmedBadge =
+    jobFilters.length === 0 ||
+    jobFilters.includes("scheduled") ||
+    jobFilters.includes("work_order");
 
   const QUEUE_REASONS = [
     "Weather Hold",
@@ -1708,20 +1722,28 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           return job.laneId === laneFilter;
         }
 
-        // Queued jobs belong exclusively to the Queue tab
-        if (jobFilter === "queue") return job.inQueue === true;
-        if (job.inQueue) return false;
-
-        // When a specific tab is selected, scope to that tab.
-        // 'scheduled' status retired 2026-05 — the W/O and Scheduled tabs now
+        // Status filters are multi-select and OR-combined — e.g. W/O + Scheduled
+        // together shows every work_order regardless of booking state (needed
+        // when rescheduling: booked and bookable jobs side by side).
+        // 'scheduled' status retired 2026-05 — the W/O and Scheduled filters
         // partition work_orders by whether they have a scheduledDate set,
-        // so every work_order shows in exactly one of the two tabs.
-        if (jobFilter === "lead") return job.status === "lead";
-        if (jobFilter === "quote") return job.status === "quote";
-        if (jobFilter === "work_order") return job.status === "work_order" && !job.scheduledDate;
-        if (jobFilter === "scheduled") return job.status === "work_order" && !!job.scheduledDate;
+        // so every work_order matches exactly one of the two.
+        if (jobFilters.length > 0) {
+          return jobFilters.some((f) => {
+            // Queued jobs belong exclusively to the Queue filter
+            if (f === "queue") return job.inQueue === true;
+            if (job.inQueue) return false;
+            if (f === "lead") return job.status === "lead";
+            if (f === "quote") return job.status === "quote";
+            if (f === "mulch") return job.status === "mulch";
+            if (f === "work_order") return job.status === "work_order" && !job.scheduledDate;
+            if (f === "scheduled") return job.status === "work_order" && !!job.scheduledDate;
+            return false;
+          });
+        }
 
-        // 'all' tab, no search: only the three most actionable statuses
+        // No filter ("All"), no search: only the three most actionable statuses
+        if (job.inQueue) return false;
         return (
           job.status === "lead" ||
           job.status === "quote" ||
@@ -1737,16 +1759,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         if (!onlyUnconfirmed) return true;
         if (isSearching) return true;
         const tabSupportsFilter =
-          jobFilter === "scheduled" ||
-          jobFilter === "work_order" ||
-          jobFilter === "all";
+          jobFilters.length === 0 ||
+          jobFilters.includes("scheduled") ||
+          jobFilters.includes("work_order");
         if (!tabSupportsFilter) return true;
         // 'scheduled' status retired 2026-05 — booked work is all work_order.
         return job.status === "work_order" && !job.customerConfirmed;
       })
       .filter((job) => {
         // When searching, a specific status filter, or a lane filter is active, skip the date window
-        if (isSearching || jobFilter !== "all" || laneFilter !== "all") return true;
+        if (isSearching || jobFilters.length > 0 || laneFilter !== "all") return true;
 
         // Always include work_order jobs — these are active jobs that need
         // dispatching. ('scheduled' status retired 2026-05.)
@@ -1832,7 +1854,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       // jobs that predate the workOrderAt column — lastActivityAt gets bumped on every email,
       // note, or edit, which caused those jobs to reshuffle whenever they were touched.
       // createdAt is immutable so positions stay stable.
-      if (jobFilter === "work_order") {
+      // FIFO only applies when W/O is the sole active filter — mixed selections
+      // (e.g. W/O + Scheduled) fall through to the activity sort below, since
+      // FIFO-by-conversion-time is meaningless for already-booked jobs.
+      if (jobFilters.length === 1 && jobFilters[0] === "work_order") {
         const getAcceptedTime = (job: JobAssignment): number => {
           if (job.workOrderAt) return new Date(job.workOrderAt).getTime();
           if (job.createdAt) return new Date(job.createdAt).getTime();
@@ -1869,7 +1894,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     deepSearchResults,
     searchQuery,
     laneFilter,
-    jobFilter,
+    jobFilters,
     onlyUnconfirmed,
   ]);
 
@@ -2247,7 +2272,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // picker that JobDetailsPanel shows when customerId is null.
   //
   // The afterOpen callback lets each caller apply its existing side
-  // effects (e.g. setJobFilter for lead/quote) once the draft is open.
+  // effects (e.g. setJobFilters for lead/quote) once the draft is open.
   const createDraftMutation = useMutation<
     { success?: boolean; data?: { id?: string } },
     Error,
@@ -2296,14 +2321,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const handleCreateLead = () => {
     createDraftMutation.mutate({
       status: "lead",
-      afterOpen: () => setJobFilter("lead"),
+      afterOpen: () => setJobFilters(["lead"]),
     });
   };
 
   const handleCreateQuote = () => {
     createDraftMutation.mutate({
       status: "quote",
-      afterOpen: () => setJobFilter("quote"),
+      afterOpen: () => setJobFilters(["quote"]),
     });
   };
 
@@ -2689,11 +2714,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       <CardHeader className="flex-shrink-0 border-b pb-3">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-base">
-                            {filterMeta[jobFilter]?.title ?? "Active Jobs"}
+                            {panelTitle}
                           </CardTitle>
-                          {(jobFilter === "scheduled" ||
-                            jobFilter === "work_order" ||
-                            jobFilter === "all") &&
+                          {showUnconfirmedBadge &&
                             unconfirmedCount > 0 && (
                               <button
                                 type="button"
@@ -3183,9 +3206,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </div>
           </div>
           )}
-          {(jobFilter === "scheduled" ||
-            jobFilter === "work_order" ||
-            jobFilter === "all") &&
+          {showUnconfirmedBadge &&
             unconfirmedCount > 0 && (
               <div className="bg-background border-b px-3 py-2">
                 <button

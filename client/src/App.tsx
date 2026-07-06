@@ -124,9 +124,9 @@ const UnlinkedCalls = lazy(() => import("@/pages/UnlinkedCalls"));
 const Reconciliation = lazy(() => import("@/pages/Reconciliation"));
 const ProfitabilityCalculator = lazy(() => import("@/pages/ProfitabilityCalculator"));
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft, LayoutGrid } from "lucide-react";
-import { useJobFilter, useLaneFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
+import { useJobFilters, useLaneFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -224,7 +224,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   
   // Check if we're on dispatch page
   const isDispatchPage = location === '/dispatch';
-  const [dispatchFilter, setDispatchFilter] = useJobFilter();
+  const [dispatchFilters, setDispatchFilters] = useJobFilters();
   const [dispatchLane, setDispatchLane] = useLaneFilter();
   const [dispatchSearchOpen, setDispatchSearchOpen] = useDispatchSearchOpen();
 
@@ -235,8 +235,28 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   });
   const dispatchLanes = lanesResponse?.data || [];
   // Status and lane are mutually-exclusive views. Selecting one clears the other.
-  const selectStatus = (v: string) => { setDispatchFilter(v); setDispatchLane("all"); };
-  const selectLane = (v: string) => { setDispatchLane(v); setDispatchFilter("all"); };
+  // Status filters are multi-select: toggling a status adds/removes it from the
+  // active set ([] = All), so e.g. W/O + Scheduled can be viewed together.
+  const toggleStatus = (v: string) => {
+    setDispatchFilters(
+      dispatchFilters.includes(v)
+        ? dispatchFilters.filter((f) => f !== v)
+        : [...dispatchFilters, v],
+    );
+    setDispatchLane("all");
+  };
+  const clearStatus = () => setDispatchFilters([]);
+  const selectLane = (v: string) => { setDispatchLane(v); setDispatchFilters([]); };
+
+  // Header label for the status-filter dropdown trigger.
+  const statusFilterLabel =
+    dispatchFilters.length === 0
+      ? "All"
+      : dispatchFilters.length <= 2
+        ? dispatchFilters
+            .map((f) => DISPATCH_STATUS_FILTERS.find((t) => t.value === f)?.label ?? f)
+            .join(" + ")
+        : `${dispatchFilters.length} filters`;
 
   // Close search strip when leaving dispatch page
   useEffect(() => {
@@ -402,7 +422,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-11 w-11 ${(dispatchFilter !== "all" || dispatchLane !== "all") ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                        className={`h-11 w-11 ${(dispatchFilters.length > 0 || dispatchLane !== "all") ? "text-[#1877F2]" : "text-muted-foreground"}`}
                         aria-label="Filter jobs"
                         data-testid="mobile-filter-dropdown-trigger"
                       >
@@ -410,17 +430,24 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => selectStatus("all")} data-testid="mobile-filter-all">
+                      <DropdownMenuCheckboxItem
+                        checked={dispatchFilters.length === 0}
+                        onSelect={(e) => e.preventDefault()}
+                        onCheckedChange={clearStatus}
+                        data-testid="mobile-filter-all"
+                      >
                         All
-                      </DropdownMenuItem>
+                      </DropdownMenuCheckboxItem>
                       {DISPATCH_STATUS_FILTERS.map(tab => (
-                        <DropdownMenuItem
+                        <DropdownMenuCheckboxItem
                           key={tab.value}
-                          onClick={() => selectStatus(tab.value)}
+                          checked={dispatchFilters.includes(tab.value)}
+                          onSelect={(e) => e.preventDefault()}
+                          onCheckedChange={() => toggleStatus(tab.value)}
                           data-testid={`mobile-filter-tab-${tab.value}`}
                         >
                           {tab.label}
-                        </DropdownMenuItem>
+                        </DropdownMenuCheckboxItem>
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -588,28 +615,35 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="sm"
-                        className={`gap-1.5 ${dispatchFilter !== "all" ? "text-[#1877F2]" : "text-black"}`}
+                        className={`gap-1.5 ${dispatchFilters.length > 0 ? "text-[#1877F2]" : "text-black"}`}
                         data-testid="desktop-filter-dropdown-trigger"
                       >
                         <Filter className="h-4 w-4" />
                         {dispatchLane !== "all"
                           ? (dispatchLanes.find(l => l.id === dispatchLane)?.name ?? "Lane")
-                          : (DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All")}
+                          : statusFilterLabel}
                         <ChevronDown className="h-3 w-3" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => selectStatus("all")} data-testid="desktop-filter-all">
+                      <DropdownMenuCheckboxItem
+                        checked={dispatchFilters.length === 0}
+                        onSelect={(e) => e.preventDefault()}
+                        onCheckedChange={clearStatus}
+                        data-testid="desktop-filter-all"
+                      >
                         All
-                      </DropdownMenuItem>
+                      </DropdownMenuCheckboxItem>
                       {DISPATCH_STATUS_FILTERS.map(tab => (
-                        <DropdownMenuItem
+                        <DropdownMenuCheckboxItem
                           key={tab.value}
-                          onClick={() => selectStatus(tab.value)}
+                          checked={dispatchFilters.includes(tab.value)}
+                          onSelect={(e) => e.preventDefault()}
+                          onCheckedChange={() => toggleStatus(tab.value)}
                           data-testid={`desktop-filter-tab-${tab.value}`}
                         >
                           {tab.label}
-                        </DropdownMenuItem>
+                        </DropdownMenuCheckboxItem>
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
