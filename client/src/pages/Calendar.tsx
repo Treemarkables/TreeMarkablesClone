@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+// Unified calendar — Month (job span bars), Week (staff grid) and Day (gantt)
+// views over a single shared data layer, with staff/status filters. The Day
+// view mirrors the /dispatch gantt; both render from the same extracted
+// modules in components/calendar/.
+import { useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -17,122 +18,140 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { JobCardErrorBoundary } from "@/components/JobCardErrorBoundary";
 import {
+  Calendar as CalendarIcon,
+  CalendarDays,
+  Check,
   ChevronLeft,
   ChevronRight,
-  Calendar as CalendarIcon,
   Clock,
-  MapPin,
-  User,
-  Plus,
   Grid3x3,
-  List,
-  MessageSquare,
-  Check,
+  Plus,
   Reply,
 } from "lucide-react";
 import {
   format,
-  startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
-  isSameMonth,
-  isSameDay,
+  addDays,
+  subDays,
+  addWeeks,
+  subWeeks,
   addMonths,
   subMonths,
   startOfWeek,
   endOfWeek,
-  parseISO,
-  isToday,
 } from "date-fns";
-import type { Job, Customer } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { formatNZTime } from "@shared/dateUtils";
+import { formatNZTime, jobRunsOnNZDate } from "@shared/dateUtils";
+import { useCalendarData, type CalendarFilter } from "@/components/calendar/useCalendarData";
+import { CalendarFilterBar, loadStoredFilter } from "@/components/calendar/CalendarFilterBar";
+import { MonthView } from "@/components/calendar/MonthView";
+import { WeekView } from "@/components/calendar/WeekView";
+import { DayView } from "@/components/calendar/DayView";
+import { DayDetailPanel, type JobWithCustomerInfo } from "@/components/calendar/DayDetailPanel";
+import type { CalendarJob } from "@/components/calendar/calendarMath";
 
-interface ApiResponse<T> {
-  success: boolean;
-  data: T[];
-  message?: string;
-}
+type ViewMode = "month" | "week" | "day";
 
-type ViewMode = "month" | "week";
+const VIEW_STORAGE_KEY = "calendar-view-mode";
 
-interface JobWithCustomer extends Job {
-  customer?: Customer;
-  confirmationReplySentAt?: string | Date | null;
-  customerReplyReceivedAt?: string | Date | null;
+function loadStoredViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (v === "month" || v === "week" || v === "day") return v;
+  } catch {
+    // storage unavailable — default below
+  }
+  return "month";
 }
 
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>("month");
+  const [viewMode, setViewModeState] = useState<ViewMode>(loadStoredViewMode);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [filter, setFilter] = useState<CalendarFilter>(loadStoredFilter);
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
-  const [selectedJob, setSelectedJob] = useState<JobWithCustomer | null>(null);
+  const [smsJob, setSmsJob] = useState<JobWithCustomerInfo | null>(null);
   const [smsMessage, setSmsMessage] = useState("");
-  const [showJobEditDialog, setShowJobEditDialog] = useState(false);
-  const [jobToEdit, setJobToEdit] = useState<JobWithCustomer | null>(null);
+  const [jobToEditId, setJobToEditId] = useState<string | null>(null);
+  const [showCreateJob, setShowCreateJob] = useState(false);
   const { toast } = useToast();
 
-  // Fetch jobs/appointments
-  const { data: jobsResponse, isLoading } = useQuery<ApiResponse<JobWithCustomer>>({
-    queryKey: ["/api/jobs?limit=10000&offset=0"],
-  });
+  const data = useCalendarData(filter);
+  const { isLoading, employees, allJobs, customerMap, jobPassesFilter, businessName } = data;
 
-  // Fetch customers
-  const { data: customersResponse } = useQuery<ApiResponse<Customer>>({
-    queryKey: ["/api/customers"],
-  });
-
-  const jobs = jobsResponse?.data || [];
-  const customers = customersResponse?.data || [];
-
-  // Merge jobs with customer data
-  const jobsWithCustomers: JobWithCustomer[] = useMemo(() => {
-    return jobs.map((job) => {
-      const customer = customers.find((c) => c.id === job.customerId);
-      return { ...job, customer };
-    });
-  }, [jobs, customers]);
-
-  // Filter jobs that have a scheduled date
-  const scheduledJobs = useMemo(() => {
-    return jobsWithCustomers.filter(
-      (job) => job.scheduledDate && job.status !== "unsuccessful",
-    );
-  }, [jobsWithCustomers]);
-
-  // Get appointments for a specific date
-  const getAppointmentsForDate = (date: Date) => {
-    return scheduledJobs.filter((job) => {
-      if (!job.scheduledDate) return false;
-      const jobDate =
-        typeof job.scheduledDate === "string"
-          ? parseISO(job.scheduledDate)
-          : job.scheduledDate;
-      return isSameDay(jobDate, date);
-    });
+  const setViewMode = (mode: ViewMode) => {
+    setViewModeState(mode);
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, mode);
+    } catch {
+      // storage unavailable — view just won't persist
+    }
   };
 
-  // Send SMS mutation
+  // Appointments on a date — multi-day aware (jobRunsOnNZDate honours the
+  // scheduledDates carve-out set AND fixes the old UTC-midnight bucketing bug).
+  const getAppointmentsForDate = (date: Date): JobWithCustomerInfo[] => {
+    return allJobs
+      .filter(
+        (job) =>
+          job.scheduledDate &&
+          job.status !== "unsuccessful" &&
+          job.status !== "archived" &&
+          jobPassesFilter(job) &&
+          jobRunsOnNZDate(job, date),
+      )
+      .map((job) => ({
+        ...job,
+        customer: job.customerId ? customerMap.get(job.customerId) : undefined,
+      }));
+  };
+
+  const selectedDateAppointments = selectedDate
+    ? getAppointmentsForDate(selectedDate)
+    : [];
+
+  // ── Navigation ─────────────────────────────────────────────────────────────
+  const goToPrevious = () => {
+    if (viewMode === "day") setCurrentDate((prev) => subDays(prev, 1));
+    else if (viewMode === "week") setCurrentDate((prev) => subWeeks(prev, 1));
+    else setCurrentDate((prev) => subMonths(prev, 1));
+  };
+  const goToNext = () => {
+    if (viewMode === "day") setCurrentDate((prev) => addDays(prev, 1));
+    else if (viewMode === "week") setCurrentDate((prev) => addWeeks(prev, 1));
+    else setCurrentDate((prev) => addMonths(prev, 1));
+  };
+  const goToToday = () => setCurrentDate(new Date());
+
+  const dateRangeLabel = useMemo(() => {
+    if (viewMode === "day") return format(currentDate, "EEE d MMMM yyyy");
+    if (viewMode === "week") {
+      const start = startOfWeek(currentDate);
+      const end = endOfWeek(currentDate);
+      return `${format(start, "d MMM")} – ${format(end, "d MMM yyyy")}`;
+    }
+    return format(currentDate, "MMMM yyyy");
+  }, [currentDate, viewMode]);
+
+  // ── SMS ────────────────────────────────────────────────────────────────────
   const sendSmsMutation = useMutation({
-    mutationFn: async (data: {
+    mutationFn: async (payload: {
       phone: string;
       message: string;
       jobId?: string;
       customerId?: string;
     }) => {
-      return apiRequest("/api/sms/send", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      // apiRequest is (method, url, data) — the old page passed (url, options)
+      // which fetched a junk URL, so the calendar SMS button silently failed.
+      return apiRequest("POST", "/api/sms/send", payload);
     },
     onSuccess: () => {
       setSmsDialogOpen(false);
       setSmsMessage("");
-      setSelectedJob(null);
+      setSmsJob(null);
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: "Failed to Send SMS",
         description: error.message || "There was an error sending the SMS.",
@@ -141,41 +160,27 @@ export default function Calendar() {
     },
   });
 
-  // Handle job edit click
-  const handleEditJob = (job: JobWithCustomer, e?: React.MouseEvent) => {
-    // Prevent event bubbling if triggered from a button
+  const handleSendSms = (job: JobWithCustomerInfo, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setJobToEdit(job);
-    setShowJobEditDialog(true);
-  };
-
-  // Handle SMS button click
-  const handleSendSms = (job: JobWithCustomer, e?: React.MouseEvent) => {
-    // Prevent event bubbling if triggered from a button
-    e?.stopPropagation();
-    setSelectedJob(job);
+    setSmsJob(job);
     const customerName = job.customer?.name || "Customer";
     const jobTitle = job.title || "your appointment";
-
-    // Convert UTC time from database to NZ time for display
     const scheduledTime = job.scheduledDate
       ? formatNZTime(
           typeof job.scheduledDate === "string"
             ? job.scheduledDate
-            : job.scheduledDate.toISOString(),
+            : (job.scheduledDate as Date).toISOString(),
           "full",
         )
       : "soon";
-
     setSmsMessage(
-      `Hi ${customerName}, this is a reminder about ${jobTitle} scheduled for ${scheduledTime}. - Treemarkables`,
+      `Hi ${customerName}, this is a reminder about ${jobTitle} scheduled for ${scheduledTime}.${businessName ? ` - ${businessName}` : ""}`,
     );
     setSmsDialogOpen(true);
   };
 
-  // Handle SMS send
   const handleSendSmsConfirm = () => {
-    if (!selectedJob || !selectedJob.customer?.phone) {
+    if (!smsJob || !smsJob.customer?.phone) {
       toast({
         title: "No Phone Number",
         description: "This customer doesn't have a phone number on file.",
@@ -183,7 +188,6 @@ export default function Calendar() {
       });
       return;
     }
-
     if (smsMessage.length > 160) {
       toast({
         title: "Message Too Long",
@@ -192,66 +196,24 @@ export default function Calendar() {
       });
       return;
     }
-
     sendSmsMutation.mutate({
-      phone: selectedJob.customer.phone,
+      phone: smsJob.customer.phone,
       message: smsMessage,
-      jobId: selectedJob.id,
-      customerId: selectedJob.customerId || undefined,
+      jobId: smsJob.id,
+      customerId: smsJob.customerId || undefined,
     });
   };
 
-  // Generate calendar days
-  const calendarDays = useMemo(() => {
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(currentDate);
-    const startDate = startOfWeek(monthStart);
-    const endDate = endOfWeek(monthEnd);
-
-    return eachDayOfInterval({ start: startDate, end: endDate });
-  }, [currentDate]);
-
-  // Week days
-  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  // Navigation functions
-  const goToPreviousMonth = () => setCurrentDate((prev) => subMonths(prev, 1));
-  const goToNextMonth = () => setCurrentDate((prev) => addMonths(prev, 1));
-  const goToToday = () => setCurrentDate(new Date());
-
-  // Get status color ('scheduled' retired 2026-05 — work_order covers both
-  // unscheduled and date-booked active jobs).
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "work_order":
-        return "bg-purple-500";
-      case "completed":
-        return "bg-green-500";
-      case "quote":
-        return "bg-amber-500";
-      default:
-        return "bg-gray-500";
-    }
+  // ── Job card handlers ──────────────────────────────────────────────────────
+  const handleJobClick = (job: CalendarJob) => setJobToEditId(job.id);
+  const handleEditJob = (job: JobWithCustomerInfo) => setJobToEditId(job.id);
+  const closeJobDialogs = () => {
+    setJobToEditId(null);
+    setShowCreateJob(false);
+    queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/jobs?limit=10000&offset=0"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
   };
-
-  // Get priority badge variant
-  const getPriorityVariant = (priority: string | null) => {
-    switch (priority) {
-      case "urgent":
-        return "destructive";
-      case "high":
-        return "default";
-      case "medium":
-        return "secondary";
-      default:
-        return "outline";
-    }
-  };
-
-  // Selected date appointments
-  const selectedDateAppointments = selectedDate
-    ? getAppointmentsForDate(selectedDate)
-    : [];
 
   return (
     <div className="flex flex-col h-full bg-background w-full overflow-x-hidden">
@@ -284,11 +246,21 @@ export default function Calendar() {
               variant={viewMode === "week" ? "default" : "ghost"}
               size="sm"
               onClick={() => setViewMode("week")}
-              className="rounded-l-none"
+              className="rounded-none"
               data-testid="button-view-week"
             >
-              <List className="h-4 w-4 mr-1" />
+              <CalendarDays className="h-4 w-4 mr-1" />
               Week
+            </Button>
+            <Button
+              variant={viewMode === "day" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("day")}
+              className="rounded-l-none"
+              data-testid="button-view-day"
+            >
+              <Clock className="h-4 w-4 mr-1" />
+              Day
             </Button>
           </div>
 
@@ -304,6 +276,7 @@ export default function Calendar() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setShowCreateJob(true)}
             data-testid="button-new-appointment"
           >
             <Plus className="h-4 w-4 mr-1" />
@@ -312,35 +285,39 @@ export default function Calendar() {
         </div>
       </div>
 
-      {/* Calendar Navigation */}
-      <div className="flex items-center justify-between p-3 sm:p-4 border-b">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={goToPreviousMonth}
-          aria-label="Previous month"
-          data-testid="button-previous-month"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </Button>
-
-        <h2
-          className="text-lg sm:text-xl font-semibold"
-          data-testid="text-current-month"
-        >
-          {format(currentDate, "MMMM yyyy")}
-        </h2>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={goToNextMonth}
-          aria-label="Next month"
-          data-testid="button-next-month"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </Button>
-      </div>
+      {/* Calendar Navigation + Filters */}
+      <div className="flex items-center justify-between gap-2 p-3 sm:p-4 border-b flex-wrap">
+        <div className="flex items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={goToPrevious}
+            aria-label="Previous period"
+            data-testid="button-previous-month"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <h2
+            className="text-base sm:text-xl font-semibold min-w-[140px] sm:min-w-[220px] text-center"
+            data-testid="text-current-month"
+          >
+            {dateRangeLabel}
+          </h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={goToNext}
+            aria-label="Next period"
+            data-testid="button-next-month"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
+        <CalendarFilterBar
+          employees={employees}
+          filter={filter}
+          onFilterChange={setFilter}
+        />      </div>
 
       {/* Legend: explains confirmed vs awaiting-confirmation styling */}
       <div className="flex items-center gap-4 px-3 sm:px-4 py-1.5 border-b text-[11px] text-muted-foreground flex-wrap">
@@ -363,379 +340,61 @@ export default function Calendar() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Calendar Grid */}
-        <div className="flex-1 overflow-auto">
+        {/* Active view */}
+        <div className="flex-1 flex flex-col overflow-auto">
           {isLoading ? (
             <div className="p-4 space-y-3">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-64 w-full" />
             </div>
+          ) : viewMode === "month" ? (
+            <MonthView
+              currentDate={currentDate}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+              onJobClick={handleJobClick}
+              data={data}
+            />
+          ) : viewMode === "week" ? (
+            <WeekView
+              currentDate={currentDate}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+              onJobClick={handleJobClick}
+              data={data}
+            />
           ) : (
-            <div className="p-2 sm:p-4">
-              {/* Week day headers */}
-              <div className="grid grid-cols-7 gap-1 mb-2">
-                {weekDays.map((day) => (
-                  <div
-                    key={day}
-                    className="text-center text-sm font-medium text-muted-foreground py-2"
-                  >
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              {/* Calendar days grid */}
-              <div className="grid grid-cols-7 gap-1 pb-8">
-                {calendarDays.map((day, index) => {
-                  const dayAppointments = getAppointmentsForDate(day);
-                  const isCurrentMonth = isSameMonth(day, currentDate);
-                  const isSelected =
-                    selectedDate && isSameDay(day, selectedDate);
-                  const isTodayDate = isToday(day);
-
-                  return (
-                    <Card
-                      key={index}
-                      className={`min-h-[80px] sm:min-h-[120px] cursor-pointer transition-colors ${
-                        !isCurrentMonth ? "opacity-40" : ""
-                      } ${isSelected ? "ring-2 ring-primary" : ""}`}
-                      onClick={() => setSelectedDate(day)}
-                      data-testid={`calendar-day-${format(day, "yyyy-MM-dd")}`}
-                    >
-                      <CardContent className="p-1 sm:p-2 h-full flex flex-col">
-                        <div className="flex items-center justify-between mb-1">
-                          <span
-                            className={`text-xs sm:text-sm font-medium ${
-                              isTodayDate
-                                ? "bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center"
-                                : ""
-                            }`}
-                            data-testid={`text-day-${format(day, "yyyy-MM-dd")}`}
-                          >
-                            {format(day, "d")}
-                          </span>
-                          {dayAppointments.length > 0 && (
-                            <Badge
-                              variant="secondary"
-                              className="h-5 px-1 text-[10px]"
-                              data-testid={`badge-count-${format(day, "yyyy-MM-dd")}`}
-                            >
-                              {dayAppointments.length}
-                            </Badge>
-                          )}
-                        </div>
-
-                        {/* Appointment indicators */}
-                        <div className="flex-1 space-y-0.5 overflow-hidden">
-                          {dayAppointments.slice(0, 3).map((appointment) => {
-                            const awaitingConfirm =
-                              appointment.status === "work_order" &&
-                              !appointment.customerConfirmed;
-                            return (
-                              <div
-                                key={appointment.id}
-                                className={`text-[10px] sm:text-xs p-1 rounded ${getStatusColor(
-                                  appointment.status,
-                                )} text-white ${
-                                  awaitingConfirm
-                                    ? "border border-dashed border-white/70 opacity-70"
-                                    : ""
-                                }`}
-                                data-testid={`appointment-indicator-${appointment.id}`}
-                              >
-                                <div className="flex items-center gap-1">
-                                  <div className="font-semibold truncate flex-1">
-                                    {appointment.customer?.name ||
-                                      appointment.title ||
-                                      "Untitled"}
-                                  </div>
-                                  {appointment.customerConfirmed && (
-                                    <Check
-                                      className="h-4 w-4 flex-shrink-0"
-                                      strokeWidth={3}
-                                      data-testid={`icon-confirmed-${appointment.id}`}
-                                    />
-                                  )}
-                                  {!appointment.customerConfirmed && appointment.customerReplyReceivedAt && (
-                                    <MessageSquare
-                                      className="h-3.5 w-3.5 flex-shrink-0"
-                                      strokeWidth={2.5}
-                                      data-testid={`icon-customer-replied-${appointment.id}`}
-                                    />
-                                  )}
-                                  {appointment.confirmationReplySentAt && (
-                                    <Reply
-                                      className="h-3.5 w-3.5 flex-shrink-0"
-                                      strokeWidth={3}
-                                      data-testid={`icon-reply-sent-${appointment.id}`}
-                                    />
-                                  )}
-                                </div>
-                                {appointment.address && (
-                                  <div className="text-[9px] sm:text-[10px] truncate opacity-90">
-                                    {appointment.address}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                          {dayAppointments.length > 3 && (
-                            <div className="text-[10px] text-muted-foreground text-center">
-                              +{dayAppointments.length - 3} more
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
+            <DayView
+              currentDate={currentDate}
+              onJobClick={handleJobClick}
+              data={data}
+            />
           )}
         </div>
 
-        {/* Appointment Details Sidebar - Desktop only */}
-        <div className="hidden lg:block w-80 border-l">
-          <ScrollArea className="h-full">
-            <div className="p-4">
-              {selectedDate ? (
-                <>
-                  <h3
-                    className="font-semibold text-lg mb-3"
-                    data-testid="text-selected-date"
-                  >
-                    {format(selectedDate, "EEEE, MMMM d, yyyy")}
-                  </h3>
-
-                  {selectedDateAppointments.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground text-sm">
-                        No appointments scheduled
-                      </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-3"
-                        data-testid="button-add-appointment"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Appointment
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {selectedDateAppointments.map((appointment) => {
-                        const awaitingConfirm =
-                          appointment.status === "work_order" &&
-                          !appointment.customerConfirmed;
-                        return (
-                        <Card
-                          key={appointment.id}
-                          className={`hover-elevate cursor-pointer ${
-                            awaitingConfirm
-                              ? "border-dashed opacity-80"
-                              : ""
-                          }`}
-                          onClick={() => handleEditJob(appointment)}
-                          data-testid={`appointment-card-${appointment.id}`}
-                        >
-                          <CardHeader className="pb-3">
-                            <div className="flex items-start justify-between gap-2">
-                              <CardTitle className="text-base">
-                                {appointment.title ||
-                                  appointment.customer?.name ||
-                                  "Untitled Appointment"}
-                              </CardTitle>
-                              {appointment.priority && (
-                                <Badge
-                                  variant={getPriorityVariant(
-                                    appointment.priority,
-                                  )}
-                                  className="capitalize"
-                                  data-testid={`badge-priority-${appointment.id}`}
-                                >
-                                  {appointment.priority}
-                                </Badge>
-                              )}
-                            </div>
-                          </CardHeader>
-                          <CardContent className="space-y-2 text-sm">
-                            {appointment.scheduledDate && (
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Clock className="h-4 w-4" />
-                                <span
-                                  data-testid={`text-time-${appointment.id}`}
-                                >
-                                  {formatNZTime(
-                                    typeof appointment.scheduledDate ===
-                                      "string"
-                                      ? appointment.scheduledDate
-                                      : appointment.scheduledDate.toISOString(),
-                                    "time",
-                                  )}
-                                </span>
-                              </div>
-                            )}
-                            {appointment.address && (
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <MapPin className="h-4 w-4 flex-shrink-0" />
-                                <span
-                                  className="truncate"
-                                  data-testid={`text-location-${appointment.id}`}
-                                >
-                                  {appointment.address}
-                                </span>
-                              </div>
-                            )}
-                            {appointment.customer && (
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <User className="h-4 w-4" />
-                                <span
-                                  data-testid={`text-customer-${appointment.id}`}
-                                >
-                                  {appointment.customer.name}
-                                </span>
-                              </div>
-                            )}
-                            <div className="pt-2 flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <Badge variant="outline" className="capitalize">
-                                  {appointment.status.replace("_", " ")}
-                                </Badge>
-                                {appointment.customerConfirmed ? (
-                                  <Badge
-                                    className="bg-green-100 text-green-700 border-0 text-xs"
-                                    data-testid={`badge-confirmed-${appointment.id}`}
-                                  >
-                                    <Check className="h-3 w-3 mr-1" />
-                                    Confirmed
-                                  </Badge>
-                                ) : appointment.customerReplyReceivedAt ? (
-                                  <Badge
-                                    className="bg-amber-100 text-amber-700 border-0 text-xs"
-                                    data-testid={`badge-customer-replied-${appointment.id}`}
-                                  >
-                                    <MessageSquare className="h-3 w-3 mr-1" />
-                                    Customer replied
-                                  </Badge>
-                                ) : awaitingConfirm ? (
-                                  <Badge
-                                    variant="outline"
-                                    className="border-dashed text-xs text-muted-foreground"
-                                    data-testid={`badge-awaiting-${appointment.id}`}
-                                  >
-                                    Awaiting confirmation
-                                  </Badge>
-                                ) : null}
-                                {appointment.confirmationReplySentAt && (
-                                  <Badge
-                                    className="bg-blue-100 text-blue-700 border-0 text-xs"
-                                    data-testid={`badge-reply-sent-${appointment.id}`}
-                                  >
-                                    <Reply className="h-3 w-3 mr-1" />
-                                    Reply sent
-                                  </Badge>
-                                )}
-                              </div>
-                              {appointment.customer?.phone && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(e) => handleSendSms(appointment, e)}
-                                  data-testid={`button-send-sms-${appointment.id}`}
-                                >
-                                  <MessageSquare className="h-4 w-4 mr-1" />
-                                  SMS
-                                </Button>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <CalendarIcon className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                  <p className="text-muted-foreground text-sm">
-                    Select a date to view appointments
-                  </p>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </div>
+        {/* Selected-date details (month/week — day view IS the detail) */}
+        {viewMode !== "day" && (
+          <DayDetailPanel
+            variant="sidebar"
+            selectedDate={selectedDate}
+            appointments={selectedDateAppointments}
+            onEditJob={handleEditJob}
+            onSendSms={handleSendSms}
+            onAddAppointment={() => setShowCreateJob(true)}
+          />
+        )}
       </div>
 
-      {/* Mobile Appointment Sheet */}
-      {selectedDate && selectedDateAppointments.length > 0 && (
-        <div className="lg:hidden border-t bg-card">
-          <ScrollArea className="h-48">
-            <div className="p-3 space-y-2">
-              <h3
-                className="font-semibold text-sm mb-2"
-                data-testid="text-mobile-selected-date"
-              >
-                {format(selectedDate, "EEE, MMM d")}
-              </h3>
-              {selectedDateAppointments.map((appointment) => (
-                <Card
-                  key={appointment.id}
-                  className="hover-elevate cursor-pointer"
-                  onClick={() => handleEditJob(appointment)}
-                  data-testid={`mobile-appointment-${appointment.id}`}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">
-                          {appointment.title ||
-                            appointment.customer?.name ||
-                            "Untitled"}
-                        </p>
-                        {appointment.scheduledDate && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {formatNZTime(
-                              typeof appointment.scheduledDate === "string"
-                                ? appointment.scheduledDate
-                                : appointment.scheduledDate.toISOString(),
-                              "time",
-                            )}
-                          </p>
-                        )}
-                        {appointment.customer?.name && (
-                          <p className="text-xs text-muted-foreground">
-                            {appointment.customer.name}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-1 items-end">
-                        <Badge
-                          variant="outline"
-                          className="capitalize text-[10px]"
-                        >
-                          {appointment.status.replace("_", " ")}
-                        </Badge>
-                        {appointment.customer?.phone && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => handleSendSms(appointment, e)}
-                            data-testid={`button-send-sms-mobile-${appointment.id}`}
-                          >
-                            <MessageSquare className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
+      {/* Mobile bottom sheet — below the flex row so it spans full width */}
+      {viewMode !== "day" && (
+        <DayDetailPanel
+          variant="sheet"
+          selectedDate={selectedDate}
+          appointments={selectedDateAppointments}
+          onEditJob={handleEditJob}
+          onSendSms={handleSendSms}
+          onAddAppointment={() => setShowCreateJob(true)}
+        />
       )}
 
       {/* SMS Dialog */}
@@ -747,7 +406,7 @@ export default function Calendar() {
           <DialogHeader>
             <DialogTitle>Send SMS to Customer</DialogTitle>
             <DialogDescription>
-              Send a text message to {selectedJob?.customer?.name}
+              Send a text message to {smsJob?.customer?.name}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -757,7 +416,7 @@ export default function Calendar() {
                 className="text-sm text-muted-foreground"
                 data-testid="text-customer-phone"
               >
-                {selectedJob?.customer?.phone || "No phone number"}
+                {smsJob?.customer?.phone || "No phone number"}
               </div>
             </div>
             <div className="space-y-2">
@@ -802,26 +461,28 @@ export default function Calendar() {
       </Dialog>
 
       {/* Job Edit Dialog */}
-      {jobToEdit && (
-        <GlobalJobCard
-          isOpen={showJobEditDialog}
-          onClose={() => {
-            setShowJobEditDialog(false);
-            setJobToEdit(null);
-          }}
-          mode="edit"
-          job={jobToEdit}
-          onJobCreated={() => {
-            queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-            setShowJobEditDialog(false);
-            setJobToEdit(null);
-          }}
-          onJobUpdated={() => {
-            queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-            setShowJobEditDialog(false);
-            setJobToEdit(null);
-          }}
-        />
+      {jobToEditId && (
+        <JobCardErrorBoundary onClose={closeJobDialogs}>
+          <GlobalJobCard
+            isOpen={!!jobToEditId}
+            onClose={closeJobDialogs}
+            mode="edit"
+            jobId={jobToEditId}
+            onJobUpdated={closeJobDialogs}
+          />
+        </JobCardErrorBoundary>
+      )}
+
+      {/* New Job Dialog */}
+      {showCreateJob && (
+        <JobCardErrorBoundary onClose={closeJobDialogs}>
+          <GlobalJobCard
+            isOpen={showCreateJob}
+            onClose={closeJobDialogs}
+            mode="create"
+            onJobCreated={closeJobDialogs}
+          />
+        </JobCardErrorBoundary>
       )}
     </div>
   );
