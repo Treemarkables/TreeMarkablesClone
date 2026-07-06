@@ -369,7 +369,7 @@ export async function createConversationNotification(conversation: {
 }) {
   try {
     await storage.createNotification({
-      title: `New ${conversation.source || 'conversation'} contact`,
+      title: `New ${conversation.source === 'web_form' ? 'website' : (conversation.source || 'conversation')} contact`,
       message: conversation.title || 'New inquiry received',
       type: 'new_conversation',
       priority: conversation.priority === 'urgent' ? 'high' : 'medium',
@@ -384,6 +384,7 @@ export async function createConversationNotification(conversation: {
     const sourceLabel = conversation.source === 'email' ? 'Email' :
                         conversation.source === 'sms' ? 'SMS' :
                         conversation.source === 'phone' ? 'Call' :
+                        conversation.source === 'web_form' ? 'Website' :
                         conversation.source || 'Message';
 
     const jobId = await getConversationJobId(conversation.id);
@@ -575,6 +576,7 @@ export async function notifyConversationReply(conversation: {
     const sourceLabel = conversation.source === 'email' ? 'Email' :
                         conversation.source === 'sms' ? 'SMS' :
                         conversation.source === 'phone' ? 'Call' :
+                        conversation.source === 'web_form' ? 'Website' :
                         conversation.source || 'Message';
 
     const senderName = conversation.customerName || conversation.title || 'Customer';

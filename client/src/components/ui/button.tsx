@@ -29,7 +29,10 @@ const buttonVariants = cva(
         default: "min-h-9 px-4 py-2",
         sm: "min-h-8 rounded-md px-3 text-xs",
         lg: "min-h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        // 44px tap target on touch viewports (Apple HIG minimum — 36px icon
+        // buttons were the app's most mis-tapped controls); desktop keeps the
+        // denser 36px since a pointer is precise. The svg stays 16px either way.
+        icon: "h-11 w-11 md:h-9 md:w-9",
       },
     },
     defaultVariants: {

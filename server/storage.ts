@@ -5843,22 +5843,43 @@ class DatabaseStorage implements IStorage {
 
   // Job Videos (Loom replacement) — real implementations against the videos table.
   async createVideo(data: InsertVideo): Promise<Video> {
+    // Knowledge (how-to) videos are GLOBAL platform content shown to every
+    // subscriber: written with no tenant stamp (business_id NULL) via the owner
+    // client so the RLS WITH CHECK on `videos` doesn't reject the null tenant.
+    // Job videos stay tenant-scoped.
+    if (data.kind === "knowledge") {
+      const [row] = await ownerDb.insert(videos).values({ ...data, businessId: null }).returning();
+      return row;
+    }
     const [row] = await db.insert(videos).values(withTenant(data)).returning();
     return row;
   }
   async getVideo(id: string): Promise<Video | undefined> {
     const [row] = await db.select().from(videos).where(eq(videos.id, id));
-    return row || undefined;
+    if (row) return row;
+    // Global knowledge videos are invisible to the tenant-scoped client under RLS.
+    // Fall back to the owner client but ONLY surface knowledge rows, so job-video
+    // isolation is never weakened (a job video by id stays unreachable cross-tenant).
+    const [global] = await ownerDb.select().from(videos)
+      .where(and(eq(videos.id, id), eq(videos.kind, "knowledge")));
+    return global || undefined;
   }
   async updateVideo(id: string, updates: UpdateVideo): Promise<Video> {
-    const [row] = await db.update(videos)
+    // Global knowledge videos live outside any tenant — mutate them via the owner
+    // client (the tenant-scoped client can't see business_id NULL rows under RLS).
+    // Route-level publisher gating prevents non-publishers reaching this path.
+    const existing = await this.getVideo(id);
+    const client = existing?.kind === "knowledge" ? ownerDb : db;
+    const [row] = await client.update(videos)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(videos.id, id))
       .returning();
     return row;
   }
   async deleteVideo(id: string): Promise<void> {
-    await db.delete(videos).where(eq(videos.id, id));
+    const existing = await this.getVideo(id);
+    const client = existing?.kind === "knowledge" ? ownerDb : db;
+    await client.delete(videos).where(eq(videos.id, id));
   }
   async getVideosByJob(jobId: string): Promise<Video[]> {
     return await db.select().from(videos)
@@ -5871,6 +5892,14 @@ class DatabaseStorage implements IStorage {
       .orderBy(asc(videos.sequenceOrder), asc(videos.createdAt));
   }
   async getVideos(filter?: { kind?: string; unassigned?: boolean }): Promise<Video[]> {
+    // Knowledge = GLOBAL library: read via the owner client so every tenant sees the
+    // same how-to videos regardless of RLS. (Job videos stay on the tenant-scoped
+    // client below, which RLS isolates per business.)
+    if (filter?.kind === "knowledge") {
+      return await ownerDb.select().from(videos)
+        .where(eq(videos.kind, "knowledge"))
+        .orderBy(desc(videos.createdAt));
+    }
     const conditions = [];
     if (filter?.kind) conditions.push(eq(videos.kind, filter.kind));
     if (filter?.unassigned) conditions.push(isNull(videos.jobId));
@@ -6052,9 +6081,23 @@ class DatabaseStorage implements IStorage {
     return this.getInvoiceSectionsByInvoice(invoiceId);
   }
 
-  async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> { throw new Error("Not implemented"); }
-  async getServiceRequest(id: string): Promise<ServiceRequest | undefined> { return undefined; }
-  async getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]> { return []; }
+  async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> {
+    const [result] = await db.insert(schema.serviceRequests).values(withTenant(request)).returning();
+    return result;
+  }
+  async getServiceRequest(id: string): Promise<ServiceRequest | undefined> {
+    const [result] = await db.select()
+      .from(schema.serviceRequests)
+      .where(eq(schema.serviceRequests.id, id))
+      .limit(1);
+    return result;
+  }
+  async getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]> {
+    return db.select()
+      .from(schema.serviceRequests)
+      .where(eq(schema.serviceRequests.customerId, customerId))
+      .orderBy(desc(schema.serviceRequests.createdAt));
+  }
   
   // Xero Integration Implementation
   async createXeroConnection(connection: InsertXeroConnection): Promise<XeroConnection> {
@@ -6747,7 +6790,7 @@ class DatabaseStorage implements IStorage {
       id: schema.jobs.id,
       jobNumber: schema.jobs.jobNumber,
       customerId: schema.jobs.customerId,
-      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerName: sql<string>`COALESCE(${schema.customers.name}, '')`,
       customerEmail: schema.customers.email,
       customerPhone: schema.customers.phone,
       address: schema.jobs.address,
@@ -6842,7 +6885,7 @@ class DatabaseStorage implements IStorage {
       internalStatus: schema.reviewSubmissions.internalStatus,
       submittedAt: schema.reviewSubmissions.submittedAt,
       jobNumber: schema.jobs.jobNumber,
-      customerName: sql<string>`COALESCE(${schema.customers.firstName}, '') || ' ' || COALESCE(${schema.customers.lastName}, '')`,
+      customerName: sql<string>`COALESCE(${schema.customers.name}, '')`,
       jobAddress: schema.jobs.address
     })
       .from(schema.reviewSubmissions)

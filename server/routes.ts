@@ -4,7 +4,7 @@ import { Webhook as SvixWebhook } from 'svix';
 import { addClient, removeClient, broadcast } from "./sseManager";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
-import { randomUUID, randomBytes, createHash } from 'crypto';
+import { randomUUID, randomBytes, createHash, createHmac, timingSafeEqual } from 'crypto';
 import { z } from "zod";
 import { fromZonedTime } from 'date-fns-tz';
 
@@ -16,6 +16,7 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
+import { APP_URL } from "./config/appUrl";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { requireEntitlement } from "./tenancy/requireEntitlement";
@@ -25,7 +26,7 @@ import { resolveEntitlements } from "./tenancy/entitlements";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
-import { db } from "./db";
+import { db, ownerDb } from "./db";
 import { eq, desc, sql, inArray, and, gte, lt, lte, ne } from "drizzle-orm";
 import { invoices, invoiceLineItems, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
@@ -91,6 +92,7 @@ import {
   createConnectAccountLink,
   retrieveConnectAccount,
   createConnectLoginLink,
+  deleteConnectAccount,
 } from "./stripe";
 import * as billing from "./billing";
 import * as usageMeter from "./services/usageMeter";
@@ -149,12 +151,12 @@ import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
 import { renderBrandedEmail, renderInvoiceEmail } from "./emailTemplates";
-import { getVonageCredentials } from "./services/vonageClient";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
+import { queueJobPush, removeJobEvents, getConnectionForUser } from "./services/googleCalendarSync";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
 
@@ -197,7 +199,18 @@ const imageUpload = multer({
     files: 100 // Maximum 100 files at once
   },
   fileFilter: (req, file, cb) => {
-    // Accept all file types - no restrictions
+    // Accept images/PDFs/documents/audio/video, but reject script-capable types
+    // (defence-in-depth against stored XSS; the serve layer also neutralises
+    // these). HTML/SVG/XML/JS have no legitimate use as a job photo/document.
+    const mt = (file.mimetype || '').toLowerCase();
+    const blocked = [
+      'text/html', 'application/xhtml+xml', 'image/svg+xml',
+      'application/xml', 'text/xml', 'text/javascript', 'application/javascript',
+    ];
+    if (blocked.some((t) => mt.startsWith(t))) {
+      cb(new Error('Unsupported file type'));
+      return;
+    }
     cb(null, true);
   }
 });
@@ -640,8 +653,14 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
 function validateTwilioSignature(req: Request): boolean {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!authToken) {
-    console.warn('⚠️ TWILIO_AUTH_TOKEN not set - skipping signature validation');
-    return true; // Allow in development if not configured
+    // Fail CLOSED in production — an unset token must never mean "accept any
+    // forged callback". Only allow the skip in non-production for local dev.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ TWILIO_AUTH_TOKEN not set in production - rejecting webhook');
+      return false;
+    }
+    console.warn('⚠️ TWILIO_AUTH_TOKEN not set - skipping signature validation (dev only)');
+    return true;
   }
 
   const signature = req.headers['x-twilio-signature'] as string;
@@ -668,6 +687,35 @@ function validateTwilioSignature(req: Request): boolean {
   }
 
   return validator;
+}
+
+// Verify Meta/Facebook's X-Hub-Signature-256 header: HMAC-SHA256 of the RAW
+// request body keyed with the app secret. Fails closed when FACEBOOK_APP_SECRET
+// is unset (Facebook inbound is otherwise dropped, so rejecting is correct).
+function verifyFacebookSignature(req: Request): boolean {
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
+  if (!appSecret) {
+    console.warn('⚠️ FACEBOOK_APP_SECRET not set - rejecting Messenger webhook');
+    return false;
+  }
+  const header = (req.headers['x-hub-signature-256'] || req.headers['x-hub-signature']) as string | undefined;
+  if (!header || !header.startsWith('sha256=')) {
+    console.error('❌ Missing/invalid X-Hub-Signature-256 header');
+    return false;
+  }
+  const rawBody = (req as any).rawBody as Buffer | undefined;
+  if (!rawBody) {
+    console.error('❌ Raw body unavailable for Facebook signature check');
+    return false;
+  }
+  const expected = 'sha256=' + createHmac('sha256', appSecret).update(rawBody).digest('hex');
+  try {
+    const a = Buffer.from(header);
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
 
 // ========================================
@@ -917,10 +965,56 @@ async function requirePlatformAdmin(req: Request, res: Response, next: express.N
 // Staff-write gate (capabilities.ts: staff.manage = Crew) with a self-exemption:
 // a freemium solo owner can always edit their OWN record (e.g. fix their name);
 // adding or editing OTHER staff requires Crew. Routes with no :id (creating a new
-// staff member) are never "self" → fall through to the Crew check.
+// staff member) are never "self" → fall through to the Crew check. Composes with
+// the #313 role guards: entitlement says what the PLAN allows, requireAdmin /
+// self-or-admin says WHO may act.
 function requireCrewUnlessSelf(req: Request, res: Response, next: express.NextFunction) {
   if (req.params.id && req.params.id === req.session.employeeId) return next();
   return requireEntitlement('plan:crew', 'staff_manage')(req, res, next);
+}
+
+// Dunning: when a subscriber's billing slips into a payment-problem state, the in-app
+// BillingBanner already warns them — but only once they open the app. This adds an
+// off-app nudge: a high-priority bell entry + an email to the business's own address,
+// so they fix their card before the grace period lapses and resolveEntitlements drops
+// them to freemium. Called only on the TRANSITION into a problem status (see the webhook),
+// so retries/resyncs don't re-spam. Runs from the Stripe webhook (owner connection, no
+// request tenant): the bell write is scoped via runWithBusiness so RLS stamps the owning
+// business; the email is a platform→tenant message (from "Inflow"), sent outside that
+// scope. Never throws — dunning is best-effort and must not 500 the webhook.
+async function notifyBillingProblem(businessId: string, status: string): Promise<void> {
+  const billingUrl = `${APP_URL}/settings/billing`;
+  const human = status.replace(/_/g, ' ');
+  try {
+    await runWithBusiness(businessId, async () => {
+      await storage.createNotification({
+        title: 'Payment problem — update your card',
+        message: "Your subscription payment didn't go through. Update your payment method to keep your plan.",
+        type: 'billing_problem',
+        priority: 'high',
+        isRead: false,
+        actionUrl: '/settings/billing',
+      });
+    });
+  } catch (e) {
+    console.error('[dunning] bell notification failed:', (e as Error).message);
+  }
+  try {
+    const settings = await storage.getBusinessSettingsForBusiness(businessId);
+    const to = (settings?.businessEmail || '').trim();
+    if (to) {
+      await emailService.sendEmail({
+        to,
+        fromName: 'Inflow',
+        subject: 'Action needed: update your payment method',
+        text: `Hi,\n\nYour latest subscription payment didn't go through, so your account is now ${human}. Update your payment method to avoid losing access:\n\n${billingUrl}\n\nAlready updated it? You can ignore this message.\n\nThanks,\nInflow`,
+        html: `<p>Hi,</p><p>Your latest subscription payment didn't go through, so your account is now <strong>${human}</strong>. Update your payment method to avoid losing access.</p><p><a href="${billingUrl}">Update payment method</a></p><p>Already updated it? You can ignore this message.</p><p>Thanks,<br>Inflow</p>`,
+      });
+      console.log(`[dunning] emailed ${businessId} (${status}) -> ${to}`);
+    }
+  } catch (e) {
+    console.error('[dunning] email failed:', (e as Error).message);
+  }
 }
 
 // Shared builder for the onboarding setup checklist (used by the per-tenant
@@ -1032,6 +1126,34 @@ async function generateProposalPDFBuffer(
   const sections = await storage.getProposalSectionsByProposal(proposalId);
   const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
 
+  // Pre-fetch + re-encode the photos attached to sections (builder photo blocks
+  // store them in proposal_sections.images). Done up-front because the PDFKit
+  // Promise executor below is synchronous; re-encoded to JPEG because PDFKit
+  // only accepts JPEG/PNG (uploads can be webp/heic) — same pattern as the
+  // invoice PDF's photo embed. Keyed by URL so each section renders its own.
+  const sectionPhotoBuffers = new Map<string, Buffer>();
+  {
+    const sectionImageUrls = sections.flatMap((s: any) => (Array.isArray(s.images) ? s.images : []));
+    if (sectionImageUrls.length > 0) {
+      const photoStorageSvc = new PhotoStorageService();
+      for (const imgUrl of sectionImageUrls) {
+        if (!isSupportedPhotoUrl(imgUrl) || sectionPhotoBuffers.has(imgUrl)) continue;
+        try {
+          const photoData = await loadPhotoBytesForAttachment(imgUrl, photoStorageSvc);
+          if (!photoData?.buffer) continue;
+          const jpegBuffer = await sharp(photoData.buffer)
+            .rotate()
+            .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+          sectionPhotoBuffers.set(imgUrl, jpegBuffer);
+        } catch (err) {
+          console.warn(`⚠️ Could not load section photo for quote/proposal PDF: ${imgUrl}`, err);
+        }
+      }
+    }
+  }
+
   // Featured (curated) reviews to render under the totals block. Same filter as
   // GET /api/reviews/featured so the builder preview and the PDF show the same
   // pool. Flattened to individual photo URLs; limit to 6 to keep the PDF compact.
@@ -1125,11 +1247,15 @@ async function generateProposalPDFBuffer(
     // Section content + line items. The builder stores the typed job description
     // as per-section content (proposals.introduction is legacy), so description-only
     // sections must render too — skipping them drops the description from the PDF.
+    // Section photos (proposal_sections.images, pre-fetched above) render as a
+    // two-up grid under the section's text, mirroring the online viewer.
     for (const section of sections) {
-      if (section.sectionType === 'photos') continue;
       const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
       const sectionContent = (section.content || '').trim();
-      if (items.length === 0 && !sectionContent) continue;
+      const sectionImages: Buffer[] = (Array.isArray((section as any).images) ? (section as any).images : [])
+        .map((u: string) => sectionPhotoBuffers.get(u))
+        .filter((b: Buffer | undefined): b is Buffer => !!b);
+      if (items.length === 0 && !sectionContent && sectionImages.length === 0) continue;
 
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text(section.title, 50, doc.y, { width: pageW });
       doc.moveDown(0.3);
@@ -1137,6 +1263,31 @@ async function generateProposalPDFBuffer(
       if (sectionContent) {
         doc.fontSize(9).font('Helvetica').fillColor('#374151').text(sectionContent, 50, doc.y, { width: pageW });
         doc.moveDown(0.5);
+      }
+
+      if (sectionImages.length > 0) {
+        const pageBottom = doc.page.height - 90; // leave room above the footer rule
+        const gap = 12;
+        const cellW = Math.floor((pageW - gap) / 2);
+        const cellH = Math.round(cellW * 0.75); // 4:3
+        for (let i = 0; i < sectionImages.length; i += 2) {
+          if (doc.y + cellH > pageBottom) doc.addPage();
+          const rowY = doc.y;
+          try {
+            doc.image(sectionImages[i], 50, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+          } catch (err) {
+            console.warn('⚠️ Failed to embed section photo into PDF (left cell):', err);
+          }
+          if (sectionImages[i + 1]) {
+            try {
+              doc.image(sectionImages[i + 1], 50 + cellW + gap, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+            } catch (err) {
+              console.warn('⚠️ Failed to embed section photo into PDF (right cell):', err);
+            }
+          }
+          doc.y = rowY + cellH + 10;
+        }
+        doc.moveDown(0.3);
       }
 
       if (items.length > 0) {
@@ -1224,7 +1375,7 @@ async function generateProposalPDFBuffer(
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text('Acceptance', { width: pageW });
     doc.moveDown(0.4);
     if (isQuote) {
-      const acceptUrl = `https://app.treemarkables.co.nz/proposal/${proposalId}/accept?type=quote`;
+      const acceptUrl = `${APP_URL}/proposal/${proposalId}/accept?type=quote`;
       doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
         .text('To accept this quote, open the link below and tap "Accept Quote". No signature required.', 50, doc.y, { width: pageW });
       doc.moveDown(0.3);
@@ -1807,6 +1958,25 @@ function isMicrosoftEmailDomain(email: string): boolean {
     || domain.endsWith('.hotmail.com');
 }
 
+/**
+ * Whether a business can take online CARD payments, and (for Connect tenants) which
+ * connected account the charge is created on. Treemarkables uses the single platform
+ * account (no connected account → returns no id). A non-TM tenant can take card only
+ * once its Stripe Connect onboarding has charges enabled — then the charge is a DIRECT
+ * charge on its connected account so the money lands with the tenant. Everyone else →
+ * bank transfer. Loads settings on the owner connection (these run on public payment routes).
+ */
+async function resolveCardPayment(
+  businessId: string | null | undefined,
+): Promise<{ canTakeCard: boolean; connectedAccountId?: string }> {
+  if (!businessId) return { canTakeCard: false };
+  if (businessOwnsStripeAccount(businessId)) return { canTakeCard: true }; // platform account (TM)
+  const settings = await storage.getBusinessSettingsForBusiness(businessId).catch(() => null);
+  const acct = (settings?.stripeConnectAccountId ?? '').trim();
+  if (settings?.stripeConnectChargesEnabled && acct) return { canTakeCard: true, connectedAccountId: acct };
+  return { canTakeCard: false };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Kick off role-tier seeding in the background — first call to a permission-protected
   // route will await this, but boot stays fast for routes that don't need it.
@@ -1882,8 +2052,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!employee) {
         return res.status(404).json({ success: false, message: 'Test user not found' });
       }
-      (req.session as any).userId = employee.id;
-      (req.session as any).userRole = employee.role;
+      req.session.employeeId = employee.id;
+      req.session.businessId = employee.businessId ?? undefined;
       req.session.save(() => {
         res.json({ success: true, data: { id: employee.id, role: employee.role } });
       });
@@ -1941,7 +2111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (plan?.stripePriceId) {
             const customerId = await getOrCreateStripeCustomer(businessId, { email, name: `${firstName} ${lastName}`.trim() });
             await billing.upsertSubscription(businessId, { stripeCustomerId: customerId, planId: plan.id, status: 'incomplete' });
-            const base = 'https://app.treemarkables.co.nz';
+            const base = APP_URL;
             const session = await createSubscriptionCheckoutSession({
               businessId, priceId: plan.stripePriceId, planKey, customerId,
               successUrl: `${base}/settings/billing?status=success`,
@@ -2321,7 +2491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (fs.existsSync(pdfPath)) {
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'inline; filename="Treemarkables-SaaS-Onboarding-Guide.pdf"');
+        res.setHeader('Content-Disposition', 'inline; filename="Inflow-Onboarding-Guide.pdf"');
         res.sendFile(pdfPath);
       } else if (fs.existsSync(htmlPath)) {
         res.setHeader('Content-Type', 'text/html');
@@ -2493,51 +2663,220 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Google Calendar status endpoint
+  // Google Calendar — per-user OAuth + two-way sync (unified calendar Phase C)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Status: returns connection info for the logged-in user.
   app.get('/api/google-calendar/status', async (req: Request, res: Response) => {
     try {
-      const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-      const xReplitToken = process.env.REPL_IDENTITY 
-        ? 'repl ' + process.env.REPL_IDENTITY 
-        : process.env.WEB_REPL_RENEWAL 
-        ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-        : null;
-
-      if (!xReplitToken || !hostname) {
-        return res.json({ 
-          connected: false,
-          message: 'Google Calendar connector not available'
-        });
-      }
-
-      const connectionSettings = await fetch(
-        'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-calendar',
-        {
-          headers: {
-            'Accept': 'application/json',
-            'X_REPLIT_TOKEN': xReplitToken
-          }
-        }
-      ).then(r => r.json()).then(data => data.items?.[0]);
-
-      if (!connectionSettings || !connectionSettings.settings?.access_token) {
-        return res.json({ 
-          connected: false,
-          message: 'Google Calendar not connected'
-        });
-      }
-
-      return res.json({ 
-        connected: true,
-        calendarEmail: connectionSettings.settings?.email || 'Connected'
-      });
-
-    } catch (error) {
-      console.error('Google Calendar status check error:', error);
+      const { getConnectionForUser: gcalGetConn } = await import('./services/googleCalendarSync');
+      const conn = await gcalGetConn(req.session.businessId, req.session.employeeId ?? '');
+      if (!conn) return res.json({ connected: false });
       return res.json({
-        connected: false,
-        message: 'Error checking Google Calendar status'
+        connected: true,
+        calendarEmail: conn.googleEmail || 'Connected',
+        calendarId: conn.calendarId,
+        lastSynced: conn.lastSyncedAt,
+        lastError: conn.lastError,
       });
+    } catch (error) {
+      console.error('Google Calendar status error:', error);
+      return res.json({ connected: false, message: 'Error checking status' });
+    }
+  });
+
+  // Auth start: redirect the user to Google's consent screen.
+  app.get('/api/google-calendar/auth', (req: Request, res: Response) => {
+    const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(503).json({ success: false, message: 'Google Calendar OAuth not configured' });
+    }
+    const { google } = require('googleapis');
+    const origin = process.env.NODE_ENV === 'production'
+      ? 'https://app.treemarkables.co.nz'
+      : `${req.protocol}://${req.get('host')}`;
+    const redirectUri = `${origin}/api/google-calendar/callback`;
+    const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    // State encodes the current session identifiers so the callback can associate
+    // the connection with the right employee without trusting POST body.
+    const state = Buffer.from(JSON.stringify({
+      businessId: req.session.businessId,
+      employeeId: req.session.employeeId,
+    })).toString('base64');
+    const url = oauth2.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: [
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/userinfo.email',
+      ],
+      state,
+    });
+    res.redirect(url);
+  });
+
+  // OAuth callback: exchange code, upsert connection, redirect to /integrations.
+  app.get('/api/google-calendar/callback', async (req: Request, res: Response) => {
+    const origin = process.env.NODE_ENV === 'production'
+      ? 'https://app.treemarkables.co.nz'
+      : `${req.protocol}://${req.get('host')}`;
+    try {
+      const code = typeof req.query.code === 'string' ? req.query.code : '';
+      const stateRaw = typeof req.query.state === 'string' ? req.query.state : '';
+      if (!code || !stateRaw) {
+        return res.redirect(`${origin}/integrations?gcal_error=missing_code`);
+      }
+      let stateParsed: { businessId?: string; employeeId?: string } = {};
+      try {
+        stateParsed = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8'));
+      } catch {
+        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+      }
+      const { businessId, employeeId } = stateParsed;
+      if (!businessId || !employeeId) {
+        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+      }
+
+      const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID!;
+      const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET!;
+      const redirectUri = `${origin}/api/google-calendar/callback`;
+      const { google } = require('googleapis');
+      const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+      const { tokens } = await oauth2.getToken(code);
+      oauth2.setCredentials(tokens);
+
+      // Fetch the connected email address via userinfo
+      let googleEmail: string | null = null;
+      try {
+        const oauth2Api = google.oauth2({ version: 'v2', auth: oauth2 });
+        const { data } = await oauth2Api.userinfo.get();
+        googleEmail = data.email ?? null;
+      } catch { /* non-fatal */ }
+
+      const { db } = await import('./db');
+      const { googleCalendarConnections } = await import('@shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+
+      // Upsert — one row per (business, user)
+      const existing = await db
+        .select()
+        .from(googleCalendarConnections)
+        .where(and(
+          eq(googleCalendarConnections.businessId, businessId),
+          eq(googleCalendarConnections.userId, employeeId),
+        ));
+
+      const connData = {
+        businessId,
+        userId: employeeId,
+        googleEmail,
+        accessToken: tokens.access_token ?? '',
+        refreshToken: tokens.refresh_token ?? '',
+        expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 50 * 60 * 1000),
+        scope: tokens.scope ?? null,
+        isActive: true,
+        lastError: null,
+        updatedAt: new Date(),
+      };
+
+      if (existing.length > 0) {
+        await db
+          .update(googleCalendarConnections)
+          .set(connData)
+          .where(eq(googleCalendarConnections.id, existing[0].id));
+      } else {
+        await db.insert(googleCalendarConnections).values(connData);
+      }
+
+      console.log(`✅ Google Calendar connected for employee ${employeeId} (${googleEmail})`);
+      res.redirect(`${origin}/integrations?gcal_connected=true`);
+    } catch (error) {
+      console.error('Google Calendar OAuth callback error:', error);
+      res.redirect(`${origin}/integrations?gcal_error=oauth_failed`);
+    }
+  });
+
+  // Disconnect: revoke token + deactivate the connection row.
+  app.delete('/api/google-calendar/connection', async (req: Request, res: Response) => {
+    try {
+      const { getConnectionForUser: gcalGetConn } = await import('./services/googleCalendarSync');
+      const conn = await gcalGetConn(req.session.businessId, req.session.employeeId ?? '');
+      if (!conn) return res.json({ success: true });
+
+      // Best-effort token revocation (don't fail if it errors)
+      try {
+        const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+        const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+        if (clientId && clientSecret) {
+          const { google } = require('googleapis');
+          const auth = new google.auth.OAuth2(clientId, clientSecret);
+          auth.setCredentials({ refresh_token: conn.refreshToken });
+          await auth.revokeCredentials();
+        }
+      } catch (revokeErr) {
+        console.warn('Google token revoke failed (ignored):', revokeErr);
+      }
+
+      const { db } = await import('./db');
+      const { googleCalendarConnections } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      await db
+        .update(googleCalendarConnections)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(googleCalendarConnections.id, conn.id));
+
+      console.log(`✅ Google Calendar disconnected for employee ${req.session.employeeId}`);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Google Calendar disconnect error:', error);
+      return res.status(500).json({ success: false, message: 'Error disconnecting Google Calendar' });
+    }
+  });
+
+  // Busy events for the calendar UI: returns external Google events as UTC intervals
+  // with the owning employee's userId so the calendar can render them in the right row.
+  app.get('/api/google-calendar/busy', async (req: Request, res: Response) => {
+    try {
+      const startStr = typeof req.query.start === 'string' ? req.query.start : '';
+      const endStr = typeof req.query.end === 'string' ? req.query.end : '';
+      if (!startStr || !endStr) {
+        return res.status(400).json({ success: false, message: 'start and end are required' });
+      }
+      const { db } = await import('./db');
+      const { googleBusyEvents, googleCalendarConnections } = await import('@shared/schema');
+      const { and, eq, gte, lte } = await import('drizzle-orm');
+      const businessId = req.session.businessId;
+      if (!businessId) return res.json({ success: true, data: [] });
+
+      const rows = await db
+        .select({
+          id: googleBusyEvents.id,
+          connectionId: googleBusyEvents.connectionId,
+          googleEventId: googleBusyEvents.googleEventId,
+          summary: googleBusyEvents.summary,
+          startTime: googleBusyEvents.startTime,
+          endTime: googleBusyEvents.endTime,
+          status: googleBusyEvents.status,
+          userId: googleCalendarConnections.userId,
+        })
+        .from(googleBusyEvents)
+        .innerJoin(
+          googleCalendarConnections,
+          eq(googleBusyEvents.connectionId, googleCalendarConnections.id),
+        )
+        .where(
+          and(
+            eq(googleBusyEvents.businessId, businessId),
+            lte(googleBusyEvents.startTime, new Date(endStr)),
+            gte(googleBusyEvents.endTime, new Date(startStr)),
+          ),
+        );
+      return res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('Google Calendar busy events error:', error);
+      return res.status(500).json({ success: false, message: 'Error fetching busy events' });
     }
   });
 
@@ -2992,10 +3331,29 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
   });
 
 
+  // Public captcha config — tells the marketing-site forms whether to render the
+  // Cloudflare Turnstile widget. Enabled by setting BOTH TURNSTILE_SITE_KEY and
+  // TURNSTILE_SECRET_KEY (via the DO dashboard); unset = widget hidden and no
+  // server-side check, so the forms keep working with zero config.
+  app.get('/api/captcha/config', (_req: Request, res: Response) => {
+    const siteKey = process.env.TURNSTILE_SITE_KEY?.trim();
+    const secretKey = process.env.TURNSTILE_SECRET_KEY?.trim();
+    if (siteKey && secretKey) {
+      res.json({ provider: 'turnstile', siteKey });
+    } else {
+      res.json({ provider: null });
+    }
+  });
+
+  // Per-IP rate limit for the public contact form (in-memory, resets on deploy).
+  const contactFormRateLimit = new Map<string, { count: number; resetTime: number }>();
+  const CONTACT_FORM_MAX_PER_WINDOW = 5;
+  const CONTACT_FORM_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
   // Contact form submission endpoint
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
-      const { name, email, phone, hearAbout, message, captchaToken, leadSource } = req.body;
+      const { name, email, phone, hearAbout, message, captchaToken, leadSource, website } = req.body;
 
       // Validate contact form data
       const contactValidation = contactFormSchema.safeParse({
@@ -3023,6 +3381,70 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       // Capture server-side data
       const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
       const userAgent = req.get('User-Agent') || 'unknown';
+
+      // Honeypot: hidden "website" field real users never see. Bots that fill it
+      // get a fake success (so they don't learn to adapt) and nothing is created.
+      if (typeof website === 'string' && website.trim() !== '') {
+        console.log(`[contact-spam] Honeypot tripped by ${clientIp}`);
+        return res.json({
+          success: true,
+          message: 'Thank you! We will contact you within 24 hours for your free quote.'
+        });
+      }
+
+      // Per-IP rate limit — a real customer never needs more than a few
+      // submissions; a spam blast from one IP gets cut off.
+      const rlNow = Date.now();
+      const rlEntry = contactFormRateLimit.get(clientIp);
+      if (rlEntry && rlNow < rlEntry.resetTime) {
+        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
+          console.log(`[contact-spam] Rate limit hit by ${clientIp}`);
+          return res.status(429).json({
+            success: false,
+            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
+          });
+        }
+        rlEntry.count++;
+      } else {
+        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
+      }
+      if (contactFormRateLimit.size > 10000) contactFormRateLimit.clear(); // memory backstop
+
+      // Cloudflare Turnstile — enforced only when BOTH keys are configured, matching
+      // /api/captcha/config so the widget and the server check turn on together
+      // (secret-only would 400 every submission while the widget stays hidden).
+      const turnstileSecret = process.env.TURNSTILE_SECRET_KEY?.trim();
+      const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY?.trim();
+      if (turnstileSecret && turnstileSiteKey) {
+        if (!captchaToken) {
+          return res.status(400).json({
+            success: false,
+            message: 'Please complete the security check.'
+          });
+        }
+        try {
+          const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              secret: turnstileSecret,
+              response: String(captchaToken),
+              remoteip: clientIp,
+            }).toString(),
+          });
+          const verifyData = await verifyResponse.json();
+          if (!verifyData.success) {
+            console.log(`[contact-spam] Turnstile rejected ${clientIp}:`, verifyData['error-codes']);
+            return res.status(400).json({
+              success: false,
+              message: 'Security check failed. Please try again.'
+            });
+          }
+        } catch (verifyErr) {
+          // A siteverify outage must not cost a genuine lead — allow and log loud.
+          console.error('[contact-spam] Turnstile siteverify unreachable — allowing submission:', verifyErr);
+        }
+      }
 
       // CAPTCHA validation — opt-in. Set REQUIRE_CAPTCHA=1 to enable once
       // the frontend reCAPTCHA integration is wired up. Default is off.
@@ -3080,18 +3502,18 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         userAgent
       };
 
-      // Auto-create a job/lead directly from the contact form. The customer
-      // explicitly asked for a quote, so we skip the manual "convert conversation
-      // to lead" step and notify the operator about the new lead immediately.
+      // Conversation-first: the inquiry lands in the Inbox/Opportunities pages as an
+      // open conversation only — NO auto-created job card or customer record. Too much
+      // form spam was polluting the jobs pipeline, so the operator now triages in the
+      // conversation view and clicks "Create Job from Lead" (ConversationDetail) to
+      // convert a real inquiry; that flow find-or-creates the customer itself.
       const trimmedName = name.trim();
       const lowerEmail = email.trim().toLowerCase();
       const cleanPhone = (phone || '').trim().replace(/-/g, '').replace(/\s/g, '');
       const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
 
-      // Step 1: find or create the customer up front so the conversation, job,
-      // and notification can all be linked to the same record. Try phone first
-      // (indexed), then fall back to email so an existing client emailing in
-      // (or with a slightly different phone) doesn't get a duplicate record.
+      // Step 1: look up an existing customer so a repeat inquiry threads onto their
+      // record. Try phone first (indexed), then fall back to email.
       // Resolve the owning business for this public, session-less submission so every
       // write below is tenant-stamped. Inbound contact forms run on the owner
       // (BYPASSRLS) connection with no tenant context; without this stamp the
@@ -3107,9 +3529,9 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         console.error('[contact] Failed to resolve business for tenant stamping:', bizErr);
       }
 
-      // Hoisted above runWithBusiness so the auto-reply block can attach a receipt to
-      // the created job once the confirmation email/SMS is sent.
-      let createdJob: any = undefined;
+      // Hoisted above runWithBusiness so the auto-reply block can log its receipt
+      // onto the conversation thread once the confirmation email/SMS is sent.
+      let contactConversation: any = undefined;
 
       // Reuse an existing customer to de-duplicate, but ONLY when the submitted name
       // plausibly belongs to the matched record. The business's own advertised number
@@ -3141,25 +3563,13 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         } else if (matched) {
           console.log(`[contact] phone/email matched existing customer "${matched.name}" but submitted name "${trimmedName}" differs — creating a new lead instead of reusing it`);
         }
-        if (!customer) {
-          customer = await storage.createCustomer({
-            name: trimmedName || 'Unknown',
-            email: lowerEmail,
-            phone: cleanPhone,
-            address: '',
-            contactPreference: 'email' as const,
-            notes: '',
-          });
-        }
-        if (isMobileNumber && cleanPhone && customer?.id) {
-          try {
-            await storage.updateCustomer(customer.id, { mobile: cleanPhone });
-          } catch {
-            // non-critical
-          }
-        }
+        // Conversation-first: do NOT create a customer record for unknown senders —
+        // spam submissions were polluting the Clients list alongside the jobs
+        // pipeline. A matched existing customer is still linked so repeat inquiries
+        // thread onto their record; for new leads the "Create Job from Lead" convert
+        // flow find-or-creates the customer (POST /api/customers dedupes by name).
       } catch (customerErr) {
-        console.error('Error finding/creating customer for contact form:', customerErr);
+        console.error('Error matching existing customer for contact form:', customerErr);
       }
 
       try {
@@ -3199,77 +3609,14 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
           platform: 'web_form'
         });
 
-        // Step 4: auto-create a job with 'lead' status (the canonical first
-        // state in the jobs.status enum). If the customer already has an open
-        // lead-status job, reuse it instead of creating a duplicate — repeat
-        // form submissions should refresh the existing lead, not pile up.
-        let reusedExistingJob = false;
-        if (customer?.id) {
-          try {
-            const existingJobs = await storage.getJobsByCustomer(customer.id);
-            const existingLeadJob = existingJobs.find(j => j.status === 'lead');
-            if (existingLeadJob) {
-              createdJob = existingLeadJob;
-              reusedExistingJob = true;
-              console.log(`✅ Reusing existing lead-status job #${existingLeadJob.jobNumber} (${existingLeadJob.id}) for customer ${customer.id} — repeat contact form submission`);
-            } else {
-              const jobNumber = await storage.getNextJobNumber();
-              createdJob = await storage.createJob({
-                customerId: customer.id,
-                jobNumber,
-                title: `Lead from ${trimmedName || 'website'}`,
-                description: message.trim(),
-                address: 'Address not specified',
-                status: 'lead',
-                priority: 'medium' as const,
-                leadSource: 'website' as const,
-                totalAmount: '0.00',
-                metricsEligible: true,
-                metricsStartDate: new Date(),
-                jobContactPhone: isMobileNumber ? '' : cleanPhone,
-                jobContactMobile: isMobileNumber ? cleanPhone : '',
-              });
-              console.log(`✅ Auto-created job #${jobNumber} (${createdJob.id}) from contact form for customer ${customer.id}`);
+        contactConversation = conversation;
 
-              if (isNewConversation) {
-                try {
-                  await storage.updateConversation(conversation.id, {
-                    status: 'converted',
-                    conversionDate: new Date(),
-                  });
-                } catch {
-                  // non-critical
-                }
-              }
-            }
-          } catch (autoJobErr) {
-            console.error('Error auto-creating job lead from contact form:', autoJobErr);
-          }
-        }
-
-        // Step 5: notify operators. Brand new lead → new-lead notification
-        // (deep-links to the job's diary). Repeat submission on an existing
-        // open lead → follow-up notification so it reads as "they pinged us
-        // again" rather than a duplicate lead. Fallbacks cover the rare case
-        // where job creation failed entirely.
-        if (createdJob && customer?.id && !reusedExistingJob) {
-          await notificationHelper.createNewLeadNotification({
-            jobId: createdJob.id,
-            jobNumber: createdJob.jobNumber,
-            customerId: customer.id,
-            customerName: trimmedName || 'Website visitor',
-            customerEmail: lowerEmail,
-            customerPhone: cleanPhone,
-            sourceLabel: 'website',
-            messagePreview: message.trim(),
-            conversationId: conversation.id,
-          });
-        } else if (createdJob && customer?.id && reusedExistingJob) {
-          await notificationHelper.notifyConversationReply(
-            { id: conversation.id, title: conversation.title, source: 'web_form', customerName: trimmedName },
-            message.trim()
-          );
-        } else if (isNewConversation) {
+        // Step 4: notify operators. Brand new conversation → new-inquiry
+        // notification (deep-links to /conversation/:id where the operator can
+        // triage and hit "Create Job from Lead"). Repeat submission on an open
+        // conversation → follow-up notification so it reads as "they pinged us
+        // again" rather than a duplicate inquiry. No job is auto-created here.
+        if (isNewConversation) {
           await notificationHelper.createConversationNotification(conversation);
         } else {
           await notificationHelper.notifyConversationReply(
@@ -3384,21 +3731,21 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
               html: emailBodyHtml,
             })
               .then(async () => {
-                if (createdJob?.id) {
+                if (contactConversation?.id) {
                   try {
-                    await storage.createJobDiaryEntry({
-                      jobId: createdJob.id,
-                      entryType: 'email',
-                      title: `Auto-reply sent: ${emailSubject}`,
-                      description: `Auto-reply email sent to ${lowerEmail}\n\nSubject: ${emailSubject}\n\nMessage:\n${emailBodyText}`,
-                      authorName: 'System',
-                      authorRole: 'system',
-                      tags: ['communication', 'email', 'auto-reply'],
-                      metadata: { emailAddress: lowerEmail },
+                    await storage.createConversationMessage({
+                      conversationId: contactConversation.id,
+                      type: 'email',
+                      content: `Auto-reply email sent to ${lowerEmail}\n\nSubject: ${emailSubject}\n\n${emailBodyText}`,
+                      direction: 'outbound',
+                      fromName: 'System',
+                      toContact: lowerEmail,
+                      subject: emailSubject,
+                      platform: 'email',
+                      metadata: { autoReply: true },
                     });
-                    await storage.updateJob(createdJob.id, { lastActivityAt: new Date() });
-                  } catch (diaryErr) {
-                    console.error('[contact] Failed to record auto-reply email receipt:', diaryErr);
+                  } catch (receiptErr) {
+                    console.error('[contact] Failed to record auto-reply email receipt:', receiptErr);
                   }
                 }
               })
@@ -3410,21 +3757,20 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
             if (smsBody.trim()) {
               smsService.sendSMS({ to: cleanPhone, message: smsBody })
                 .then(async () => {
-                  if (createdJob?.id) {
+                  if (contactConversation?.id) {
                     try {
-                      await storage.createJobDiaryEntry({
-                        jobId: createdJob.id,
-                        entryType: 'sms',
-                        title: 'Auto-reply SMS sent',
-                        description: `Auto-reply SMS sent to ${cleanPhone}\n\nMessage:\n${smsBody}`,
-                        authorName: 'System',
-                        authorRole: 'system',
-                        tags: ['communication', 'sms', 'auto-reply'],
-                        metadata: { phoneNumber: cleanPhone },
+                      await storage.createConversationMessage({
+                        conversationId: contactConversation.id,
+                        type: 'sms',
+                        content: `Auto-reply SMS sent to ${cleanPhone}\n\n${smsBody}`,
+                        direction: 'outbound',
+                        fromName: 'System',
+                        toContact: cleanPhone,
+                        platform: 'sms',
+                        metadata: { autoReply: true },
                       });
-                      await storage.updateJob(createdJob.id, { lastActivityAt: new Date() });
-                    } catch (diaryErr) {
-                      console.error('[contact] Failed to record auto-reply SMS receipt:', diaryErr);
+                    } catch (receiptErr) {
+                      console.error('[contact] Failed to record auto-reply SMS receipt:', receiptErr);
                     }
                   }
                 })
@@ -5460,170 +5806,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
+      // Queue Google Calendar push post-response (non-blocking)
+      queueJobPush(job.id);
     } catch (error) {
       console.error('Error creating job:', error);
       res.status(500).json({ success: false, message: 'Error creating job' });
     }
   });
-
-  // Enhanced tree service description processing
-  function processTreeServiceDescription(sources: string[]): string {
-    // Combine all sources and clean them
-    const combinedText = sources.join(' | ').toLowerCase();
-    
-    // Remove common ServiceM8 artifacts and invalid data
-    let cleaned = combinedText
-      .replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/g, '') // Timestamps
-      .replace(/0000-00-00 00:00:00/g, '') // Invalid dates
-      .replace(/\{\{[^}]*\}\}/g, '') // Template placeholders
-      .replace(/\[.*?\]/g, '') // Bracketed codes
-      .replace(/\b(servicem8|sm8|job|#)\b/gi, '') // ServiceM8 references
-      .replace(/\s+/g, ' ') // Multiple spaces
-      .trim();
-    
-    if (!cleaned || cleaned.length < 5) {
-      return '';
-    }
-    
-    // Tree service standardization patterns
-    const treeServicePatterns = [
-      // Tree removal variations
-      { pattern: /tree\s*remov/i, replacement: 'Tree Removal' },
-      { pattern: /remove\s*tree/i, replacement: 'Tree Removal' },
-      { pattern: /take\s*down\s*tree/i, replacement: 'Tree Removal' },
-      { pattern: /cut\s*down\s*tree/i, replacement: 'Tree Removal' },
-      { pattern: /fell\s*tree/i, replacement: 'Tree Removal' },
-      
-      // Tree trimming/pruning
-      { pattern: /tree\s*trim/i, replacement: 'Tree Trimming' },
-      { pattern: /tree\s*prun/i, replacement: 'Tree Pruning' },
-      { pattern: /prune\s*tree/i, replacement: 'Tree Pruning' },
-      { pattern: /trim\s*tree/i, replacement: 'Tree Trimming' },
-      { pattern: /shape\s*tree/i, replacement: 'Tree Shaping' },
-      
-      // Stump services
-      { pattern: /stump\s*grind/i, replacement: 'Stump Grinding' },
-      { pattern: /grind\s*stump/i, replacement: 'Stump Grinding' },
-      { pattern: /stump\s*remov/i, replacement: 'Stump Removal' },
-      { pattern: /remove\s*stump/i, replacement: 'Stump Removal' },
-      
-      // Emergency services
-      { pattern: /emergency.*tree/i, replacement: 'Emergency Tree Service' },
-      { pattern: /urgent.*tree/i, replacement: 'Emergency Tree Service' },
-      { pattern: /storm.*damage/i, replacement: 'Storm Damage Cleanup' },
-      { pattern: /fallen.*tree/i, replacement: 'Fallen Tree Removal' },
-      
-      // Maintenance services
-      { pattern: /tree\s*maint/i, replacement: 'Tree Maintenance' },
-      { pattern: /hedge\s*trim/i, replacement: 'Hedge Trimming' },
-      { pattern: /garden\s*clean/i, replacement: 'Garden Cleanup' },
-      { pattern: /branch\s*remov/i, replacement: 'Branch Removal' },
-      { pattern: /deadwood/i, replacement: 'Deadwood Removal' },
-      
-      // Specialized services
-      { pattern: /palm\s*clean/i, replacement: 'Palm Tree Cleaning' },
-      { pattern: /palm\s*trim/i, replacement: 'Palm Tree Trimming' },
-      { pattern: /fruit\s*tree/i, replacement: 'Fruit Tree Service' },
-      { pattern: /cable.*brac/i, replacement: 'Tree Cabling & Bracing' },
-    ];
-    
-    // Apply tree service patterns
-    let standardized = cleaned;
-    for (const { pattern, replacement } of treeServicePatterns) {
-      if (pattern.test(standardized)) {
-        standardized = standardized.replace(pattern, replacement);
-        break; // Use first match for primary service type
-      }
-    }
-    
-    // Extract key details and build structured description
-    const details = extractServiceDetails(standardized);
-    const structuredDescription = buildStructuredDescription(details);
-    
-    // Clean up final result
-    return structuredDescription
-      .split('|')[0] // Take first part if multiple services
-      .replace(/\s+/g, ' ')
-      .trim()
-      .split('')
-      .map((char, i) => i === 0 ? char.toUpperCase() : char)
-      .join('')
-      .substring(0, 200); // Reasonable length limit
-  }
-  
-  function extractServiceDetails(text: string): any {
-    const details: any = {
-      serviceType: '',
-      treeCount: null,
-      size: '',
-      location: '',
-      urgency: '',
-      additionalNotes: ''
-    };
-    
-    // Extract tree count
-    const countMatch = text.match(/(\d+)\s*tree/i);
-    if (countMatch) {
-      details.treeCount = parseInt(countMatch[1]);
-    }
-    
-    // Extract size descriptions
-    const sizePatterns = ['large', 'small', 'medium', 'huge', 'massive', 'tall', 'big'];
-    for (const size of sizePatterns) {
-      if (text.includes(size)) {
-        details.size = size;
-        break;
-      }
-    }
-    
-    // Extract location context
-    const locationPatterns = ['front yard', 'back yard', 'backyard', 'driveway', 'near house', 'fence line'];
-    for (const location of locationPatterns) {
-      if (text.includes(location)) {
-        details.location = location;
-        break;
-      }
-    }
-    
-    // Extract urgency
-    if (text.match(/urgent|emergency|asap|immediate/i)) {
-      details.urgency = 'urgent';
-    }
-    
-    return details;
-  }
-  
-  function buildStructuredDescription(details: any): string {
-    let parts = [];
-    
-    // Add count if specified
-    if (details.treeCount && details.treeCount > 1) {
-      parts.push(`${details.treeCount} trees`);
-    } else if (details.treeCount === 1) {
-      parts.push('1 tree');
-    }
-    
-    // Add size description
-    if (details.size) {
-      parts.push(details.size);
-    }
-    
-    // Add location context
-    if (details.location) {
-      parts.push(`in ${details.location}`);
-    }
-    
-    // Build final description
-    let description = parts.length > 0 ? parts.join(' ') : 'Tree service';
-    
-    // Add urgency flag
-    if (details.urgency === 'urgent') {
-      description = `URGENT: ${description}`;
-    }
-    
-    return description;
-  }
-
 
   // Fix fake job descriptions with real ServiceM8 data
   app.post('/api/jobs/fix-fake-descriptions', async (req: Request, res: Response) => {
@@ -6179,9 +6368,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
-      // Only Treemarkables may take card payments (single Stripe account, no Connect);
-      // every other tenant collects by bank transfer. See businessOwnsStripeAccount.
-      if (!businessOwnsStripeAccount((job as any).businessId)) {
+      // Card payments: Treemarkables (platform account) or a Connect tenant with charges
+      // enabled (direct charge → funds go to the tenant). Everyone else → bank transfer.
+      const { canTakeCard: jobCanCard, connectedAccountId: jobConnectAccount } = await resolveCardPayment((job as any).businessId);
+      if (!jobCanCard) {
         return res.status(403).json({
           success: false,
           message: 'Online card payment is not available for this business. Please pay by bank transfer.',
@@ -6208,7 +6398,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       const origin =
         process.env.NODE_ENV === 'production'
-          ? 'https://app.treemarkables.co.nz'
+          ? APP_URL
           : `${req.protocol}://${req.get('host')}`;
       const successUrl = `${origin}/payment-complete?status=success`;
       const cancelUrl = `${origin}/payment-complete?status=cancelled`;
@@ -6222,6 +6412,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         successUrl,
         cancelUrl,
         businessName: (settings as any)?.businessName || 'Treemarkables',
+        connectedAccountId: jobConnectAccount,
       });
 
       res.json({ success: true, data: { sessionId: session.id, url: session.url, amount: outstanding } });
@@ -6563,6 +6754,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         console.log(`🔄 Clearing unsuccessful data for job ${req.params.id} - status changing to ${validation.data.status}`);
       }
 
+      // Auto-advance a quote to 'work_order' when it gets scheduled. Scheduling
+      // a quote means committing to do the work (owner's chosen workflow). Only
+      // fires on the null → set transition so editing an already-scheduled job
+      // never re-flips, and we don't override an explicit status in this request.
+      {
+        const effectiveStatus = validation.data.status ?? oldJob?.status;
+        const hadSchedule = !!(oldJob as any)?.scheduledDate;
+        const nowScheduled = !!(validation.data as any).scheduledDate;
+        if (effectiveStatus === 'quote' && nowScheduled && !hadSchedule) {
+          (validation.data as any).status = 'work_order';
+          console.log(`📅 Job ${req.params.id} scheduled → status quote → work_order`);
+        }
+      }
+
       // Debug logging for job update
       console.log('🔍 JOB UPDATE SERVER DEBUG:', {
         jobId: req.params.id,
@@ -6829,6 +7034,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       res.json({ success: true, data: job });
+      // Queue Google Calendar push post-response (non-blocking)
+      const cancelStatuses = new Set(['archived', 'unsuccessful', 'cancelled']);
+      if (job.status && cancelStatuses.has(job.status)) {
+        removeJobEvents(job.id).catch(err => console.error('❌ GCal remove error:', err));
+      } else {
+        queueJobPush(job.id);
+      }
     } catch (error) {
       console.error('Error updating job:', error);
       res.status(500).json({ success: false, message: 'Error updating job' });
@@ -6995,6 +7207,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       }
 
+      // Auto-advance a quote to 'work_order' when it gets scheduled (mirrors the
+      // PUT handler). Only on the null → set transition; never overrides an
+      // explicit status sent in this request.
+      {
+        const effectiveStatus = updateData.status ?? oldJob?.status;
+        const hadSchedule = !!(oldJob as any)?.scheduledDate;
+        const nowScheduled = !!(updateData as any).scheduledDate;
+        if (effectiveStatus === 'quote' && nowScheduled && !hadSchedule) {
+          updateData.status = 'work_order';
+          console.log(`📅 Job ${req.params.id} scheduled → status quote → work_order (PATCH)`);
+        }
+      }
+
       // Stamp customerConfirmedAt + method when the confirmation flag transitions.
       if ('customerConfirmed' in updateData) {
         const was = !!oldJob?.customerConfirmed;
@@ -7102,6 +7327,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
+      queueJobPush(job.id);
     } catch (error) {
       console.error('Error patching job:', error);
       res.status(500).json({ success: false, message: 'Error updating job' });
@@ -7172,6 +7398,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           console.error(`JOB_DELETE_AUDIT snapshot failed for id=${jobId}:`, auditErr);
         }
       }));
+
+      // Clean up Google Calendar events before deleting
+      await Promise.all(jobIds.map((jobId: string) =>
+        removeJobEvents(jobId).catch(err => console.error(`❌ GCal remove before delete failed for job ${jobId}:`, err))
+      ));
 
       // Delete jobs using storage layer
       const result = await storage.bulkDeleteJobs(jobIds);
@@ -7935,7 +8166,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // customer can click from their quote, regardless of which DO/Cloudflare
   // alias the staff session happens to be on.
   function getWatchUrl(videoId: string): string {
-    return `https://app.treemarkables.co.nz/watch/${videoId}`;
+    return `${APP_URL}/watch/${videoId}`;
   }
   function buildVideoLinkLine(videoId: string): string {
     return `Watch the on-site walkthrough: ${getWatchUrl(videoId)}`;
@@ -8326,6 +8557,18 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
   // Standalone video upload (Videos library) — no job card required. The job
   // can be linked later via PATCH /api/videos/:id { jobId }.
+  // Knowledge (how-to) videos are GLOBAL platform content shown to every subscriber
+  // (stored business_id NULL, served via the owner client — see storage.getVideos).
+  // Only allowlisted businesses may publish/manage them, so a stray tenant admin
+  // can't inject into the shared help library. Empty allowlist = fail closed (nobody).
+  // Set INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS to TM + the content/demo tenant ids.
+  const CONTENT_PUBLISHER_BUSINESS_IDS = new Set(
+    (process.env.INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS ?? "")
+      .split(",").map((s) => s.trim()).filter(Boolean),
+  );
+  const isContentPublisher = (businessId: string | undefined): boolean =>
+    !!businessId && CONTENT_PUBLISHER_BUSINESS_IDS.has(businessId);
+
   app.post('/api/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -8347,6 +8590,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       }
 
       const kind = req.body.kind === 'knowledge' ? 'knowledge' : 'job';
+      // Publishing into the global how-to library is restricted to content publishers.
+      if (kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to publish knowledge videos.' });
+      }
       const showToCustomer = req.body.showToCustomer === undefined
         ? true
         : req.body.showToCustomer === 'true' || req.body.showToCustomer === true;
@@ -8447,6 +8694,13 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       // and sync the corresponding link in jobs.description after the update.
       const priorVideo = await storage.getVideo(req.params.id);
 
+      // Editing a global knowledge video — or re-tagging a job video INTO the
+      // knowledge library — touches shared platform content; gate to publishers.
+      if ((priorVideo?.kind === 'knowledge' || req.body.kind === 'knowledge')
+        && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
+      }
+
       const updates: schema.UpdateVideo = {};
       if (req.body.title !== undefined) updates.title = req.body.title;
       if (req.body.description !== undefined) updates.description = req.body.description;
@@ -8508,6 +8762,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       const video = await storage.getVideo(req.params.id);
       if (!video) {
         return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      // Deleting from the global how-to library is restricted to content publishers.
+      if (video.kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
       }
       await storage.deleteVideo(req.params.id);
       await videoStorage.deleteVideoObject(video.url);
@@ -10241,7 +10499,7 @@ Draft the reply now.`;
 
       // Always use the production domain for customer-facing links
       // to prevent dev/preview URLs from leaking into customer emails/SMS
-      const baseUrl = `https://app.treemarkables.co.nz`;
+      const baseUrl = APP_URL;
       
       // Prepare email content
       const customerName = customer?.name || 'Valued Customer';
@@ -10499,7 +10757,7 @@ Draft the reply now.`;
       // ?type=quote hint labels it as a quote before data loads). Replies still
       // land in the job inbox via emailService's reply-to, so the
       // "I accept quote Q-*" webhook fallback keeps working.
-      const quoteAcceptUrl = `https://app.treemarkables.co.nz/proposal/${proposalId}/accept?type=quote`;
+      const quoteAcceptUrl = `${APP_URL}/proposal/${proposalId}/accept?type=quote`;
 
       const customerName = customer?.name || 'Valued Customer';
       const bodyLead = message && message.trim().length > 0
@@ -10861,8 +11119,8 @@ Draft the reply now.`;
 
         // Customer-facing link is always the app domain (CLAUDE.md), regardless of tenant.
         const onlineInvoiceUrl = invoiceDetails?.id
-          ? `https://app.treemarkables.co.nz/invoice/${invoiceDetails.id}/view`
-          : 'https://app.treemarkables.co.nz';
+          ? `${APP_URL}/invoice/${invoiceDetails.id}/view`
+          : APP_URL;
 
         const invCustomerName = job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'there';
 
@@ -11302,8 +11560,19 @@ Draft the reply now.`;
       const normalizedFrom = normalizePhone(From);
       console.log(`📱 Normalized incoming phone: ${From} -> ${normalizedFrom}`);
       
-      // Find customer by phone number
-      const customers = await storage.getAllCustomers();
+      // Resolve which tenant owns the number that RECEIVED this SMS (To). Without it
+      // the lookup below scans EVERY tenant's customers and would attach an inbound SMS
+      // to another business's job whenever two tenants have a customer sharing a phone
+      // number. Unmapped number → undefined → unchanged single-tenant behaviour.
+      // Mirrors the twilio-voice webhook + smsReplyPoller tenant scoping.
+      const inboundBizId = await resolveBusinessIdByChannel('phone', String(To || ''));
+      if (inboundBizId) console.log(`🏢 Inbound SMS line ${To} resolved to business ${inboundBizId}`);
+
+      // Find customer by phone number — scoped to the receiving tenant when known.
+      const allCustomers = await storage.getAllCustomers();
+      const customers = inboundBizId
+        ? allCustomers.filter(c => c.businessId === inboundBizId)
+        : allCustomers;
       const customer = customers.find(c => {
         if (!c.phone) return false;
         const normalizedCustomerPhone = normalizePhone(c.phone);
@@ -11317,7 +11586,12 @@ Draft the reply now.`;
         // Get most recent job for this customer
         const jobs = await storage.getJobsByCustomer(customer.id);
         const recentJob = jobs[0]; // Most recent job
-        
+
+        // Stamp every write below (diary, job/customer updates, notifications) to the
+        // resolved tenant. runWithBusiness doesn't scope READS (the customer match above
+        // is already tenant-filtered) — it pins the write-path businessId so these rows
+        // land under the right tenant instead of the column default (Treemarkables).
+        await runWithBusiness(inboundBizId ?? customer.businessId ?? undefined, async () => {
         // Log to job diary if job exists
         if (recentJob) {
           console.log(`📝 Logging to job #${recentJob.jobNumber} diary...`);
@@ -11464,6 +11738,7 @@ Draft the reply now.`;
         } else {
           console.log(`⚠️ No jobs found for customer ${customer.name}`);
         }
+        }); // runWithBusiness(inboundBizId)
       } else {
         console.warn(`📱 Received SMS from unknown number: ${From}`);
       }
@@ -11665,7 +11940,13 @@ Draft the reply now.`;
           // Indexed/DB-side lookup rather than loading the entire customer
           // table on every inbound call — keeps the answer webhook fast so
           // the caller reaches the greeting sooner (less pre-answer ringback).
-          const match = await storage.findCustomerByPhoneLast8(key);
+          // Owner-context path: scope the lookup to the tenant that owns the
+          // dialled line, so a last-8 collision can't surface another tenant's
+          // customer NAME on the caller ID. Unmapped line → undefined → prior
+          // single-tenant behaviour. findCustomerByPhoneLast8 self-scopes to
+          // the ambient businessId set here.
+          const inboundBizId = await resolveBusinessIdByChannel('phone', inboundTo);
+          const match = await runWithBusiness(inboundBizId, () => storage.findCustomerByPhoneLast8(key));
           if (match?.name) callerName = String(match.name);
         }
       } catch (lookupErr) {
@@ -12360,7 +12641,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const observedBaseUrl = `${protocol}://${host}`;
-    const expectedBaseUrl = 'https://app.treemarkables.co.nz';
+    const expectedBaseUrl = APP_URL;
 
     const expectedWebhooks = {
       answer: `${expectedBaseUrl}/api/webhooks/twilio-answer`,
@@ -12502,400 +12783,6 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       twilioMonitorError,
       recommendations,
     });
-  });
-
-  // ========================================
-  // VONAGE INBOUND CALL RECORDING WEBHOOKS
-  // ========================================
-
-  // In-memory store: conversation_uuid → caller phone number
-  // Populated at voice webhook time so the recording callback can reliably identify the caller
-  const vonageCallStore = new Map<string, { from: string; to: string; startedAt: Date }>();
-
-  // Allowed domains for Vonage recording downloads (SSRF protection)
-  const VONAGE_RECORDING_HOSTS = ['api.nexmo.com', 'api.vonage.com', 'storage.vonage.com'];
-
-  function isAllowedVonageHost(url: string): boolean {
-    try {
-      const parsed = new URL(url);
-      return VONAGE_RECORDING_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h));
-    } catch {
-      return false;
-    }
-  }
-
-  // Validate an inbound Vonage webhook request.
-  //
-  // Strategy (in priority order):
-  //  1. If VONAGE_WEBHOOK_SECRET is set, verify the Vonage Signed Webhook JWT in the
-  //     Authorization header (HS256 HMAC with the Signature Secret from the dashboard).
-  //     This is the Vonage-official approach shown under API Settings → Signed webhooks.
-  //  2. Fall back to a query-param shared secret (?wt=) for simple cases / testing.
-  //  3. If no secret at all is configured, allow all requests (dev/test mode only).
-  function validateVonageWebhookToken(req: Request): boolean {
-    const secret = process.env.VONAGE_WEBHOOK_SECRET;
-    if (!secret) return true; // dev/test: no validation configured
-
-    // --- Method 1: Vonage Signed Webhook JWT (Authorization: Bearer <jwt>) ---
-    const authHeader = req.headers['authorization'];
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.slice(7);
-      try {
-        jwt.verify(token, secret, { algorithms: ['HS256'] });
-        return true;
-      } catch (jwtErr) {
-        console.error('❌ Vonage JWT verification failed:', (jwtErr as any).message);
-        // Don't fall through — a bad JWT is a hard failure
-        return false;
-      }
-    }
-
-    // --- Method 2: Simple shared-secret query param (?wt=) ---
-    const provided = req.query.wt || req.body?.wt;
-    return provided === secret;
-  }
-
-  // Build callback URLs. When VONAGE_WEBHOOK_SECRET is set we rely on Vonage's
-  // Signed Webhook JWT (sent automatically in the Authorization header) so we
-  // don't need to append anything to the URL. The ?wt= param is kept as a
-  // belt-and-braces fallback for non-JWT environments.
-  function vonageCallbackUrl(req: Request, path: string): string {
-    return `${req.protocol}://${req.get('host')}${path}`;
-  }
-
-  // GET/POST /api/webhooks/vonage-voice — Vonage NCCO response for inbound calls
-  // Vonage calls this when an inbound call arrives. We return an NCCO that records
-  // the full call and simultaneously connects through to the owner's mobile.
-  function buildVonageNcco(req: Request) {
-    // Calls arrive here forwarded from the owner's personal mobile via iPhone call forwarding.
-    // We record the call then connect to the owner's Zoiper SIP client registered on sip.nexmo.com.
-    // The Vonage virtual number (VONAGE_FORWARD_TO_NUMBER) is used as the caller-ID in the connect action.
-    const rawVonageNumber = process.env.VONAGE_FORWARD_TO_NUMBER || '';
-    const vonageFrom = rawVonageNumber.startsWith('+') ? rawVonageNumber : `+${rawVonageNumber}`;
-    // SIP URI: the owner's Zoiper app registers as <apiKey>@sip.nexmo.com
-    const apiKey = process.env.VONAGE_API_KEY;
-    if (!apiKey) throw new Error('VONAGE_API_KEY not set');
-    const sipUri = `sip:${apiKey}@sip.nexmo.com`;
-    return [
-      {
-        action: 'record',
-        eventUrl: [vonageCallbackUrl(req, '/api/webhooks/vonage-recording')],
-        eventMethod: 'POST',
-        format: 'mp3',
-        endOnSilence: 10,
-        endOnKey: '#',
-        beepStart: false,
-        split: 'conversation'
-      },
-      {
-        action: 'connect',
-        eventUrl: [vonageCallbackUrl(req, '/api/webhooks/vonage-event')],
-        from: vonageFrom,
-        endpoint: [{ type: 'sip', uri: sipUri }]
-      }
-    ];
-  }
-
-  app.get('/api/webhooks/vonage-voice', async (req: Request, res: Response) => {
-    try {
-      const forwardTo = process.env.VONAGE_FORWARD_TO_NUMBER;
-      const from = String(req.query.from || req.query.msisdn || 'unknown');
-      const to = String(req.query.to || process.env.VONAGE_NUMBER || 'unknown');
-      const conversationUuid = String(req.query.conversation_uuid || req.query.uuid || '');
-
-      console.log(`📞 Vonage inbound call (GET) - From: ${from}, To: ${to}, UUID: ${conversationUuid}`);
-
-      // Persist caller identity keyed by conversation UUID for recording callback lookup
-      if (conversationUuid && from !== 'unknown') {
-        vonageCallStore.set(conversationUuid, { from, to, startedAt: new Date() });
-        // Auto-expire after 24 h to prevent unbounded growth
-        setTimeout(() => vonageCallStore.delete(conversationUuid), 86400000);
-      }
-
-      if (!forwardTo) {
-        console.error('❌ VONAGE_FORWARD_TO_NUMBER not configured');
-        return res.json([{ action: 'talk', text: 'This number is not properly configured.' }]);
-      }
-
-      res.json(buildVonageNcco(req));
-    } catch (error: any) {
-      console.error('❌ Vonage voice GET webhook error:', error);
-      res.json([{ action: 'talk', text: 'An error occurred.' }]);
-    }
-  });
-
-  app.post('/api/webhooks/vonage-voice', async (req: Request, res: Response) => {
-    try {
-      // NOTE: Vonage does NOT sign Answer URL requests with JWT by default,
-      // so we skip token validation here to avoid blocking the NCCO response.
-      const forwardTo = process.env.VONAGE_FORWARD_TO_NUMBER;
-      const from = String(req.body.from || req.body.msisdn || 'unknown');
-      const to = String(req.body.to || process.env.VONAGE_NUMBER || 'unknown');
-      const conversationUuid = String(req.body.conversation_uuid || req.body.uuid || '');
-
-      console.log(`📞 Vonage inbound call (POST) - From: ${from}, To: ${to}, UUID: ${conversationUuid}`);
-
-      if (conversationUuid && from !== 'unknown') {
-        vonageCallStore.set(conversationUuid, { from, to, startedAt: new Date() });
-        setTimeout(() => vonageCallStore.delete(conversationUuid), 86400000);
-      }
-
-      if (!forwardTo) {
-        console.error('❌ VONAGE_FORWARD_TO_NUMBER not configured');
-        return res.json([{ action: 'talk', text: 'This number is not properly configured.' }]);
-      }
-
-      res.json(buildVonageNcco(req));
-    } catch (error: any) {
-      console.error('❌ Vonage voice POST webhook error:', error);
-      res.json([{ action: 'talk', text: 'An error occurred.' }]);
-    }
-  });
-
-  // POST /api/webhooks/vonage-event — Vonage call event updates
-  // Also used to capture caller identity from mid-call events as a fallback
-  app.post('/api/webhooks/vonage-event', async (req: Request, res: Response) => {
-    try {
-      if (!validateVonageWebhookToken(req)) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
-      const { uuid, conversation_uuid, status, direction, from, to } = req.body;
-      const convId = conversation_uuid || uuid;
-      console.log(`📞 Vonage call event - Conv: ${convId}, Status: ${status}, From: ${from}`);
-
-      // Capture caller if not already stored (fallback for cases where GET voice webhook ran first)
-      if (convId && from && from !== 'unknown' && !vonageCallStore.has(convId)) {
-        vonageCallStore.set(convId, { from: String(from), to: String(to || ''), startedAt: new Date() });
-        setTimeout(() => vonageCallStore.delete(convId), 86400000);
-      }
-
-      res.status(200).send('OK');
-    } catch (error: any) {
-      console.error('❌ Vonage event webhook error:', error);
-      res.status(200).send('OK');
-    }
-  });
-
-  // POST /api/webhooks/vonage-recording — Vonage recording complete callback
-  app.post('/api/webhooks/vonage-recording', async (req: Request, res: Response) => {
-    try {
-      // Validate webhook token to prevent SSRF / replay attacks
-      if (!validateVonageWebhookToken(req)) {
-        console.error('❌ Vonage recording: invalid webhook token');
-        return res.status(403).json({ error: 'Forbidden' });
-      }
-
-      const {
-        recording_url: recordingUrlRemote,
-        recording_uuid: recordingUuid,
-        start_time: startTime,
-        end_time: endTime,
-        duration,
-        conversation_uuid: conversationUuid,
-        status
-      } = req.body;
-
-      console.log(`🎙️ Vonage recording complete - UUID: ${recordingUuid}, Conv: ${conversationUuid}, Duration: ${duration}s, Status: ${status}`);
-
-      // Only process completed recordings
-      if (status !== 'uploaded' && status !== 'completed' && status !== 'ok') {
-        console.log(`⚠️ Vonage recording status: ${status}, skipping`);
-        return res.status(200).send('OK');
-      }
-
-      if (!recordingUrlRemote) {
-        console.error('❌ No recording URL in Vonage callback');
-        return res.status(200).send('OK');
-      }
-
-      // SSRF protection: recording URL must be from a known Vonage domain
-      if (!isAllowedVonageHost(recordingUrlRemote)) {
-        console.error(`❌ Vonage recording URL from disallowed host: ${recordingUrlRemote}`);
-        return res.status(400).json({ error: 'Invalid recording URL' });
-      }
-
-      res.status(200).send('OK');
-
-      // Process recording asynchronously
-      setTimeout(async () => {
-        try {
-          const { apiKey, apiSecret } = getVonageCredentials();
-
-          // Download the recording using Basic auth
-          const authHeader = 'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
-          const recordingFilename = `vonage-${recordingUuid || Date.now()}-${Date.now()}.mp3`;
-          const recordingPath = path.join(recordingsDir, recordingFilename);
-
-          // Download recording (https only for Vonage)
-          const https = await import('https');
-          await new Promise<void>((resolve, reject) => {
-            const file = fs.createWriteStream(recordingPath);
-            https.get(recordingUrlRemote, {
-              headers: { 'Authorization': authHeader }
-            }, (response) => {
-              // Follow a single redirect (still within Vonage)
-              if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-                const redirectUrl = response.headers.location;
-                if (!isAllowedVonageHost(redirectUrl)) {
-                  file.close();
-                  fs.unlink(recordingPath, () => {});
-                  return reject(new Error(`Redirect to disallowed host: ${redirectUrl}`));
-                }
-                https.get(redirectUrl, { headers: { 'Authorization': authHeader } }, (rr) => {
-                  rr.pipe(file);
-                  file.on('finish', () => { file.close(); resolve(); });
-                  file.on('error', (err) => { fs.unlink(recordingPath, () => {}); reject(err); });
-                }).on('error', (err) => { fs.unlink(recordingPath, () => {}); reject(err); });
-              } else {
-                response.pipe(file);
-                file.on('finish', () => { file.close(); resolve(); });
-                file.on('error', (err) => { fs.unlink(recordingPath, () => {}); reject(err); });
-              }
-            }).on('error', (err) => { fs.unlink(recordingPath, () => {}); reject(err); });
-          });
-
-          console.log(`✅ Vonage recording downloaded: ${recordingPath}`);
-
-          // Resolve caller: look up from in-memory store first (populated at voice webhook),
-          // fall back to whatever Vonage included in the recording callback body
-          const stored = vonageCallStore.get(conversationUuid);
-          const callerPhoneRaw = stored?.from || (req.body.from as string) || 'unknown';
-
-          const normalizePhone = (phone: string): string => {
-            if (!phone || phone === 'unknown') return phone;
-            const cleaned = phone.replace(/\D/g, '');
-            if (cleaned.startsWith('64')) return `+${cleaned}`;
-            if (cleaned.startsWith('0')) return `+64${cleaned.substring(1)}`;
-            if (cleaned.length === 9 || cleaned.length === 10) return `+64${cleaned}`;
-            return `+${cleaned}`;
-          };
-
-          const normalizedCaller = normalizePhone(callerPhoneRaw);
-          const durationSecs = parseInt(String(duration || '0'));
-          const startedAt = stored?.startedAt || (startTime ? new Date(startTime) : new Date());
-          const endedAt = endTime ? new Date(endTime) : new Date();
-
-          // Transcribe with Whisper
-          let transcript = '';
-          try {
-            const transcription = await openai.audio.transcriptions.create({
-              file: fs.createReadStream(recordingPath),
-              model: 'whisper-1',
-              language: 'en',
-              response_format: 'text'
-            });
-            const rawTranscript = typeof transcription === 'string' ? transcription : (transcription as any).text || String(transcription);
-
-            // Capitalize proper nouns
-            try {
-              const capResponse = await openai.chat.completions.create({
-                model: 'gpt-4o',
-                messages: [
-                  {
-                    role: 'system',
-                    content: 'Properly capitalize all proper nouns (people, places, companies) in the transcribed text. Return ONLY the corrected text.'
-                  },
-                  { role: 'user', content: rawTranscript }
-                ],
-                temperature: 0.1
-              });
-              transcript = capResponse.choices[0].message.content?.trim() || rawTranscript;
-            } catch {
-              transcript = rawTranscript;
-            }
-            console.log(`✅ Vonage recording transcribed: ${transcript.substring(0, 100)}...`);
-          } catch (transcribeError) {
-            console.error('❌ Transcription error:', transcribeError);
-          }
-
-          // AI summary
-          let transcriptionSummary = '';
-          if (transcript) {
-            try {
-              const summaryResp = await openai.chat.completions.create({
-                model: 'gpt-4o',
-                messages: [
-                  { role: 'system', content: 'Summarize this phone call in 1-2 sentences for a job card diary. Focus on what the customer wants and key details.' },
-                  { role: 'user', content: transcript }
-                ],
-                temperature: 0.3,
-                max_tokens: 150
-              });
-              transcriptionSummary = summaryResp.choices[0].message.content?.trim() || '';
-            } catch { /* non-fatal */ }
-          }
-
-          // Match caller to existing customer
-          const allCustomers = await storage.getAllCustomers();
-          const matchedCustomer = normalizedCaller !== 'unknown'
-            ? allCustomers.find(c => c.phone && normalizePhone(c.phone) === normalizedCaller)
-            : undefined;
-
-          // Find most recent active job for this customer
-          let matchedJobId: string | undefined;
-          if (matchedCustomer) {
-            const customerJobs = await storage.getJobsByCustomer(matchedCustomer.id);
-            const activeJob = customerJobs.find((j: any) =>
-              !['completed', 'cancelled', 'archived'].includes(j.status)
-            ) || customerJobs[0];
-            if (activeJob) matchedJobId = activeJob.id;
-          }
-
-          // Save call record
-          const recordingLocalUrl = `/uploads/recordings/${recordingFilename}`;
-          const callRecord = await storage.createCallRecord({
-            direction: 'inbound',
-            status: 'completed',
-            fromNumber: normalizedCaller,
-            toNumber: process.env.VONAGE_NUMBER || 'unknown',
-            duration: durationSecs,
-            recordingUrl: recordingLocalUrl,
-            transcription: transcript || undefined,
-            transcriptionSummary: transcriptionSummary || undefined,
-            jobId: matchedJobId || undefined,
-            customerId: matchedCustomer?.id || undefined,
-            callerName: matchedCustomer?.name || undefined,
-            callStartedAt: startedAt,
-            callEndedAt: endedAt,
-            tags: ['vonage', 'inbound']
-          });
-
-          console.log(`📝 Vonage call record created: ${callRecord.id} — customer: ${matchedCustomer?.name || 'unmatched'} — job: ${matchedJobId || 'unlinked'}`);
-
-          // Write diary entry when we have a matched job
-          if (matchedJobId && matchedCustomer) {
-            await storage.createJobDiaryEntry({
-              jobId: matchedJobId,
-              entryType: 'call',
-              title: `Inbound Call from ${matchedCustomer.name}`,
-              description: `Caller: ${normalizedCaller}\nDuration: ${durationSecs}s${transcriptionSummary ? `\n\nSummary: ${transcriptionSummary}` : ''}${transcript ? `\n\nTranscript:\n${transcript}` : ''}`,
-              authorName: 'System',
-              authorRole: 'system',
-              tags: ['call', 'vonage', 'inbound', 'recorded'],
-              metadata: {
-                recordingUrl: recordingLocalUrl,
-                transcription: transcript,
-                transcriptionSummary,
-                duration: durationSecs,
-                callerNumber: normalizedCaller,
-                callRecordId: callRecord.id
-              }
-            });
-            console.log(`📓 Diary entry added for job ${matchedJobId}`);
-          }
-
-          // Clean up call store entry
-          vonageCallStore.delete(conversationUuid);
-
-        } catch (processingError) {
-          console.error('❌ Error processing Vonage recording:', processingError);
-        }
-      }, 500);
-
-    } catch (error: any) {
-      console.error('❌ Vonage recording webhook error:', error);
-      res.status(200).send('OK');
-    }
   });
 
   // GET /api/call-records/unlinked — Get call records not linked to any job
@@ -13142,7 +13029,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
       
       const updateData = validationResult.data;
-      
+      // Never let an update move the invoice to another tenant. (Marking paid /
+      // setting paidAt stays allowed — it's the legitimate manual-payment flow.)
+      delete (updateData as any).businessId;
+
       const invoice = await storage.getInvoice(id);
       if (!invoice) {
         return res.status(404).json({ success: false, message: 'Invoice not found' });
@@ -13332,10 +13222,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           customer: customer || null,
           job: job || null,
           company,
-          // Whether this business can take card payments online (single Stripe
-          // account = Treemarkables only, until Connect). Drives the "Pay now" button;
+          // Whether this business can take card payments online — Treemarkables (platform
+          // account) or a Connect tenant with charges enabled. Drives the "Pay now" button;
           // everyone else shows bank-transfer details instead.
-          onlinePaymentEnabled: businessOwnsStripeAccount(invoice.businessId),
+          onlinePaymentEnabled: businessOwnsStripeAccount(invoice.businessId) || !!bizSettings?.stripeConnectChargesEnabled,
           sections: sections.map(s => ({
             ...s,
             images: Array.isArray(s.images) ? s.images : [],
@@ -13345,6 +13235,89 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     } catch (error) {
       console.error('Error fetching public invoice:', error);
       res.status(500).json({ success: false, message: 'Error fetching invoice' });
+    }
+  });
+
+  // Public: request another job from the public invoice page (no login).
+  // We already know who the customer is (they came in via their invoice), so
+  // this creates a proper 'lead' job pre-filled with their details + fires the
+  // bell notification and admin push. Everything is derived from the invoice
+  // itself and scoped to the invoice's tenant.
+  app.post('/api/invoices/:invoiceId/request-service', async (req: Request, res: Response) => {
+    try {
+      const invoice = await storage.getInvoice(req.params.invoiceId);
+      if (!invoice || !invoice.customerId) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+
+      const customer = await storage.getCustomer(invoice.customerId);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: 'Customer not found' });
+      }
+
+      const description = (req.body.description || '').trim();
+      if (!description) {
+        return res.status(400).json({ success: false, message: 'A description is required' });
+      }
+      const preferredDate = (req.body.preferredDate || '').trim();
+      const fullDescription = preferredDate
+        ? `${description}\n\nPreferred date: ${preferredDate}`
+        : description;
+
+      const address =
+        (req.body.address || '').trim() ||
+        invoice.address ||
+        customer.address ||
+        'Address not specified';
+
+      // customers store a single `name`; split it for the job contact fields.
+      const nameParts = (customer.name || '').trim().split(/\s+/).filter(Boolean);
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ');
+
+      const businessId = invoice.businessId ?? undefined;
+
+      // Create the lead + notify inside the invoice's tenant context so the
+      // job is stamped correctly and the push/bell reach that business's admins.
+      const job = await runWithBusiness(businessId, async () => {
+        const jobNumber = await storage.getNextJobNumber();
+        const createdJob = await storage.createJob({
+          customerId: customer.id,
+          jobNumber,
+          title: `New request from ${customer.name || 'customer'}`,
+          description: fullDescription,
+          address,
+          status: 'lead',
+          priority: 'medium',
+          leadSource: 'repeat', // existing customer returning via their invoice
+          totalAmount: '0.00',
+          metricsEligible: true,
+          metricsStartDate: new Date(),
+          jobContactFirstName: firstName,
+          jobContactLastName: lastName,
+          jobContactEmail: customer.email || '',
+          jobContactPhone: customer.phone || '',
+          jobContactMobile: customer.mobile || '',
+        });
+
+        await notificationHelper.createNewLeadNotification({
+          jobId: createdJob.id,
+          jobNumber: createdJob.jobNumber,
+          customerId: customer.id,
+          customerName: customer.name || 'Customer',
+          customerEmail: customer.email || undefined,
+          customerPhone: customer.mobile || customer.phone || undefined,
+          sourceLabel: `Invoice #${invoice.invoiceNumber}`,
+          messagePreview: description,
+        });
+
+        return createdJob;
+      });
+
+      res.json({ success: true, data: { id: job.id, jobNumber: job.jobNumber } });
+    } catch (error) {
+      console.error('Error creating lead from invoice:', error);
+      res.status(500).json({ success: false, message: 'Error creating request' });
     }
   });
 
@@ -13371,10 +13344,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (invoice.status === 'cancelled') {
         return res.status(400).json({ success: false, message: 'This invoice has been cancelled' });
       }
-      // Card payments settle into the single (Treemarkables) Stripe account. Until
-      // Connect routes funds per-tenant, only TM may take them; everyone else is
-      // paid by bank transfer (their details are on the invoice). See businessOwnsStripeAccount.
-      if (!businessOwnsStripeAccount(invoice.businessId)) {
+      // Card payments: Treemarkables (platform account) or a Connect tenant with charges
+      // enabled (direct charge → funds go to the tenant). Everyone else → bank transfer.
+      const { canTakeCard: invoiceCanCard, connectedAccountId: invoiceConnectAccount } = await resolveCardPayment(invoice.businessId);
+      if (!invoiceCanCard) {
         return res.status(403).json({
           success: false,
           message: 'Online card payment is not available for this business. Please pay using the bank-transfer details on your invoice.',
@@ -13411,11 +13384,16 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       const customer = invoice.customerId ? await storage.getCustomer(invoice.customerId) : null;
-      const settings = await storage.getBusinessSettings().catch(() => null);
+      // Owner-context (public) path — scope settings to the invoice's tenant so
+      // the Stripe page shows the right business name (unscoped getBusinessSettings()
+      // returns an arbitrary tenant's row across all businesses).
+      const settings = invoice.businessId
+        ? await storage.getBusinessSettingsForBusiness(invoice.businessId).catch(() => null)
+        : await storage.getBusinessSettings().catch(() => null);
 
       const origin =
         process.env.NODE_ENV === 'production'
-          ? 'https://app.treemarkables.co.nz'
+          ? APP_URL
           : `${req.protocol}://${req.get('host')}`;
       const successUrl = `${origin}/invoice/${invoice.id}/view?payment=success&session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = `${origin}/invoice/${invoice.id}/view?payment=cancelled`;
@@ -13429,6 +13407,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         successUrl,
         cancelUrl,
         businessName: (settings as any)?.businessName || 'Treemarkables',
+        connectedAccountId: invoiceConnectAccount,
       });
 
       res.json({ success: true, data: { sessionId: session.id, url: session.url, amount: outstanding } });
@@ -13461,7 +13440,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         invoice.jobId ? storage.getJob(invoice.jobId) : Promise.resolve(null),
       ]);
 
-      const baseUrl = `https://app.treemarkables.co.nz`;
+      const baseUrl = APP_URL;
       const customerName = customer?.name || 'Valued Customer';
       const invoiceViewUrl = `${baseUrl}/invoice/${invoiceId}/view`;
 
@@ -16824,28 +16803,37 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Create new employee
-  app.post('/api/employees', requireCrewUnlessSelf, async (req: Request, res: Response) => {
+  // Create new employee (plan gate: staff management is Crew+; role gate: admin)
+  app.post('/api/employees', requireCrewUnlessSelf, requireAdmin, async (req: Request, res: Response) => {
     try {
       // Convert hourlyRate to string if it's a number
       const bodyData = { ...req.body };
       if (typeof bodyData.hourlyRate === 'number') {
         bodyData.hourlyRate = bodyData.hourlyRate.toString();
       }
-      
+
+      // Never trust a client-supplied businessId — withTenant() stamps the
+      // session's tenant on create. Strip defensively.
+      delete bodyData.businessId;
+
       // Convert empty strings to undefined for all fields
       Object.keys(bodyData).forEach(key => {
         if (bodyData[key] === '' || bodyData[key] === 'dd/mm/yyyy') {
           bodyData[key] = undefined;
         }
       });
-      
+
       // Convert hireDate if it's a string (and not empty/undefined)
       if (bodyData.hireDate && typeof bodyData.hireDate === 'string') {
         bodyData.hireDate = new Date(bodyData.hireDate);
       }
-      
+
       const validatedData = insertEmployeeSchema.parse(bodyData);
+      // Never store a plaintext password — hash if one was supplied. (The
+      // dedicated PATCH /:id/password route is the normal path.)
+      if (validatedData.password) {
+        validatedData.password = await bcrypt.hash(validatedData.password, 10);
+      }
       const employee = await storage.createEmployee(validatedData);
       res.json({
         success: true,
@@ -16861,30 +16849,61 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Update employee
+  // Update employee. Admins may edit anyone in their tenant; a non-admin may
+  // edit ONLY their own record and may NOT change privileged fields (role,
+  // permissions, active-state, tenant, password). Prevents crew->admin
+  // self-escalation and cross-tenant record moves via mass assignment.
+  // Plan gate: editing OTHERS requires the Crew tier (self is exempt).
   app.put('/api/employees/:id', requireCrewUnlessSelf, async (req: Request, res: Response) => {
     try {
+      const callerId = req.session.employeeId;
+      if (!callerId) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      const caller = await storage.getEmployee(callerId);
+      if (!caller) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      const isAdmin = caller.role === 'admin';
+      if (!isAdmin && req.params.id !== callerId) {
+        return res.status(403).json({ success: false, message: 'You can only edit your own profile' });
+      }
+
       const validatedData = updateEmployeeSchema.parse(req.body);
-      
+
       // Convert all timestamp fields from strings to Date objects
       const dataToUpdate: any = { ...validatedData };
-      
+
+      // Never accept a client businessId (would move the record cross-tenant),
+      // and never take a password here (use PATCH /:id/password, which hashes).
+      delete dataToUpdate.businessId;
+      delete dataToUpdate.password;
+
+      // Privileged fields are admin-only. A non-admin editing their own profile
+      // cannot promote themselves or flip their active/tenant state.
+      if (!isAdmin) {
+        delete dataToUpdate.role;
+        delete dataToUpdate.roleTierId;
+        delete dataToUpdate.permissionOverrides;
+        delete dataToUpdate.isActive;
+      }
+
       // Convert empty strings to undefined for all fields
       Object.keys(dataToUpdate).forEach(key => {
         if (dataToUpdate[key] === '') {
           dataToUpdate[key] = undefined;
         }
       });
-      
+
       // Convert hireDate if it's a string (and not empty)
       if (dataToUpdate.hireDate && typeof dataToUpdate.hireDate === 'string') {
         dataToUpdate.hireDate = new Date(dataToUpdate.hireDate);
       }
-      
+
       // Remove auto-managed timestamp fields - they should not be updated manually
       delete dataToUpdate.createdAt;
       delete dataToUpdate.updatedAt;
-      
+
       const employee = await storage.updateEmployee(req.params.id, dataToUpdate);
       res.json({
         success: true,
@@ -16900,8 +16919,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Delete employee
-  app.delete('/api/employees/:id', requireCrewUnlessSelf, async (req: Request, res: Response) => {
+  // Delete employee (plan gate: Crew+ unless self; role gate: admin)
+  app.delete('/api/employees/:id', requireCrewUnlessSelf, requireAdmin, async (req: Request, res: Response) => {
     try {
       await storage.deleteEmployee(req.params.id);
       res.json({
@@ -16917,11 +16936,24 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Set employee password
+  // Set employee password. A user may set their own; an admin may set anyone's
+  // in the tenant (Crew-tier plan gate applies when it's not your own record).
   app.patch('/api/employees/:id/password', requireCrewUnlessSelf, async (req: Request, res: Response) => {
     try {
+      const callerId = req.session.employeeId;
+      if (!callerId) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      const caller = await storage.getEmployee(callerId);
+      if (!caller) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+      if (caller.role !== 'admin' && req.params.id !== callerId) {
+        return res.status(403).json({ success: false, message: 'You can only change your own password' });
+      }
+
       const { password } = req.body;
-      
+
       // Validate password
       const passwordSchema = z.object({
         password: z.string().min(8, 'Password must be at least 8 characters')
@@ -17191,7 +17223,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Emergency password reset (for recovery purposes)
-  app.post('/api/employees/emergency-password-reset', async (req: Request, res: Response) => {
+  app.post('/api/employees/emergency-password-reset', requireAdmin, async (req: Request, res: Response) => {
     try {
       const { email, newPassword } = req.body;
       
@@ -17234,7 +17266,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Admin-only: Clean up duplicate employee emails (prioritize admin role)
-  app.post('/api/employees/cleanup-duplicates', async (req: Request, res: Response) => {
+  app.post('/api/employees/cleanup-duplicates', requireAdmin, async (req: Request, res: Response) => {
     try {
       // Get all employees
       const allEmployees = await storage.getAllEmployees();
@@ -17404,7 +17436,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Create staff assignments for a job (with conflict checking and notifications)
   app.post('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
     try {
-      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false, scheduleBookingReminders = false } = req.body;
+      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false, scheduleBookingReminders = false, checkConflicts = false, overrideConflicts = false } = req.body;
       const jobId = req.params.jobId;
 
       if (!staffAssignments || !Array.isArray(staffAssignments) || staffAssignments.length === 0) {
@@ -17471,6 +17503,42 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             endTime: new Date(assignment.endTime),
             role: assignment.role || null,
             notes: assignment.notes || null,
+          });
+        }
+      }
+
+      // Opt-in double-booking guard (defence in depth behind the client-side
+      // pre-drop check). Only callers that send checkConflicts:true get the
+      // 409 — existing GlobalJobCard / QuickAssign flows are unaffected.
+      // This job's own rows are excluded: they're replaced/deduped below.
+      if (checkConflicts && !overrideConflicts) {
+        const conflictRows: Array<{ employeeId: string; jobId: string; jobNumber: string | null; startTime: string; endTime: string }> = [];
+        for (const planned of allAssignmentsToCreate) {
+          const found = await storage.checkStaffConflicts(
+            [planned.employeeId],
+            planned.startTime,
+            planned.endTime,
+            jobId,
+          );
+          for (const f of found) {
+            for (const c of f.conflicts) {
+              const conflictJob = await storage.getJob(c.jobId);
+              conflictRows.push({
+                employeeId: f.employeeId,
+                jobId: c.jobId,
+                jobNumber: conflictJob?.jobNumber ?? null,
+                startTime: new Date(c.startTime).toISOString(),
+                endTime: new Date(c.endTime).toISOString(),
+              });
+            }
+          }
+        }
+        if (conflictRows.length > 0) {
+          return res.status(409).json({
+            success: false,
+            error: 'conflict',
+            message: 'One or more crew members are already booked in that window',
+            conflicts: conflictRows,
           });
         }
       }
@@ -17750,21 +17818,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           console.error('Diary error stack:', diaryError instanceof Error ? diaryError.stack : diaryError);
         }
 
-        try {
-          const calendarJob = { ...job } as any;
-          if (job.customerId) {
-            const customer = await storage.getCustomer(job.customerId);
-            if (customer) {
-              calendarJob.customerName = customer.name;
-            }
-          }
-          const googleEventId = await googleCalendarService.syncJobToCalendar(calendarJob, created);
-          if (googleEventId) {
-            console.log(`✅ Job synced to Google Calendar: ${googleEventId}`);
-          }
-        } catch (calendarError) {
-          console.error('❌ Error syncing to Google Calendar:', calendarError);
-        }
+        // Queue two-way Google Calendar push (debounced, non-blocking)
+        queueJobPush(jobId);
       });
     } catch (error) {
       console.error('Error creating staff assignments:', error);
@@ -17808,7 +17863,42 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Update a staff assignment (reschedule drag-and-drop)
   app.put('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {
-      const { startTime, endTime, employeeId, notes, status } = req.body;
+      const { startTime, endTime, employeeId, notes, status, checkConflicts = false, overrideConflicts = false } = req.body;
+
+      // Opt-in double-booking guard (same contract as the batch-create route).
+      // Excludes the moved assignment's own job so a within-job time tweak
+      // never conflicts with itself.
+      if (checkConflicts && !overrideConflicts) {
+        const existing = await storage.getJobStaffAssignment(req.params.id);
+        if (existing) {
+          const effEmployeeId = employeeId ?? existing.employeeId;
+          const effStart = startTime ? new Date(startTime) : new Date(existing.startTime);
+          const effEnd = endTime ? new Date(endTime) : new Date(existing.endTime);
+          const found = await storage.checkStaffConflicts([effEmployeeId], effStart, effEnd, existing.jobId);
+          const conflictRows: Array<{ employeeId: string; jobId: string; jobNumber: string | null; startTime: string; endTime: string }> = [];
+          for (const f of found) {
+            for (const c of f.conflicts) {
+              const conflictJob = await storage.getJob(c.jobId);
+              conflictRows.push({
+                employeeId: f.employeeId,
+                jobId: c.jobId,
+                jobNumber: conflictJob?.jobNumber ?? null,
+                startTime: new Date(c.startTime).toISOString(),
+                endTime: new Date(c.endTime).toISOString(),
+              });
+            }
+          }
+          if (conflictRows.length > 0) {
+            return res.status(409).json({
+              success: false,
+              error: 'conflict',
+              message: 'Crew member is already booked in that window',
+              conflicts: conflictRows,
+            });
+          }
+        }
+      }
+
       const updates: Record<string, unknown> = {};
       if (startTime) updates.startTime = new Date(startTime);
       if (endTime) updates.endTime = new Date(endTime);
@@ -17817,6 +17907,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (status) updates.status = status;
       const updated = await storage.updateJobStaffAssignment(req.params.id, updates as Parameters<typeof storage.updateJobStaffAssignment>[1]);
       res.json({ success: true, data: updated });
+      if (updated?.jobId) queueJobPush(updated.jobId);
     } catch (error) {
       console.error('Error updating staff assignment:', error);
       res.status(500).json({ success: false, message: 'Error updating staff assignment' });
@@ -17826,11 +17917,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Delete a staff assignment
   app.delete('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {
+      const assignment = await storage.getJobStaffAssignment(req.params.id);
       await storage.deleteJobStaffAssignment(req.params.id);
       res.json({
         success: true,
         message: 'Staff assignment deleted successfully'
       });
+      if (assignment?.jobId) queueJobPush(assignment.jobId);
     } catch (error) {
       console.error('Error deleting staff assignment:', error);
       res.status(500).json({
@@ -17880,6 +17973,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       } as any);
       if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
       res.json({ success: true, data: job });
+      removeJobEvents(req.params.jobId).catch(err => console.error('❌ GCal remove error on unschedule:', err));
     } catch (error) {
       console.error('Error unscheduling job:', error);
       res.status(500).json({ success: false, message: 'Error unscheduling job' });
@@ -19031,7 +19125,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Update business settings
-  app.put('/api/business-settings', async (req: Request, res: Response) => {
+  app.put('/api/business-settings', requireAdmin, async (req: Request, res: Response) => {
     try {
       // Pre-process values to match Zod schema expectations before validation
       const rawBody = { ...req.body };
@@ -19049,6 +19143,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
       if (typeof rawBody.dailyRevenueTarget === 'number') {
         rawBody.dailyRevenueTarget = String(rawBody.dailyRevenueTarget);
+      }
+      if (typeof rawBody.defaultDepositValue === 'number') {
+        rawBody.defaultDepositValue = String(rawBody.defaultDepositValue);
       }
 
       const validationResult = updateBusinessSettingsSchema.safeParse(rawBody);
@@ -19102,7 +19199,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Reset business settings to defaults
-  app.post('/api/business-settings/reset', async (req: Request, res: Response) => {
+  app.post('/api/business-settings/reset', requireAdmin, async (req: Request, res: Response) => {
     try {
       const settings = await storage.resetBusinessSettings();
       
@@ -21418,24 +21515,38 @@ Transcription: ${transcriptText}`;
       if (isResendWebhook) {
         console.log(`📧 Resend webhook received: ${req.body.type}`);
         
-        // Verify Resend webhook signature (Svix) if secret is configured
-        const signature = req.headers['svix-signature'] as string;
+        // Verify the Resend/Svix signature. Inbound email drives lead creation,
+        // conversation threading and the "I accept quote Q-*" reply flow, so an
+        // unverified payload lets an attacker forge inbound customer emails.
+        // Verify with the Svix SDK (same as /api/webhooks/resend-events).
         const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
-        
         if (webhookSecret) {
-          if (!signature) {
-            console.error(`🔐 Missing webhook signature - rejecting unauthenticated request`);
-            return res.status(401).json({ 
-              success: false, 
-              message: 'Missing webhook signature' 
-            });
+          const svixId        = req.headers['svix-id'] as string;
+          const svixTimestamp = req.headers['svix-timestamp'] as string;
+          const svixSignature = req.headers['svix-signature'] as string;
+          if (!svixId || !svixTimestamp || !svixSignature) {
+            console.error(`🔐 Inbound email webhook: missing Svix headers — rejecting`);
+            return res.status(401).json({ success: false, message: 'Missing webhook signature headers' });
           }
-          
-          // TODO: Implement Svix signature verification using svix SDK
-          // For now, require the signature header to be present
-          console.log(`🔐 Webhook signature present (verification pending Svix SDK integration)`);
+          try {
+            const wh = new SvixWebhook(webhookSecret);
+            const rawBody = (req as any).rawBody as Buffer | undefined;
+            const payloadStr = rawBody ? rawBody.toString('utf-8') : JSON.stringify(req.body);
+            wh.verify(payloadStr, {
+              'svix-id':        svixId,
+              'svix-timestamp': svixTimestamp,
+              'svix-signature': svixSignature,
+            });
+          } catch (verifyErr) {
+            console.error(`🔐 Inbound email webhook: invalid Svix signature — rejecting`);
+            return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
+          }
+        } else if (process.env.NODE_ENV === 'production') {
+          // Fail closed in production rather than process an unverified payload.
+          console.error(`⚠️ RESEND_WEBHOOK_SECRET not set in production — rejecting inbound email webhook`);
+          return res.status(401).json({ success: false, message: 'Webhook verification not configured' });
         } else {
-          console.warn(`⚠️ RESEND_WEBHOOK_SECRET not set - webhook signatures not verified (security risk)`);
+          console.warn(`⚠️ RESEND_WEBHOOK_SECRET not set - inbound email signature not verified (dev only)`);
         }
         
         // Extract email metadata from Resend webhook
@@ -22435,6 +22546,10 @@ Transcription: ${transcriptText}`;
       console.log('💬 Facebook Messenger inbound disabled — acked and skipped');
       res.sendStatus(200);
       return;
+    }
+    // When re-enabled, still require a valid Meta signature before processing.
+    if (!verifyFacebookSignature(req)) {
+      return res.status(403).json({ error: 'Invalid webhook signature' });
     }
     try {
       const { entry } = req.body;
@@ -25496,9 +25611,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       if (!proposal) {
         return res.status(404).json({ success: false, message: 'Proposal not found' });
       }
-      // Deposits settle into the single (Treemarkables) Stripe account; until Connect
-      // routes per-tenant, only TM may collect them online. See businessOwnsStripeAccount.
-      if (!businessOwnsStripeAccount(proposal.businessId)) {
+      // Deposits: Treemarkables (platform account) or a Connect tenant with charges
+      // enabled (direct charge → funds go to the tenant). Everyone else → bank transfer.
+      const { canTakeCard: depositCanCard, connectedAccountId: depositConnectAccount } = await resolveCardPayment(proposal.businessId);
+      if (!depositCanCard) {
         return res.status(403).json({
           success: false,
           message: 'Online card payment is not available for this business. Please arrange the deposit by bank transfer.',
@@ -25530,7 +25646,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // request origin in dev/preview environments.
       const origin =
         process.env.NODE_ENV === 'production'
-          ? 'https://app.treemarkables.co.nz'
+          ? APP_URL
           : `${req.protocol}://${req.get('host')}`;
       const successUrl = `${origin}/proposal/${proposal.id}/accept?deposit=success&session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = `${origin}/proposal/${proposal.id}/accept?deposit=cancelled`;
@@ -25544,6 +25660,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         successUrl,
         cancelUrl,
         businessName: (settings as any)?.businessName || 'Treemarkables',
+        connectedAccountId: depositConnectAccount,
       });
 
       res.json({ success: true, data: { sessionId: session.id, url: session.url, depositAmount } });
@@ -25655,7 +25772,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         status: existing?.status ?? 'incomplete',
       });
 
-      const base = 'https://app.treemarkables.co.nz';
+      const base = APP_URL;
       const session = await createSubscriptionCheckoutSession({
         businessId,
         priceId: plan.stripePriceId,
@@ -25678,7 +25795,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     try {
       const sub = await billing.getSubscriptionByBusiness(businessId);
       if (!sub?.stripeCustomerId) return res.status(400).json({ success: false, message: 'No billing account yet — subscribe first.' });
-      const { url } = await createBillingPortalSession(sub.stripeCustomerId, 'https://app.treemarkables.co.nz/settings/billing');
+      const { url } = await createBillingPortalSession(sub.stripeCustomerId, `${APP_URL}/settings/billing`);
       res.json({ success: true, url });
     } catch (e: any) {
       res.status(500).json({ success: false, message: e?.message });
@@ -25686,8 +25803,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // ── Stripe Connect (Express) — per-tenant card payments, Phase 1: onboarding ──
-  const CONNECT_RETURN = 'https://app.treemarkables.co.nz/settings/billing?connect=done';
-  const CONNECT_REFRESH = 'https://app.treemarkables.co.nz/settings/billing?connect=refresh';
+  const CONNECT_RETURN = `${APP_URL}/settings/billing?connect=done`;
+  const CONNECT_REFRESH = `${APP_URL}/settings/billing?connect=refresh`;
 
   // Start (or resume) Stripe-hosted onboarding. Creates the tenant's Express account on
   // first call, stores the acct_… id, and returns a hosted onboarding URL to redirect to.
@@ -25743,6 +25860,24 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
+  // Disconnect: stop taking card payments → fall back to bank transfer. Clears the stored
+  // link (so resolveCardPayment no longer routes to it) and best-effort deletes the empty
+  // Express account so it doesn't orphan. If the account holds a balance the delete is
+  // skipped — the tenant manages/closes it in Stripe; we still unlink either way.
+  app.post('/api/billing/connect/disconnect', requireAdmin, async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+      const settings = await storage.getBusinessSettings();
+      const accountId = (settings?.stripeConnectAccountId ?? '').trim();
+      if (accountId) await deleteConnectAccount(accountId); // best-effort, never throws
+      await storage.updateBusinessSettings({ stripeConnectAccountId: '', stripeConnectChargesEnabled: false });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message || 'Could not disconnect Stripe.' });
+    }
+  });
+
   app.post('/api/stripe/webhook', async (req: Request, res: Response) => {
     const rawBody: Buffer | undefined = (req as any).rawBody;
     const signature = req.headers['stripe-signature'] as string | undefined;
@@ -25759,6 +25894,25 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
 
     try {
+      // ── Stripe Connect: a connected account's capabilities changed ──
+      // Keep stripe_connect_charges_enabled current so the card-payment gate reflects
+      // reality without waiting for the owner to reopen Settings → Billing. Owner
+      // connection (session-less webhook), matched by the stored account id. NOTE: only
+      // delivered if the webhook endpoint listens to "events on Connected accounts".
+      if (event.type === 'account.updated') {
+        const acct = event.data.object as any;
+        if (acct?.id) {
+          try {
+            await ownerDb.update(schema.businessSettings)
+              .set({ stripeConnectChargesEnabled: !!acct.charges_enabled })
+              .where(eq(schema.businessSettings.stripeConnectAccountId, acct.id));
+          } catch (e: any) {
+            console.error('Stripe Connect account.updated sync failed:', e?.message);
+          }
+        }
+        return res.json({ received: true });
+      }
+
       // ── Subscription billing events (Inflow — Phase 4) ──
       // Keep each business's `subscriptions` row in sync with Stripe. Runs outside any
       // request (owner connection), so businessId comes from the event metadata.
@@ -25776,6 +25930,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           // store the CURRENT status regardless of event order (the Stripe-
           // recommended pattern). subscription.deleted → the fetch returns
           // status=canceled. Fall back to the event snapshot if the fetch fails.
+          // Capture the status we had BEFORE this sync, so dunning fires only on the
+          // transition into a payment problem — not on every resync/retry of the same state.
+          const prevStatus = (await storage.getSubscriptionForBusiness(businessId).catch(() => undefined))?.status;
           let fresh = sub;
           try {
             fresh = await retrieveStripeSubscription(sub.id);
@@ -25784,6 +25941,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           }
           await billing.syncFromStripeSubscription(businessId, fresh);
           console.log(`Stripe webhook: synced subscription ${sub.id} for business ${businessId} -> ${fresh.status}`);
+          // Dunning: payment slipped into a problem state — nudge the owner off-app (bell +
+          // email) to fix their card. Only on the transition, so retries don't re-spam.
+          const PAYMENT_PROBLEM = new Set(['past_due', 'unpaid', 'incomplete_expired']);
+          if (PAYMENT_PROBLEM.has(fresh.status) && fresh.status !== prevStatus) {
+            await notifyBillingProblem(businessId, fresh.status);
+          }
         }
         return res.json({ received: true });
       }
@@ -26920,7 +27083,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // POST /api/admin/clear-data - Clear all jobs and customers (for fresh imports)
-  app.post('/api/admin/clear-data', async (req: Request, res: Response) => {
+  app.post('/api/admin/clear-data', requirePlatformAdmin, async (req: Request, res: Response) => {
     try {
       // Delete all jobs first (due to foreign key constraints)
       const deletedJobs = await storage.clearAllJobs();
@@ -27619,7 +27782,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Create material
-  app.post('/api/materials', async (req: Request, res: Response) => {
+  app.post('/api/materials', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       const validation = z.object({
         itemNumber: z.string().min(1, "Item number is required"),
@@ -27650,7 +27813,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Update material
-  app.put('/api/materials/:id', async (req: Request, res: Response) => {
+  app.put('/api/materials/:id', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       const validation = z.object({
         itemNumber: z.string().min(1).optional(),
@@ -27683,7 +27846,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Delete material
-  app.delete('/api/materials/:id', async (req: Request, res: Response) => {
+  app.delete('/api/materials/:id', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       await storage.deleteMaterial(req.params.id);
       res.json({ success: true, message: 'Material deleted successfully' });
@@ -27709,7 +27872,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Create service
-  app.post('/api/services', async (req: Request, res: Response) => {
+  app.post('/api/services', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       const validation = z.object({
         name: z.string().min(1, "Service name is required"),
@@ -27739,7 +27902,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Update service
-  app.put('/api/services/:id', async (req: Request, res: Response) => {
+  app.put('/api/services/:id', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       const validation = z.object({
         name: z.string().min(1).optional(),
@@ -27771,7 +27934,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Delete service
-  app.delete('/api/services/:id', async (req: Request, res: Response) => {
+  app.delete('/api/services/:id', requireEntitlement('plan:crew', 'materials'), async (req: Request, res: Response) => {
     try {
       await storage.deleteService(req.params.id);
       res.json({ success: true, message: 'Service deleted successfully' });
@@ -30167,7 +30330,7 @@ Transcription: ${transcriptText}`;
   // ========================================
 
   // One-time sync: Update all jobs' totalAmount from their invoices
-  app.post("/api/admin/sync-invoice-amounts", async (req, res) => {
+  app.post("/api/admin/sync-invoice-amounts", requirePlatformAdmin, async (req, res) => {
     try {
       console.log('🔄 Starting invoice-to-job amount sync...');
       
@@ -30668,6 +30831,14 @@ Transcription: ${transcriptText}`;
 
   // POST: Facebook sends message events here (both paths — /facebook/messenger is canonical, /messenger is alias)
   app.post(['/api/webhooks/facebook/messenger', '/api/webhooks/messenger'], async (req: Request, res: Response) => {
+    // Verify Meta's X-Hub-Signature-256 (HMAC-SHA256 of the raw body with the
+    // app secret) BEFORE doing anything. Without this, anyone can forge a
+    // payload to inject leads, burn a GPT call per request, and trigger an
+    // outbound Graph API reply. Fail closed when the secret is unset.
+    if (!verifyFacebookSignature(req)) {
+      return res.status(403).json({ error: 'Invalid webhook signature' });
+    }
+
     // Acknowledge immediately so Facebook doesn't retry
     res.sendStatus(200);
 
@@ -32993,7 +33164,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
   // Log the webhook URL and configuration status at startup so it's easy to
   // find in the server console when setting up the Resend dashboard.
   const resendEventsSecret = process.env.RESEND_EVENTS_WEBHOOK_SECRET;
-  const deployedBase = 'https://app.treemarkables.co.nz';
+  const deployedBase = APP_URL;
   console.log('');
   console.log('━━━ Resend Email Events Webhook ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  Endpoint : ${deployedBase}/api/webhooks/resend-events`);

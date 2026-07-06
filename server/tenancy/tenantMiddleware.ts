@@ -78,7 +78,7 @@ const OWNER_PATH_PATTERNS: RegExp[] = [
   /^\/api\/reviews\/submit$/,
 ];
 
-function isOwnerPath(path: string): boolean {
+export function isOwnerPath(path: string): boolean {
   return (
     OWNER_PATHS.some((p) => path === p || path.startsWith(p + "/")) ||
     OWNER_PATH_PATTERNS.some((re) => re.test(path))

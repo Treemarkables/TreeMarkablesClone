@@ -210,16 +210,26 @@ export default function Integrations() {
   >([]);
   const [isSyncingMailchimp, setIsSyncingMailchimp] = useState(false);
 
-  // Check for Xero connection success/error from URL params
+  // Check for Xero / Google Calendar connection success/error from URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("xero_connected") === "true") {
-      // Clean up URL
       window.history.replaceState({}, "", "/integrations");
     } else if (params.get("error")) {
       toast({
         title: "Connection Failed",
         description: "Failed to connect to Xero. Please try again.",
+        variant: "destructive",
+      });
+      window.history.replaceState({}, "", "/integrations");
+    }
+    if (params.get("gcal_connected") === "true") {
+      queryClient.invalidateQueries({ queryKey: ["/api/google-calendar/status"] });
+      window.history.replaceState({}, "", "/integrations");
+    } else if (params.get("gcal_error")) {
+      toast({
+        title: "Google Calendar Connection Failed",
+        description: "Could not connect to Google Calendar. Please try again.",
         variant: "destructive",
       });
       window.history.replaceState({}, "", "/integrations");
@@ -379,6 +389,9 @@ export default function Integrations() {
       connectMutation.mutate();
     } else if (integrationId === "mailchimp") {
       setShowMailchimpDialog(true);
+    } else if (integrationId === "google-calendar") {
+      // OAuth redirect — server builds the consent URL and redirects back to /integrations
+      window.location.href = "/api/google-calendar/auth";
     } else {
       console.log("Connecting to:", integrationId);
     }
@@ -482,11 +495,22 @@ export default function Integrations() {
     }
   };
 
-  const handleDisconnect = (integrationId: string) => {
+  const handleDisconnect = async (integrationId: string) => {
     if (integrationId === "xero") {
       disconnectMutation.mutate();
     } else if (integrationId === "mailchimp") {
       handleDisconnectMailchimp();
+    } else if (integrationId === "google-calendar") {
+      try {
+        await apiRequest("DELETE", "/api/google-calendar/connection", undefined);
+        queryClient.invalidateQueries({ queryKey: ["/api/google-calendar/status"] });
+      } catch (error: any) {
+        toast({
+          title: "Disconnect Failed",
+          description: error.message || "Could not disconnect Google Calendar",
+          variant: "destructive",
+        });
+      }
     } else {
       console.log("Disconnecting from:", integrationId);
     }

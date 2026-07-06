@@ -264,6 +264,7 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
                         onClick={() => handleRemoveEntry(entry.id || `${entry.employeeId}-${entry.lineItemId || index}`, entry.date)}
                         disabled={removeStaffTimeMutation.isPending}
                         data-testid={`button-remove-staff-entry-${entry.employeeId}-${entry.lineItemId || index}`}
+                        aria-label="Remove time entry"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>

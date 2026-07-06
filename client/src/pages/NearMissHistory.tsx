@@ -81,7 +81,6 @@ export default function NearMissHistory() {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/near-miss-reports/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/near-miss-reports"] });
-      toast({ title: "Draft deleted" });
     },
   });
 
@@ -91,7 +90,6 @@ export default function NearMissHistory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/near-miss-reports"] });
       queryClient.invalidateQueries({ queryKey: [`/api/near-miss-reports/${selectedId}`] });
-      toast({ title: "Report closed" });
     },
   });
 
@@ -151,6 +149,7 @@ export default function NearMissHistory() {
             variant="outline"
             size="icon"
             onClick={() => setShowFilters(f => !f)}
+            aria-label="Toggle filters"
             className={showFilters ? "bg-amber-50 border-amber-200" : ""}
           >
             <Filter className="h-4 w-4" />

@@ -4,7 +4,9 @@ import { format } from "date-fns";
 import {
   X, Plus, Upload, Trash2, Mail, MessageSquare, Check, Crown,
   GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye, ArrowLeft, Save,
+  SlidersHorizontal,
 } from "lucide-react";
+import { BuilderToolbarButton } from "@/components/BuilderToolbarButton";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
 import { ProposalReviewsWidget } from "@/components/ProposalReviewsWidget";
@@ -1431,19 +1433,20 @@ export function ProposalBuilderV2({
         }));
         const sectionDesc = s.description || "";
         const inferredType = inferBlockType({ description: sectionDesc, photos, lineItems });
-        // For a description block, prefer the live job.description over the
-        // proposal's saved section content. The saved content was originally
-        // a snapshot of job.description at creation time (auto-created from a
-        // lead, etc.), so when the user updates the job description they
-        // expect the proposal to reflect it. Fall back to the saved sectionDesc
-        // only when no live job description is available.
+        // A non-empty saved section description wins. Preferring the live
+        // job.description here (the previous behaviour) silently clobbered
+        // description edits made inside the builder every time this init
+        // re-ran (reopen, or the line-item re-init below), so the customer's
+        // emailed PDF carried the job's old description instead of the edit.
+        // The live job.description only seeds description blocks that have
+        // no saved content of their own.
         const liveJobDesc =
           jobDescription ||
           (job as { description?: string } | null)?.description ||
           "";
         const effectiveDesc =
-          inferredType === "description"
-            ? (liveJobDesc || sectionDesc)
+          inferredType === "description" && !sectionDesc.trim()
+            ? liveJobDesc
             : sectionDesc;
         return {
           id: s.id || `block-${idx}`,
@@ -1891,7 +1894,7 @@ export function ProposalBuilderV2({
     const phone = (customer as { phone?: string } | null)?.phone || (job as { jobContactMobile?: string } | null)?.jobContactMobile || (job as { jobContactPhone?: string } | null)?.jobContactPhone || "";
     const name = (customer as { name?: string } | null)?.name || "Valued Customer";
     const first = name.split(" ")[0];
-    const link = draftId ? `https://app.treemarkables.co.nz/proposal/${draftId}` : "";
+    const link = draftId ? `${window.location.origin}/proposal/${draftId}` : "";
     setSmsForm({
       to: phone,
       message: link
@@ -2039,41 +2042,34 @@ export function ProposalBuilderV2({
       <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 w-full">
           {/* ── Toolbar ── */}
-          <div className="flex-shrink-0 flex items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b bg-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
+          <div className="flex-shrink-0 flex items-stretch sm:items-center justify-between gap-1.5 sm:gap-2 px-1.5 sm:px-4 py-2 border-b bg-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
             <>
-            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-              <button
-                type="button"
+            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-none">
+              <BuilderToolbarButton
+                icon={ArrowLeft}
+                label="Back"
                 onClick={handleClose}
-                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-gray-700 rounded-md shadow-sm hover:bg-gray-800 transition-colors"
                 aria-label="Back to job card"
-                title="Back"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Back</span>
-              </button>
-              <button
-                type="button"
+                className="bg-gray-700 hover:bg-gray-800"
+              />
+              <BuilderToolbarButton
+                icon={Mail}
+                label="Email"
                 onClick={() => { initEmailForm(); setShowEmailDialog(true); }}
-                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 transition-colors"
-                aria-label="Email proposal"
-                title="Email"
-              >
-                <Mail className="w-4 h-4" />
-                <span className="hidden sm:inline">Email</span>
-              </button>
-              <button
-                type="button"
+                aria-label={isQuote ? "Email quote" : "Email proposal"}
+                className="bg-blue-600 hover:bg-blue-700"
+              />
+              <BuilderToolbarButton
+                icon={MessageSquare}
+                label="SMS"
                 onClick={() => { initSmsForm(); setShowSmsDialog(true); }}
-                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md shadow-sm hover:bg-green-700 transition-colors"
-                aria-label="SMS proposal"
-                title="SMS"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span className="hidden sm:inline">SMS</span>
-              </button>
-              <button
-                type="button"
+                aria-label={isQuote ? "SMS quote" : "SMS proposal"}
+                className="bg-green-600 hover:bg-green-700"
+              />
+              <BuilderToolbarButton
+                icon={autoSaveStatus === "saved" && lastSavedAt ? Check : Save}
+                label={autoSaveStatus === "saving" ? "Saving" : autoSaveStatus === "saved" && lastSavedAt ? "Saved" : "Save"}
+                loading={autoSaveStatus === "saving"}
                 onClick={async () => {
                   // First click: persists the draft and unlocks auto-save.
                   // Subsequent clicks: flush the latest edits immediately
@@ -2086,38 +2082,21 @@ export function ProposalBuilderV2({
                     try { await saveDraftMutation.mutateAsync(buildPayload()); } catch { /* surfaced via toast */ }
                   }
                 }}
-                disabled={autoSaveStatus === "saving"}
-                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 disabled:opacity-60 transition-colors"
                 aria-label={isQuote ? "Save quote" : "Save proposal"}
-                title="Save"
-              >
-                <Save className="w-4 h-4" />
-                <span className="hidden sm:inline">Save</span>
-              </button>
+                className="bg-indigo-600 hover:bg-indigo-700"
+              />
               {/* Preview button removed — the customer view now lives inline
                   below the editor (scroll down to see it), matching the
                   invoice modal's live-preview pattern. */}
             </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-              {autoSaveStatus === "saving" && (
-                <div className="hidden sm:flex items-center gap-1 text-xs text-blue-500">
-                  <div className="w-2.5 h-2.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                  Saving
-                </div>
-              )}
-              {autoSaveStatus === "saved" && lastSavedAt && (
-                <div className="hidden sm:flex items-center gap-1 text-xs text-green-600">
-                  <Check className="w-3 h-3" /> Saved
-                </div>
-              )}
+            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 flex-[2] sm:flex-none">
               <Popover open={showSettings} onOpenChange={setShowSettings}>
                 <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
-                  >
-                    Settings <ChevronDown className="w-3.5 h-3.5" />
-                  </button>
+                  <BuilderToolbarButton
+                    icon={SlidersHorizontal}
+                    label="Settings"
+                    className="bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                  />
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-4" align="end">
                   <p className="text-sm font-semibold mb-3">Proposal Settings</p>
@@ -2191,15 +2170,13 @@ export function ProposalBuilderV2({
                   </div>
                 </PopoverContent>
               </Popover>
-              <button
-                type="button"
+              <BuilderToolbarButton
+                icon={X}
+                label="Close"
                 onClick={handleClose}
-                aria-label="Close proposal"
-                title="Close"
-                className="flex items-center justify-center h-9 w-9 rounded-md text-white bg-red-500 shadow-sm hover:bg-red-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+                aria-label={isQuote ? "Close quote" : "Close proposal"}
+                className="bg-red-500 hover:bg-red-600"
+              />
             </div>
             </>
           </div>

@@ -3,16 +3,30 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { composeCustomerAddress } from "@shared/customerAddress";
 import {
   AlertCircle,
+  CalendarPlus,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CreditCard,
+  Download,
+  Landmark,
   Loader2,
-  Receipt,
   X,
 } from "lucide-react";
 
@@ -65,6 +79,15 @@ export default function InvoiceView() {
     images: string[];
     index: number;
   } | null>(null);
+
+  // "Book another job" — request another job inline, no login required.
+  const [bookOpen, setBookOpen] = useState(false);
+  const [bookDone, setBookDone] = useState(false);
+  const [bookForm, setBookForm] = useState({
+    description: "",
+    address: "",
+    preferredDate: "",
+  });
 
   const { toast } = useToast();
 
@@ -135,6 +158,41 @@ export default function InvoiceView() {
         description:
           err?.message ||
           "Could not start the payment. Please try again or contact us.",
+      });
+    },
+  });
+
+  const bookMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/invoices/${invoiceId}/request-service`,
+        {
+          description: bookForm.description.trim(),
+          address: bookForm.address.trim(),
+          preferredDate: bookForm.preferredDate || undefined,
+        },
+      );
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      if (data?.success) {
+        setBookDone(true);
+        return;
+      }
+      toast({
+        variant: "destructive",
+        title: "Couldn't send request",
+        description:
+          data?.message || "Please try again, or contact us directly.",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Couldn't send request",
+        description:
+          err?.message || "Please try again, or contact us directly.",
       });
     },
   });
@@ -233,332 +291,444 @@ export default function InvoiceView() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white w-full overflow-x-hidden">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4 w-full">
-        <div className="max-w-3xl mx-auto w-full flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+    <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
+      <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8 w-full">
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+
+          {/* Header */}
+          <div className="flex items-center justify-between gap-3 px-5 sm:px-7 py-4 border-b border-gray-100">
             <img
               src={logoUrl}
               alt={company.name || "Logo"}
-              className="h-10 sm:h-12 object-contain flex-shrink-0"
+              className="h-9 sm:h-11 object-contain flex-shrink-0"
             />
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
-                Invoice #{invoice.invoiceNumber}
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-600 truncate">
-                {billingName || "Customer"}
+            <div className="text-right">
+              <p className="text-xs text-gray-500">Invoice</p>
+              <p className="text-sm font-semibold text-gray-900">
+                #{invoice.invoiceNumber}
               </p>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="max-w-3xl mx-auto py-4 px-4 w-full space-y-4">
-        {/* Status banners */}
-        {invoice.status === "paid" && (
-          <div className="bg-green-100 border border-green-300 rounded-lg p-3">
-            <div className="flex items-center text-sm">
-              <Receipt className="w-4 h-4 text-green-600 mr-2" />
-              <span className="text-green-800 font-medium">
-                Payment Received — Thank you!
-              </span>
-            </div>
-          </div>
-        )}
-        {isOverdue && (
-          <div className="bg-red-100 border border-red-300 rounded-lg p-3">
-            <div className="flex items-center text-sm">
-              <AlertCircle className="w-4 h-4 text-red-600 mr-2" />
-              <span className="text-red-800 font-medium">
-                Payment overdue — please contact us
-              </span>
-            </div>
-          </div>
-        )}
-        {justPaid && invoice.status !== "paid" && (
-          <div className="bg-green-100 border border-green-300 rounded-lg p-3">
-            <div className="flex items-center text-sm">
-              <Receipt className="w-4 h-4 text-green-600 mr-2" />
-              <span className="text-green-800 font-medium">
-                Payment received — confirming now, this page will update
-                shortly.
-              </span>
-            </div>
-          </div>
-        )}
+          {/* Body */}
+          <div className="p-5 sm:p-7 space-y-6">
 
-        {/* Pay online — only when this business can take card payments (single
-            Stripe account = Treemarkables until Connect); others pay by bank transfer. */}
-        {stripeConfigured &&
-          invoice.onlinePaymentEnabled &&
-          !justPaid &&
-          invoice.status !== "paid" &&
-          invoice.status !== "cancelled" &&
-          total > 0 && (
-            <Card className="bg-white shadow-sm border-orange-200">
-              <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <p className="text-sm text-gray-600">Amount due</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(total)}
-                  </p>
-                </div>
-                <Button
-                  size="lg"
-                  onClick={() => payMutation.mutate()}
-                  disabled={payMutation.isPending}
-                  className="w-full sm:w-auto"
-                  data-testid="button-pay-invoice"
-                >
-                  {payMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <CreditCard className="w-4 h-4 mr-2" />
-                  )}
-                  Pay now
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-        {/* Invoice meta + bill-to */}
-        <Card className="bg-white shadow-sm">
-          <CardContent className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                Invoice Details
-              </h3>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Invoice Number:</span>
-                  <span className="font-medium">{invoice.invoiceNumber}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Issue Date:</span>
-                  <span className="font-medium">
-                    {new Date(invoice.issueDate).toLocaleDateString("en-NZ")}
+            {/* Hero: amount due + book panel */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 rounded-xl bg-gray-50 p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm text-gray-600">
+                    {invoice.status === "paid" ? "Amount paid" : "Amount due"}
                   </span>
+                  {invoice.status === "paid" ? (
+                    <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                      Paid
+                    </span>
+                  ) : justPaid ? (
+                    <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                      Payment received
+                    </span>
+                  ) : isOverdue ? (
+                    <span className="text-xs font-medium text-red-700 bg-red-50 px-2 py-0.5 rounded-full">
+                      Overdue
+                    </span>
+                  ) : null}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Due Date:</span>
-                  <span className="font-medium">
-                    {invoice.dueDate
-                      ? new Date(invoice.dueDate).toLocaleDateString("en-NZ")
-                      : "On receipt"}
-                  </span>
+                <p className="text-3xl font-semibold text-gray-900 tracking-tight">
+                  {formatCurrency(total)}
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {invoice.status === "paid"
+                    ? "Thank you for your payment."
+                    : justPaid
+                      ? "Confirming now — this page will update shortly."
+                      : `Issued ${new Date(invoice.issueDate).toLocaleDateString("en-NZ")}${invoice.dueDate ? ` · Due ${new Date(invoice.dueDate).toLocaleDateString("en-NZ")}` : ""}`}
+                </p>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {/* Pay online — only when this business can take card payments (single
+                      Stripe account = Treemarkables until Connect); others pay by bank transfer. */}
+                  {stripeConfigured &&
+                    invoice.onlinePaymentEnabled &&
+                    !justPaid &&
+                    invoice.status !== "paid" &&
+                    invoice.status !== "cancelled" &&
+                    total > 0 && (
+                      <Button
+                        size="lg"
+                        onClick={() => payMutation.mutate()}
+                        disabled={payMutation.isPending}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        data-testid="button-pay-invoice"
+                      >
+                        {payMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <CreditCard className="w-4 h-4 mr-2" />
+                        )}
+                        Pay now
+                      </Button>
+                    )}
+                  <Button asChild variant="outline" size="lg">
+                    <a
+                      href={`/api/invoices/${invoice.id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download PDF
+                    </a>
+                  </Button>
                 </div>
               </div>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                Bill To
-              </h3>
-              <div className="space-y-1 text-sm">
-                <div>
-                  <span className="text-gray-600">Name:</span>{" "}
-                  <span className="font-medium">
-                    {billingName || "N/A"}
-                  </span>
+              {/* Book another job */}
+              <aside className="lg:col-span-1">
+                <div className="lg:sticky lg:top-4">
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 flex flex-col">
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Need more work done?
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1 mb-4">
+                      Book another job or request a fresh quote — we'd love to
+                      help you again.
+                    </p>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="w-full border-emerald-600 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                      data-testid="button-book-another-job"
+                      onClick={() => {
+                        setBookDone(false);
+                        setBookForm((f) => ({
+                          ...f,
+                          address:
+                            f.address ||
+                            invoice.address ||
+                            composeCustomerAddress(customer) ||
+                            "",
+                        }));
+                        setBookOpen(true);
+                      }}
+                    >
+                      <CalendarPlus className="w-4 h-4 mr-2" />
+                      Book another job
+                    </Button>
+                  </div>
                 </div>
-                {customer?.email && (
-                  <div>
-                    <span className="text-gray-600">Email:</span>{" "}
-                    <span className="font-medium">{customer.email}</span>
-                  </div>
-                )}
-                {customer?.phone && (
-                  <div>
-                    <span className="text-gray-600">Phone:</span>{" "}
-                    <span className="font-medium">{customer.phone}</span>
-                  </div>
-                )}
-                {(composeCustomerAddress(customer) || invoice.address) && (
-                  <div>
-                    <span className="text-gray-600">Address:</span>{" "}
-                    <span className="font-medium">
-                      {composeCustomerAddress(customer) || invoice.address}
+              </aside>
+            </div>
+
+            {/* Invoice details + bill to */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">
+                  Invoice details
+                </p>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Invoice number</span>
+                    <span className="font-medium text-gray-900">
+                      {invoice.invoiceNumber}
                     </span>
                   </div>
-                )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Issued</span>
+                    <span className="font-medium text-gray-900">
+                      {new Date(invoice.issueDate).toLocaleDateString("en-NZ")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Due</span>
+                    <span className="font-medium text-gray-900">
+                      {invoice.dueDate
+                        ? new Date(invoice.dueDate).toLocaleDateString("en-NZ")
+                        : "On receipt"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">Bill to</p>
+                <div className="text-sm space-y-0.5">
+                  <p className="font-medium text-gray-900">
+                    {billingName || "Customer"}
+                  </p>
+                  {(composeCustomerAddress(customer) || invoice.address) && (
+                    <p className="text-gray-600">
+                      {composeCustomerAddress(customer) || invoice.address}
+                    </p>
+                  )}
+                  {customer?.email && (
+                    <p className="text-gray-600">{customer.email}</p>
+                  )}
+                  {customer?.phone && (
+                    <p className="text-gray-600">{customer.phone}</p>
+                  )}
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Description */}
-        {(invoice.description || job?.description || invoice.notes) && (
-          <Card className="bg-white shadow-sm">
-            <CardContent className="p-4 sm:p-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                Description
-              </h3>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                {invoice.description || job?.description || invoice.notes}
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Line items */}
-        {hasLineItems && (
-          <Card className="bg-white shadow-sm">
-            <CardContent className="p-4 sm:p-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                Line Items
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b">
-                      <th className="text-left px-2 py-2">Description</th>
-                      <th className="text-center px-2 py-2">Qty</th>
-                      <th className="text-right px-2 py-2">Unit Price</th>
-                      <th className="text-right px-2 py-2">Total (incl GST)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineItems.map((item, idx) => {
-                      const unitPrice =
-                        item.rate ?? item.unitPrice ?? 0;
-                      const unitNum =
-                        typeof unitPrice === "string"
-                          ? parseFloat(unitPrice)
-                          : unitPrice;
-                      const t = item.total ?? item.amount ?? 0;
-                      const tNum =
-                        typeof t === "string" ? parseFloat(t) : t;
-                      return (
-                        <tr key={idx} className="border-b last:border-b-0">
-                          <td className="px-2 py-2">
-                            {item.description || "Tree Service"}
-                          </td>
-                          <td className="text-center px-2 py-2">
-                            {item.quantity || 1}
-                          </td>
-                          <td className="text-right px-2 py-2">
-                            {formatCurrency(unitNum || 0)}
-                          </td>
-                          <td className="text-right px-2 py-2">
-                            {formatCurrency((tNum || 0) * 1.15)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Sections (photos + narrative) */}
-        {visibleSections.map((section) => (
-          <Card key={section.id} className="bg-white shadow-sm">
-            <CardContent className="p-4 sm:p-6 space-y-3">
-              <h3 className="text-base font-semibold text-gray-900">
-                {section.title}
-              </h3>
-              {section.content && (
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                  {section.content}
+            {/* Description */}
+            {(invoice.description || job?.description || invoice.notes) && (
+              <div className="border-t border-gray-100 pt-5">
+                <p className="text-xs font-medium text-gray-500 mb-2">
+                  Description
                 </p>
-              )}
-              {section.images && section.images.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {section.images.map((url, i) => (
-                    <button
-                      key={url}
-                      type="button"
-                      onClick={() => openLightbox(section.images, i)}
-                      className="relative aspect-square rounded-md overflow-hidden border bg-gray-100"
-                    >
-                      <img
-                        src={url}
-                        alt=""
-                        className="w-full h-full object-cover hover:scale-105 transition-transform"
-                        loading="lazy"
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {invoice.description || job?.description || invoice.notes}
+                </p>
+              </div>
+            )}
 
-        {/* Totals */}
-        <Card className="bg-white shadow-sm">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex justify-end">
-              <div className="w-full max-w-sm space-y-1 text-sm">
-                <div className="flex justify-between text-gray-700">
-                  <span>Subtotal (excl GST):</span>
+            {/* Line items */}
+            {hasLineItems && (
+              <div className="border-t border-gray-100 pt-5">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-gray-400 border-b border-gray-100">
+                        <th className="text-left font-normal pb-2">
+                          Description
+                        </th>
+                        <th className="text-center font-normal pb-2">Qty</th>
+                        <th className="text-right font-normal pb-2">Unit</th>
+                        <th className="text-right font-normal pb-2">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lineItems.map((item, idx) => {
+                        const unitPrice = item.rate ?? item.unitPrice ?? 0;
+                        const unitNum =
+                          typeof unitPrice === "string"
+                            ? parseFloat(unitPrice)
+                            : unitPrice;
+                        const t = item.total ?? item.amount ?? 0;
+                        const tNum =
+                          typeof t === "string" ? parseFloat(t) : t;
+                        return (
+                          <tr
+                            key={idx}
+                            className="border-b border-gray-50 last:border-b-0 text-gray-900"
+                          >
+                            <td className="py-3 pr-2">
+                              {item.description || "Tree Service"}
+                            </td>
+                            <td className="text-center py-3">
+                              {item.quantity || 1}
+                            </td>
+                            <td className="text-right py-3">
+                              {formatCurrency(unitNum || 0)}
+                            </td>
+                            <td className="text-right py-3">
+                              {formatCurrency((tNum || 0) * 1.15)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Sections (photos + narrative) */}
+            {visibleSections.map((section) => (
+              <div
+                key={section.id}
+                className="border-t border-gray-100 pt-5 space-y-3"
+              >
+                <h3 className="text-base font-semibold text-gray-900">
+                  {section.title}
+                </h3>
+                {section.content && (
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                    {section.content}
+                  </p>
+                )}
+                {section.images && section.images.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {section.images.map((url, i) => (
+                      <button
+                        key={url}
+                        type="button"
+                        onClick={() => openLightbox(section.images, i)}
+                        className="relative aspect-square rounded-md overflow-hidden border bg-gray-100"
+                      >
+                        <img
+                          src={url}
+                          alt=""
+                          className="w-full h-full object-cover hover:scale-105 transition-transform"
+                          loading="lazy"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Totals */}
+            <div className="border-t border-gray-100 pt-5 flex justify-end">
+              <div className="w-full max-w-xs space-y-1.5 text-sm">
+                <div className="flex justify-between text-gray-600">
+                  <span>Subtotal (excl GST)</span>
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>GST (15%):</span>
+                <div className="flex justify-between text-gray-600">
+                  <span>GST (15%)</span>
                   <span>{formatCurrency(gst)}</span>
                 </div>
-                <div className="flex justify-between text-lg font-bold border-t pt-1 text-gray-900">
-                  <span>Total Due:</span>
+                <div className="flex justify-between text-base font-semibold text-gray-900 border-t border-gray-100 pt-2 mt-1">
+                  <span>Total due</span>
                   <span>{formatCurrency(total)}</span>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Payment info — only shown when the business has set its bank details,
-            so a customer is never told to pay into another business's account. */}
-        {company.bankAccountNumber ? (
-          <Card className="bg-white shadow-sm">
-            <CardContent className="p-4 sm:p-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                Payment Information
-              </h3>
-              <div className="text-sm text-gray-700 space-y-1">
-                {company.bankAccountName ? (
-                  <p>
-                    <span className="text-gray-600">Account Name:</span>{" "}
-                    {company.bankAccountName}
-                  </p>
-                ) : null}
-                <p>
-                  <span className="text-gray-600">Account:</span>{" "}
+            {/* Payment info — only when the business has set its bank details,
+                so a customer is never told to pay into another business's account. */}
+            {company.bankAccountNumber ? (
+              <div className="rounded-xl bg-gray-50 p-4 sm:p-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Landmark className="w-4 h-4 text-gray-400" />
+                  <span>
+                    {company.bankAccountName || company.name || "Bank transfer"}
+                  </span>
+                </div>
+                <span className="font-mono text-gray-900">
                   {company.bankAccountNumber}
-                </p>
-                <p className="pt-2">
-                  Please use Invoice #{invoice.invoiceNumber} as the reference.
-                </p>
+                </span>
+                <span className="text-gray-500">
+                  Reference:{" "}
+                  <span className="text-gray-700">#{invoice.invoiceNumber}</span>
+                </span>
               </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* PDF link */}
-        <div className="flex justify-center pt-2 pb-8">
-          <Button asChild variant="outline" size="sm">
-            <a
-              href={`/api/invoices/${invoice.id}/pdf`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Download PDF
-            </a>
-          </Button>
+            ) : null}
+          </div>
         </div>
 
-        <div className="text-center text-xs text-gray-500 pb-8">
-          <p>{company.name ? `Thank you for choosing ${company.name}.` : "Thank you."}</p>
+        {/* Footer */}
+        <div className="text-center text-xs text-gray-500 mt-5 pb-4">
+          <p>
+            {company.name
+              ? `Thank you for choosing ${company.name}.`
+              : "Thank you."}
+          </p>
           {company.email || company.phone ? (
             <p className="mt-1">
-              Questions? Contact {[company.email, company.phone].filter(Boolean).join(" or ")}.
+              Questions? Contact{" "}
+              {[company.email, company.phone].filter(Boolean).join(" or ")}.
             </p>
           ) : null}
         </div>
       </div>
+
+      {/* Book another job dialog */}
+      <Dialog open={bookOpen} onOpenChange={setBookOpen}>
+        <DialogContent className="sm:max-w-md">
+          {bookDone ? (
+            <div className="text-center py-4">
+              <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-3" />
+              <DialogTitle className="text-lg">Request sent</DialogTitle>
+              <p className="text-sm text-gray-600 mt-2">
+                Thanks{customer?.name ? `, ${customer.name.split(" ")[0]}` : ""}!
+                We've got your request and will be in touch soon to sort the
+                details.
+              </p>
+              <Button
+                className="mt-5"
+                onClick={() => {
+                  setBookOpen(false);
+                  setBookForm({
+                    description: "",
+                    address: "",
+                    preferredDate: "",
+                  });
+                }}
+              >
+                Done
+              </Button>
+            </div>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Request another job</DialogTitle>
+                <DialogDescription>
+                  Tell us what you need — no login required. We'll follow up to
+                  confirm.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="book-description">
+                    What do you need done?
+                  </Label>
+                  <Textarea
+                    id="book-description"
+                    value={bookForm.description}
+                    onChange={(e) =>
+                      setBookForm((f) => ({
+                        ...f,
+                        description: e.target.value,
+                      }))
+                    }
+                    placeholder="e.g. Remove a large gum tree near the driveway"
+                    rows={4}
+                    data-testid="input-book-description"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="book-address">Job address</Label>
+                  <Input
+                    id="book-address"
+                    value={bookForm.address}
+                    onChange={(e) =>
+                      setBookForm((f) => ({ ...f, address: e.target.value }))
+                    }
+                    placeholder="Where's the work?"
+                    data-testid="input-book-address"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="book-date">Preferred date (optional)</Label>
+                  <Input
+                    id="book-date"
+                    type="date"
+                    value={bookForm.preferredDate}
+                    onChange={(e) =>
+                      setBookForm((f) => ({
+                        ...f,
+                        preferredDate: e.target.value,
+                      }))
+                    }
+                    data-testid="input-book-date"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setBookOpen(false)}
+                  disabled={bookMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => bookMutation.mutate()}
+                  disabled={
+                    bookMutation.isPending || !bookForm.description.trim()
+                  }
+                  data-testid="button-submit-book"
+                >
+                  {bookMutation.isPending && (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  )}
+                  Send request
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Lightbox */}
       {lightbox && (

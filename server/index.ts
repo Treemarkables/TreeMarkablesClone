@@ -7,7 +7,9 @@ import * as Sentry from "@sentry/node";
 import http from "http";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.ts";
+import { APP_URL } from "./config/appUrl";
 import { tenantContextMiddleware } from "./tenancy/tenantMiddleware";
+import { requireApiAuth } from "./tenancy/requireApiAuth";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
 import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
@@ -96,6 +98,33 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
 });
 
+// Legacy-domain redirect. Customer document links already sent out (invoices,
+// proposals, quotes, etc.) point at the old app host. The app now lives at
+// APP_URL (app.inflowapp.co.nz). 301 the customer-facing paths to the new host
+// so those old links keep working.
+//
+// Scoped to these path prefixes ONLY — NOT `/` or `/login` — so already-shipped
+// native apps, which load the app root on the old host and whose origin guards
+// expect it, keep working until they're rebuilt. The old host is grey-cloud
+// (DNS-only) so this can't be a Cloudflare redirect rule; it has to live here.
+//
+// The APP_HOST !== legacy guard prevents a redirect loop if APP_URL is unset and
+// still falls back to the old host.
+const LEGACY_APP_HOST = 'app.treemarkables.co.nz';
+const REDIRECT_PATH_PREFIXES = ['/proposal', '/invoice', '/quote', '/watch', '/review', '/customer-portal'];
+const APP_HOST = (() => { try { return new URL(APP_URL).host; } catch { return ''; } })();
+app.use((req, res, next) => {
+  if (
+    APP_HOST &&
+    APP_HOST !== LEGACY_APP_HOST &&
+    req.hostname === LEGACY_APP_HOST &&
+    REDIRECT_PATH_PREFIXES.some((p) => req.path === p || req.path.startsWith(p + '/'))
+  ) {
+    return res.redirect(301, `${APP_URL}${req.originalUrl}`);
+  }
+  next();
+});
+
 // Increase JSON payload limit for large CSV imports (ServiceM8 data can be huge)
 // The verify callback captures the raw body as a Buffer so webhook signature
 // verification (e.g. Svix for Resend events) can work correctly alongside
@@ -114,6 +143,14 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 // Configure session middleware with PostgreSQL store for persistence across server restarts
 const PgSession = connectPgSimple(session);
 const isDevelopment = process.env.NODE_ENV === 'development';
+
+// SESSION_SECRET signs the session cookie. If it's ever unset in production the
+// cookie would be signed with a public literal from the repo — an attacker could
+// then forge a valid session for any employee/business (defeating RLS too). Fail
+// fast at boot rather than silently shipping a forgeable secret.
+if (!isDevelopment && !process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET must be set in production — refusing to start with a default signing secret');
+}
 
 app.use(
   session({
@@ -154,6 +191,11 @@ console.log('✅ Session store: PostgreSQL (sessions persist across server resta
 // Postgres RLS enforces read isolation. Must come after session middleware. With the
 // flag off this only sets businessId (no pooled connection) — exact current behaviour.
 app.use(tenantContextMiddleware);
+
+// Global API auth backstop — 401 for unauthenticated /api/* calls that aren't on
+// the public allowlist, so authorization no longer depends solely on RLS. Flag-
+// gated (API_AUTH_ENFORCED, default off); roll out + smoke-test like RLS.
+app.use(requireApiAuth);
 
 // Runtime static file serving with path resolution
 function resolveAndServeStatic(appInstance: express.Express) {
@@ -1190,6 +1232,8 @@ The Treemarkables Team';
       startEmailReplyPolling();
       const { marketingScheduler } = await import('./services/marketingScheduler');
       marketingScheduler.start();
+      const { startGoogleCalendarPoller } = await import('./services/googleCalendarSync');
+      startGoogleCalendarPoller();
     } catch (err) {
       log(`⚠️ Background worker startup warning: ${(err as Error).message}`, "startup");
     }
