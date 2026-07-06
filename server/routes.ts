@@ -962,6 +962,17 @@ async function requirePlatformAdmin(req: Request, res: Response, next: express.N
   }
 }
 
+// Staff-write gate (capabilities.ts: staff.manage = Crew) with a self-exemption:
+// a freemium solo owner can always edit their OWN record (e.g. fix their name);
+// adding or editing OTHER staff requires Crew. Routes with no :id (creating a new
+// staff member) are never "self" → fall through to the Crew check. Composes with
+// the #313 role guards: entitlement says what the PLAN allows, requireAdmin /
+// self-or-admin says WHO may act.
+function requireCrewUnlessSelf(req: Request, res: Response, next: express.NextFunction) {
+  if (req.params.id && req.params.id === req.session.employeeId) return next();
+  return requireEntitlement('plan:crew', 'staff_manage')(req, res, next);
+}
+
 // Dunning: when a subscriber's billing slips into a payment-problem state, the in-app
 // BillingBanner already warns them — but only once they open the app. This adds an
 // off-app nudge: a high-priority bell entry + an email to the business's own address,
@@ -14020,7 +14031,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     return out;
   };
 
-  app.post('/api/reviews', async (req: Request, res: Response) => {
+  app.post('/api/reviews', requireEntitlement('plan:business', 'reputation'), async (req: Request, res: Response) => {
     try {
       const validation = insertReviewSchema.safeParse(coerceReviewDates(req.body));
       if (!validation.success) {
@@ -14083,7 +14094,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  app.put('/api/reviews/:id', async (req: Request, res: Response) => {
+  app.put('/api/reviews/:id', requireEntitlement('plan:business', 'reputation'), async (req: Request, res: Response) => {
     try {
       const updates = insertReviewSchema.partial().safeParse(coerceReviewDates(req.body));
       if (!updates.success) {
@@ -14102,7 +14113,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  app.delete('/api/reviews/:id', async (req: Request, res: Response) => {
+  app.delete('/api/reviews/:id', requireEntitlement('plan:business', 'reputation'), async (req: Request, res: Response) => {
     try {
       await storage.deleteReview(req.params.id);
       res.json({ success: true });
@@ -16792,8 +16803,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Create new employee (admin only — creates staff incl. role/permissions)
-  app.post('/api/employees', requireAdmin, async (req: Request, res: Response) => {
+  // Create new employee (plan gate: staff management is Crew+; role gate: admin)
+  app.post('/api/employees', requireCrewUnlessSelf, requireAdmin, async (req: Request, res: Response) => {
     try {
       // Convert hourlyRate to string if it's a number
       const bodyData = { ...req.body };
@@ -16842,7 +16853,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // edit ONLY their own record and may NOT change privileged fields (role,
   // permissions, active-state, tenant, password). Prevents crew->admin
   // self-escalation and cross-tenant record moves via mass assignment.
-  app.put('/api/employees/:id', async (req: Request, res: Response) => {
+  // Plan gate: editing OTHERS requires the Crew tier (self is exempt).
+  app.put('/api/employees/:id', requireCrewUnlessSelf, async (req: Request, res: Response) => {
     try {
       const callerId = req.session.employeeId;
       if (!callerId) {
@@ -16907,8 +16919,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Delete employee (admin only)
-  app.delete('/api/employees/:id', requireAdmin, async (req: Request, res: Response) => {
+  // Delete employee (plan gate: Crew+ unless self; role gate: admin)
+  app.delete('/api/employees/:id', requireCrewUnlessSelf, requireAdmin, async (req: Request, res: Response) => {
     try {
       await storage.deleteEmployee(req.params.id);
       res.json({
@@ -16925,9 +16937,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Set employee password. A user may set their own; an admin may set anyone's
-  // in the tenant. Prevents any authenticated user resetting a colleague's
-  // (incl. the admin's) password.
-  app.patch('/api/employees/:id/password', async (req: Request, res: Response) => {
+  // in the tenant (Crew-tier plan gate applies when it's not your own record).
+  app.patch('/api/employees/:id/password', requireCrewUnlessSelf, async (req: Request, res: Response) => {
     try {
       const callerId = req.session.employeeId;
       if (!callerId) {
