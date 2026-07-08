@@ -152,7 +152,9 @@ function toast({ ...props }: Toast) {
   dispatch({
     type: "ADD_TOAST",
     toast: {
-      duration: 1000, // Default 1 second for all toasts
+      // Errors stay up until dismissed (close button / swipe) — the 1s default
+      // made failure messages vanish before anyone could read the reason.
+      duration: props.variant === "destructive" ? Infinity : 1000,
       ...props,
       id,
       open: true,

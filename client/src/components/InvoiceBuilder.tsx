@@ -1268,7 +1268,7 @@ export function InvoiceBuilder({
                 />
                 <BuilderToolbarButton
                   icon={Mail}
-                  label="Email"
+                  label="Email invoice"
                   onClick={handleSendInvoice}
                   disabled={isCreating}
                   aria-label="Email invoice"
@@ -1277,7 +1277,7 @@ export function InvoiceBuilder({
                 />
                 <BuilderToolbarButton
                   icon={MessageSquare}
-                  label="SMS"
+                  label="SMS invoice"
                   onClick={handleSmsInvoice}
                   disabled={isCreating}
                   aria-label="SMS invoice"
