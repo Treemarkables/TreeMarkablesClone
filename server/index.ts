@@ -266,6 +266,18 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
     fallthrough: true,
     redirect: false,
     index: false,
+    setHeaders: (res, filePath) => {
+      // Vite content-hashes everything under /assets/ (index-C5HqaHu6.js), so
+      // those files are safe to cache forever — a new build gets new names.
+      // Without this they ship with the express.static default (max-age=0),
+      // so every visit refetches every chunk and any transient server blip
+      // during a deploy rollout becomes a visible "Failed to fetch dynamically
+      // imported module" crash. index.html / sw.js / manifest are NOT under
+      // /assets/ and keep their no-store headers from the middleware above.
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
   }));
 
   appInstance.use("*", (req, res, next) => {
