@@ -26,6 +26,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { invalidRecipientMessage } from "@/lib/emailValidation";
 import {
   Send,
   X,
@@ -952,6 +953,16 @@ export function EmailComposerModal({
       toast({
         title: "Subject Required",
         description: "Please enter an email subject",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const recipientError = invalidRecipientMessage(emailData.to) || invalidRecipientMessage(emailData.cc || "", "CC");
+    if (recipientError) {
+      toast({
+        title: "Invalid Email Address",
+        description: recipientError,
         variant: "destructive",
       });
       return;
