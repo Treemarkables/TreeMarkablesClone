@@ -12072,6 +12072,82 @@ ${phoneTarget}
 `;
   };
 
+  // TwiML App Voice URL — fires when a logged-in Voice-SDK client (the web
+  // dialer, or a future native outgoing flow) places an OUTGOING call via
+  // device.connect({ params: { To } }). The TwiML App (TWILIO_TWIML_APP_SID)
+  // must have "A CALL COMES IN" pointed at this URL — one-click setup via
+  // POST /api/twilio/admin/configure-outgoing, verified by the diagnostic.
+  app.post('/api/webhooks/twilio-outgoing', async (req: Request, res: Response) => {
+    if (!validateTwilioSignature(req)) {
+      console.error('❌ Invalid Twilio signature for outgoing webhook');
+      return res.status(403).send('Forbidden');
+    }
+    res.type('text/xml');
+    const say = (msg: string) =>
+      res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">${escapeTwimlXml(msg)}</Say>
+</Response>`);
+
+    // Only Voice-SDK clients (From=client:<identity>, minted by our own token
+    // endpoint) may dial out. A PSTN leg that reaches this URL through a
+    // console misconfiguration must not turn it into an open relay.
+    const from = String(req.body?.From || '');
+    if (!from.startsWith('client:')) {
+      console.error(`❌ twilio-outgoing rejected non-client From: ${from || '(empty)'}`);
+      return say('Outgoing calls are only available from the app.');
+    }
+
+    const callerId = process.env.TWILIO_PHONE_NUMBER;
+    if (!callerId) {
+      console.error('❌ twilio-outgoing: TWILIO_PHONE_NUMBER not set — no caller ID to dial out with');
+      return say('Outgoing calling is not configured.');
+    }
+
+    // The dial target arrives via the client's connect() params. Accept phone
+    // numbers only (no client:/sip: targets) and normalize NZ local formats to
+    // E.164, matching the normalizePhone convention in the voice webhook.
+    const rawTo = String(req.body?.To || '').trim();
+    const bare = rawTo.replace(/\D/g, '');
+    let dialTo = '';
+    if (rawTo.startsWith('+') && bare.length >= 7 && bare.length <= 15) {
+      dialTo = `+${bare}`;
+    } else if (bare.startsWith('64') && bare.length >= 9) {
+      dialTo = `+${bare}`;
+    } else if (bare.startsWith('0') && bare.length >= 8) {
+      dialTo = `+64${bare.slice(1)}`;
+    }
+    if (!dialTo) {
+      console.error(`❌ twilio-outgoing could not parse dial target: "${rawTo}"`);
+      return say('Sorry, that phone number could not be dialled.');
+    }
+
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const baseUrl = `${protocol}://${host}`;
+    // Reuse the inbound recording pipeline for logging: callerFrom = the OTHER
+    // party (the customer we dialled) so the Calls page shows their number,
+    // calledTo = our own line for tenant resolution, direction=outbound flips
+    // the stored direction and skips inbound-lead extraction. `&` between
+    // query params must be `&amp;` inside an XML attribute.
+    const recordingCallbackUrl =
+      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(dialTo)}&amp;calledTo=${encodeURIComponent(callerId)}&amp;direction=outbound`;
+
+    console.log(`📞 Outgoing web call: ${from} → ${dialTo} (callerId ${callerId})`);
+    return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial
+    callerId="${escapeTwimlXml(callerId)}"
+    record="record-from-answer"
+    recordingStatusCallback="${recordingCallbackUrl}"
+    recordingStatusCallbackEvent="completed"
+    timeout="30"
+  >
+    <Number>${dialTo}</Number>
+  </Dial>
+</Response>`);
+  });
+
   // TwiML: answer the call. With the AI voice agent enabled, play an IVR menu
   // ("press 1 for an AI quote, press 2 for Jules") — press 2, a wrong digit or
   // no input all fall through to ringing the iOS app + owner's phone exactly
@@ -12495,7 +12571,11 @@ ${dialBody}</Response>`);
         // missed call, not 'answered', so the Calls page (and anyone debugging
         // "why isn't my phone ringing") can tell the two apart.
         const isVoicemail = String(req.query.source || '') === 'voicemail';
-        console.log(`📞 Caller identified as: ${callerPhone} (raw: ${rawCallerPhone}, source: ${callerSource}, voicemail: ${isVoicemail})`);
+        // The outgoing webhook tags its recording callback with &direction=outbound:
+        // callerFrom is then the number WE dialled (the customer), and the call
+        // must be logged as outbound + skip inbound-lead extraction below.
+        const isOutbound = String(req.query.direction || '') === 'outbound';
+        console.log(`📞 Caller identified as: ${callerPhone} (raw: ${rawCallerPhone}, source: ${callerSource}, voicemail: ${isVoicemail}, outbound: ${isOutbound})`);
 
         // Resolve which tenant owns the dialed line (the answer/no-answer routes
         // pass it through as ?calledTo=...; recording-status callbacks omit To).
@@ -12558,7 +12638,7 @@ ${dialBody}</Response>`);
             // line is mapped (else falls to the column default, as before).
             const call = await runWithBusiness(inboundBizId, () => storage.createCall({
               phoneNumber: callerPhone,
-              direction: 'inbound',
+              direction: isOutbound ? 'outbound' : 'inbound',
               status: isVoicemail ? 'missed' : 'answered',
               duration: parseInt(RecordingDuration || '0'),
               recordingUrl: servingUrl,
@@ -12610,7 +12690,14 @@ ${dialBody}</Response>`);
                 await storage.updateCall(call.id, { transcriptText: transcript });
                 
                 console.log(`✅ Call transcribed: ${transcript.substring(0, 100)}...`);
-                
+
+                // Outbound calls the owner placed are not inbound leads — keep
+                // the transcript but skip job extraction + customer creation.
+                if (isOutbound) {
+                  console.log('📞 Outbound call — skipping lead extraction');
+                  return;
+                }
+
                 // Extract job data with GPT-4
                 const extraction = await openai.chat.completions.create({
                   model: 'gpt-4o',
@@ -12796,16 +12883,36 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       answer: `${expectedBaseUrl}/api/webhooks/twilio-answer`,
       statusCallback: `${expectedBaseUrl}/api/webhooks/twilio-voice`,
       sms: `${expectedBaseUrl}/api/webhooks/sms`,
+      outgoing: `${expectedBaseUrl}/api/webhooks/twilio-outgoing`,
     };
 
     let twilioAccount: any = null;
     let twilioPhoneNumber: any = null;
+    let twilioTwimlApp: any = null;
     let twilioFetchError: string | null = null;
     try {
       if (process.env.TWILIO_ACCOUNT_SID && (process.env.TWILIO_AUTH_TOKEN || (process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET))) {
         const client = await getTwilioClient();
         const acct = await client.api.accounts(process.env.TWILIO_ACCOUNT_SID!).fetch();
         twilioAccount = { friendlyName: acct.friendlyName, status: acct.status, type: acct.type };
+
+        // The TwiML App's voice URL is what Twilio hits when a Voice-SDK
+        // client places an outgoing call — if it isn't our outgoing webhook,
+        // web-dialer calls fail (or hit the wrong flow) with no other symptom.
+        if (process.env.TWILIO_TWIML_APP_SID) {
+          try {
+            const twimlApp = await client.applications(process.env.TWILIO_TWIML_APP_SID).fetch();
+            twilioTwimlApp = {
+              sid: twimlApp.sid,
+              friendlyName: twimlApp.friendlyName,
+              voiceUrl: twimlApp.voiceUrl,
+              voiceMethod: twimlApp.voiceMethod,
+              voiceUrlMatchesExpected: twimlApp.voiceUrl === expectedWebhooks.outgoing,
+            };
+          } catch (appErr: any) {
+            twilioTwimlApp = { error: appErr?.message || String(appErr) };
+          }
+        }
 
         if (process.env.TWILIO_PHONE_NUMBER) {
           const list = await client.incomingPhoneNumbers.list({ phoneNumber: process.env.TWILIO_PHONE_NUMBER, limit: 1 });
@@ -12914,6 +13021,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     if (twilioPhoneNumber && !twilioPhoneNumber.voiceUrlMatchesExpected) {
       recommendations.push(`Update Twilio console voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'})`);
     }
+    if (twilioTwimlApp && !twilioTwimlApp.error && !twilioTwimlApp.voiceUrlMatchesExpected) {
+      recommendations.push(`TwiML App voice URL should be ${expectedWebhooks.outgoing} for web-dialer outgoing calls (currently: ${twilioTwimlApp.voiceUrl || 'unset'}) — POST /api/twilio/admin/configure-outgoing sets it`);
+    }
     // observedBaseUrl is just where the diagnostic was viewed from — it doesn't
     // affect whether Twilio webhooks work. Only the Twilio-side voiceUrl matters.
 
@@ -12925,6 +13035,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       env,
       twilioAccount,
       twilioPhoneNumber,
+      twilioTwimlApp,
       twilioFetchError,
       recentCalls,
       twilioCallLegs,
@@ -12932,6 +13043,44 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       twilioMonitorError,
       recommendations,
     });
+  });
+
+  // One-click setup for web-dialer outgoing calls: points the TwiML App's
+  // voice URL at /api/webhooks/twilio-outgoing so device.connect() from the
+  // browser reaches our dial-out TwiML. Same auth as the diagnostic above
+  // (HERO_WEBHOOK_SECRET header for curl, or an admin session).
+  app.post('/api/twilio/admin/configure-outgoing', async (req: Request, res: Response) => {
+    const secret = req.headers['x-webhook-secret'];
+    const secretOk = !!secret && secret === process.env.HERO_WEBHOOK_SECRET;
+    let sessionOk = false;
+    if (!secretOk && req.session.employeeId) {
+      try {
+        const emp = await storage.getEmployee(req.session.employeeId);
+        sessionOk = !!emp && emp.role === 'admin';
+      } catch {
+        sessionOk = false;
+      }
+    }
+    if (!secretOk && !sessionOk) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    try {
+      const twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
+      if (!twimlAppSid) {
+        return res.status(400).json({ success: false, message: 'TWILIO_TWIML_APP_SID not set — create a TwiML App in the Twilio Console first' });
+      }
+      const expectedVoiceUrl = `${APP_URL}/api/webhooks/twilio-outgoing`;
+      const client = await getTwilioClient();
+      const updated = await client.applications(twimlAppSid).update({
+        voiceUrl: expectedVoiceUrl,
+        voiceMethod: 'POST',
+      });
+      console.log(`✅ TwiML App ${twimlAppSid} voice URL set to ${updated.voiceUrl}`);
+      return res.json({ success: true, sid: updated.sid, voiceUrl: updated.voiceUrl, voiceMethod: updated.voiceMethod });
+    } catch (error: any) {
+      console.error('❌ Failed to configure TwiML App voice URL:', error);
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to update TwiML App' });
+    }
   });
 
   // GET /api/call-records/unlinked — Get call records not linked to any job

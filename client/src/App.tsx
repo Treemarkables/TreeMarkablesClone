@@ -12,6 +12,8 @@ import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
+import { WebCallProvider } from "@/contexts/WebCallContext";
+import { WebCallButton } from "@/components/WebCallButton";
 import { lazy, Suspense } from "react";
 
 // Route targets are lazy-loaded so the initial JS bundle stays small. This is
@@ -590,8 +592,11 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           {/* Desktop header - full menu */}
           <header className="hidden md:flex items-center justify-between p-2 border-b bg-white">
             <LogoSidebarTrigger size={36} />
-            
+
             <div className="flex items-center gap-2">
+              {/* In-browser dialer (desktop web only) */}
+              <WebCallButton />
+
               {/* Notifications Bell */}
               <NotificationBell />
               
@@ -1771,6 +1776,7 @@ function App() {
         <TooltipProvider>
           <AuthProvider>
             <TwilioCallProvider>
+            <WebCallProvider>
               <ScrollToTop />
               <Toaster />
               <InstallPrompt />
@@ -1781,6 +1787,7 @@ function App() {
               <Suspense fallback={<PageSpinner />}>
                 <Router />
               </Suspense>
+            </WebCallProvider>
             </TwilioCallProvider>
           </AuthProvider>
         </TooltipProvider>
