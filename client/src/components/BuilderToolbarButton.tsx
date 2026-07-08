@@ -39,7 +39,8 @@ export const BuilderToolbarButton = forwardRef<
     ) : (
       <Icon className="w-5 h-5 sm:w-4 sm:h-4 flex-shrink-0" />
     )}
-    <span className="text-[11px] sm:text-sm font-medium leading-none truncate max-w-full">
+    {/* Two-word labels ("Email quote") wrap on mobile's narrow stacked buttons; sm+ has room to stay one line */}
+    <span className="text-[11px] sm:text-sm font-medium leading-tight sm:leading-none text-center sm:truncate max-w-full">
       {label}
     </span>
   </button>

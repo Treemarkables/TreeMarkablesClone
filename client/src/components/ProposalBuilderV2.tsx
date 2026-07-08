@@ -2077,14 +2077,14 @@ export function ProposalBuilderV2({
               />
               <BuilderToolbarButton
                 icon={Mail}
-                label="Email"
+                label={isQuote ? "Email quote" : "Email proposal"}
                 onClick={() => { initEmailForm(); setShowEmailDialog(true); }}
                 aria-label={isQuote ? "Email quote" : "Email proposal"}
                 className="bg-blue-600 hover:bg-blue-700"
               />
               <BuilderToolbarButton
                 icon={MessageSquare}
-                label="SMS"
+                label={isQuote ? "SMS quote" : "SMS proposal"}
                 onClick={() => { initSmsForm(); setShowSmsDialog(true); }}
                 aria-label={isQuote ? "SMS quote" : "SMS proposal"}
                 className="bg-green-600 hover:bg-green-700"
@@ -2571,7 +2571,7 @@ export function ProposalBuilderV2({
         <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
           <DialogContent className="max-w-md">
             <div className="p-2">
-              <h2 className="text-base font-semibold mb-4">Send Proposal via Email</h2>
+              <h2 className="text-base font-semibold mb-4">{isQuote ? "Send Quote via Email" : "Send Proposal via Email"}</h2>
               <div className="space-y-3">
                 <div>
                   <div className="flex items-center justify-between">
@@ -2616,7 +2616,7 @@ export function ProposalBuilderV2({
         <Dialog open={showSmsDialog} onOpenChange={setShowSmsDialog}>
           <DialogContent className="max-w-md">
             <div className="p-2">
-              <h2 className="text-base font-semibold mb-4">Send Proposal via SMS</h2>
+              <h2 className="text-base font-semibold mb-4">{isQuote ? "Send Quote via SMS" : "Send Proposal via SMS"}</h2>
               <div className="space-y-3">
                 <div>
                   <div className="flex items-center justify-between">
