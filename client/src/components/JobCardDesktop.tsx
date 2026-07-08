@@ -86,6 +86,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useWebCall } from "@/contexts/WebCallContext";
 import { useJobActions } from "@/hooks/useJobActions";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
@@ -278,6 +279,7 @@ export function JobCardDesktop({
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const { toast } = useToast();
+  const { webCallAvailable, startCall } = useWebCall();
 
   // ── Shared job-action mutations + handlers ─────────────────────────────
   // Mark Complete / Duplicate / Delete / Queue and the empty-draft delete
@@ -452,7 +454,13 @@ export function JobCardDesktop({
   const handleEmail = actions?.email ?? (() => setShowEmailModal(true));
   const handleCall = actions?.call ?? (() => {
     if (phoneForCall) {
-      window.location.href = `tel:${phoneForCall}`;
+      // Desktop web: call in-browser via the Twilio dialer (tel: mostly goes
+      // nowhere on desktop). Native keeps the OS dialer.
+      if (webCallAvailable) {
+        startCall(phoneForCall, (customer?.name as string | undefined) || undefined);
+      } else {
+        window.location.href = `tel:${phoneForCall}`;
+      }
     } else {
       toast({
         title: "No phone number on file",
