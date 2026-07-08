@@ -1,28 +1,38 @@
 import { useState, useEffect } from "react";
 
 // ── Job Filter ────────────────────────────────────────────────────────────────
-let _jobFilter = "all";
+// Multi-select: an empty array means "All". Multiple values are OR-combined by
+// the Dispatch Board (e.g. ["work_order", "scheduled"] shows both tabs' jobs at
+// once — needed when rescheduling, so booked and bookable jobs sit side by side).
+let _jobFilters: string[] = [];
 const _filterListeners = new Set<() => void>();
 
 function notifyFilter() {
   _filterListeners.forEach((fn) => fn());
 }
 
-export function setJobFilter(v: string) {
-  _jobFilter = v;
+export function setJobFilters(v: string[]) {
+  _jobFilters = v;
   notifyFilter();
 }
 
-export function useJobFilter(): [string, (v: string) => void] {
-  const [filter, setLocal] = useState(_jobFilter);
+export function toggleJobFilter(v: string) {
+  _jobFilters = _jobFilters.includes(v)
+    ? _jobFilters.filter((f) => f !== v)
+    : [..._jobFilters, v];
+  notifyFilter();
+}
+
+export function useJobFilters(): [string[], (v: string[]) => void] {
+  const [filters, setLocal] = useState(_jobFilters);
 
   useEffect(() => {
-    const sync = () => setLocal(_jobFilter);
+    const sync = () => setLocal(_jobFilters);
     _filterListeners.add(sync);
     return () => { _filterListeners.delete(sync); };
   }, []);
 
-  return [filter, setJobFilter];
+  return [filters, setJobFilters];
 }
 
 // ── Lane Filter ───────────────────────────────────────────────────────────────
