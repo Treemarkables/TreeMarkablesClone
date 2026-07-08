@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/react";
 import App from "./App";
 import "./index.css";
 import { isReloadUnsafe } from "./lib/foregroundReloadGuard";
+import { isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
 
 // Sentry frontend init — disabled when VITE_SENTRY_DSN is unset so local
 // development without a DSN doesn't spam Sentry.
@@ -39,24 +40,22 @@ if (SENTRY_DSN) {
   });
 }
 
-// v14 - Auto-recover from stale cached JS bundles
-// When a new deployment happens, old cached index.html references old JS filenames.
-// Those files return 404 → "Failed to fetch dynamically imported module" error.
-// This handler detects that and forces a full hard reload to get the fresh HTML + JS.
+// v15 - Auto-recover from stale or unfetchable JS chunks.
+// Stale cached index.html referencing deleted chunk hashes AND transient asset
+// failures during a deploy rollout both surface here. requestStaleBundleReload
+// reloads immediately on the first failure, then retries with spaced delays
+// (riding out a rollout) before giving up — so a permanently missing chunk
+// can't cause an endless reload loop.
 window.addEventListener('error', (event) => {
   const msg = event.message || '';
   const isChunkError = (
-    msg.includes('Failed to fetch dynamically imported module') ||
-    msg.includes('Importing a module script failed') ||
-    msg.includes('Loading chunk') ||
-    msg.includes('ChunkLoadError') ||
+    isChunkLoadErrorMessage(msg) ||
     (event.filename && event.filename.includes('/assets/') && msg.includes('SyntaxError'))
   );
 
   if (isChunkError) {
-    console.warn('⚠️ Stale JS bundle detected — forcing reload to get fresh version');
-    // Use location.replace so the back button still works
-    window.location.replace(window.location.href);
+    console.warn('⚠️ Stale JS bundle detected — reloading to get fresh version');
+    requestStaleBundleReload();
   }
 });
 
@@ -64,17 +63,11 @@ window.addEventListener('error', (event) => {
 window.addEventListener('unhandledrejection', (event) => {
   const reason = event.reason;
   const msg = reason?.message || String(reason) || '';
-  const isChunkError = (
-    msg.includes('Failed to fetch dynamically imported module') ||
-    msg.includes('Importing a module script failed') ||
-    msg.includes('Loading chunk') ||
-    msg.includes('ChunkLoadError')
-  );
 
-  if (isChunkError) {
-    console.warn('⚠️ Stale JS chunk import failed — forcing reload to get fresh version');
+  if (isChunkLoadErrorMessage(msg)) {
+    console.warn('⚠️ Stale JS chunk import failed — reloading to get fresh version');
     event.preventDefault();
-    window.location.replace(window.location.href);
+    requestStaleBundleReload();
   }
 });
 
