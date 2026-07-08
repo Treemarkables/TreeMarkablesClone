@@ -24,6 +24,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { fetchPhotoAnnotationsBatch } from "@/lib/photoAnnotations";
+import { invalidRecipientMessage } from "@/lib/emailValidation";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
 import type { DocumentTemplate, Customer, Proposal, DocumentBlock } from "@shared/schema";
 import { DEFAULT_PROPOSAL_BLOCKS } from "@shared/schema";
@@ -1929,6 +1930,11 @@ export function ProposalBuilderV2({
   const handleSendEmail = async () => {
     if (!emailForm.to.trim() || !emailForm.subject.trim()) {
       toast({ title: "Missing Information", description: "Please enter recipient email and subject.", variant: "destructive" });
+      return;
+    }
+    const recipientError = invalidRecipientMessage(emailForm.to) || invalidRecipientMessage(emailForm.cc, "CC");
+    if (recipientError) {
+      toast({ title: "Invalid Email Address", description: recipientError, variant: "destructive" });
       return;
     }
     const effectiveDraftId = await ensureDraftSaved();
