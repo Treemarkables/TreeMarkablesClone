@@ -12098,11 +12098,17 @@ ${phoneTarget}
       return say('Outgoing calls are only available from the app.');
     }
 
-    const callerId = process.env.TWILIO_PHONE_NUMBER;
-    if (!callerId) {
+    const twilioLine = process.env.TWILIO_PHONE_NUMBER;
+    if (!twilioLine) {
       console.error('❌ twilio-outgoing: TWILIO_PHONE_NUMBER not set — no caller ID to dial out with');
       return say('Outgoing calling is not configured.');
     }
+    // Displayed caller ID: TWILIO_OUTBOUND_CALLER_ID (e.g. the owner's own
+    // mobile, so customers see and return calls to a familiar number) with the
+    // Twilio line as fallback. ⚠️ A non-Twilio number here MUST be added as a
+    // Verified Caller ID in the Twilio Console (error 13214 otherwise). Only
+    // the DISPLAY uses it — tenant resolution below stays on the Twilio line.
+    const callerId = (process.env.TWILIO_OUTBOUND_CALLER_ID || '').trim() || twilioLine;
 
     // The dial target arrives via the client's connect() params. Accept phone
     // numbers only (no client:/sip: targets) and normalize NZ local formats to
@@ -12131,7 +12137,7 @@ ${phoneTarget}
     // the stored direction and skips inbound-lead extraction. `&` between
     // query params must be `&amp;` inside an XML attribute.
     const recordingCallbackUrl =
-      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(dialTo)}&amp;calledTo=${encodeURIComponent(callerId)}&amp;direction=outbound`;
+      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(dialTo)}&amp;calledTo=${encodeURIComponent(twilioLine)}&amp;direction=outbound`;
 
     console.log(`📞 Outgoing web call: ${from} → ${dialTo} (callerId ${callerId})`);
     return res.send(`<?xml version="1.0" encoding="UTF-8"?>
@@ -12866,6 +12872,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       TWILIO_API_KEY: { set: !!process.env.TWILIO_API_KEY, masked: mask(process.env.TWILIO_API_KEY) },
       TWILIO_API_SECRET: { set: !!process.env.TWILIO_API_SECRET, masked: mask(process.env.TWILIO_API_SECRET) },
       TWILIO_PHONE_NUMBER: { set: !!process.env.TWILIO_PHONE_NUMBER, value: process.env.TWILIO_PHONE_NUMBER || null },
+      TWILIO_OUTBOUND_CALLER_ID: { set: !!process.env.TWILIO_OUTBOUND_CALLER_ID, value: (process.env.TWILIO_OUTBOUND_CALLER_ID || '').trim() || null },
       TWILIO_TWIML_APP_SID: { set: !!process.env.TWILIO_TWIML_APP_SID, masked: mask(process.env.TWILIO_TWIML_APP_SID) },
       TWILIO_PUSH_CREDENTIAL_SID: { set: !!process.env.TWILIO_PUSH_CREDENTIAL_SID, masked: mask(process.env.TWILIO_PUSH_CREDENTIAL_SID) },
       TWILIO_CLIENT_IDENTITY: { set: !!process.env.TWILIO_CLIENT_IDENTITY, value: process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner (default)' },
