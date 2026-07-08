@@ -658,8 +658,8 @@ export default function ConversationDetail() {
   return (
     <div className="flex flex-col absolute top-0 left-0 right-0 bottom-20 bg-white dark:bg-gray-950 w-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-start justify-between px-3 sm:px-4 py-3 sm:py-4 border-b bg-white dark:bg-gray-950 flex-shrink-0 w-full gap-4">
-        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden pr-12">
+      <div className="flex items-start justify-between px-3 sm:px-4 py-3 sm:py-4 border-b bg-white dark:bg-gray-950 flex-shrink-0 w-full gap-2 sm:gap-4">
+        <div className="flex items-start gap-1.5 sm:gap-3 flex-1 min-w-0">
           <Button
             variant="ghost"
             size="icon"
@@ -670,14 +670,15 @@ export default function ConversationDetail() {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1 min-w-0 overflow-hidden pr-8">
+          <div className="flex-1 min-w-0">
             <h1
-              className="font-bold text-base sm:text-lg text-gray-900 dark:text-gray-100 break-words leading-snug pr-8"
+              className="font-bold text-base sm:text-lg text-gray-900 dark:text-gray-100 break-words line-clamp-2 leading-snug"
+              title={conversation.title}
               data-testid="text-conversation-title"
             >
               {conversation.title}
             </h1>
-            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 capitalize mt-0.5 pr-4">
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 capitalize mt-0.5 truncate">
               {conversation.source}
               {senderDisplayName && (
                 <span className="normal-case">
@@ -766,7 +767,7 @@ export default function ConversationDetail() {
 
       {/* Messages */}
       <ScrollArea className="flex-1 px-3 sm:px-4 py-2">
-        <div className="space-y-2 sm:space-y-3 pr-12">
+        <div className="space-y-2 sm:space-y-3">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-gray-400 dark:text-gray-500 text-sm">
@@ -780,10 +781,10 @@ export default function ConversationDetail() {
               return (
                 <div
                   key={message.id}
-                  className={`flex w-full pr-4 ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
+                  className={`flex w-full ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
                   data-testid={`message-${message.id}`}
                 >
-                  <div className="max-w-[55%] sm:max-w-[75%]">
+                  <div className="max-w-[85%] sm:max-w-[75%]">
                     {message.direction === "inbound" && message.fromName && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5 px-1 font-medium">
                         {message.fromName}
