@@ -58,6 +58,7 @@ import {
   Copy,
   Trash2,
   ListOrdered,
+  Loader2,
 } from "lucide-react";
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
 import { Button } from "@/components/ui/button";
@@ -140,6 +141,9 @@ export interface JobCardDesktopProps {
     timeTracking?: () => void;
     profitTracker?: () => void;
     sendToXero?: () => void;
+    /** True while the send-to-Xero request is in flight — drives the
+     *  menu item's "Sending…" state so a click gives visible feedback. */
+    sendToXeroPending?: boolean;
   };
   /**
    * Called after Duplicate Job succeeds. Parent (GlobalJobCard) typically
@@ -686,9 +690,27 @@ export function JobCardDesktop({
                   </DropdownMenuItem>
                 )}
                 {actions?.sendToXero && (
-                  <DropdownMenuItem onClick={actions.sendToXero} data-testid="more-send-to-xero">
-                    <Send className="w-4 h-4 mr-2 text-blue-600" />
-                    Send to Xero
+                  // Sent/sending state reads this card's own fresh job query,
+                  // so it flips live — no close/reopen. Stays clickable when
+                  // already sent so the handler's "use Reset Xero Sync" toast
+                  // can explain why nothing re-sends.
+                  <DropdownMenuItem
+                    onClick={actions.sendToXero}
+                    disabled={actions?.sendToXeroPending}
+                    data-testid="more-send-to-xero"
+                  >
+                    {actions?.sendToXeroPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 text-blue-600 animate-spin" />
+                    ) : job?.xeroStatus === "sent" ? (
+                      <CheckCircle className="w-4 h-4 mr-2 text-emerald-600" />
+                    ) : (
+                      <Send className="w-4 h-4 mr-2 text-blue-600" />
+                    )}
+                    {actions?.sendToXeroPending
+                      ? "Sending to Xero..."
+                      : job?.xeroStatus === "sent"
+                        ? "Sent to Xero"
+                        : "Send to Xero"}
                   </DropdownMenuItem>
                 )}
                 {(actions?.speechToQuote || actions?.schedule || actions?.profitTracker || actions?.sendToXero) && (
