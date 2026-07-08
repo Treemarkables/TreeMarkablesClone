@@ -72,6 +72,7 @@ import Papa from "papaparse";
 import twilio from "twilio";
 import { getTwilioClient } from "./services/twilioClient";
 import { mintStreamToken } from "./services/voiceAgent";
+import { isBulkMail } from "./services/bulkMailDetector";
 import jwt from "jsonwebtoken";
 import path from "path";
 import bcrypt from "bcrypt";
@@ -22644,6 +22645,14 @@ Transcription: ${transcriptText}`;
 
       // If no job found, create/update conversation (original behavior)
       if (!jobFound) {
+        // Bulk/marketing mail with no job reference is never a lead — ack the
+        // webhook and ingest nothing (no conversation, no message, no bell).
+        // Job-referenced emails above are untouched.
+        if (isBulkMail(headers)) {
+          console.log(`📧 [bulk-mail] Ignoring marketing/newsletter email from ${actualFromEmail} (subject: ${actualSubject})`);
+          return res.json({ success: true, message: 'Bulk marketing email ignored' });
+        }
+
         console.log(`💬 No job reference found - checking for existing conversation`);
         // Check if conversation exists for this email contact
         let conversation = await notificationHelper.findExistingOpenConversation(actualFromEmail);
