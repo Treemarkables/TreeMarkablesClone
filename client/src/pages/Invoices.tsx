@@ -47,7 +47,9 @@ type InvoiceWithRelations = Invoice & {
 
 export default function Invoices() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "pending" | "notInXero">(
+    "all",
+  );
   const [sendingJobId, setSendingJobId] = useState<string | null>(null);
   const [editingInvoice, setEditingInvoice] =
     useState<InvoiceWithRelations | null>(null);
@@ -205,6 +207,11 @@ export default function Invoices() {
 
   const invoices = invoicesResponse?.data || [];
 
+  // Sent to the customer (sentDate stamped by the invoice email) but never
+  // pushed to Xero. Cancelled invoices don't need to reach Xero.
+  const isSentNotInXero = (invoice: InvoiceWithRelations) =>
+    !!invoice.sentDate && !invoice.xeroInvoiceId && invoice.status !== "cancelled";
+
   const handleEditInvoice = (invoice: InvoiceWithRelations) => {
     setEditingInvoice(invoice);
     setEditFormData({
@@ -272,7 +279,8 @@ export default function Invoices() {
 
     const matchesTab =
       activeTab === "all" ||
-      (activeTab === "pending" && invoice.status === "pending");
+      (activeTab === "pending" && invoice.status === "pending") ||
+      (activeTab === "notInXero" && isSentNotInXero(invoice));
 
     return matchesSearch && matchesTab;
   });
@@ -356,7 +364,7 @@ export default function Invoices() {
         onValueChange={(value) => setActiveTab(value as any)}
       >
         <TabsList
-          className="grid w-full grid-cols-2 max-w-full"
+          className="grid w-full grid-cols-3 max-w-full"
           data-testid="tabs-invoice-filter"
         >
           <TabsTrigger value="all" data-testid="tab-all-invoices">
@@ -365,6 +373,9 @@ export default function Invoices() {
           <TabsTrigger value="pending" data-testid="tab-pending-invoices">
             Pending ({invoices.filter((inv) => inv.status === "pending").length}
             )
+          </TabsTrigger>
+          <TabsTrigger value="notInXero" data-testid="tab-not-in-xero">
+            Not in Xero ({invoices.filter(isSentNotInXero).length})
           </TabsTrigger>
         </TabsList>
 
@@ -386,6 +397,8 @@ export default function Invoices() {
                 >
                   {activeTab === "all" && "No invoices created yet"}
                   {activeTab === "pending" && "No pending invoices"}
+                  {activeTab === "notInXero" &&
+                    "Every sent invoice is in Xero"}
                 </p>
               </CardContent>
             </Card>
@@ -480,6 +493,16 @@ export default function Invoices() {
                           {formatCurrency(invoice.amount?.toString())}
                         </span>
                       </div>
+
+                      {invoice.sentDate && (
+                        <p
+                          className="text-xs text-muted-foreground"
+                          data-testid={`text-customer-sent-date-${invoice.id}`}
+                        >
+                          Sent to customer:{" "}
+                          {format(new Date(invoice.sentDate), "MMM d, yyyy")}
+                        </p>
+                      )}
 
                       {invoice.xeroSyncedAt && (
                         <p
