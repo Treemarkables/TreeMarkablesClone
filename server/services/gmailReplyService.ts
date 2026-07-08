@@ -7,6 +7,7 @@ import { PhotoStorageService } from '../photoStorage';
 import { onLaneJobEvent } from './laneAutomationService';
 import { resolveBusinessIdByChannel } from '../tenancy/channelMap';
 import { runWithBusiness } from '../tenancy/tenantStore';
+import { isBulkMail } from './bulkMailDetector';
 
 interface ParsedEmailAttachment {
   filename?: string;
@@ -27,6 +28,7 @@ interface ParsedEmailReply {
   references?: string[];
   uid?: number; // IMAP UID for marking as seen after successful processing
   attachments?: ParsedEmailAttachment[];
+  isBulkMail?: boolean; // marketing/newsletter markers present — never create a lead conversation from these
 }
 
 class GmailReplyService {
@@ -182,6 +184,7 @@ class GmailReplyService {
                       references: parsed.references,
                       uid: emailUid, // Store UID for later marking as seen
                       attachments: imageAttachments.length > 0 ? imageAttachments : undefined,
+                      isBulkMail: isBulkMail(parsed.headers),
                     };
 
                     emailsToProcess.push(emailData);
@@ -366,6 +369,15 @@ class GmailReplyService {
       // STEP 3: If no customer/job found, still try to add to existing conversation
       // This handles replies from leads who haven't been converted to customers yet
       if (!customer && !job) {
+        // Bulk/marketing mail from an unknown sender is never a lead — don't create,
+        // reopen, or append to a conversation for it. Known-customer and job-alias
+        // emails above are untouched (a real customer's mail never carries these
+        // markers; if a matched sender's does, it still threads as before).
+        if (email.isBulkMail) {
+          console.log(`📧 [bulk-mail] Skipping marketing/newsletter email from ${email.from} (subject: ${email.subject})`);
+          return false; // leave the Gmail message untouched; nothing was ingested
+        }
+
         console.log(`📧 No customer found for email: ${email.from} - checking for existing conversation`);
 
         // Scope this brand-new-lead path to the addressed tenant: runWithBusiness
