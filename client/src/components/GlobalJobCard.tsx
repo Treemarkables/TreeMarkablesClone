@@ -2816,7 +2816,13 @@ export function GlobalJobCard({
       return data;
     },
     onSuccess: () => {
+      // ["/api/jobs"] prefix-matches ["/api/jobs", id] too, so the fresh
+      // xeroStatus="sent" reaches JobCardMobile/JobCardDesktop's own job
+      // queries and flips their button state without a close/reopen.
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/invoices", editingJob?.id],
+      });
     },
     onError: (error: any) => {
       console.error("Error sending to Xero:", error);
@@ -4728,7 +4734,17 @@ The Treemarkables Team`;
   const handleSendToXeroClick = () => {
     if (!editingJob?.id || mode === "create") return;
     if (sendToXeroMutation.isPending) return;
-    if (editingJob?.xeroStatus === "sent") {
+    // editingJob can be a stale open-time snapshot (the `job` prop doesn't
+    // refresh, and the mobile card's status changes go through
+    // JobDetailsPanel's own PUT — never through this component's form). The
+    // ["/api/jobs", id] cache entry IS kept fresh by those mutations'
+    // invalidations, so read the gate inputs from there. Without this the
+    // user had to close and reopen the card before Send to Xero unblocked.
+    const cachedJob = (
+      queryClient.getQueryData(["/api/jobs", editingJob.id]) as any
+    )?.data;
+    const liveJob = cachedJob ?? editingJob;
+    if (liveJob?.xeroStatus === "sent") {
       toast({
         title: "Already sent to Xero",
         description:
@@ -4737,11 +4753,14 @@ The Treemarkables Team`;
       });
       return;
     }
-    if (currentStatus !== "completed") {
+    const isCompleted =
+      currentStatus === "completed" || liveJob?.status === "completed";
+    const hasInvoice = ((jobInvoiceResponse as any)?.data?.length ?? 0) > 0;
+    if (!isCompleted && !hasInvoice) {
       toast({
         title: "Can't send to Xero yet",
         description:
-          "Mark this job as Completed before sending its invoice to Xero.",
+          "Create an invoice for this job, or mark it as Completed, before sending to Xero.",
         variant: "destructive",
       });
       return;
@@ -10876,6 +10895,10 @@ The Treemarkables Team`;
     timeTracking: () => setIsTimeTrackingOpen(true),
     profitTracker: () => setIsProfitTrackerOpen(true),
     sendToXero: handleSendToXeroClick,
+    // Lets the cards render a live "Sending…" state on their Xero buttons —
+    // previously a tap gave zero feedback until the toast (or nothing at all
+    // on success, since there are no success toasts).
+    sendToXeroPending: sendToXeroMutation.isPending,
   };
 
   // Diary doc-click handlers reused by both surfaces. Quote/invoice just

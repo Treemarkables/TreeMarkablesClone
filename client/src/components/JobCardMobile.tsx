@@ -34,6 +34,7 @@ import {
   TrendingUp,
   ListOrdered,
   Send,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,6 +124,9 @@ export interface JobCardMobileProps {
     profitTracker?: () => void;
     queueJob?: () => void;
     sendToXero?: () => void;
+    /** True while the send-to-Xero request is in flight — drives the
+     *  tile's "Sending…" state so a tap gives visible feedback. */
+    sendToXeroPending?: boolean;
   };
 }
 
@@ -491,7 +495,32 @@ export function JobCardMobile({
                   colour="indigo"
                   onClick={actions?.queueJob ?? onQueueTile}
                 />
-                <ActionTile label="Send to Xero" icon={Send} colour="slate" disabled={!actions?.sendToXero} onClick={actions?.sendToXero ?? actionStub("Send to Xero")} />
+                {/* Live state comes from this card's own fresh job query —
+                    xeroStatus flips to "sent" via the invalidation after a
+                    successful send, no close/reopen needed. Stays tappable
+                    when already sent so the handler's "use Reset Xero Sync"
+                    toast can explain the state. */}
+                <ActionTile
+                  label={
+                    actions?.sendToXeroPending
+                      ? "Sending..."
+                      : job?.xeroStatus === "sent"
+                        ? "Sent to Xero"
+                        : "Send to Xero"
+                  }
+                  icon={
+                    actions?.sendToXeroPending
+                      ? Loader2
+                      : job?.xeroStatus === "sent"
+                        ? CheckCircle
+                        : Send
+                  }
+                  iconSpin={actions?.sendToXeroPending}
+                  colour={job?.xeroStatus === "sent" ? "green" : "slate"}
+                  disabled={!actions?.sendToXero || actions?.sendToXeroPending}
+                  onClick={actions?.sendToXero ?? actionStub("Send to Xero")}
+                  testId="action-tile-send-to-xero"
+                />
               </div>
 
               {/* Secondary admin actions — kept around because they're already wired
@@ -656,12 +685,18 @@ function ActionTile({
   colour,
   onClick,
   disabled,
+  iconSpin,
+  testId,
 }: {
   label: string;
   icon: React.ElementType;
   colour: TileColour;
   onClick: () => void;
   disabled?: boolean;
+  iconSpin?: boolean;
+  /** Override for tiles whose label changes with state (e.g. "Sending...")
+   *  so the testid stays stable. */
+  testId?: string;
 }) {
   const c = TILE_COLOURS[colour];
   return (
@@ -670,14 +705,14 @@ function ActionTile({
       onClick={onClick}
       disabled={disabled}
       className="flex flex-col items-center gap-1.5 group disabled:opacity-50"
-      data-testid={`action-tile-${label.toLowerCase().replace(/\s+/g, "-")}`}
+      data-testid={testId ?? `action-tile-${label.toLowerCase().replace(/\s+/g, "-")}`}
     >
       <div
         className={`relative w-16 h-16 rounded-[1.25rem] bg-gradient-to-b ${c.grad} grid place-items-center overflow-hidden shadow-lg ${c.shadow} group-active:scale-95 transition-transform`}
       >
         {/* glossy top highlight — light falls from above, like a native app icon */}
         <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-white/30 via-white/5 to-transparent" />
-        <Icon className="relative w-7 h-7 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]" strokeWidth={2} />
+        <Icon className={`relative w-7 h-7 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)] ${iconSpin ? "animate-spin" : ""}`} strokeWidth={2} />
       </div>
       <div className="text-[11.5px] font-semibold text-slate-900 leading-tight text-center max-w-[72px]">
         {label}
