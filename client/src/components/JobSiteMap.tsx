@@ -243,15 +243,26 @@ export function JobSiteMap({
         body: fd,
         credentials: "include",
       });
-      if (!res.ok) throw new Error("upload failed");
+      if (!res.ok) {
+        // Surface the server's reason — a bare "failed" hides whether it was
+        // auth, size, storage, or the DB, which made prod failures undiagnosable.
+        const detail = await res
+          .json()
+          .then((d) => d?.message)
+          .catch(() => null);
+        throw new Error(detail || `Upload failed (${res.status})`);
+      }
       await queryClient.invalidateQueries({
         queryKey: ["/api/jobs", jobId, "site-map-image"],
       });
       setManualView("photo");
-    } catch {
+    } catch (err) {
       toast({
         title: "Upload Error",
-        description: "Failed to upload the site photo",
+        description:
+          err instanceof Error && err.message
+            ? err.message
+            : "Failed to upload the site photo",
         variant: "destructive",
       });
     } finally {
