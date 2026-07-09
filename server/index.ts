@@ -799,6 +799,28 @@ The {businessName} Team';
             GRANT SELECT, INSERT, UPDATE, DELETE ON tree_markers TO app_tenant;
           END IF;
         END $$;
+        -- Site-map photo mode: markers can live on an uploaded image instead
+        -- of the satellite map (council jobs where the card address is the
+        -- billing address, not the site). Mirrors
+        -- migrations/manual/20260710_site_map_photo_mode.sql.
+        ALTER TABLE tree_markers ADD COLUMN IF NOT EXISTS surface TEXT NOT NULL DEFAULT 'map';
+        CREATE TABLE IF NOT EXISTS job_site_maps (
+          business_id VARCHAR,
+          job_id VARCHAR PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+          image_url TEXT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        ALTER TABLE job_site_maps ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON job_site_maps;
+        CREATE POLICY tenant_isolation ON job_site_maps
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON job_site_maps TO app_tenant;
+          END IF;
+        END $$;
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           role_key VARCHAR NOT NULL,

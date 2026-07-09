@@ -156,7 +156,7 @@ import { renderBrandedEmail, renderInvoiceEmail } from "./emailTemplates";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter, type BeforeAfterBranding } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
-import { renderSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
+import { renderSiteMapSnapshot, renderImageSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
 import { queueJobPush, removeJobEvents, getConnectionForUser } from "./services/googleCalendarSync";
@@ -31123,10 +31123,13 @@ Transcription: ${transcriptText}`;
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
       }
-      const { latitude, longitude, label, notes, markerType, color } = req.body;
+      const { latitude, longitude, label, notes, markerType, color, surface } = req.body;
 
       if (!latitude || !longitude) {
         return res.status(400).json({ success: false, message: 'Latitude and longitude are required' });
+      }
+      if (surface !== undefined && surface !== 'map' && surface !== 'image') {
+        return res.status(400).json({ success: false, message: "surface must be 'map' or 'image'" });
       }
 
       // Under RLS a foreign tenant's job reads as absent — blocks attaching
@@ -31143,7 +31146,8 @@ Transcription: ${transcriptText}`;
         label: label || null,
         notes: notes || null,
         markerType: markerType || 'tree',
-        color: color || '#22c55e'
+        color: color || '#22c55e',
+        surface: surface || 'map'
       });
       
       res.json({ success: true, data: marker });
@@ -31199,8 +31203,64 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  // Render the job's site map (satellite tiles + numbered markers) as a PNG.
-  // Streams the image directly — no GCS involved, so it's verifiable locally.
+  // The uploaded base image for the job's site map (photo mode — council jobs
+  // where the card address is the billing address, not the site).
+  app.get("/api/jobs/:id/site-map-image", async (req, res) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      const siteMap = await storage.getJobSiteMapImage(req.params.id);
+      res.json({ success: true, data: { imageUrl: siteMap?.imageUrl || null } });
+    } catch (error) {
+      console.error('Error fetching site map image:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch site map image' });
+    }
+  });
+
+  app.post("/api/jobs/:id/site-map-image", imageUpload.single('photo'), async (req, res) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No photo provided' });
+      }
+      if (!(req.file.mimetype || '').toLowerCase().startsWith('image/')) {
+        return res.status(400).json({ success: false, message: 'Site map must be an image' });
+      }
+      const svc = new PhotoStorageService();
+      const { url } = await svc.uploadPhoto(req.file.buffer, req.file.originalname, req.file.mimetype);
+      await storage.upsertJobSiteMapImage(req.params.id, url);
+      res.json({ success: true, data: { imageUrl: url } });
+    } catch (error) {
+      console.error('Error uploading site map image:', error);
+      res.status(500).json({ success: false, message: 'Failed to upload site map image' });
+    }
+  });
+
+  // Compose the job's site-map snapshot: markers over the uploaded site photo
+  // when one exists and has markers, otherwise over stitched satellite tiles.
+  const composeSiteMapPng = async (jobId: string): Promise<Buffer> => {
+    const markers = await storage.getTreeMarkersByJob(jobId);
+    const siteMap = await storage.getJobSiteMapImage(jobId);
+    const imageMarkers = markers.filter((m) => m.surface === 'image');
+    if (siteMap?.imageUrl && imageMarkers.length > 0) {
+      const svc = new PhotoStorageService();
+      const downloaded = await svc.downloadPhotoBuffer(siteMap.imageUrl);
+      if (downloaded?.exists) {
+        return renderImageSiteMapSnapshot(downloaded.buffer, imageMarkers);
+      }
+    }
+    return renderSiteMapSnapshot(markers.filter((m) => m.surface !== 'image'));
+  };
+
+  // Render the job's site map (base + numbered markers) as a PNG.
+  // Streams the image directly — no GCS write, so it's verifiable locally.
   app.get("/api/jobs/:id/site-map.png", async (req, res) => {
     try {
       if (!req.session.employeeId) {
@@ -31210,8 +31270,7 @@ Transcription: ${transcriptText}`;
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
-      const markers = await storage.getTreeMarkersByJob(req.params.id);
-      const png = await renderSiteMapSnapshot(markers);
+      const png = await composeSiteMapPng(req.params.id);
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'no-store');
       res.send(png);
@@ -31236,8 +31295,7 @@ Transcription: ${transcriptText}`;
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
-      const markers = await storage.getTreeMarkersByJob(req.params.id);
-      const png = await renderSiteMapSnapshot(markers);
+      const png = await composeSiteMapPng(req.params.id);
       const svc = new PhotoStorageService();
       const { url, thumbnailUrl } = await svc.uploadPhoto(
         png,
