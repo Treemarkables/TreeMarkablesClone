@@ -208,7 +208,7 @@ const settingsSections: SettingSection[] = [
       {
         id: "equipment-register",
         title: "Equipment Register",
-        description: "Assign licence requirements to equipment for AI Smart Dispatch",
+        description: "Assign licence requirements to equipment",
         icon: Wrench,
         path: "/settings/equipment-register"
       }

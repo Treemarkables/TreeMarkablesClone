@@ -348,7 +348,7 @@ export default function SettingsPreferences() {
                 Daily Revenue Target (NZD)
               </Label>
               <p className="text-sm text-muted-foreground">
-                Used by AI Smart Dispatch and the Dispatch Board revenue progress bar. Set to your typical daily revenue goal.
+                Used by the schedule revenue progress bar. Set to your typical daily revenue goal.
               </p>
               <div className="flex items-center gap-3 mt-3">
                 <div className="relative w-40">

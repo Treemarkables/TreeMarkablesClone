@@ -10,9 +10,7 @@ import {
   Video,
   Search,
   BookOpen,
-  Bot,
   Briefcase,
-  Zap,
   Phone,
   CalendarDays,
   Car,
@@ -66,7 +64,6 @@ function NavIcon({ icon: Icon }: { icon: LucideIcon }) {
 
 const dashboardItems = [
   { title: "All Jobs", url: "/job-dashboard", icon: Briefcase, value: "jobs", isTab: true },
-  { title: "Pipeline", url: "/pipeline", icon: Zap, value: "pipeline", isTab: false },
 ];
 
 
@@ -220,18 +217,6 @@ function SidebarNavContent({
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-
-              {/* AI Smart Dispatch - Admin only */}
-              {!isCrew && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/ai-scheduler"} className={ITEM}>
-                    <Link href="/ai-scheduler" onClick={handleLinkClick} data-testid="link-ai-scheduler">
-                      <NavIcon icon={Bot} />
-                      <span>AI Smart Dispatch</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
 
               {filteredDashboardItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
