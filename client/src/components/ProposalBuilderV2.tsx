@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import {
   X, Plus, Upload, Trash2, Mail, MessageSquare, Check, Crown,
   GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye, ArrowLeft, Save,
-  SlidersHorizontal,
+  SlidersHorizontal, Map as MapIcon,
 } from "lucide-react";
 import { BuilderToolbarButton } from "@/components/BuilderToolbarButton";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
@@ -445,6 +445,51 @@ function PhotoBlock({
   const [uploading, setUploading] = useState(false);
   const [showDiary, setShowDiary] = useState(false);
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
+  const [addingSiteMap, setAddingSiteMap] = useState(false);
+
+  // Bake the job's marked-up satellite site map server-side and drop it into
+  // this photo block — from there it rides the normal proposal photo pipeline
+  // (viewer, PDF, email).
+  const addSiteMap = async () => {
+    if (!jobId) return;
+    setAddingSiteMap(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/site-map-snapshot`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.status === 422) {
+        toast({
+          title: "No markers yet",
+          description: "Add markers on the job card's site map first",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!res.ok) throw new Error("Snapshot failed");
+      const data = await res.json();
+      const url: string | undefined = data?.data?.url;
+      if (!url) throw new Error("Snapshot failed");
+      const photo: UploadedPhoto = {
+        id: `site-map-${Date.now()}`,
+        url,
+        thumbnailUrl: data.data.thumbnailUrl,
+        filename: url.split("/").pop() || "site-map.png",
+        type: "before",
+        category: "documentation",
+        capturedAt: new Date().toISOString(),
+      };
+      onUpdate({ photos: [...block.photos, photo] });
+    } catch {
+      toast({
+        title: "Site Map Error",
+        description: "Failed to create the site map snapshot",
+        variant: "destructive",
+      });
+    } finally {
+      setAddingSiteMap(false);
+    }
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -657,6 +702,19 @@ function PhotoBlock({
               </Button>
             </PopoverContent>
           </Popover>
+        )}
+        {jobId && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addSiteMap}
+            disabled={addingSiteMap}
+            className="gap-1.5"
+          >
+            <MapIcon className="w-3.5 h-3.5" />
+            {addingSiteMap ? "Adding…" : "Site Map"}
+          </Button>
         )}
       </div>
     </div>

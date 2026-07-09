@@ -50,6 +50,8 @@ interface JobSiteMapProps {
   className?: string;
 }
 
+// TODO: source these labels from the trade-preset vocabulary (server/trades/) so
+// non-tree trades get fitting marker types.
 const MARKER_TYPES = [
   { value: "tree", label: "Tree", color: "#22c55e" },
   { value: "stump", label: "Stump", color: "#854d0e" },
@@ -101,7 +103,13 @@ function MapClickHandler({
   return null;
 }
 
-function GeocodedCenter({ address }: { address: string }) {
+function GeocodedCenter({
+  address,
+  onResult,
+}: {
+  address: string;
+  onResult?: (found: boolean) => void;
+}) {
   const map = useMap();
   const [geocoded, setGeocoded] = useState(false);
 
@@ -118,9 +126,13 @@ function GeocodedCenter({ address }: { address: string }) {
           const { lat, lon } = data[0];
           map.setView([parseFloat(lat), parseFloat(lon)], 18);
           setGeocoded(true);
+          onResult?.(true);
+        } else {
+          onResult?.(false);
         }
       } catch (error) {
         console.error("Geocoding failed:", error);
+        onResult?.(false);
       }
     };
 
@@ -138,6 +150,7 @@ export function JobSiteMap({
 }: JobSiteMapProps) {
   const { toast } = useToast();
   const [isAddingMarker, setIsAddingMarker] = useState(false);
+  const [geocodeFailed, setGeocodeFailed] = useState(false);
   const [editingMarker, setEditingMarker] = useState<TreeMarker | null>(null);
   const [newMarkerPosition, setNewMarkerPosition] = useState<{
     lat: number;
@@ -170,11 +183,7 @@ export function JobSiteMap({
       markerType: string;
       color: string;
     }) => {
-      return apiRequest(`/api/jobs/${jobId}/tree-markers`, {
-        method: "POST",
-        body: JSON.stringify(marker),
-        headers: { "Content-Type": "application/json" },
-      });
+      return apiRequest("POST", `/api/jobs/${jobId}/tree-markers`, marker);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -209,11 +218,7 @@ export function JobSiteMap({
       markerType?: string;
       color?: string;
     }) => {
-      return apiRequest(`/api/tree-markers/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(updates),
-        headers: { "Content-Type": "application/json" },
-      });
+      return apiRequest("PATCH", `/api/tree-markers/${id}`, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -232,7 +237,7 @@ export function JobSiteMap({
 
   const deleteMarkerMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/tree-markers/${id}`, { method: "DELETE" });
+      return apiRequest("DELETE", `/api/tree-markers/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -298,9 +303,9 @@ export function JobSiteMap({
   if (isLoading) {
     return (
       <div
-        className={`flex items-center justify-center h-64 bg-gray-100 rounded-lg ${className}`}
+        className={`flex items-center justify-center h-64 bg-muted rounded-lg ${className}`}
       >
-        <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -332,7 +337,7 @@ export function JobSiteMap({
       </div>
 
       {isAddingMarker && (
-        <div className="absolute top-2 left-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-lg text-sm">
+        <div className="absolute top-2 left-2 z-[1000] bg-card border border-border px-3 py-2 rounded-lg shadow-lg text-sm">
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-green-600" />
             <span>Click on the map to place a marker</span>
@@ -350,7 +355,12 @@ export function JobSiteMap({
           attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         />
-        {address && <GeocodedCenter address={address} />}
+        {address && (
+          <GeocodedCenter
+            address={address}
+            onResult={(found) => setGeocodeFailed(!found)}
+          />
+        )}
         <MapClickHandler
           onMapClick={handleMapClick}
           isAddingMarker={isAddingMarker}
@@ -395,12 +405,18 @@ export function JobSiteMap({
         )}
       </MapContainer>
 
+      {geocodeFailed && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Address not found on map — pan/zoom to the property manually.
+        </p>
+      )}
+
       {markers.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {markers.map((marker) => (
             <div
               key={marker.id}
-              className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-xs cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+              className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs cursor-pointer hover:bg-accent"
               onClick={() => openEditDialog(marker)}
             >
               <div

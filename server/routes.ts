@@ -156,6 +156,7 @@ import { renderBrandedEmail, renderInvoiceEmail } from "./emailTemplates";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter, type BeforeAfterBranding } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
+import { renderSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
 import { queueJobPush, removeJobEvents, getConnectionForUser } from "./services/googleCalendarSync";
@@ -31055,6 +31056,9 @@ Transcription: ${transcriptText}`;
   // Get all tree markers for a job
   app.get("/api/jobs/:id/tree-markers", async (req, res) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       const markers = await storage.getTreeMarkersByJob(req.params.id);
       res.json({ success: true, data: markers });
     } catch (error) {
@@ -31066,10 +31070,20 @@ Transcription: ${transcriptText}`;
   // Create a new tree marker
   app.post("/api/jobs/:id/tree-markers", async (req, res) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       const { latitude, longitude, label, notes, markerType, color } = req.body;
-      
+
       if (!latitude || !longitude) {
         return res.status(400).json({ success: false, message: 'Latitude and longitude are required' });
+      }
+
+      // Under RLS a foreign tenant's job reads as absent — blocks attaching
+      // markers to another business's job (WITH CHECK alone doesn't validate jobId).
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
       const marker = await storage.createTreeMarker({
@@ -31092,6 +31106,13 @@ Transcription: ${transcriptText}`;
   // Update a tree marker
   app.patch("/api/tree-markers/:id", async (req, res) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      const existing = await storage.getTreeMarker(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Marker not found' });
+      }
       const { latitude, longitude, label, notes, markerType, color } = req.body;
       const updates: any = {};
       
@@ -31113,11 +31134,73 @@ Transcription: ${transcriptText}`;
   // Delete a tree marker
   app.delete("/api/tree-markers/:id", async (req, res) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      const existing = await storage.getTreeMarker(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Marker not found' });
+      }
       await storage.deleteTreeMarker(req.params.id);
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting tree marker:', error);
       res.status(500).json({ success: false, message: 'Failed to delete tree marker' });
+    }
+  });
+
+  // Render the job's site map (satellite tiles + numbered markers) as a PNG.
+  // Streams the image directly — no GCS involved, so it's verifiable locally.
+  app.get("/api/jobs/:id/site-map.png", async (req, res) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      const markers = await storage.getTreeMarkersByJob(req.params.id);
+      const png = await renderSiteMapSnapshot(markers);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(png);
+    } catch (error) {
+      if (error instanceof NoMarkersError) {
+        return res.status(422).json({ success: false, message: 'No markers placed on this job\'s site map yet' });
+      }
+      console.error('Error rendering site map snapshot:', error);
+      res.status(500).json({ success: false, message: 'Failed to render site map' });
+    }
+  });
+
+  // Render + store the site map snapshot in GCS so proposals can reference it
+  // as a plain /objects/photos URL (viewer, PDF and email all already handle
+  // those).
+  app.post("/api/jobs/:id/site-map-snapshot", async (req, res) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      const markers = await storage.getTreeMarkersByJob(req.params.id);
+      const png = await renderSiteMapSnapshot(markers);
+      const svc = new PhotoStorageService();
+      const { url, thumbnailUrl } = await svc.uploadPhoto(
+        png,
+        `site-map-${req.params.id}.png`,
+        'image/png',
+      );
+      res.json({ success: true, data: { url, thumbnailUrl } });
+    } catch (error) {
+      if (error instanceof NoMarkersError) {
+        return res.status(422).json({ success: false, message: 'No markers placed on this job\'s site map yet' });
+      }
+      console.error('Error storing site map snapshot:', error);
+      res.status(500).json({ success: false, message: 'Failed to create site map snapshot' });
     }
   });
 
