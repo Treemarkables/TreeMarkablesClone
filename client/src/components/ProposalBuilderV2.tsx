@@ -2131,7 +2131,9 @@ export function ProposalBuilderV2({
           {/* ── Toolbar ── */}
           <div className="flex-shrink-0 flex items-stretch sm:items-center justify-between gap-1.5 sm:gap-2 px-1.5 sm:px-4 py-2 border-b bg-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
             <>
-            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-none">
+            {/* sm:flex-initial on both groups so the row can shrink (labels
+                truncate) instead of clipping the Close button at tablet widths */}
+            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-initial">
               <BuilderToolbarButton
                 icon={ArrowLeft}
                 label="Back"
@@ -2176,7 +2178,7 @@ export function ProposalBuilderV2({
                   below the editor (scroll down to see it), matching the
                   invoice modal's live-preview pattern. */}
             </div>
-            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 flex-[2] sm:flex-none">
+            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 flex-[2] sm:flex-initial min-w-0">
               <Popover open={showSettings} onOpenChange={setShowSettings}>
                 <PopoverTrigger asChild>
                   <BuilderToolbarButton

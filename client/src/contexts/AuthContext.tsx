@@ -253,10 +253,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } else if (meResponse.success === true && meResponse.data) {
       consecutive401sRef.current = 0;
+      // Always adopt the fresh /me payload — it carries fields the login response
+      // and any localStorage-persisted user may lack (permissions, planKey,
+      // entitlements). Guarding on id-change here left entitlements stale forever,
+      // which hid every PlanGated nav item (Safety, One Dashboard) for the owner.
       if (!user || user.id !== meResponse.data.id) {
         console.log('✅ Setting authenticated user:', meResponse.data.role);
-        setCurrentUser(meResponse.data);
       }
+      setCurrentUser(meResponse.data);
     }
   }, [meResponse]);
 

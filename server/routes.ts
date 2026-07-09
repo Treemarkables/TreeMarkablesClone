@@ -2234,6 +2234,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Mirror /api/auth/me's payload (permissions + plan entitlements) so the
+      // client's user object is complete from the first render — the login
+      // response is cached as the current user (and seeds the /me query), so a
+      // slimmer payload here left PlanGated nav (Safety, One Dashboard) hidden.
+      await ensureRoleTiersSeeded().catch(() => {});
+      const loginPermsSet = await getEmployeePermissions(employee).catch(() => new Set<string>());
+      let loginPlanKey = 'freemium';
+      let loginEntitlements: string[] = [];
+      if (employee.businessId && TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
+        loginPlanKey = 'business';
+        loginEntitlements = ['plan:crew', 'plan:business'];
+      } else if (employee.businessId) {
+        try {
+          const ent = await resolveEntitlements(employee.businessId);
+          loginPlanKey = ent.planKey;
+          loginEntitlements = Array.from(ent.entitlements);
+        } catch { /* fail-open: empty entitlements */ }
+      }
+
       // Regenerate session ID on login so any stale cookie in the browser
       // is always replaced by a fresh Set-Cookie. Also defends against
       // session fixation.
@@ -2282,7 +2301,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               email: employee.email,
               role: employee.role,
               phone: employee.phone,
-              status: employee.status
+              status: employee.status,
+              permissions: Array.from(loginPermsSet),
+              planKey: loginPlanKey,
+              entitlements: loginEntitlements,
             }
           });
         });
@@ -12897,12 +12919,28 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     let twilioAccount: any = null;
     let twilioPhoneNumber: any = null;
     let twilioTwimlApp: any = null;
+    let twilioVerifiedCallerIds: any = null;
     let twilioFetchError: string | null = null;
     try {
       if (process.env.TWILIO_ACCOUNT_SID && (process.env.TWILIO_AUTH_TOKEN || (process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET))) {
         const client = await getTwilioClient();
         const acct = await client.api.accounts(process.env.TWILIO_ACCOUNT_SID!).fetch();
         twilioAccount = { friendlyName: acct.friendlyName, status: acct.status, type: acct.type };
+
+        // Verified outgoing caller IDs AS THE APP'S CREDENTIALS SEE THEM —
+        // <Dial callerId> with a non-Twilio number (TWILIO_OUTBOUND_CALLER_ID)
+        // is only valid if that number appears in THIS list (error 13214
+        // otherwise). Listing it here catches account/subaccount mismatches
+        // that the console UI can't reveal.
+        try {
+          const verifiedIds = await client.outgoingCallerIds.list({ limit: 20 });
+          twilioVerifiedCallerIds = verifiedIds.map((v: any) => ({
+            phoneNumber: v.phoneNumber,
+            friendlyName: v.friendlyName,
+          }));
+        } catch (vErr: any) {
+          twilioVerifiedCallerIds = { error: vErr?.message || String(vErr) };
+        }
 
         // The TwiML App's voice URL is what Twilio hits when a Voice-SDK
         // client places an outgoing call — if it isn't our outgoing webhook,
@@ -13032,6 +13070,17 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     if (twilioTwimlApp && !twilioTwimlApp.error && !twilioTwimlApp.voiceUrlMatchesExpected) {
       recommendations.push(`TwiML App voice URL should be ${expectedWebhooks.outgoing} for web-dialer outgoing calls (currently: ${twilioTwimlApp.voiceUrl || 'unset'}) — POST /api/twilio/admin/configure-outgoing sets it`);
     }
+    {
+      const outboundCallerId = (process.env.TWILIO_OUTBOUND_CALLER_ID || '').trim();
+      if (
+        outboundCallerId &&
+        outboundCallerId !== process.env.TWILIO_PHONE_NUMBER &&
+        Array.isArray(twilioVerifiedCallerIds) &&
+        !twilioVerifiedCallerIds.some((v: any) => v.phoneNumber === outboundCallerId)
+      ) {
+        recommendations.push(`TWILIO_OUTBOUND_CALLER_ID (${outboundCallerId}) is NOT in this account's verified caller IDs — outgoing web calls will fail with error 13214. Verify it at Twilio Console → Phone Numbers → Verified Caller IDs (in THIS account), or unset the env var to fall back to the Twilio line.`);
+      }
+    }
     // observedBaseUrl is just where the diagnostic was viewed from — it doesn't
     // affect whether Twilio webhooks work. Only the Twilio-side voiceUrl matters.
 
@@ -13044,6 +13093,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       twilioAccount,
       twilioPhoneNumber,
       twilioTwimlApp,
+      twilioVerifiedCallerIds,
       twilioFetchError,
       recentCalls,
       twilioCallLegs,
