@@ -1258,7 +1258,7 @@ export function InvoiceBuilder({
           <DialogHeader className="sticky top-0 z-20 bg-background -mx-4 px-1.5 pt-2 pb-2 sm:-mx-6 sm:px-6 sm:pt-4 sm:pb-3 border-b space-y-2">
             {/* ── Toolbar — mirrors the proposal/quote builder ── */}
             <div className="flex items-stretch sm:items-center justify-between gap-1.5 sm:gap-2">
-              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-none">
+              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-initial">
                 <BuilderToolbarButton
                   icon={ArrowLeft}
                   label="Back"
@@ -1294,7 +1294,7 @@ export function InvoiceBuilder({
                   className="bg-indigo-600 hover:bg-indigo-700"
                 />
               </div>
-              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 flex-1 sm:flex-none">
+              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 flex-1 sm:flex-initial min-w-0">
                 <BuilderToolbarButton
                   icon={X}
                   label="Close"

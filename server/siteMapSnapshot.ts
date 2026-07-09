@@ -35,10 +35,10 @@ const MAX_CANVAS_H = 960;
 const MIN_CANVAS_W = 800;
 const MIN_CANVAS_H = 600;
 const MIN_ZOOM = 16;
-// Esri/LINZ native coverage is solid to z19 NZ-wide (verified deeper over
-// Gisborne); beyond that rural gaps risk grey patches in a customer-facing
-// image, so the snapshot stays a notch below the interactive map's ceiling.
-const MAX_ZOOM = 19;
+// Matches the detail the interactive map shows when framing a property.
+// Where native z20 coverage is missing, fetchTile falls back to the upscaled
+// parent tile, so a customer-facing image degrades soft instead of grey.
+const MAX_ZOOM = 20;
 const ATTRIBUTION = "Imagery (c) Esri, Maxar, Earthstar Geographics";
 
 const XML_ENTITIES: Record<string, string> = {
@@ -64,32 +64,61 @@ function latToPx(lat: number, z: number): number {
   );
 }
 
-async function fetchTile(z: number, x: number, y: number): Promise<Buffer> {
+function greyTile(): Promise<Buffer> {
+  return sharp({
+    create: {
+      width: TILE_SIZE,
+      height: TILE_SIZE,
+      channels: 3,
+      background: { r: 220, g: 220, b: 220 },
+    },
+  })
+    .png()
+    .toBuffer();
+}
+
+async function fetchTileRaw(
+  z: number,
+  x: number,
+  y: number,
+): Promise<Buffer | null> {
   const max = 2 ** z;
-  // Out-of-range tiles (off the edge of the world) render grey.
-  const grey = () =>
-    sharp({
-      create: {
-        width: TILE_SIZE,
-        height: TILE_SIZE,
-        channels: 3,
-        background: { r: 220, g: 220, b: 220 },
-      },
-    })
-      .png()
-      .toBuffer();
-
-  if (y < 0 || y >= max) return grey();
+  if (y < 0 || y >= max) return null;
   const wrappedX = ((x % max) + max) % max;
-
   try {
     const res = await fetch(
       `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${wrappedX}`,
     );
-    if (!res.ok) return grey();
+    if (!res.ok) return null;
     return Buffer.from(await res.arrayBuffer());
   } catch {
-    return grey();
+    return null;
+  }
+}
+
+// A tile that's missing at this zoom (thin native coverage) is replaced with
+// its parent tile's quadrant upscaled — soft imagery beats a grey hole in a
+// customer-facing image. One level only; beyond that render grey.
+async function fetchTile(z: number, x: number, y: number): Promise<Buffer> {
+  const direct = await fetchTileRaw(z, x, y);
+  if (direct) return direct;
+
+  const parent = await fetchTileRaw(z - 1, x >> 1, y >> 1);
+  if (!parent) return greyTile();
+  try {
+    const half = TILE_SIZE / 2;
+    return await sharp(parent)
+      .extract({
+        left: (x & 1) * half,
+        top: (y & 1) * half,
+        width: half,
+        height: half,
+      })
+      .resize(TILE_SIZE, TILE_SIZE)
+      .png()
+      .toBuffer();
+  } catch {
+    return greyTile();
   }
 }
 
@@ -188,13 +217,36 @@ export async function renderSiteMapSnapshot(
     height: canvasH,
   });
 
-  // ── SVG overlay: numbered marker circles + legend + attribution ──
+  const overlay = buildOverlaySvg(
+    markers,
+    (m) => ({
+      x: lonToPx(parseFloat(m.longitude), zoom) - originX,
+      y: latToPx(parseFloat(m.latitude), zoom) - originY,
+    }),
+    canvasW,
+    canvasH,
+    ATTRIBUTION,
+  );
+
+  return base
+    .composite([{ input: Buffer.from(overlay), top: 0, left: 0 }])
+    .png()
+    .toBuffer();
+}
+
+// ── Shared SVG overlay: numbered marker circles + legend (+ attribution) ──
+function buildOverlaySvg(
+  markers: SnapshotMarker[],
+  project: (m: SnapshotMarker) => { x: number; y: number },
+  canvasW: number,
+  canvasH: number,
+  attribution?: string,
+): string {
   const R = 14;
   const parts: string[] = [];
 
   markers.forEach((m, i) => {
-    const cx = lonToPx(parseFloat(m.longitude), zoom) - originX;
-    const cy = latToPx(parseFloat(m.latitude), zoom) - originY;
+    const { x: cx, y: cy } = project(m);
     const color = m.color || "#22c55e";
     parts.push(
       `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${escapeXml(color)}" stroke="white" stroke-width="3"/>` +
@@ -232,18 +284,59 @@ export async function renderSiteMapSnapshot(
     );
   }
 
-  // Attribution (bottom-right).
-  parts.push(
-    `<rect x="${canvasW - 320}" y="${canvasH - 22}" width="320" height="22" fill="black" fill-opacity="0.55"/>` +
-      `<text x="${canvasW - 10}" y="${canvasH - 11}" font-family="Inter, Arial, sans-serif" font-size="11" fill="white" text-anchor="end" dominant-baseline="central">${escapeXml(ATTRIBUTION)}</text>`,
-  );
+  if (attribution) {
+    parts.push(
+      `<rect x="${canvasW - 320}" y="${canvasH - 22}" width="320" height="22" fill="black" fill-opacity="0.55"/>` +
+        `<text x="${canvasW - 10}" y="${canvasH - 11}" font-family="Inter, Arial, sans-serif" font-size="11" fill="white" text-anchor="end" dominant-baseline="central">${escapeXml(attribution)}</text>`,
+    );
+  }
 
-  const overlay =
+  return (
     `<svg width="${canvasW}" height="${canvasH}" xmlns="http://www.w3.org/2000/svg">` +
     parts.join("") +
-    `</svg>`;
+    `</svg>`
+  );
+}
 
-  return base
+/**
+ * Render markers over an UPLOADED site image (photo mode — e.g. council jobs
+ * whose card address is the billing address, not the site). Marker
+ * latitude/longitude carry normalized 0..1 coords: lat = y from the top,
+ * lng = x from the left.
+ */
+export async function renderImageSiteMapSnapshot(
+  baseImage: Buffer,
+  markers: SnapshotMarker[],
+): Promise<Buffer> {
+  if (markers.length === 0) throw new NoMarkersError();
+
+  // EXIF-rotate so overlay coords match what the user saw in the editor,
+  // then cap the output size (uploads can be huge camera photos).
+  const rotated = await sharp(baseImage)
+    .rotate()
+    .resize({
+      width: MAX_CANVAS_W,
+      height: MAX_CANVAS_H,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .toBuffer();
+  const { width, height } = await sharp(rotated).metadata();
+  if (!width || !height) {
+    throw new Error("Could not read site image dimensions");
+  }
+
+  const overlay = buildOverlaySvg(
+    markers,
+    (m) => ({
+      x: parseFloat(m.longitude) * width,
+      y: parseFloat(m.latitude) * height,
+    }),
+    width,
+    height,
+  );
+
+  return sharp(rotated)
     .composite([{ input: Buffer.from(overlay), top: 0, left: 0 }])
     .png()
     .toBuffer();

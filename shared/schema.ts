@@ -4521,11 +4521,29 @@ export const treeMarkers = pgTable("tree_markers", {
   notes: text("notes"), // Additional notes about the tree
   markerType: text("marker_type").default('tree'), // tree, stump, hazard, etc.
   color: text("color").default('#22c55e'), // Marker color (green default)
+  // 'map' = latitude/longitude are geographic; 'image' = they are normalized
+  // 0..1 coords (lat=y from top, lng=x from left) on the job's uploaded
+  // site-map image (job_site_maps).
+  surface: text("surface").notNull().default('map'),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   jobIdIdx: index("tree_markers_job_id_idx").on(table.jobId),
 }));
+
+// Uploaded base image for a job's site map — used when the job-card address
+// isn't the actual work site (e.g. council jobs invoiced to the council's
+// address), so the satellite view can't frame the site and the user supplies
+// their own aerial/plan photo to mark trees on instead.
+export const jobSiteMaps = pgTable("job_site_maps", {
+  businessId: varchar("business_id"),
+  jobId: varchar("job_id").primaryKey().references(() => jobs.id, { onDelete: 'cascade' }),
+  imageUrl: text("image_url").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type JobSiteMapImage = typeof jobSiteMaps.$inferSelect;
 
 // Tree markers schemas
 export const insertTreeMarkerSchema = createInsertSchema(treeMarkers).omit({

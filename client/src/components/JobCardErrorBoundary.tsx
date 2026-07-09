@@ -1,6 +1,11 @@
 import { Component, ReactNode, createElement, Fragment } from 'react';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, RefreshCw, X, Loader2 } from 'lucide-react';
+import {
+  isChunkLoadError,
+  canAttemptReload,
+  requestStaleBundleReload,
+} from '@/lib/staleChunkReload';
 
 interface Props {
   children: ReactNode;
@@ -11,6 +16,7 @@ interface State {
   hasError: boolean;
   error: Error | null;
   resetKey: number;
+  recovering: boolean;
 }
 
 export class JobCardErrorBoundary extends Component<Props, State> {
@@ -18,11 +24,18 @@ export class JobCardErrorBoundary extends Component<Props, State> {
 
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, resetKey: 0 };
+    this.state = { hasError: false, error: null, resetKey: 0, recovering: false };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
-    return { hasError: true, error };
+    // Chunk-load failures during a deploy rollout recover via a hard reload
+    // (the top-level ErrorBoundary pattern) — show a calm "Updating" state
+    // instead of the error card while it lands.
+    return {
+      hasError: true,
+      error,
+      recovering: isChunkLoadError(error) && canAttemptReload(),
+    };
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
@@ -30,6 +43,14 @@ export class JobCardErrorBoundary extends Component<Props, State> {
     // triggers another render cycle, which causes an infinite loop when the error
     // is itself a "Maximum update depth exceeded" error.
     this.capturedComponentStack = errorInfo.componentStack || '';
+
+    // Stale-bundle recovery first: lazy-loaded job-card chunks fail through
+    // Suspense into THIS boundary (the top-level one never sees them), and
+    // React caches the rejected import — remounting can never fix it, only a
+    // reload can. Skip logging while retrying; it's a deploy artifact.
+    if (isChunkLoadError(error) && requestStaleBundleReload() === 'reloading') {
+      return;
+    }
 
     // Persist to localStorage for diagnosis
     try {
@@ -60,6 +81,12 @@ export class JobCardErrorBoundary extends Component<Props, State> {
   }
 
   handleRetry = () => {
+    // React lazy() caches a failed import's rejection, so remounting after a
+    // chunk error just re-throws — only a full reload can fetch the chunk.
+    if (isChunkLoadError(this.state.error)) {
+      window.location.reload();
+      return;
+    }
     this.capturedComponentStack = '';
     // Increment resetKey so we get a fresh Fragment with a different key,
     // which forces React to fully unmount and remount the children.
@@ -67,6 +94,7 @@ export class JobCardErrorBoundary extends Component<Props, State> {
       hasError: false,
       error: null,
       resetKey: prev.resetKey + 1,
+      recovering: false,
     }));
   };
 
@@ -77,6 +105,16 @@ export class JobCardErrorBoundary extends Component<Props, State> {
   };
 
   render() {
+    if (this.state.hasError && this.state.recovering) {
+      // A stale-bundle reload is in flight — calm screen, not the error card.
+      return (
+        <div className="flex flex-col items-center justify-center p-8 bg-white rounded-lg m-4 text-center gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <p className="text-sm text-gray-500">Updating to the latest version…</p>
+        </div>
+      );
+    }
+
     if (this.state.hasError) {
       const stack = this.capturedComponentStack
         .split('\n')
