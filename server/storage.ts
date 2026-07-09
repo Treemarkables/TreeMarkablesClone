@@ -1101,6 +1101,8 @@ export interface IStorage {
   updateTreeMarker(id: string, updates: schema.UpdateTreeMarker): Promise<schema.TreeMarker>;
   deleteTreeMarker(id: string): Promise<boolean>;
   getTreeMarkersByJob(jobId: string): Promise<schema.TreeMarker[]>;
+  getJobSiteMapImage(jobId: string): Promise<schema.JobSiteMapImage | null>;
+  upsertJobSiteMapImage(jobId: string, imageUrl: string): Promise<schema.JobSiteMapImage>;
 
   // Mulch Drops
   createMulchDrop(drop: schema.InsertMulchDrop): Promise<schema.MulchDrop>;
@@ -7597,6 +7599,28 @@ class DatabaseStorage implements IStorage {
       .from(schema.treeMarkers)
       .where(eq(schema.treeMarkers.jobId, jobId))
       .orderBy(schema.treeMarkers.createdAt);
+  }
+
+  async getJobSiteMapImage(jobId: string): Promise<schema.JobSiteMapImage | null> {
+    const [result] = await db.select()
+      .from(schema.jobSiteMaps)
+      .where(eq(schema.jobSiteMaps.jobId, jobId));
+    return result || null;
+  }
+
+  async upsertJobSiteMapImage(jobId: string, imageUrl: string): Promise<schema.JobSiteMapImage> {
+    const existing = await this.getJobSiteMapImage(jobId);
+    if (existing) {
+      const [updated] = await db.update(schema.jobSiteMaps)
+        .set({ imageUrl, updatedAt: new Date() })
+        .where(eq(schema.jobSiteMaps.jobId, jobId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(schema.jobSiteMaps)
+      .values(withTenant({ jobId, imageUrl }))
+      .returning();
+    return created;
   }
 
   // ─── Mulch Drops ──────────────────────────────────────────────────────────
