@@ -113,6 +113,7 @@ import { PhotoCaptureModal } from "./PhotoCaptureModal";
 import { SpeechToQuote } from "./SpeechToQuote";
 import { CustomerAvatar } from "./CustomerAvatar";
 import { JobLocationMap } from "./JobLocationMap";
+import { JobSiteMapSection } from "./JobSiteMapSection";
 import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -6834,6 +6835,15 @@ The Treemarkables Team`;
                           <JobLocationMap
                             jobAddress={editingJob.address}
                             className="mt-2"
+                          />
+                        )}
+
+                        {/* Bird's-eye site map with tree markers */}
+                        {mode === "edit" && editingJob?.id && (
+                          <JobSiteMapSection
+                            jobId={editingJob.id}
+                            address={editingJob.address ?? undefined}
+                            className="mt-1"
                           />
                         )}
 

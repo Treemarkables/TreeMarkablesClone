@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { SpeechToQuote } from "@/components/SpeechToQuote";
 import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAutocomplete";
+import { JobSiteMapSection } from "@/components/JobSiteMapSection";
 
 // The Web Speech API (webkitSpeechRecognition) is present on `window` inside the
 // iOS Capacitor WKWebView but is a silent no-op there — recognition never starts,
@@ -724,6 +725,11 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           )}
         </div>
       )}
+
+      {/* ── Site Map (bird's-eye tree markers) ── */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-2">
+        <JobSiteMapSection jobId={jobId} address={job?.address ?? undefined} />
+      </div>
 
       {/* ── Job Description ── */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4">

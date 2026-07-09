@@ -782,6 +782,23 @@ The {businessName} Team';
             GRANT SELECT, INSERT, UPDATE, DELETE ON equipment_compliance_reminders TO app_tenant;
           END IF;
         END $$;
+        -- tree_markers drifted from shared/schema.ts: the bootstrap DDL never had
+        -- business_id and no RLS policy exists, so under the blanket app_tenant GRANT
+        -- it was cross-tenant readable/writable. Mirrors
+        -- migrations/manual/20260709_tree_markers_business_id_rls.sql.
+        ALTER TABLE tree_markers ADD COLUMN IF NOT EXISTS business_id VARCHAR;
+        UPDATE tree_markers tm SET business_id = j.business_id
+          FROM jobs j WHERE tm.job_id = j.id AND tm.business_id IS NULL;
+        ALTER TABLE tree_markers ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON tree_markers;
+        CREATE POLICY tenant_isolation ON tree_markers
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON tree_markers TO app_tenant;
+          END IF;
+        END $$;
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           role_key VARCHAR NOT NULL,
