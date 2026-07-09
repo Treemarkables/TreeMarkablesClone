@@ -13982,6 +13982,137 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // ── Live job timer (clock in/out) ─────────────────────────────────────────
+  // Start/stop from the job card. Stopping converts the elapsed time into a
+  // jobs.staffTimeEntries entry so labour cost, back-costing and gross margin
+  // reuse the exact recompute paths the manual RecordedTimeEntries flow uses.
+
+  // Stop a running timer: write the time entry, recompute labour + margin,
+  // diary-log, delete the timer row. Shared by /timer/stop and start-with-switch.
+  async function finalizeTimer(timer: { id: string; jobId: string; employeeId: string; startedAt: Date | string }) {
+    const elapsedMs = Date.now() - new Date(timer.startedAt).getTime();
+    // Round to 2dp hours, minimum 1 minute so an accidental tap-tap still
+    // produces a visible, deletable entry rather than a silent no-op.
+    const hours = Math.max(0.02, Math.round((elapsedMs / 3_600_000) * 100) / 100);
+
+    const employee = await storage.getEmployee(timer.employeeId);
+    const chargeRate = employee?.chargeOutRate ? parseFloat(String(employee.chargeOutRate)) : 0;
+    const costRate = employee?.hourlyRate ? parseFloat(String(employee.hourlyRate)) : undefined;
+
+    await storage.addStaffTimeEntry(timer.jobId, {
+      employeeId: timer.employeeId,
+      hours,
+      rate: chargeRate,
+      costRate,
+      date: new Date().toISOString().split('T')[0],
+    });
+
+    // Recalculate labour cost from cost rates (same maths as the manual flow)
+    const entries = await storage.getJobStaffTimeEntries(timer.jobId);
+    const totalLaborCost = await entries.reduce(async (accPromise: Promise<number>, e: any) => {
+      const acc = await accPromise;
+      let cr = e.costRate;
+      if (cr === undefined || cr === null) {
+        const emp = e.employeeId ? await storage.getEmployee(e.employeeId) : null;
+        cr = emp?.hourlyRate ? parseFloat(String(emp.hourlyRate)) : 0;
+      }
+      return acc + (e.hours * (cr || 0));
+    }, Promise.resolve(0));
+    await storage.updateJobExpenses(timer.jobId, { actualLaborCosts: totalLaborCost });
+    await storage.calculateAndUpdateGrossMargin(timer.jobId);
+
+    const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
+    await storage.createJobDiaryEntry({
+      jobId: timer.jobId,
+      entryType: 'note',
+      title: 'Timer stopped',
+      description: `${employeeName}: ${hours} hours (live timer)`,
+      authorName: employeeName,
+      authorRole: 'system',
+      isPrivate: false,
+    }).catch(() => { /* non-critical */ });
+
+    await storage.deleteTimer(timer.id);
+    return { hours, jobId: timer.jobId };
+  }
+
+  // Current user's running timer (if any) — drives the job-card timer UI.
+  app.get('/api/timer/current', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const timer = await storage.getActiveTimerForEmployee(req.session.employeeId);
+      if (!timer) return res.json({ success: true, data: null });
+      const job = await storage.getJob(timer.jobId);
+      res.json({
+        success: true,
+        data: {
+          ...timer,
+          jobNumber: job?.jobNumber ?? null,
+          jobTitle: job?.title ?? null,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching current timer:', error);
+      res.status(500).json({ success: false, message: 'Error fetching current timer' });
+    }
+  });
+
+  // Clock in on a job. If the user already has a timer running on ANOTHER
+  // job, responds 409 with that timer unless { switch: true } — then the old
+  // timer is finalized first. Starting on the same job is idempotent.
+  app.post('/api/jobs/:id/timer/start', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const jobId = req.params.id;
+      const job = await storage.getJob(jobId);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+      const running = await storage.getActiveTimerForEmployee(req.session.employeeId);
+      if (running) {
+        if (running.jobId === jobId) {
+          return res.json({ success: true, data: running }); // already running here
+        }
+        if (!req.body?.switch) {
+          const otherJob = await storage.getJob(running.jobId);
+          return res.status(409).json({
+            success: false,
+            message: 'Timer already running on another job',
+            data: { ...running, jobNumber: otherJob?.jobNumber ?? null },
+          });
+        }
+        await finalizeTimer(running);
+      }
+
+      const timer = await storage.startTimer(jobId, req.session.employeeId);
+      res.json({ success: true, data: timer });
+    } catch (error) {
+      console.error('Error starting timer:', error);
+      res.status(500).json({ success: false, message: 'Error starting timer' });
+    }
+  });
+
+  // Clock out — finalizes the current user's running timer wherever it is.
+  app.post('/api/timer/stop', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const running = await storage.getActiveTimerForEmployee(req.session.employeeId);
+      if (!running) {
+        return res.status(404).json({ success: false, message: 'No running timer' });
+      }
+      const result = await finalizeTimer(running);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error stopping timer:', error);
+      res.status(500).json({ success: false, message: 'Error stopping timer' });
+    }
+  });
+
   // Get staff time entries for a job
   app.get('/api/jobs/:id/staff-time', async (req: Request, res: Response) => {
     try {

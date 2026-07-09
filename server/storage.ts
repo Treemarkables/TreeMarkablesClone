@@ -1104,6 +1104,11 @@ export interface IStorage {
   getJobSiteMapImage(jobId: string): Promise<schema.JobSiteMapImage | null>;
   upsertJobSiteMapImage(jobId: string, imageUrl: string): Promise<schema.JobSiteMapImage>;
 
+  // Live job timers (clock in/out)
+  getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null>;
+  startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer>;
+  deleteTimer(id: string): Promise<boolean>;
+
   // Mulch Drops
   createMulchDrop(drop: schema.InsertMulchDrop): Promise<schema.MulchDrop>;
   reorderMulchDrops(orderedIds: string[]): Promise<void>;
@@ -7621,6 +7626,28 @@ class DatabaseStorage implements IStorage {
       .values(withTenant({ jobId, imageUrl }))
       .returning();
     return created;
+  }
+
+  // ─── Live job timers (clock in/out) ───────────────────────────────────────
+  async getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null> {
+    const [timer] = await db.select()
+      .from(schema.activeTimers)
+      .where(eq(schema.activeTimers.employeeId, employeeId));
+    return timer ?? null;
+  }
+
+  async startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer> {
+    const [timer] = await db.insert(schema.activeTimers)
+      .values(withTenant({ jobId, employeeId }))
+      .returning();
+    return timer;
+  }
+
+  async deleteTimer(id: string): Promise<boolean> {
+    const result = await db.delete(schema.activeTimers)
+      .where(eq(schema.activeTimers.id, id))
+      .returning();
+    return result.length > 0;
   }
 
   // ─── Mulch Drops ──────────────────────────────────────────────────────────
