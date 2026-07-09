@@ -31,11 +31,11 @@ export function WebCallButton() {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="default"
+          variant="ghost"
           size="icon"
           aria-label="Make a call"
           data-testid="web-call-button"
-          className="h-14 w-14 bg-green text-green-foreground border-[hsl(var(--green-border))] [&_svg]:size-6"
+          className="h-14 w-14 text-green [&_svg]:size-6"
           disabled={callState !== "idle"}
         >
           <Phone />
