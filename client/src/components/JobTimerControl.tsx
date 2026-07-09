@@ -82,7 +82,28 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
     enabled: pickerOpen,
     staleTime: 15_000,
   });
-  const employees = (employeesResp?.data ?? []).filter((e) => e.isActive !== false);
+  // Staff scheduled on this job — sorted to the top of the picker as the
+  // likely selection. EVERY active staff member stays selectable regardless
+  // (crews change on the day), scheduling is just the sort order.
+  const { data: assignmentsResp } = useQuery<{ data: Array<{ employeeId: string }> }>({
+    queryKey: ["/api/jobs", jobId, "staff-assignments"],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/staff-assignments`);
+      if (!res.ok) return { data: [] };
+      return res.json();
+    },
+    enabled: pickerOpen && !!jobId,
+    staleTime: 60_000,
+  });
+  const scheduledIds = new Set((assignmentsResp?.data ?? []).map((a) => a.employeeId));
+  const employees = (employeesResp?.data ?? [])
+    .filter((e) => e.isActive !== false)
+    .sort((a, b) => {
+      const aScheduled = scheduledIds.has(a.id) ? 0 : 1;
+      const bScheduled = scheduledIds.has(b.id) ? 0 : 1;
+      if (aScheduled !== bScheduled) return aScheduled - bScheduled;
+      return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+    });
   const activeTimers = activeResp?.data ?? [];
   const timerByEmployee = new Map(activeTimers.map((t) => [t.employeeId, t]));
 
@@ -298,6 +319,10 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
                       ) : running ? (
                         <span className="text-xs text-amber-600 font-medium flex-shrink-0">
                           On Job {running.jobNumber ?? ""}
+                        </span>
+                      ) : scheduledIds.has(emp.id) ? (
+                        <span className="text-xs text-muted-foreground flex-shrink-0">
+                          Scheduled
                         </span>
                       ) : null}
                     </label>
