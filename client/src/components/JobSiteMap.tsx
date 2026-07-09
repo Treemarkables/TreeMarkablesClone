@@ -123,8 +123,22 @@ function GeocodedCenter({
         );
         const data = await response.json();
         if (data && data.length > 0) {
-          const { lat, lon } = data[0];
-          map.setView([parseFloat(lat), parseFloat(lon)], 18);
+          const { lat, lon, boundingbox } = data[0];
+          // For house addresses Nominatim usually matches the building itself
+          // and its boundingbox is the parcel/footprint — fit to that so the
+          // view frames just the property. maxZoom clamps tiny footprints.
+          if (Array.isArray(boundingbox) && boundingbox.length === 4) {
+            const [south, north, west, east] = boundingbox.map(Number);
+            map.fitBounds(
+              [
+                [south, west],
+                [north, east],
+              ],
+              { padding: [40, 40], maxZoom: 19 },
+            );
+          } else {
+            map.setView([parseFloat(lat), parseFloat(lon)], 18);
+          }
           setGeocoded(true);
           onResult?.(true);
         } else {
@@ -351,9 +365,13 @@ export function JobSiteMap({
         style={{ height: "400px", width: "100%" }}
         className="rounded-lg z-0"
       >
+        {/* maxNativeZoom 18: z19 is upscaled z18 imagery rather than risking
+            blank tiles where Esri lacks native 19 coverage (rural NZ). */}
         <TileLayer
           attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          maxNativeZoom={18}
+          maxZoom={19}
         />
         {address && (
           <GeocodedCenter
