@@ -27,7 +27,10 @@ export const BuilderToolbarButton = forwardRef<
     title={label}
     disabled={disabled || loading}
     className={cn(
-      "flex flex-1 sm:flex-none min-w-0 flex-col sm:flex-row items-center justify-center",
+      // sm:flex-initial (not flex-none) so a full toolbar can shrink these
+      // buttons — with truncating labels — instead of pushing the last one
+      // (Close) off-screen at tablet widths.
+      "flex flex-1 sm:flex-initial min-w-0 flex-col sm:flex-row items-center justify-center",
       "gap-1 sm:gap-1.5 px-1 sm:px-3 py-2 sm:py-1.5 min-h-[54px] sm:min-h-0",
       "rounded-lg sm:rounded-md text-white shadow-sm transition-colors disabled:opacity-60",
       className,
