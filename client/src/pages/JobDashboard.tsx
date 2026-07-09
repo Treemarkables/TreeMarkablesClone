@@ -46,7 +46,6 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import Pipeline from "./Pipeline";
 import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
 import { EquipmentTracker } from "@/components/EquipmentTracker";
 import CommunicationsManagement from "./CommunicationsManagement";
@@ -1092,11 +1091,6 @@ export default function JobDashboard({
                 </div>
               </div>
             </div>
-          </TabsContent>
-
-          {/* Pipeline Tab */}
-          <TabsContent value="pipeline" className="flex-1 overflow-auto">
-            <Pipeline />
           </TabsContent>
 
           {/* Job Templates Tab */}

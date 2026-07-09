@@ -50,7 +50,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 
 const TEMPLATE_CATEGORIES: { value: string; label: string; description: string }[] = [
-  { value: "confirmation", label: "Job Scheduling Confirmation", description: "Used by AI Smart Dispatch when confirming scheduled jobs" },
+  { value: "confirmation", label: "Job Scheduling Confirmation", description: "Confirmation messages for scheduled jobs" },
   { value: "quote", label: "Quote / Proposal", description: "Sending quotes or proposals to customers" },
   { value: "invoice", label: "Invoice", description: "Invoice delivery and payment requests" },
   { value: "job_status", label: "Job Status Update", description: "Notifying customers of job progress" },

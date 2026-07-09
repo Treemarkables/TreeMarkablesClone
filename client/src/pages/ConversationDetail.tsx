@@ -12,7 +12,6 @@ import {
   Phone,
   Video,
   Calendar,
-  UserPlus,
   Star,
   Activity,
   MessageSquare,
@@ -112,12 +111,11 @@ export default function ConversationDetail() {
   const [replyContent, setReplyContent] = useState("");
   const [showManageMenu, setShowManageMenu] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
-  const [showCreateOpportunity, setShowCreateOpportunity] = useState(false);
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
 
-  // Create Opportunity form state
+  // Create Job form state
   const [leadForm, setLeadForm] = useState({
     name: "",
     email: "",
@@ -474,35 +472,6 @@ export default function ConversationDetail() {
     },
   });
 
-  // Create Opportunity mutation
-  const createOpportunityMutation = useMutation({
-    mutationFn: async (leadData: typeof leadForm) => {
-      return apiRequest("POST", "/api/pipeline-leads", leadData);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pipeline-leads"] });
-      setShowCreateOpportunity(false);
-      setLeadForm({
-        name: "",
-        email: "",
-        phone: "",
-        address: "",
-        serviceRequested: "",
-        urgency: "medium",
-        status: "new_lead",
-        notes: "",
-      });
-      setLocation("/pipeline");
-    },
-    onError: () => {
-      toast({
-        title: "Failed to create opportunity",
-        description: "Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
   // Create Job mutation — actually creates a job and redirects to it
   const createJobMutation = useMutation<Job, Error, typeof leadForm>({
     mutationFn: async (formValues) => {
@@ -609,10 +578,6 @@ export default function ConversationDetail() {
   const handleSendReply = () => {
     if (!replyContent.trim()) return;
     replyMutation.mutate({ content: replyContent });
-  };
-
-  const handleCreateOpportunity = () => {
-    createOpportunityMutation.mutate(leadForm);
   };
 
   const getInitials = (title: string) => {
@@ -919,34 +884,6 @@ export default function ConversationDetail() {
               </span>
             </button>
 
-            {/* Create Opportunity */}
-            <button
-              onClick={() => {
-                setShowManageMenu(false);
-                const extracted = extractContactDetails();
-                setLeadForm({
-                  name: extracted.name || conversation?.title || "New Lead",
-                  email: extracted.email || "",
-                  phone: extracted.phone || "",
-                  address: extracted.address || "",
-                  serviceRequested: extracted.description || "",
-                  urgency: "medium",
-                  status: "new",
-                  notes: `Opportunity from conversation: ${conversation?.title || ""}`,
-                });
-                setShowCreateOpportunity(true);
-              }}
-              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
-              data-testid="button-create-opportunity"
-            >
-              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                <UserPlus className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-base font-medium text-gray-900">
-                Create Opportunity
-              </span>
-            </button>
-
             {/* Create Job from Lead - disabled if already converted */}
             {conversation?.status === "converted" ||
             conversation?.conversionDate ? (
@@ -1068,158 +1005,6 @@ export default function ConversationDetail() {
           </div>
         </SheetContent>
       </Sheet>
-
-      {/* Create Opportunity Dialog */}
-      <Dialog
-        open={showCreateOpportunity}
-        onOpenChange={setShowCreateOpportunity}
-      >
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Create Opportunity</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                value={leadForm.name}
-                onChange={(e) =>
-                  setLeadForm({ ...leadForm, name: e.target.value })
-                }
-                placeholder="Customer name"
-                data-testid="input-lead-name"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                value={leadForm.phone}
-                onChange={(e) =>
-                  setLeadForm({ ...leadForm, phone: e.target.value })
-                }
-                placeholder="Phone number"
-                data-testid="input-lead-phone"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={leadForm.email}
-                onChange={(e) =>
-                  setLeadForm({ ...leadForm, email: e.target.value })
-                }
-                placeholder="Email address"
-                data-testid="input-lead-email"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="address">Address</Label>
-              <Input
-                id="address"
-                value={leadForm.address}
-                onChange={(e) =>
-                  setLeadForm({ ...leadForm, address: e.target.value })
-                }
-                placeholder="Service address"
-                data-testid="input-lead-address"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="service">Service Requested</Label>
-              <Input
-                id="service"
-                value={leadForm.serviceRequested}
-                onChange={(e) =>
-                  setLeadForm({ ...leadForm, serviceRequested: e.target.value })
-                }
-                placeholder="e.g., Tree removal, hedge trimming"
-                data-testid="input-lead-service"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="urgency">Urgency</Label>
-              <Select
-                value={leadForm.urgency}
-                onValueChange={(value: any) =>
-                  setLeadForm({ ...leadForm, urgency: value })
-                }
-              >
-                <SelectTrigger data-testid="select-lead-urgency">
-                  <SelectValue placeholder="Select urgency" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="emergency">Emergency</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="status">Pipeline Stage</Label>
-              <Select
-                value={leadForm.status}
-                onValueChange={(value: any) =>
-                  setLeadForm({ ...leadForm, status: value })
-                }
-              >
-                <SelectTrigger data-testid="select-lead-status">
-                  <SelectValue placeholder="Select stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new_lead">New Lead</SelectItem>
-                  <SelectItem value="quote_scheduled">
-                    Quote Scheduled
-                  </SelectItem>
-                  <SelectItem value="proposal_sent">Proposal Sent</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                value={leadForm.notes}
-                onChange={(e) =>
-                  setLeadForm({ ...leadForm, notes: e.target.value })
-                }
-                placeholder="Additional notes or context"
-                className="min-h-[80px]"
-                data-testid="textarea-lead-notes"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowCreateOpportunity(false)}
-              disabled={createOpportunityMutation.isPending}
-              data-testid="button-cancel-opportunity"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateOpportunity}
-              disabled={createOpportunityMutation.isPending}
-              data-testid="button-submit-opportunity"
-            >
-              {createOpportunityMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Creating...
-                </>
-              ) : (
-                "Create Opportunity"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Create Job Dialog */}
       <Dialog open={showCreateJob} onOpenChange={setShowCreateJob}>

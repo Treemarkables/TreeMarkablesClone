@@ -1823,7 +1823,6 @@ export function GlobalJobCard({
               const scheduleFields = ["scheduledDate", "scheduledStartTime", "scheduledEndTime", "assignedTeam", "status"];
               if (scheduleFields.some(f => changedData.hasOwnProperty(f))) {
                 queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
-                queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
               }
             })
             .catch((err) => {
@@ -2158,7 +2157,6 @@ export function GlobalJobCard({
           const scheduleFields = ["scheduledDate", "scheduledStartTime", "scheduledEndTime", "assignedTeam", "status", "customerConfirmed"];
           if (scheduleFields.some(f => changedData.hasOwnProperty(f))) {
             queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
           }
         } catch (error) {
           console.error("❌ Auto-save failed:", error);
@@ -4132,7 +4130,6 @@ The Treemarkables Team`;
         });
         queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
         queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
       } else {
         throw new Error(data.message || "Failed to schedule");
       }
@@ -4184,7 +4181,6 @@ The Treemarkables Team`;
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary-timeline"] });
       setIsSchedulingModalOpen(false);
