@@ -35,6 +35,7 @@ import {
   ListOrdered,
   Send,
   Loader2,
+  Navigation,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,6 +71,7 @@ import { JobDetailsPanel } from "@/components/JobDetailsPanel";
 import { JobBillingPanel } from "@/components/JobBillingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
+import { OnMyWayDialog } from "@/components/OnMyWayDialog";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardMobileTab =
@@ -256,6 +258,7 @@ export function JobCardMobile({
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showOnMyWay, setShowOnMyWay] = useState(false);
 
   // Pick the best phone for native dialer: job-level mobile → customer mobile →
   // job-level phone → customer phone. Strips spaces so tel: parses cleanly.
@@ -489,6 +492,7 @@ export function JobCardMobile({
                 <ActionTile label="Invoice" icon={CreditCard} colour="green" onClick={actions?.invoice ?? actionStub("Invoice")} />
                 <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actions?.proposal ?? actionStub("Proposal")} />
                 <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
+                <ActionTile label="On My Way" icon={Navigation} colour="orange" onClick={() => setShowOnMyWay(true)} />
                 <ActionTile
                   label={jobInQueue ? "In Queue" : "Queue Job"}
                   icon={ListOrdered}
@@ -592,6 +596,20 @@ export function JobCardMobile({
           onClose={() => setShowEmailModal(false)}
           job={job}
           customer={customer}
+        />
+      )}
+      {showOnMyWay && (
+        <OnMyWayDialog
+          isOpen={showOnMyWay}
+          onClose={() => setShowOnMyWay(false)}
+          jobId={jobId}
+          phone={phoneForCall}
+          customerName={
+            (customer?.name as string | undefined) ||
+            [job?.jobContactFirstName, job?.jobContactLastName].filter(Boolean).join(" ") ||
+            undefined
+          }
+          address={(job?.address as string | undefined) || (customer?.address as string | undefined)}
         />
       )}
 

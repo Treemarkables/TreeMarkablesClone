@@ -20260,7 +20260,65 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Send email from diary  
+  // "On my way" text — one-tap SMS from the job card telling the customer a
+  // crew member is en route. Crew-initiated, so it sends immediately (no
+  // approval queue) and logs to the job diary.
+  app.post('/api/jobs/:id/on-my-way', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const { phone, message, etaMinutes } = req.body as {
+        phone?: string; message?: string; etaMinutes?: number;
+      };
+      if (!phone || !message) {
+        return res.status(400).json({ success: false, message: 'Phone number and message are required' });
+      }
+
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      const sent = await smsService.sendSMS({ to: phone, message, feature: 'on_my_way' });
+      if (!sent) {
+        return res.status(500).json({ success: false, message: 'Failed to send SMS' });
+      }
+
+      // Save the number onto the job contact if it has none, so SMS reply
+      // matching works (same behaviour as the diary SMS route).
+      if (!job.jobContactPhone && !job.jobContactMobile) {
+        try {
+          await storage.updateJob(job.id, { jobContactPhone: phone });
+        } catch (e) { console.warn('on-my-way: failed to save phone to job:', e); }
+      }
+
+      let authorName = 'System';
+      try {
+        const employee = await storage.getEmployee(req.session.employeeId);
+        const name = [employee?.firstName, employee?.lastName].filter(Boolean).join(' ');
+        if (name) authorName = name;
+      } catch { /* non-fatal */ }
+
+      const eta = Number(etaMinutes);
+      const hasEta = Number.isFinite(eta) && eta > 0;
+      const diaryEntry = await storage.createJobDiaryEntry({
+        jobId: job.id,
+        entryType: 'sms',
+        title: hasEta ? `On my way text sent — ETA ~${eta} min` : 'On my way text sent',
+        description: message,
+        authorName,
+        metadata: { phoneNumber: phone, ...(hasEta ? { etaMinutes: eta } : {}) },
+      });
+
+      res.json({ success: true, data: diaryEntry });
+    } catch (error) {
+      console.error('Error sending on-my-way SMS:', error);
+      res.status(500).json({ success: false, message: 'Error sending on-my-way SMS' });
+    }
+  });
+
+  // Send email from diary
   app.post('/api/communications/email', async (req: Request, res: Response) => {
     try {
       const { to, subject, message, jobId, customerId, tags } = req.body;
