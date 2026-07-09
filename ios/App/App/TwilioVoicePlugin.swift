@@ -27,6 +27,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "hangup", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "mute", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setSpeaker", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "sendDigits", returnType: CAPPluginReturnPromise),
     ]
 
     /// Shared instance so the AppDelegate can stand up VoIP push handling at app
@@ -178,6 +179,30 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func mute(_ call: CAPPluginCall) {
         let isMuted = call.getBool("muted") ?? true
         TwilioVoicePlugin.shared.activeCall?.isMuted = isMuted
+        call.resolve()
+    }
+
+    @objc func sendDigits(_ call: CAPPluginCall) {
+        guard let digits = call.getString("digits"), !digits.isEmpty else {
+            call.reject("digits is required")
+            return
+        }
+        // Valid DTMF characters per the SDK: 0-9, *, # and 'w' (500ms pause).
+        // Reject anything else up front — sendDigits on the TVOCall silently
+        // no-ops rather than erroring, so a bad string would look like a
+        // dead keypad with no signal as to why.
+        let valid = CharacterSet(charactersIn: "0123456789*#w")
+        guard digits.unicodeScalars.allSatisfy({ valid.contains($0) }) else {
+            call.reject("digits may only contain 0-9, *, # and w")
+            return
+        }
+        // Like mute/hangup: the live call lives on shared, not on a JS-routed
+        // second plugin instance.
+        guard let activeCall = TwilioVoicePlugin.shared.activeCall else {
+            call.reject("No active call")
+            return
+        }
+        activeCall.sendDigits(digits)
         call.resolve()
     }
 
@@ -592,6 +617,15 @@ extension TwilioVoicePlugin: CXProviderDelegate {
 
 extension TwilioVoicePlugin: CallDelegate {
     public func callDidConnect(call: Call) {
+        // Media start restarts Twilio's audio unit, which can pull the output
+        // back to the receiver WITHOUT posting a route-change notification —
+        // the didActivate watchdog never sees it. If the user already selected
+        // speaker (toggled during "Connecting…"), re-assert it now that the
+        // audio graph is in its final state.
+        if self.speakerOn {
+            DispatchQueue.main.async { self.applySpeakerRoute(true) }
+        }
+        emitAudioRoute("callDidConnect")
         notifyListeners("callConnected", data: ["sid": call.sid ?? ""], retainUntilConsumed: true)
     }
 

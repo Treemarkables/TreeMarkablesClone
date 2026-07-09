@@ -7,7 +7,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useTwilioVoice, CallEvent } from "@/hooks/useTwilioVoice";
 import { useToast } from "@/hooks/use-toast";
-import { Mic, MicOff, Volume2, Phone } from "lucide-react";
+import { Grip, Mic, MicOff, Volume2, Phone } from "lucide-react";
 
 // Inbound calls use the native iOS CallKit UI whenever iOS will present it —
 // full-screen on the lock screen, the compact banner/Dynamic Island when the
@@ -32,6 +32,15 @@ interface CallInfo {
   foreground: boolean;
 }
 
+/// Ground truth from the native side about where iOS is actually playing call
+/// audio. Displayed on the call screen because device logs are unreadable on
+/// the owner's setup — this is the only way to see whether a speaker toggle
+/// actually moved the route.
+interface AudioRouteInfo {
+  outputs: string;
+  onSpeaker: boolean;
+}
+
 export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -39,6 +48,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
+  const [audioRoute, setAudioRoute] = useState<AudioRouteInfo | null>(null);
 
   const refreshCallHistory = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
@@ -49,6 +59,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setCallInfo(null);
     setIsMuted(false);
     setIsSpeaker(false);
+    setAudioRoute(null);
   }, []);
 
   const handleIncomingCall = useCallback((data: CallEvent) => {
@@ -101,7 +112,19 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     [toast],
   );
 
-  const { isNative, hangup, mute, setSpeaker } = useTwilioVoice({
+  // The native side emits "audioRoute" on every route event (setSpeaker,
+  // didActivate, routeChange, callDidConnect) with what iOS ACTUALLY routed
+  // to. Mirror it into state so the call screen can display it — the console
+  // line doubles as the Web-Inspector trace of the whole route history.
+  const handleAudioRoute = useCallback((data: CallEvent) => {
+    console.log("[TwilioCall] audioRoute", data);
+    setAudioRoute({
+      outputs: data.outputs || "",
+      onSpeaker: data.onSpeaker === "true",
+    });
+  }, []);
+
+  const { isNative, hangup, mute, setSpeaker, sendDigits } = useTwilioVoice({
     onIncomingCall: handleIncomingCall,
     onCallAnswered: handleCallAnswered,
     onCallConnected: handleCallConnected,
@@ -111,6 +134,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     onCallFailed: reset,
     onRegistered: handleRegistered,
     onRegistrationError: handleRegistrationError,
+    onAudioRoute: handleAudioRoute,
   });
 
   const onHangup = useCallback(() => {
@@ -163,33 +187,64 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
           callInfo={callInfo ?? { foreground: false }}
           isMuted={isMuted}
           isSpeaker={isSpeaker}
+          audioRoute={audioRoute}
           onHangup={onHangup}
           onToggleMute={onToggleMute}
           onToggleSpeaker={onToggleSpeaker}
+          onSendDigit={sendDigits}
         />
       )}
     </>
   );
 }
 
+// Standard telephone keypad, letters included like the native dialer.
+const KEYPAD_KEYS: Array<{ digit: string; letters: string }> = [
+  { digit: "1", letters: "" },
+  { digit: "2", letters: "ABC" },
+  { digit: "3", letters: "DEF" },
+  { digit: "4", letters: "GHI" },
+  { digit: "5", letters: "JKL" },
+  { digit: "6", letters: "MNO" },
+  { digit: "7", letters: "PQRS" },
+  { digit: "8", letters: "TUV" },
+  { digit: "9", letters: "WXYZ" },
+  { digit: "*", letters: "" },
+  { digit: "0", letters: "+" },
+  { digit: "#", letters: "" },
+];
+
 function CallScreen({
   callState,
   callInfo,
   isMuted,
   isSpeaker,
+  audioRoute,
   onHangup,
   onToggleMute,
   onToggleSpeaker,
+  onSendDigit,
 }: {
   callState: CallState;
   callInfo: CallInfo;
   isMuted: boolean;
   isSpeaker: boolean;
+  audioRoute: AudioRouteInfo | null;
   onHangup: () => void;
   onToggleMute: () => void;
   onToggleSpeaker: () => void;
+  onSendDigit: (digit: string) => void;
 }) {
   const [seconds, setSeconds] = useState(0);
+  const [showKeypad, setShowKeypad] = useState(false);
+  // Digits already sent this call, echoed above the keypad like the native
+  // dialer so the user can follow along with an IVR menu.
+  const [dialedDigits, setDialedDigits] = useState("");
+
+  const pressKey = (digit: string) => {
+    setDialedDigits((d) => (d + digit).slice(-24));
+    onSendDigit(digit);
+  };
 
   // Count up once the call is actually connected, like the native screen.
   useEffect(() => {
@@ -208,21 +263,63 @@ function CallScreen({
 
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-between bg-gradient-to-b from-neutral-800 to-neutral-950 text-white px-8 pt-[max(4rem,env(safe-area-inset-top))] pb-[max(3rem,env(safe-area-inset-bottom))]">
-      {/* Caller identity */}
-      <div className="flex flex-col items-center text-center mt-6">
-        <div className="w-28 h-28 rounded-full bg-white/15 flex items-center justify-center mb-6">
-          <span className="text-5xl font-light">{initial}</span>
+      {/* Caller identity — collapses to a compact header while the keypad is
+          open so the grid fits without scrolling, like the native dialer. */}
+      {showKeypad ? (
+        <div className="flex flex-col items-center text-center">
+          <p className="text-xl font-semibold leading-tight">{displayName}</p>
+          <p className="text-white/60 text-sm mt-1 tabular-nums">{status}</p>
+          {/* Digits sent so far — feedback that each key press went through. */}
+          <p className="text-2xl font-light tracking-[0.2em] tabular-nums mt-4 h-8 break-all">
+            {dialedDigits}
+          </p>
         </div>
-        <p className="text-3xl font-semibold leading-tight">{displayName}</p>
-        {callInfo.callerName && callInfo.from && (
-          <p className="text-white/60 text-base mt-1">{callInfo.from}</p>
-        )}
-        <p className="text-white/60 text-lg mt-3 tabular-nums">{status}</p>
-      </div>
+      ) : (
+        <div className="flex flex-col items-center text-center mt-6">
+          <div className="w-28 h-28 rounded-full bg-white/15 flex items-center justify-center mb-6">
+            <span className="text-5xl font-light">{initial}</span>
+          </div>
+          <p className="text-3xl font-semibold leading-tight">{displayName}</p>
+          {callInfo.callerName && callInfo.from && (
+            <p className="text-white/60 text-base mt-1">{callInfo.from}</p>
+          )}
+          <p className="text-white/60 text-lg mt-3 tabular-nums">{status}</p>
+          {/* Ground truth from AVAudioSession: what iOS is ACTUALLY playing
+              through. When the speaker button is lit but this still says
+              "Receiver", the override isn't holding — that's the diagnostic
+              we can't get any other way (device logs are unreadable). */}
+          {audioRoute && (
+            <p className="text-white/40 text-xs mt-2" data-testid="call-audio-route">
+              Audio: {audioRoute.outputs || "unknown"}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* DTMF keypad */}
+      {showKeypad && (
+        <div className="grid grid-cols-3 gap-x-8 gap-y-4">
+          {KEYPAD_KEYS.map(({ digit, letters }) => (
+            <button
+              key={digit}
+              onClick={() => pressKey(digit)}
+              className="w-16 h-16 rounded-full bg-white/15 active:bg-white/30 flex flex-col items-center justify-center"
+              data-testid={`keypad-${digit === "*" ? "star" : digit === "#" ? "hash" : digit}`}
+            >
+              <span className="text-2xl font-light leading-none">{digit}</span>
+              {letters && (
+                <span className="text-[0.55rem] tracking-[0.15em] text-white/60 mt-0.5">
+                  {letters}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Controls */}
       <div className="w-full max-w-xs flex flex-col items-center gap-10">
-        <div className="flex justify-center gap-16">
+        <div className="flex justify-center gap-8">
           <button
             onClick={onToggleMute}
             className="flex flex-col items-center gap-2"
@@ -236,6 +333,21 @@ function CallScreen({
               {isMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
             </span>
             <span className="text-sm text-white/80">{isMuted ? "Unmute" : "Mute"}</span>
+          </button>
+
+          <button
+            onClick={() => setShowKeypad((k) => !k)}
+            className="flex flex-col items-center gap-2"
+            data-testid="call-keypad"
+          >
+            <span
+              className={`w-[4.5rem] h-[4.5rem] rounded-full flex items-center justify-center transition-colors ${
+                showKeypad ? "bg-white text-neutral-900" : "bg-white/15 text-white"
+              }`}
+            >
+              <Grip className="w-7 h-7" />
+            </span>
+            <span className="text-sm text-white/80">Keypad</span>
           </button>
 
           <button
