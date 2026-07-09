@@ -217,13 +217,36 @@ export async function renderSiteMapSnapshot(
     height: canvasH,
   });
 
-  // ── SVG overlay: numbered marker circles + legend + attribution ──
+  const overlay = buildOverlaySvg(
+    markers,
+    (m) => ({
+      x: lonToPx(parseFloat(m.longitude), zoom) - originX,
+      y: latToPx(parseFloat(m.latitude), zoom) - originY,
+    }),
+    canvasW,
+    canvasH,
+    ATTRIBUTION,
+  );
+
+  return base
+    .composite([{ input: Buffer.from(overlay), top: 0, left: 0 }])
+    .png()
+    .toBuffer();
+}
+
+// ── Shared SVG overlay: numbered marker circles + legend (+ attribution) ──
+function buildOverlaySvg(
+  markers: SnapshotMarker[],
+  project: (m: SnapshotMarker) => { x: number; y: number },
+  canvasW: number,
+  canvasH: number,
+  attribution?: string,
+): string {
   const R = 14;
   const parts: string[] = [];
 
   markers.forEach((m, i) => {
-    const cx = lonToPx(parseFloat(m.longitude), zoom) - originX;
-    const cy = latToPx(parseFloat(m.latitude), zoom) - originY;
+    const { x: cx, y: cy } = project(m);
     const color = m.color || "#22c55e";
     parts.push(
       `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${escapeXml(color)}" stroke="white" stroke-width="3"/>` +
@@ -261,18 +284,59 @@ export async function renderSiteMapSnapshot(
     );
   }
 
-  // Attribution (bottom-right).
-  parts.push(
-    `<rect x="${canvasW - 320}" y="${canvasH - 22}" width="320" height="22" fill="black" fill-opacity="0.55"/>` +
-      `<text x="${canvasW - 10}" y="${canvasH - 11}" font-family="Inter, Arial, sans-serif" font-size="11" fill="white" text-anchor="end" dominant-baseline="central">${escapeXml(ATTRIBUTION)}</text>`,
-  );
+  if (attribution) {
+    parts.push(
+      `<rect x="${canvasW - 320}" y="${canvasH - 22}" width="320" height="22" fill="black" fill-opacity="0.55"/>` +
+        `<text x="${canvasW - 10}" y="${canvasH - 11}" font-family="Inter, Arial, sans-serif" font-size="11" fill="white" text-anchor="end" dominant-baseline="central">${escapeXml(attribution)}</text>`,
+    );
+  }
 
-  const overlay =
+  return (
     `<svg width="${canvasW}" height="${canvasH}" xmlns="http://www.w3.org/2000/svg">` +
     parts.join("") +
-    `</svg>`;
+    `</svg>`
+  );
+}
 
-  return base
+/**
+ * Render markers over an UPLOADED site image (photo mode — e.g. council jobs
+ * whose card address is the billing address, not the site). Marker
+ * latitude/longitude carry normalized 0..1 coords: lat = y from the top,
+ * lng = x from the left.
+ */
+export async function renderImageSiteMapSnapshot(
+  baseImage: Buffer,
+  markers: SnapshotMarker[],
+): Promise<Buffer> {
+  if (markers.length === 0) throw new NoMarkersError();
+
+  // EXIF-rotate so overlay coords match what the user saw in the editor,
+  // then cap the output size (uploads can be huge camera photos).
+  const rotated = await sharp(baseImage)
+    .rotate()
+    .resize({
+      width: MAX_CANVAS_W,
+      height: MAX_CANVAS_H,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .toBuffer();
+  const { width, height } = await sharp(rotated).metadata();
+  if (!width || !height) {
+    throw new Error("Could not read site image dimensions");
+  }
+
+  const overlay = buildOverlaySvg(
+    markers,
+    (m) => ({
+      x: parseFloat(m.longitude) * width,
+      y: parseFloat(m.latitude) * height,
+    }),
+    width,
+    height,
+  );
+
+  return sharp(rotated)
     .composite([{ input: Buffer.from(overlay), top: 0, left: 0 }])
     .png()
     .toBuffer();
