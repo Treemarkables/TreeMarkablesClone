@@ -365,13 +365,14 @@ export function JobSiteMap({
         style={{ height: "400px", width: "100%" }}
         className="rounded-lg z-0"
       >
-        {/* maxNativeZoom 18: z19 is upscaled z18 imagery rather than risking
-            blank tiles where Esri lacks native 19 coverage (rural NZ). */}
+        {/* Esri serves genuine native imagery to z20+ across NZ (LINZ-sourced;
+            verified z21 over Gisborne). Native to 20, z21 upscales so thin
+            rural coverage degrades to soft imagery instead of blank tiles. */}
         <TileLayer
           attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          maxNativeZoom={18}
-          maxZoom={19}
+          maxNativeZoom={20}
+          maxZoom={21}
         />
         {address && (
           <GeocodedCenter

@@ -35,9 +35,10 @@ const MAX_CANVAS_H = 960;
 const MIN_CANVAS_W = 800;
 const MIN_CANVAS_H = 600;
 const MIN_ZOOM = 16;
-// z19 World_Imagery coverage is spotty in rural NZ — cap at 18 (the zoom the
-// interactive map uses).
-const MAX_ZOOM = 18;
+// Esri/LINZ native coverage is solid to z19 NZ-wide (verified deeper over
+// Gisborne); beyond that rural gaps risk grey patches in a customer-facing
+// image, so the snapshot stays a notch below the interactive map's ceiling.
+const MAX_ZOOM = 19;
 const ATTRIBUTION = "Imagery (c) Esri, Maxar, Earthstar Geographics";
 
 const XML_ENTITIES: Record<string, string> = {
