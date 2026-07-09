@@ -1106,6 +1106,8 @@ export interface IStorage {
 
   // Live job timers (clock in/out)
   getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null>;
+  getActiveTimersForJob(jobId: string): Promise<schema.ActiveTimer[]>;
+  getAllActiveTimers(): Promise<schema.ActiveTimer[]>;
   startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer>;
   deleteTimer(id: string): Promise<boolean>;
 
@@ -7634,6 +7636,16 @@ class DatabaseStorage implements IStorage {
       .from(schema.activeTimers)
       .where(eq(schema.activeTimers.employeeId, employeeId));
     return timer ?? null;
+  }
+
+  async getActiveTimersForJob(jobId: string): Promise<schema.ActiveTimer[]> {
+    return await db.select()
+      .from(schema.activeTimers)
+      .where(eq(schema.activeTimers.jobId, jobId));
+  }
+
+  async getAllActiveTimers(): Promise<schema.ActiveTimer[]> {
+    return await db.select().from(schema.activeTimers);
   }
 
   async startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer> {
