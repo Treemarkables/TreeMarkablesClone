@@ -2234,6 +2234,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Mirror /api/auth/me's payload (permissions + plan entitlements) so the
+      // client's user object is complete from the first render — the login
+      // response is cached as the current user (and seeds the /me query), so a
+      // slimmer payload here left PlanGated nav (Safety, One Dashboard) hidden.
+      await ensureRoleTiersSeeded().catch(() => {});
+      const loginPermsSet = await getEmployeePermissions(employee).catch(() => new Set<string>());
+      let loginPlanKey = 'freemium';
+      let loginEntitlements: string[] = [];
+      if (employee.businessId && TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
+        loginPlanKey = 'business';
+        loginEntitlements = ['plan:crew', 'plan:business'];
+      } else if (employee.businessId) {
+        try {
+          const ent = await resolveEntitlements(employee.businessId);
+          loginPlanKey = ent.planKey;
+          loginEntitlements = Array.from(ent.entitlements);
+        } catch { /* fail-open: empty entitlements */ }
+      }
+
       // Regenerate session ID on login so any stale cookie in the browser
       // is always replaced by a fresh Set-Cookie. Also defends against
       // session fixation.
@@ -2282,7 +2301,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               email: employee.email,
               role: employee.role,
               phone: employee.phone,
-              status: employee.status
+              status: employee.status,
+              permissions: Array.from(loginPermsSet),
+              planKey: loginPlanKey,
+              entitlements: loginEntitlements,
             }
           });
         });
