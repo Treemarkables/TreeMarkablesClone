@@ -48,6 +48,10 @@ export interface CallEvent {
   category?: string;
   mode?: string;
   options?: string;
+  // Native app version "1.0(37)" — the webview loads from the production
+  // server, so the UI version and the installed native build can differ;
+  // this disambiguates which native code produced an event.
+  nativeBuild?: string;
 }
 
 export interface TwilioVoiceOptions {
@@ -199,6 +203,10 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
     [isNative],
   );
 
+  // These three RETHROW after logging (unlike mute/hangup): a bridge-level
+  // rejection ("method not implemented") was silently swallowed here for
+  // months while the stale .m CAP_PLUGIN method list dropped setSpeaker —
+  // callers must be able to surface the failure on screen.
   const setSpeaker = useCallback(
     async (on: boolean) => {
       if (!isNative) return;
@@ -206,6 +214,7 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
         await TwilioVoice.setSpeaker({ on });
       } catch (err) {
         console.warn("[TwilioVoice] setSpeaker failed:", err);
+        throw err instanceof Error ? err : new Error(String(err));
       }
     },
     [isNative],
@@ -218,6 +227,7 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
         await TwilioVoice.sendDigits({ digits });
       } catch (err) {
         console.warn("[TwilioVoice] sendDigits failed:", err);
+        throw err instanceof Error ? err : new Error(String(err));
       }
     },
     [isNative],
@@ -229,6 +239,7 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
       await TwilioVoice.showAudioRoutePicker();
     } catch (err) {
       console.warn("[TwilioVoice] showAudioRoutePicker failed:", err);
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }, [isNative]);
 

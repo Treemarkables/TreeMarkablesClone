@@ -867,6 +867,31 @@ The {businessName} Team';
             GRANT SELECT, INSERT, UPDATE, DELETE ON active_timers TO app_tenant;
           END IF;
         END $$;
+        -- Heal job-child rows created behind multer with the wrong tenant stamp:
+        -- busboy's stream callbacks run in the socket's async context, so those
+        -- upload handlers lost the ALS tenant context — withTenant() stamped
+        -- nothing and inserts took the column DEFAULT (Treemarkables'
+        -- business_id): correct for TM by accident, wrong AND invisible under RLS
+        -- for every other tenant. The routes now stamp from the job row; these
+        -- idempotent updates restamp any child row that disagrees with its parent
+        -- job. Mirrors migrations/manual/20260710_multer_child_rows_backfill.sql.
+        UPDATE job_diary_entries d SET business_id = j.business_id
+          FROM jobs j WHERE d.job_id = j.id AND d.business_id IS DISTINCT FROM j.business_id;
+        UPDATE photos p SET business_id = j.business_id
+          FROM jobs j WHERE p.job_id = j.id AND p.business_id IS DISTINCT FROM j.business_id;
+        UPDATE notifications n SET business_id = j.business_id
+          FROM jobs j WHERE n.job_id = j.id AND n.business_id IS DISTINCT FROM j.business_id;
+        UPDATE job_quoting_process_completions q SET business_id = j.business_id
+          FROM jobs j WHERE q.job_id = j.id AND q.business_id IS DISTINCT FROM j.business_id;
+        -- Round 2: the remaining multer instances (video/audio/csv/logo/near-miss
+        -- uploads) shared the same ALS loss. Job-linked videos take their job's
+        -- tenant (knowledge videos are business_id NULL by design and have no
+        -- job_id, so the join skips them); near-miss attachments take their parent
+        -- report's. Mirrors migrations/manual/20260710_multer_child_rows_backfill.sql.
+        UPDATE videos v SET business_id = j.business_id
+          FROM jobs j WHERE v.job_id = j.id AND v.business_id IS DISTINCT FROM j.business_id;
+        UPDATE near_miss_attachments a SET business_id = r.business_id
+          FROM near_miss_reports r WHERE a.report_id = r.id AND a.business_id IS DISTINCT FROM r.business_id;
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           role_key VARCHAR NOT NULL,
