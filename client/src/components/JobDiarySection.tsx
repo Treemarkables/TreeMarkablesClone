@@ -1129,6 +1129,23 @@ export function JobDiarySection({
     }
   };
 
+  // Site-map markers — when the job has any, the Photos tab leads with a live
+  // "Site Photo" tile rendering the server-baked marked-up map (the same image
+  // the proposal builder's Site Map button inserts). Shares the cache/key shape
+  // with JobSiteMap's query (array of markers).
+  const { data: siteMapMarkers = [] } = useQuery<Array<{ id: string; updatedAt?: string }>>({
+    queryKey: ["/api/jobs", jobId, "tree-markers"],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/tree-markers`);
+      const data = await res.json();
+      return data.success ? data.data : [];
+    },
+    enabled: !!jobId,
+    staleTime: 30_000,
+  });
+  const hasSiteMapPhoto = siteMapMarkers.length > 0;
+  const [viewingSiteMap, setViewingSiteMap] = useState(false);
+
   // Fetch diary entries (combining local and ServiceM8 sources)
   const {
     data: diaryEntries = [],
@@ -2303,7 +2320,7 @@ export function JobDiarySection({
               <div className="flex items-center justify-center py-4">
                 <div className="text-xs text-muted-foreground">Loading...</div>
               </div>
-            ) : photoEntries.length === 0 ? (
+            ) : photoEntries.length === 0 && !hasSiteMapPhoto ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Camera className="w-10 h-10 text-gray-300 dark:text-gray-600 mb-2" />
                 <div className="text-sm text-muted-foreground">
@@ -2315,6 +2332,30 @@ export function JobDiarySection({
               </div>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 p-2 pr-4">
+                {/* Live marked-up site map — server renders the current markers
+                    over the uploaded site photo (or satellite tiles), so this
+                    tile always matches what the proposal would show. */}
+                {hasSiteMapPhoto && (
+                  <button
+                    type="button"
+                    onClick={() => setViewingSiteMap(true)}
+                    className="group relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover-elevate active-elevate-2"
+                    data-testid="photo-tile-site-map"
+                  >
+                    <img
+                      src={`/api/jobs/${jobId}/site-map.png`}
+                      alt="Site photo with markers"
+                      loading="lazy"
+                      className="w-full h-full object-cover"
+                      onError={(e) => (e.currentTarget.style.display = "none")}
+                    />
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2 py-1">
+                      <div className="text-[10px] text-white whitespace-nowrap truncate">
+                        Site Photo
+                      </div>
+                    </div>
+                  </button>
+                )}
                 {photoEntries.map((photo, idx) => {
                   const galleryIdx = allPhotos.indexOf(photo.url);
                   return (
@@ -2351,6 +2392,35 @@ export function JobDiarySection({
               </div>
             )}
           </TabScrollContainer>
+        )}
+
+        {/* Fullscreen viewer for the live marked-up site map */}
+        {viewingSiteMap && (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95"
+            onClick={() => setViewingSiteMap(false)}
+          >
+            <button
+              type="button"
+              onClick={() => setViewingSiteMap(false)}
+              aria-label="Close site photo"
+              className="text-white w-11 h-11 flex items-center justify-center bg-black/40 rounded-full"
+              style={{
+                position: "fixed",
+                right: "1rem",
+                top: "max(1rem, env(safe-area-inset-top))",
+                zIndex: 201,
+              }}
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={`/api/jobs/${jobId}/site-map.png`}
+              alt="Site photo with markers"
+              className="max-w-[95vw] max-h-[90vh] object-contain rounded"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         )}
 
         {/* Timeline */}
