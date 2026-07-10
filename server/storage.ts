@@ -1102,7 +1102,7 @@ export interface IStorage {
   deleteTreeMarker(id: string): Promise<boolean>;
   getTreeMarkersByJob(jobId: string): Promise<schema.TreeMarker[]>;
   getJobSiteMapImage(jobId: string): Promise<schema.JobSiteMapImage | null>;
-  upsertJobSiteMapImage(jobId: string, imageUrl: string): Promise<schema.JobSiteMapImage>;
+  upsertJobSiteMapImage(jobId: string, imageUrl: string, businessId?: string | null): Promise<schema.JobSiteMapImage>;
 
   // Live job timers (clock in/out)
   getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null>;
@@ -7624,19 +7624,23 @@ class DatabaseStorage implements IStorage {
     return result || null;
   }
 
-  async upsertJobSiteMapImage(jobId: string, imageUrl: string): Promise<schema.JobSiteMapImage> {
-    const existing = await this.getJobSiteMapImage(jobId);
-    if (existing) {
-      const [updated] = await db.update(schema.jobSiteMaps)
-        .set({ imageUrl, updatedAt: new Date() })
-        .where(eq(schema.jobSiteMaps.jobId, jobId))
-        .returning();
-      return updated;
-    }
-    const [created] = await db.insert(schema.jobSiteMaps)
-      .values(withTenant({ jobId, imageUrl }))
+  // businessId is passed EXPLICITLY (from the job row) rather than read from the
+  // ALS tenant context: this is called from a multer route, and busboy's stream
+  // callbacks run in the socket's async context, not the request's — so
+  // withTenant() stamped nothing and the row landed with business_id NULL on the
+  // owner connection, invisible to every tenant-scoped read (found on prod
+  // 2026-07-10: uploads "succeeded" but never showed). Runs on ownerDb with an
+  // atomic ON CONFLICT so it also heals those orphaned NULL-stamped rows.
+  async upsertJobSiteMapImage(jobId: string, imageUrl: string, businessId?: string | null): Promise<schema.JobSiteMapImage> {
+    const stamp = businessId ?? currentBusinessId() ?? null;
+    const [row] = await ownerDb.insert(schema.jobSiteMaps)
+      .values({ jobId, imageUrl, businessId: stamp })
+      .onConflictDoUpdate({
+        target: schema.jobSiteMaps.jobId,
+        set: { imageUrl, businessId: stamp, updatedAt: new Date() },
+      })
       .returning();
-    return created;
+    return row;
   }
 
   // ─── Live job timers (clock in/out) ───────────────────────────────────────

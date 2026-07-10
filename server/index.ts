@@ -839,6 +839,13 @@ The {businessName} Team';
             GRANT SELECT, INSERT, UPDATE, DELETE ON job_site_maps TO app_tenant;
           END IF;
         END $$;
+        -- Heal rows inserted before 2026-07-10 with business_id NULL: the multer
+        -- upload route lost the ALS tenant context (busboy callbacks run in the
+        -- socket's async scope), so withTenant() never stamped them and they were
+        -- invisible to tenant-scoped reads. The route now stamps explicitly from
+        -- the job row; this backfill makes the already-uploaded photos visible.
+        UPDATE job_site_maps jsm SET business_id = j.business_id
+          FROM jobs j WHERE jsm.job_id = j.id AND jsm.business_id IS NULL;
         -- Live job timers (clock in/out). Stopping a timer writes into
         -- jobs.staff_time_entries. Mirrors
         -- migrations/manual/20260710_active_timers.sql.
