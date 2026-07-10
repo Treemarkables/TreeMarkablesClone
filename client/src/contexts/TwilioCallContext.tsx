@@ -50,6 +50,7 @@ interface AudioRouteInfo {
   mode: string;
   options: string;
   context: string;
+  nativeBuild: string;
 }
 
 export function TwilioCallProvider({ children }: { children: ReactNode }) {
@@ -150,6 +151,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
         mode: data.mode || "",
         options: data.options || "",
         context: data.context || "",
+        nativeBuild: data.nativeBuild || "",
       });
       pushRouteLog(
         `${data.context}: ${data.outputs || "?"} ${data.mode || ""}${
@@ -190,14 +192,38 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setIsSpeaker((s) => {
       const next = !s;
       pushRouteLog(`tap:Speaker -> ${next ? "on" : "off"}`);
-      setSpeaker(next);
+      // Surface bridge failures ON SCREEN: for months the bridge rejected
+      // setSpeaker as not-implemented (stale .m method list) and the only
+      // trace was an unreadable console.warn. The no-reply timer catches the
+      // remaining failure shape: a call that neither resolves nor rejects.
+      const timer = window.setTimeout(
+        () => pushRouteLog("setSpeaker: no native reply in 1.5s"),
+        1500,
+      );
+      setSpeaker(next)
+        .then(() => window.clearTimeout(timer))
+        .catch((e: Error) => {
+          window.clearTimeout(timer);
+          pushRouteLog(`JSERR setSpeaker: ${e.message}`);
+        });
       return next;
     });
   }, [setSpeaker, pushRouteLog]);
 
+  const onSendDigit = useCallback(
+    (digit: string) => {
+      sendDigits(digit).catch((e: Error) =>
+        pushRouteLog(`JSERR sendDigits: ${e.message}`),
+      );
+    },
+    [sendDigits, pushRouteLog],
+  );
+
   const onShowRoutePicker = useCallback(() => {
     pushRouteLog("tap:AudioOutput");
-    showAudioRoutePicker();
+    showAudioRoutePicker().catch((e: Error) =>
+      pushRouteLog(`JSERR routePicker: ${e.message}`),
+    );
   }, [showAudioRoutePicker, pushRouteLog]);
 
   // Render the overlay for the entire connecting/active window — no foreground
@@ -233,7 +259,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
           onHangup={onHangup}
           onToggleMute={onToggleMute}
           onToggleSpeaker={onToggleSpeaker}
-          onSendDigit={sendDigits}
+          onSendDigit={onSendDigit}
           onShowRoutePicker={onShowRoutePicker}
           routeLog={routeLog}
         />
@@ -344,6 +370,7 @@ function CallScreen({
               >
                 Audio: {audioRoute.outputs || "unknown"}
                 {audioRoute.error && ` — ${audioRoute.error}`}
+                {audioRoute.nativeBuild && ` · native ${audioRoute.nativeBuild}`}
               </p>
               {/* Rolling event log: taps + native route events in order. The
                   sequence is the diagnostic — a tap with no following
