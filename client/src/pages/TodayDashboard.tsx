@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   Truck,
   Wrench,
@@ -9,6 +12,8 @@ import {
   AlertTriangle,
   ClipboardCheck,
   RefreshCw,
+  LocateFixed,
+  Loader2,
 } from "lucide-react";
 
 interface FleetItem {
@@ -67,6 +72,56 @@ export default function TodayDashboard() {
   const { data, isLoading } = useQuery<{ success: boolean; data: TodayOverview }>({
     queryKey: ["/api/today-overview"],
   });
+  const { toast } = useToast();
+
+  // "Near me" — geolocate, then sort today's schedule by distance. Distances
+  // come from /api/near-me/jobs (server geocodes today's job addresses).
+  const [distances, setDistances] = useState<Map<string, number> | null>(null);
+  const [locating, setLocating] = useState(false);
+
+  const handleNearMe = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Location unavailable",
+        description: "This device doesn't support location.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await fetch(
+            `/api/near-me/jobs?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`,
+            { credentials: "include" },
+          );
+          if (!res.ok) throw new Error("near-me failed");
+          const body = await res.json();
+          const map = new Map<string, number>();
+          for (const j of body?.data ?? []) map.set(j.id, j.distanceKm);
+          setDistances(map);
+        } catch {
+          toast({
+            title: "Couldn't sort by distance",
+            description: "Please try again.",
+            variant: "destructive",
+          });
+        } finally {
+          setLocating(false);
+        }
+      },
+      () => {
+        setLocating(false);
+        toast({
+          title: "Location permission needed",
+          description: "Allow location access to sort jobs by distance.",
+          variant: "destructive",
+        });
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
 
   const overview = data?.data;
   const fleet = overview?.fleet ?? [];
@@ -169,9 +224,29 @@ export default function TodayDashboard() {
       {/* Today's schedule */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Calendar className="h-4 w-4" />
-            Today's schedule
+          <CardTitle className="flex items-center justify-between gap-2 text-base">
+            <span className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Today's schedule
+            </span>
+            {jobsToday.length > 1 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNearMe}
+                disabled={locating}
+                data-testid="button-near-me"
+              >
+                {locating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <LocateFixed className="h-4 w-4 mr-1.5" />
+                    {distances ? "Re-sort" : "Near me"}
+                  </>
+                )}
+              </Button>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -184,19 +259,34 @@ export default function TodayDashboard() {
             </p>
           ) : (
             <ul className="divide-y">
-              {jobsToday.map((job) => (
-                <li key={job.id} className="flex items-center gap-3 px-6 py-3">
-                  <span className="text-sm font-medium text-muted-foreground w-16 shrink-0">
-                    {job.scheduledStartTime || "—"}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{job.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {[job.customerName, job.address].filter(Boolean).join(" · ")}
-                    </p>
-                  </div>
-                </li>
-              ))}
+              {(distances
+                ? [...jobsToday].sort(
+                    (a, b) =>
+                      (distances.get(a.id) ?? Infinity) - (distances.get(b.id) ?? Infinity),
+                  )
+                : jobsToday
+              ).map((job, index) => {
+                const km = distances?.get(job.id);
+                const nearest = !!distances && index === 0 && km !== undefined;
+                return (
+                  <li key={job.id} className="flex items-center gap-3 px-6 py-3">
+                    <span className="text-sm font-medium text-muted-foreground w-16 shrink-0">
+                      {job.scheduledStartTime || "—"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{job.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {[job.customerName, job.address].filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                    {km !== undefined && (
+                      <Badge variant={nearest ? "default" : "outline"} className="shrink-0">
+                        {km < 0.15 ? "You're here" : `${km} km`}
+                      </Badge>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardContent>
