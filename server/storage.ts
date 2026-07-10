@@ -6852,6 +6852,15 @@ class DatabaseStorage implements IStorage {
     return request;
   }
 
+  async getLatestReviewRequestForJob(jobId: string): Promise<any> {
+    const [request] = await db.select()
+      .from(schema.reviewRequests)
+      .where(eq(schema.reviewRequests.jobId, jobId))
+      .orderBy(desc(schema.reviewRequests.createdAt))
+      .limit(1);
+    return request ?? null;
+  }
+
   async getAllReviewRequests(): Promise<any[]> {
     return await db.select({
       id: schema.reviewRequests.id,
