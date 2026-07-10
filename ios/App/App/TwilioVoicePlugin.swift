@@ -368,22 +368,18 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
                 DefaultAudioDevice.DefaultAVAudioSessionConfigurationBlock()
                 applyRoute()
             }
-            if self.activeCall != nil, audioDevice.isEnabled {
-                // RESTART the audio unit instead of just running the block on
-                // the live one. Builds 33-35 proved that poking the session
-                // mid-call (setCategory + override, no errors) changes
-                // nothing — a live CallKit-managed I/O unit keeps its route.
-                // Twilio's documented pattern for mid-call audio-session
-                // changes is to disable/re-enable the device so a FRESH audio
-                // unit initialises against the new config (the block runs
-                // during re-init); the native CallKit speaker button works
-                // precisely because the system restarts the unit itself.
-                // Costs a brief (~100ms) audio blip on toggle.
-                audioDevice.isEnabled = false
-                audioDevice.isEnabled = true
-            } else {
-                audioDevice.block()
-            }
+            // Run the block on the live audio unit — the standard Twilio
+            // quickstart speaker-toggle pattern. Do NOT "restart" the device
+            // here (isEnabled false→true, builds 36-37): that was added to
+            // counter the override "being ignored", which turned out to be a
+            // phantom — setSpeaker never reached native at all (stale .m
+            // CAP_PLUGIN method list). Once build 37 unblocked the bridge,
+            // the restart ran for the first time and is the prime suspect
+            // for the call dropping the moment audio was toggled (abruptly
+            // stopping the audio unit mid-call can surface as a media error
+            // → callDidDisconnect). The plain pattern below is what the
+            // Twilio quickstart ships and gets its first fair trial now.
+            audioDevice.block()
         } else {
             applyRoute()
         }

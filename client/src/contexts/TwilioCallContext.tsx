@@ -70,20 +70,23 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
 
   const pushRouteLog = useCallback((line: string) => {
     const t = new Date().toLocaleTimeString("en-NZ", { hour12: false });
-    setRouteLog((log) => [...log, `${t} ${line}`].slice(-6));
+    setRouteLog((log) => [...log, `${t} ${line}`].slice(-8));
   }, []);
 
   const refreshCallHistory = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
   }, [queryClient]);
 
+  // NOTE: routeLog deliberately survives reset — it's the post-mortem for a
+  // call that dropped (the overlay disappears moments after hangup, so a
+  // log cleared here could never be read). A divider is pushed when the
+  // next call arrives instead.
   const reset = useCallback(() => {
     setCallState("idle");
     setCallInfo(null);
     setIsMuted(false);
     setIsSpeaker(false);
     setAudioRoute(null);
-    setRouteLog([]);
   }, []);
 
   const handleIncomingCall = useCallback((data: CallEvent) => {
@@ -93,6 +96,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
       foreground: data.foreground,
       from: data.from,
     });
+    pushRouteLog("--- incoming call ---");
     // Remember who's calling and whether iOS will hand us the in-app case.
     setCallInfo({
       from: data.from,
@@ -101,16 +105,32 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     });
     // Don't show our screen yet — iOS shows its native ringing UI. We only take
     // over (for foreground calls) once the call is answered.
-  }, []);
+  }, [pushRouteLog]);
 
   const handleCallAnswered = useCallback(() => setCallState("connecting"), []);
   const handleCallConnected = useCallback(() => setCallState("active"), []);
 
-  const handleCallEnded = useCallback(() => {
-    setCallState("ended");
-    refreshCallHistory();
-    setTimeout(reset, 800);
-  }, [refreshCallHistory, reset]);
+  const handleCallEnded = useCallback(
+    (data?: CallEvent) => {
+      // A call that ends WITH an error is the SDK dropping it (media error,
+      // signaling failure) — not the user or the far end hanging up. Owner
+      // hit exactly this on build 37 ("answered then hung itself up") with
+      // no visible reason anywhere. Put the reason in their face and in the
+      // post-mortem log.
+      if (data?.error) {
+        pushRouteLog(`DISCONNECTED: ${data.error}`);
+        toast({
+          variant: "destructive",
+          title: "Call dropped",
+          description: data.error,
+        });
+      }
+      setCallState("ended");
+      refreshCallHistory();
+      setTimeout(reset, 800);
+    },
+    [refreshCallHistory, reset, pushRouteLog, toast],
+  );
 
   // Registration is the make-or-break for inbound ringing: if this device
   // isn't bound to the Twilio identity, calls go straight to voicemail with
@@ -169,7 +189,8 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     onCallEnded: handleCallEnded,
     onCallDisconnected: handleCallEnded,
     onCallCancelled: reset,
-    onCallFailed: reset,
+    // Failed-to-connect carries an error too — same visibility treatment.
+    onCallFailed: handleCallEnded,
     onRegistered: handleRegistered,
     onRegistrationError: handleRegistrationError,
     onAudioRoute: handleAudioRoute,
