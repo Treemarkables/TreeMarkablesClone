@@ -56,6 +56,11 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     /// (so a later revert gets a fresh budget) and on each user toggle / call end.
     private var speakerReassertAttempts = 0
     private let maxSpeakerReasserts = 4
+    /// Error text from the most recent route attempt, forwarded to the webview
+    /// in the "audioRoute" event. os_log is unreadable on the owner's device,
+    /// so a route failure that only logs is a route failure that never
+    /// happened as far as debugging goes — this puts it on the call screen.
+    private var lastRouteError = ""
 
     // MARK: - Plugin Lifecycle
 
@@ -250,24 +255,35 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     private func applySpeakerRoute(_ on: Bool) {
         let applyRoute = {
             let session = AVAudioSession.sharedInstance()
+            var errs: [String] = []
+            // Best-effort: .defaultToSpeaker as the session's standing
+            // preference so the route survives audio-unit restarts; Bluetooth
+            // options mirror Twilio's default config so paired headsets keep
+            // working. IMPORTANT: this must be a SEPARATE do/catch from the
+            // override below. setCategory is exactly the call that can throw
+            // under CallKit while Twilio's audio unit is live, and when the
+            // two shared one do-block a category failure silently skipped the
+            // override on every attempt — observed on-device as the speaker
+            // button lit with "Audio: Receiver" pinned for the whole call.
+            // Twilio's quickstart toggle calls ONLY the override for this
+            // reason.
+            var options: AVAudioSession.CategoryOptions = [
+                .allowBluetoothHFP, .allowBluetoothA2DP,
+            ]
+            if on { options.insert(.defaultToSpeaker) }
             do {
-                // A bare overrideOutputAudioPort(.speaker) is transient under
-                // CallKit: the next session reconfiguration (Twilio audio-unit
-                // restart, route recompute) silently reverts to the earpiece —
-                // the button stays "on" but the volume never changes. Adding
-                // .defaultToSpeaker to the category makes speaker the session's
-                // standing preference, which survives those cycles; the
-                // override still gives the immediate switch. Bluetooth options
-                // mirror Twilio's default config so paired headsets keep
-                // working and win over .defaultToSpeaker when connected.
-                var options: AVAudioSession.CategoryOptions = [
-                    .allowBluetoothHFP, .allowBluetoothA2DP,
-                ]
-                if on { options.insert(.defaultToSpeaker) }
                 try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
+            } catch {
+                errs.append("setCategory: \(error.localizedDescription)")
+            }
+            do {
                 try session.overrideOutputAudioPort(on ? .speaker : .none)
             } catch {
-                tvLog.error("setSpeaker(\(on, privacy: .public)) failed: \(error.localizedDescription, privacy: .public)")
+                errs.append("override: \(error.localizedDescription)")
+            }
+            self.lastRouteError = errs.joined(separator: " | ")
+            if !errs.isEmpty {
+                tvLog.error("setSpeaker(\(on, privacy: .public)) failed: \(self.lastRouteError, privacy: .public)")
             }
             // What iOS ACTUALLY routed to (expect builtInSpeaker when on=true,
             // receiver when off) plus the session state — the ground truth when
@@ -315,6 +331,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
             "attempts": String(self.speakerReassertAttempts),
             "category": session.category.rawValue,
             "mode": session.mode.rawValue,
+            "error": self.lastRouteError,
         ])
     }
 
@@ -542,6 +559,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         activeCall = nil
         callUUID = nil
         speakerOn = false
+        lastRouteError = ""
         action.fulfill()
         notifyListeners("callEnded", data: [:], retainUntilConsumed: true)
     }
@@ -636,6 +654,7 @@ extension TwilioVoicePlugin: CallDelegate {
         activeCall = nil
         callUUID = nil
         speakerOn = false
+        lastRouteError = ""
         notifyListeners("callDisconnected", data: [
             "error": error?.localizedDescription ?? "",
         ], retainUntilConsumed: true)
@@ -648,6 +667,7 @@ extension TwilioVoicePlugin: CallDelegate {
         activeCall = nil
         callUUID = nil
         speakerOn = false
+        lastRouteError = ""
         notifyListeners("callFailed", data: ["error": error.localizedDescription], retainUntilConsumed: true)
     }
 }

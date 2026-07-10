@@ -39,6 +39,9 @@ interface CallInfo {
 interface AudioRouteInfo {
   outputs: string;
   onSpeaker: boolean;
+  /** Error text from the last native route attempt (setCategory/override
+   *  failures) — empty when the calls succeeded. */
+  error: string;
 }
 
 export function TwilioCallProvider({ children }: { children: ReactNode }) {
@@ -121,6 +124,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setAudioRoute({
       outputs: data.outputs || "",
       onSpeaker: data.onSpeaker === "true",
+      error: data.error || "",
     });
   }, []);
 
@@ -289,8 +293,12 @@ function CallScreen({
               "Receiver", the override isn't holding — that's the diagnostic
               we can't get any other way (device logs are unreadable). */}
           {audioRoute && (
-            <p className="text-white/40 text-xs mt-2" data-testid="call-audio-route">
+            <p
+              className="text-white/40 text-xs mt-2 max-w-[85vw] break-words"
+              data-testid="call-audio-route"
+            >
               Audio: {audioRoute.outputs || "unknown"}
+              {audioRoute.error && ` — ${audioRoute.error}`}
             </p>
           )}
         </div>
