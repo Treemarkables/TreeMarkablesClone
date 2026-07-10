@@ -7845,16 +7845,32 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   });
 
   // Upload photo and create diary entry (FAST: responds immediately, uploads in background)
+  // NOTE (this + every imageUpload/upload route): multer/busboy stream callbacks
+  // run in the socket's async context, not the request's, so the ALS tenant
+  // context is GONE inside these handlers — reads ride the OWNER (BYPASSRLS)
+  // connection (hence explicit ownership checks) and withTenant() stamps nothing,
+  // so inserts take the column DEFAULT (Treemarkables' business_id) and become
+  // invisible to the uploading tenant. runWithBusiness() restores the stamp.
   app.post('/api/jobs/:jobId/photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
-      
+
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
       if (!req.file) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'No photo file provided' 
+        return res.status(400).json({
+          success: false,
+          message: 'No photo file provided'
         });
       }
+
+      const job = await storage.getJob(jobId);
+      if (!job || (job.businessId && req.session.businessId && job.businessId !== req.session.businessId)) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      const jobBusinessId = job.businessId ?? req.session.businessId;
 
       // Create a temporary diary entry ID immediately
       const tempDiaryEntry = {
@@ -7885,7 +7901,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         req.file.buffer,
         req.file.originalname,
         req.file.mimetype
-      ).then(async ({ url: photoUrl, thumbnailUrl }) => {
+      ).then(({ url: photoUrl, thumbnailUrl }) => runWithBusiness(jobBusinessId ?? undefined, async () => {
         // Update diary entry with real photo URL
         const entry = await storage.createJobDiaryEntry({
           jobId,
@@ -7909,7 +7925,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           userId: (req as any).user?.id,
           metadata: { photoCount: 1 },
         });
-      }).catch(error => {
+      })).catch(error => {
         console.error('❌ Background photo upload failed:', error);
       });
     } catch (error) {
@@ -7931,9 +7947,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const { jobId } = req.params;
       const files = (req.files as Express.Multer.File[] | undefined) || [];
 
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
       if (files.length === 0) {
         return res.status(400).json({ success: false, message: 'No photos provided' });
       }
+
+      // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos).
+      const job = await storage.getJob(jobId);
+      if (!job || (job.businessId && req.session.businessId && job.businessId !== req.session.businessId)) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      const jobBusinessId = job.businessId ?? req.session.businessId;
 
       const photoStorage = new PhotoStorageService();
       const photoUrls: string[] = [];
@@ -7944,7 +7971,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       const isMulti = photoUrls.length > 1;
       const authorName = req.body.authorName || 'User';
-      const entry = await storage.createJobDiaryEntry({
+      const entry = await runWithBusiness(jobBusinessId ?? undefined, () => storage.createJobDiaryEntry({
         jobId,
         entryType: 'photo',
         title: isMulti ? `${photoUrls.length} Photos Added` : 'Photo Added',
@@ -7953,9 +7980,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         photoUrl: photoUrls[0],
         photos: photoUrls,
         isPrivate: false,
-      });
+      }));
 
-      await notificationHelper.createJobActivityNotification({
+      await runWithBusiness(jobBusinessId ?? undefined, () => notificationHelper.createJobActivityNotification({
         jobId,
         type: 'photo_added',
         title: isMulti ? `${photoUrls.length} Photos Added` : 'Photo Added',
@@ -7967,7 +7994,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         diaryEntryId: entry.id,
         userId: (req as any).user?.id,
         metadata: { photoCount: photoUrls.length },
-      });
+      }));
 
       res.json({ success: true, data: entry });
     } catch (error) {
@@ -7994,6 +8021,16 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         if (!photo1 || !photo2) {
           return res.status(400).json({ success: false, message: 'Both photo1 and photo2 are required' });
         }
+
+        if (!req.session.employeeId) {
+          return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+        // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos).
+        const baJob = await storage.getJob(jobId);
+        if (!baJob || (baJob.businessId && req.session.businessId && baJob.businessId !== req.session.businessId)) {
+          return res.status(404).json({ success: false, message: 'Job not found' });
+        }
+        const jobBusinessId = baJob.businessId ?? req.session.businessId;
 
         // Ask GPT-5 vision which photo is "before" and which is "after".
         let beforeIndex = 0;
@@ -8048,7 +8085,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         // its own settings: wordmark strip = business name (+ tagline), colours
         // = brand palette. Blank name → no strip (never another business's
         // identity); colour defaults reproduce the same black/neon look.
-        const baBusinessId = currentBusinessId();
+        // Derived from the job row, NOT currentBusinessId() — the ALS context is
+        // lost behind multer, so currentBusinessId() was always undefined here and
+        // every tenant fell through to the unscoped-settings branch below.
+        const baBusinessId = jobBusinessId;
         let branding: BeforeAfterBranding | undefined;
         if (baBusinessId && TREEMARKABLES_BUSINESS_IDS.includes(baBusinessId)) {
           branding = {
@@ -8058,17 +8098,21 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
           };
         } else {
           try {
-            const baSettings = await storage.getBusinessSettings();
-            const baIdentity = getBusinessIdentity(baSettings);
-            const baColors = getBrandColors(baSettings);
-            branding = {
-              footerText: [baIdentity.name, baIdentity.tagline]
-                .filter(Boolean)
-                .join(" • ")
-                .toUpperCase(),
-              accentColor: baColors.accentColor,
-              headerColor: baColors.headerColor,
-            };
+            // Scoped lookup — getBusinessSettings() on the owner connection would
+            // return an arbitrary tenant's row (no RLS, no filter) = identity leak.
+            const baSettings = await storage.getBusinessSettingsForBusiness(baBusinessId);
+            if (baSettings) {
+              const baIdentity = getBusinessIdentity(baSettings);
+              const baColors = getBrandColors(baSettings);
+              branding = {
+                footerText: [baIdentity.name, baIdentity.tagline]
+                  .filter(Boolean)
+                  .join(" • ")
+                  .toUpperCase(),
+                accentColor: baColors.accentColor,
+                headerColor: baColors.headerColor,
+              };
+            }
           } catch (settingsError) {
             console.warn('Before/after branding lookup failed, composing unbranded:', settingsError);
           }
@@ -8092,7 +8136,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         const beforeAfterPairId = randomUUID();
         const authorName = (req.body?.authorName as string) || 'User';
 
-        const diaryEntry = await storage.createJobDiaryEntry({
+        const diaryEntry = await runWithBusiness(jobBusinessId ?? undefined, () => storage.createJobDiaryEntry({
           jobId,
           entryType: 'photo',
           title: 'Before / After',
@@ -8102,11 +8146,11 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
           photos: [compositeUpload.url],
           tags: ['before-after-pair', `pair:${beforeAfterPairId}`, 'composite'],
           isPrivate: false,
-        });
+        }));
 
         const now = new Date();
         try {
-          await db.insert(schema.photos).values(withTenant({
+          await runWithBusiness(jobBusinessId ?? undefined, () => db.insert(schema.photos).values(withTenant({
             jobId,
             jobDiaryEntryId: diaryEntry.id,
             url: compositeUpload.url,
@@ -8120,7 +8164,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
             capturedBy: authorName,
             beforeAfterPairId,
             sequenceOrder: 0,
-          }));
+          })));
         } catch (photoRowError) {
           console.error('⚠️ Failed to insert photos table row for before/after composite:', photoRowError);
         }
@@ -9533,6 +9577,9 @@ Draft the reply now.`;
   // confirms via POST below.
   app.post('/api/jobs/:jobId/supplier-invoices/extract', imageUpload.single('file'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       const file = req.file as Express.Multer.File | undefined;
       if (!file) {
         return res.status(400).json({ success: false, message: 'No file provided' });
@@ -16319,6 +16366,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const { jobId } = req.params;
       const { type } = req.body; // 'before' or 'after'
 
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
       // Validate job ID format
       if (!jobId || typeof jobId !== 'string' || jobId.length < 1) {
         return res.status(400).json({ success: false, message: 'Invalid job ID' });
@@ -16335,9 +16386,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         });
       }
 
-      // Check if job exists
+      // Check if job exists AND belongs to the caller's tenant — this is a multer
+      // route, so getJob runs on the owner (BYPASSRLS) connection and would happily
+      // return another tenant's job (see note on /api/jobs/:jobId/photos).
       const job = await storage.getJob(jobId);
-      if (!job) {
+      if (!job || (job.businessId && req.session.businessId && job.businessId !== req.session.businessId)) {
         // No cleanup needed for memory storage
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
@@ -27673,6 +27726,13 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   // POST /api/jobs/import-csv - Import jobs from CSV file upload
   app.post('/api/jobs/import-csv', upload.single('csvFile'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos),
+      // so reads below are NOT RLS-scoped and creates would take the column default.
+      const importBusinessId = req.session.businessId;
+
       if (!req.file) {
         return res.status(400).json({
           success: false,
@@ -27707,9 +27767,13 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const errorMessages: string[] = [];
       const importedJobIds: string[] = [];
 
-      // Get all existing customers and jobs for matching
-      const existingCustomers = await storage.getAllCustomers();
-      const existingJobs = await storage.getAllJobs();
+      // Get existing customers and jobs for matching — scoped to the caller's
+      // tenant (owner-connection reads return every tenant's rows; matching an
+      // imported job onto another business's customer would cross tenants).
+      const existingCustomers = (await storage.getAllCustomers())
+        .filter(c => !importBusinessId || c.businessId === importBusinessId);
+      const existingJobs = (await storage.getAllJobs())
+        .filter(j => !importBusinessId || j.businessId === importBusinessId);
       const customerByName = new Map(existingCustomers.map(c => [c.name.toLowerCase().trim(), c]));
       const jobByJobNumber = new Map(existingJobs.map(j => [j.jobNumber, j]));
 
@@ -27736,12 +27800,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             const customerPhone = jobData['Job Telephone Number'] || jobData['Job Contact Mobile Number'] || jobData['Billing Telephone Number'] || jobData['Billing Contact Mobile Number'] || jobData.customerPhone || jobData.phone || '';
             const customerAddress = jobData['Job Address'] || jobData['Billing Address'] || jobData.customerAddress || jobData.address || '';
             
-            customer = await storage.createCustomer({
+            customer = await runWithBusiness(importBusinessId ?? undefined, () => storage.createCustomer({
               name: customerName,
               email: customerEmail,
               phone: customerPhone,
               address: customerAddress
-            });
+            }));
             customerByName.set(customerName.toLowerCase(), customer);
           }
 
@@ -27752,12 +27816,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             const customerPhone = jobData['Job Telephone Number'] || jobData['Job Contact Mobile Number'] || jobData['Billing Telephone Number'] || jobData['Billing Contact Mobile Number'] || jobData.customerPhone || jobData.phone || '';
             const customerAddress = jobData['Job Address'] || jobData['Billing Address'] || jobData.customerAddress || jobData.address || jobData.location || '';
             
-            customer = await storage.createCustomer({
+            customer = await runWithBusiness(importBusinessId ?? undefined, () => storage.createCustomer({
               name: defaultCustomerName,
               email: customerEmail,
               phone: customerPhone,
               address: customerAddress
-            });
+            }));
             customerByName.set(defaultCustomerName.toLowerCase(), customer);
           }
 
@@ -27838,13 +27902,14 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           const existingJob = jobByJobNumber.get(jobNumber);
           
           if (existingJob) {
-            // Update existing job
+            // Update existing job (matched within-tenant above, so this can't
+            // touch another business's job)
             await storage.updateJob(existingJob.id, jobPayload);
             importedJobIds.push(existingJob.id);
             updated++;
           } else {
             // Create new job
-            const newJob = await storage.createJob(jobPayload);
+            const newJob = await runWithBusiness(importBusinessId ?? undefined, () => storage.createJob(jobPayload));
             importedJobIds.push(newJob.id);
             jobByJobNumber.set(newJob.jobNumber, newJob);
             imported++;
@@ -29994,6 +30059,9 @@ Transcription: ${transcriptText}`;
   // Synchronous photo upload for induction step photos -> object storage
   app.post('/api/induction-photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No photo file provided' });
       }
@@ -30535,6 +30603,9 @@ Transcription: ${transcriptText}`;
   // JHA Photo upload (no assessment ID — for pending photos before assessment is created)
   app.post("/api/jha/photos/upload", imageUpload.single("photo"), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, message: "No photo file provided" });
       }
@@ -30557,8 +30628,13 @@ Transcription: ${transcriptText}`;
   // JHA Photo upload for an existing assessment
   app.post("/api/jha/assessments/:assessmentId/photos", imageUpload.single("photo"), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+      // Multer route: this read rides the owner (BYPASSRLS) connection, so check
+      // the assessment belongs to the caller's tenant before appending to it.
       const existing = await storage.getJhaAssessment(req.params.assessmentId);
-      if (!existing) {
+      if (!existing || (existing.businessId && req.session.businessId && existing.businessId !== req.session.businessId)) {
         return res.status(404).json({ success: false, message: "Assessment not found" });
       }
       if (!req.file) {
@@ -31703,6 +31779,9 @@ ${messageText}`
   // ─── Screenshot extraction for Mulch Drops ─────────────────────────────────
   app.post('/api/ai/extract-screenshot', imageUpload.single('image'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No image uploaded' });
       }
@@ -31827,15 +31906,24 @@ If you cannot find a value, use null. Do not guess.`
   // Upload photo for a mulch drop
   app.post('/api/mulch-drops/:id/photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      // Multer route: this read rides the owner (BYPASSRLS) connection, so check
+      // the drop belongs to the caller's tenant before appending to it.
       const drop = await storage.getMulchDrop(req.params.id);
-      if (!drop) return res.status(404).json({ success: false, message: 'Not found' });
+      if (!drop || (drop.businessId && req.session.businessId && drop.businessId !== req.session.businessId)) {
+        return res.status(404).json({ success: false, message: 'Not found' });
+      }
       if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
 
       const photoStorage = new PhotoStorageService();
+      // args are (buffer, originalFilename, mimeType) — this call previously
+      // passed (buffer, mimetype, label), storing the label as the content type
       const { url: photoUrl } = await photoStorage.uploadPhoto(
         req.file.buffer,
-        req.file.mimetype,
-        `mulch-drop-${drop.id}-${Date.now()}`
+        req.file.originalname || `mulch-drop-${drop.id}-${Date.now()}.jpg`,
+        req.file.mimetype
       );
       const updatedPhotos = [...(drop.photos ?? []), photoUrl];
       const updated = await storage.updateMulchDrop(drop.id, { photos: updatedPhotos });
@@ -32349,14 +32437,14 @@ If you cannot find a value, use null. Do not guess.`
 
       const [result] = await db
         .insert(jobQuotingProcessCompletions)
-        .values({
+        .values(withTenant({
           jobId,
           itemId,
           completedByEmployeeId: req.session.employeeId,
           completedByName: employeeName,
           note: noteValue,
           photos: photosValue,
-        })
+        }))
         .onConflictDoUpdate({
           target: [jobQuotingProcessCompletions.jobId, jobQuotingProcessCompletions.itemId],
           set: {
