@@ -11924,7 +11924,16 @@ Draft the reply now.`;
         ? ownerIdentity
         : `treemarkables-emp-${req.session.employeeId}`;
       const twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
-      const pushCredentialSid = process.env.TWILIO_PUSH_CREDENTIAL_SID;
+      // Platform-aware push credential. iOS uses an APNs VoIP push credential;
+      // Android uses an FCM push credential (a different SID registered in the
+      // Twilio Console). The client tells us which platform it is via the body;
+      // default to iOS for backward compatibility with older app builds.
+      const platform = (typeof req.body?.platform === 'string'
+        ? req.body.platform.toLowerCase()
+        : 'ios');
+      const pushCredentialSid = platform === 'android'
+        ? (process.env.TWILIO_PUSH_CREDENTIAL_SID_ANDROID || process.env.TWILIO_PUSH_CREDENTIAL_SID)
+        : process.env.TWILIO_PUSH_CREDENTIAL_SID;
       const { AccessToken } = twilio.jwt;
       const { VoiceGrant } = AccessToken;
       const voiceGrant = new VoiceGrant({
@@ -11941,10 +11950,11 @@ Draft the reply now.`;
         console.warn('⚠️  TWILIO_TWIML_APP_SID not set — outgoing calls from the iOS app will not work. Create a TwiML App in the Twilio Console and set this secret.');
       }
       if (!pushCredentialSid) {
-        console.warn('⚠️  TWILIO_PUSH_CREDENTIAL_SID not set — incoming VoIP push notifications to the iOS app will not work. Create a Push Credential at Twilio Console → Voice → Push Credentials and set this secret.');
+        const credEnv = platform === 'android' ? 'TWILIO_PUSH_CREDENTIAL_SID_ANDROID' : 'TWILIO_PUSH_CREDENTIAL_SID';
+        console.warn(`⚠️  ${credEnv} not set — incoming call push notifications to the ${platform} app will not work. Create a Push Credential at Twilio Console → Voice → Push Credentials (${platform === 'android' ? 'FCM' : 'APNs'}) and set this secret.`);
       }
-      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (outgoing: ${twimlAppSid ? 'enabled' : 'disabled'}, push: ${pushCredentialSid ? 'enabled' : 'disabled'})`);
-      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity, outgoingEnabled: !!twimlAppSid, pushEnabled: !!pushCredentialSid });
+      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (platform: ${platform}, outgoing: ${twimlAppSid ? 'enabled' : 'disabled'}, push: ${pushCredentialSid ? 'enabled' : 'disabled'})`);
+      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity, platform, outgoingEnabled: !!twimlAppSid, pushEnabled: !!pushCredentialSid });
     } catch (error: any) {
       console.error('❌ Error generating Twilio token:', error);
       return res.status(500).json({ success: false, message: 'Failed to generate token' });
