@@ -31390,13 +31390,17 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // NOTE: multer/busboy callbacks run outside the request's ALS tenant context,
+  // so everything in this handler rides the OWNER connection: RLS does NOT scope
+  // the getJob read (hence the explicit ownership check) and withTenant() cannot
+  // stamp the insert (hence businessId passed explicitly from the job row).
   app.post("/api/jobs/:id/site-map-image", imageUpload.single('photo'), async (req, res) => {
     try {
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
       }
       const job = await storage.getJob(req.params.id);
-      if (!job) {
+      if (!job || (job.businessId && req.session.businessId && job.businessId !== req.session.businessId)) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
       if (!req.file) {
@@ -31407,7 +31411,7 @@ Transcription: ${transcriptText}`;
       }
       const svc = new PhotoStorageService();
       const { url } = await svc.uploadPhoto(req.file.buffer, req.file.originalname, req.file.mimetype);
-      await storage.upsertJobSiteMapImage(req.params.id, url);
+      await storage.upsertJobSiteMapImage(req.params.id, url, job.businessId);
       res.json({ success: true, data: { imageUrl: url } });
     } catch (error) {
       console.error('Error uploading site map image:', error);
