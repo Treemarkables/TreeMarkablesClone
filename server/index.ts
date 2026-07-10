@@ -114,14 +114,32 @@ app.get('/health', (_req, res) => {
 const LEGACY_APP_HOST = 'app.treemarkables.co.nz';
 const REDIRECT_PATH_PREFIXES = ['/proposal', '/invoice', '/quote', '/watch', '/review', '/customer-portal'];
 const APP_HOST = (() => { try { return new URL(APP_URL).host; } catch { return ''; } })();
+// Full cutover switch: when LEGACY_HOST_REDIRECT_ALL=true (set in DO once the
+// owner is ready), EVERY browser page-load on the legacy app host 301s to
+// APP_URL — not just the customer-link prefixes. Deliberately excluded even
+// then:
+//   - /api/*     — Twilio/Stripe/etc. webhooks still point at the old host
+//                  (Stripe treats a 301 as delivery failure), and an already-
+//                  open SPA tab keeps its session working mid-flight.
+//   - /objects/* — media referenced from old emails/documents.
+//   - non-GET/HEAD — form posts etc. must not lose their bodies to a redirect.
+// ⚠️ Flipping this also moves the iOS shell (which still loads the old host,
+// see capacitor allowNavigation) — sessions are per-host, so users get the
+// login screen once. Coordinate with a native rebuild or accept the re-login.
+const REDIRECT_ALL = (process.env.LEGACY_HOST_REDIRECT_ALL || '').trim().toLowerCase() === 'true';
 app.use((req, res, next) => {
-  if (
-    APP_HOST &&
-    APP_HOST !== LEGACY_APP_HOST &&
-    req.hostname === LEGACY_APP_HOST &&
-    REDIRECT_PATH_PREFIXES.some((p) => req.path === p || req.path.startsWith(p + '/'))
-  ) {
-    return res.redirect(301, `${APP_URL}${req.originalUrl}`);
+  if (APP_HOST && APP_HOST !== LEGACY_APP_HOST && req.hostname === LEGACY_APP_HOST) {
+    const isCustomerLink = REDIRECT_PATH_PREFIXES.some(
+      (p) => req.path === p || req.path.startsWith(p + '/'),
+    );
+    const isFullCutoverPath =
+      REDIRECT_ALL &&
+      (req.method === 'GET' || req.method === 'HEAD') &&
+      !req.path.startsWith('/api') &&
+      !req.path.startsWith('/objects');
+    if (isCustomerLink || isFullCutoverPath) {
+      return res.redirect(301, `${APP_URL}${req.originalUrl}`);
+    }
   }
   next();
 });
