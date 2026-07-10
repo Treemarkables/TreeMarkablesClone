@@ -241,10 +241,15 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
                 shared.routePickerView = picker
             }
             guard let button = picker.subviews.compactMap({ $0 as? UIButton }).first else {
+                // Into the on-screen event log — the owner reported being
+                // unsure whether the sheet ever appeared, and console.warn
+                // in the webview is invisible on this device.
+                shared.emitAudioRoute("routePicker:noButton")
                 call.reject("Route picker button not found")
                 return
             }
             button.sendActions(for: .touchUpInside)
+            shared.emitAudioRoute("routePicker:opened")
             call.resolve()
         }
     }
@@ -258,6 +263,12 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         let shared = TwilioVoicePlugin.shared
         shared.speakerOn = on
         shared.speakerReassertAttempts = 0
+        // Bridge-delivery proof for the on-screen event log: build 35's
+        // screenshot left open whether Speaker taps reach native at all (last
+        // event was callDidConnect). This fires before any audio work, so a
+        // missing "setSpeaker:received" after a tap = JS/bridge problem, not
+        // an audio-session one.
+        shared.emitAudioRoute("setSpeaker:received(\(on))")
         // AVAudioSession route changes must run on the main thread. Capacitor
         // dispatches plugin calls on a background queue, and an off-main
         // setCategory/overrideOutputAudioPort silently fails to move audio —
@@ -357,7 +368,22 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
                 DefaultAudioDevice.DefaultAVAudioSessionConfigurationBlock()
                 applyRoute()
             }
-            audioDevice.block()
+            if self.activeCall != nil, audioDevice.isEnabled {
+                // RESTART the audio unit instead of just running the block on
+                // the live one. Builds 33-35 proved that poking the session
+                // mid-call (setCategory + override, no errors) changes
+                // nothing — a live CallKit-managed I/O unit keeps its route.
+                // Twilio's documented pattern for mid-call audio-session
+                // changes is to disable/re-enable the device so a FRESH audio
+                // unit initialises against the new config (the block runs
+                // during re-init); the native CallKit speaker button works
+                // precisely because the system restarts the unit itself.
+                // Costs a brief (~100ms) audio blip on toggle.
+                audioDevice.isEnabled = false
+                audioDevice.isEnabled = true
+            } else {
+                audioDevice.block()
+            }
         } else {
             applyRoute()
         }

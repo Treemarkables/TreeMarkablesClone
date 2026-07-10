@@ -11121,6 +11121,35 @@ Draft the reply now.`;
         // billingNameOverride so "edit for this invoice only" sticks in the email too.
         const invCustomerName = invoiceDetails?.contactName || job?.billingNameOverride || customer?.name || 'there';
 
+        // Review ask riding along with the invoice. Reuses the job's existing
+        // review-request token (re-sent invoices don't mint new ones); otherwise
+        // creates one marked sent-via-email. Failure here never blocks the invoice.
+        let invoiceReviewUrl: string | undefined;
+        try {
+          if (job?.id && job?.customerId) {
+            let reviewReq = await storage.getLatestReviewRequestForJob(job.id);
+            if (!reviewReq) {
+              const reviewToken = require('crypto').randomBytes(32).toString('hex');
+              reviewReq = await storage.createReviewRequest({
+                jobId: job.id,
+                customerId: job.customerId,
+                token: reviewToken,
+                status: 'sent',
+                sentAt: new Date(),
+                sentBy: req.session.employeeId || 'System',
+                sentVia: 'email',
+                customerName: invCustomerName,
+                customerEmail: to || customer?.email || null,
+                jobNumber: job.jobNumber ? String(job.jobNumber) : null,
+                jobAddress: job.address || null,
+              });
+            }
+            if (reviewReq?.token) invoiceReviewUrl = `${APP_URL}/review/${reviewReq.token}`;
+          }
+        } catch (reviewErr) {
+          console.warn('Invoice review link skipped:', reviewErr);
+        }
+
         invoiceHtml = renderInvoiceEmail({
           customerName: invCustomerName,
           intro: emailBody,
@@ -11150,6 +11179,7 @@ Draft the reply now.`;
             gstNumber: invIdentity.gstNumber,
           },
           brand: invBrand,
+          reviewUrl: invoiceReviewUrl,
         });
       }
       

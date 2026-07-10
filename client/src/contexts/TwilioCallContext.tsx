@@ -60,6 +60,17 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
   const [audioRoute, setAudioRoute] = useState<AudioRouteInfo | null>(null);
+  // Rolling log of route events AND user taps, rendered on the call screen.
+  // A single "latest event" line kept missing the moment that mattered (a
+  // screenshot seconds later only showed the resting state); the sequence is
+  // the diagnostic: tap → setSpeaker:received → setSpeaker(true) result →
+  // routeChange… — wherever the chain stops is the bug.
+  const [routeLog, setRouteLog] = useState<string[]>([]);
+
+  const pushRouteLog = useCallback((line: string) => {
+    const t = new Date().toLocaleTimeString("en-NZ", { hour12: false });
+    setRouteLog((log) => [...log, `${t} ${line}`].slice(-6));
+  }, []);
 
   const refreshCallHistory = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
@@ -71,6 +82,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setIsMuted(false);
     setIsSpeaker(false);
     setAudioRoute(null);
+    setRouteLog([]);
   }, []);
 
   const handleIncomingCall = useCallback((data: CallEvent) => {
@@ -127,18 +139,26 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   // didActivate, routeChange, callDidConnect) with what iOS ACTUALLY routed
   // to. Mirror it into state so the call screen can display it — the console
   // line doubles as the Web-Inspector trace of the whole route history.
-  const handleAudioRoute = useCallback((data: CallEvent) => {
-    console.log("[TwilioCall] audioRoute", data);
-    setAudioRoute({
-      outputs: data.outputs || "",
-      onSpeaker: data.onSpeaker === "true",
-      error: data.error || "",
-      category: data.category || "",
-      mode: data.mode || "",
-      options: data.options || "",
-      context: data.context || "",
-    });
-  }, []);
+  const handleAudioRoute = useCallback(
+    (data: CallEvent) => {
+      console.log("[TwilioCall] audioRoute", data);
+      setAudioRoute({
+        outputs: data.outputs || "",
+        onSpeaker: data.onSpeaker === "true",
+        error: data.error || "",
+        category: data.category || "",
+        mode: data.mode || "",
+        options: data.options || "",
+        context: data.context || "",
+      });
+      pushRouteLog(
+        `${data.context}: ${data.outputs || "?"} ${data.mode || ""}${
+          data.options ? `+${data.options}` : ""
+        }${data.error ? ` ERR ${data.error}` : ""}`,
+      );
+    },
+    [pushRouteLog],
+  );
 
   const { isNative, hangup, mute, setSpeaker, sendDigits, showAudioRoutePicker } = useTwilioVoice({
     onIncomingCall: handleIncomingCall,
@@ -169,10 +189,16 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const onToggleSpeaker = useCallback(() => {
     setIsSpeaker((s) => {
       const next = !s;
+      pushRouteLog(`tap:Speaker -> ${next ? "on" : "off"}`);
       setSpeaker(next);
       return next;
     });
-  }, [setSpeaker]);
+  }, [setSpeaker, pushRouteLog]);
+
+  const onShowRoutePicker = useCallback(() => {
+    pushRouteLog("tap:AudioOutput");
+    showAudioRoutePicker();
+  }, [showAudioRoutePicker, pushRouteLog]);
 
   // Render the overlay for the entire connecting/active window — no foreground
   // or visibility gating (see the header comment for why those signals failed).
@@ -208,7 +234,8 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
           onToggleMute={onToggleMute}
           onToggleSpeaker={onToggleSpeaker}
           onSendDigit={sendDigits}
-          onShowRoutePicker={showAudioRoutePicker}
+          onShowRoutePicker={onShowRoutePicker}
+          routeLog={routeLog}
         />
       )}
     </>
@@ -242,6 +269,7 @@ function CallScreen({
   onToggleSpeaker,
   onSendDigit,
   onShowRoutePicker,
+  routeLog,
 }: {
   callState: CallState;
   callInfo: CallInfo;
@@ -253,6 +281,7 @@ function CallScreen({
   onToggleSpeaker: () => void;
   onSendDigit: (digit: string) => void;
   onShowRoutePicker: () => void;
+  routeLog: string[];
 }) {
   const [seconds, setSeconds] = useState(0);
   const [showKeypad, setShowKeypad] = useState(false);
@@ -316,14 +345,21 @@ function CallScreen({
                 Audio: {audioRoute.outputs || "unknown"}
                 {audioRoute.error && ` — ${audioRoute.error}`}
               </p>
-              {/* Live session config as iOS holds it. If this doesn't read
-                  PlayAndRecord/VideoChat(+spkDefault) while the speaker is
-                  selected, our config isn't what's live — the next lead. */}
-              <p className="text-white/30 text-[10px] mt-0.5 max-w-[85vw] break-words">
-                {audioRoute.category}/{audioRoute.mode}
-                {audioRoute.options && ` +${audioRoute.options}`}
-                {audioRoute.context && ` · ${audioRoute.context}`}
-              </p>
+              {/* Rolling event log: taps + native route events in order. The
+                  sequence is the diagnostic — a tap with no following
+                  setSpeaker:received is a bridge failure; received with no
+                  route change is iOS refusing the config. Any screenshot
+                  captures the story. */}
+              <div className="mt-1 max-w-[85vw] text-left">
+                {routeLog.map((line, i) => (
+                  <p
+                    key={i}
+                    className="text-white/30 text-[9px] leading-tight break-words font-mono"
+                  >
+                    {line}
+                  </p>
+                ))}
+              </div>
             </>
           )}
         </div>
