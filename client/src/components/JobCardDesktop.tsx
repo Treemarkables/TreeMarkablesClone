@@ -51,6 +51,7 @@ import {
   FilePen,
   MoreHorizontal,
   Mic,
+  Navigation,
   Calendar as CalendarIcon,
   TrendingUp,
   Send,
@@ -98,6 +99,7 @@ import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
+import { OnMyWayDialog } from "@/components/OnMyWayDialog";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardDesktopTab =
@@ -278,6 +280,7 @@ export function JobCardDesktop({
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showOnMyWay, setShowOnMyWay] = useState(false);
   const { toast } = useToast();
   const { webCallAvailable, startCall } = useWebCall();
 
@@ -655,6 +658,7 @@ export function JobCardDesktop({
             {actionBtn("Call", Phone, "bg-emerald-100", "text-emerald-600", handleCall, !phoneForCall && !actions?.call)}
             {actionBtn("SMS", MessageSquare, "bg-blue-100", "text-blue-600", handleSms)}
             {actionBtn("Email", Mail, "bg-amber-100", "text-amber-600", handleEmail)}
+            {actionBtn("On way", Navigation, "bg-orange-100", "text-orange-600", () => setShowOnMyWay(true), !phoneForCall)}
           </div>
           <div className="flex items-center gap-2">
             {actionBtn("Quote", FileText, "bg-amber-100", "text-amber-600", handleQuote)}
@@ -790,6 +794,20 @@ export function JobCardDesktop({
           onClose={() => setShowEmailModal(false)}
           job={job}
           customer={customer}
+        />
+      )}
+      {showOnMyWay && (
+        <OnMyWayDialog
+          isOpen={showOnMyWay}
+          onClose={() => setShowOnMyWay(false)}
+          jobId={jobId}
+          phone={phoneForCall}
+          customerName={
+            (customer?.name as string | undefined) ||
+            [job?.jobContactFirstName, job?.jobContactLastName].filter(Boolean).join(" ") ||
+            undefined
+          }
+          address={(job?.address as string | undefined) || (customer?.address as string | undefined)}
         />
       )}
 
