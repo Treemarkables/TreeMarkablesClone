@@ -4545,6 +4545,22 @@ export const jobSiteMaps = pgTable("job_site_maps", {
 
 export type JobSiteMapImage = typeof jobSiteMaps.$inferSelect;
 
+// Live job timer — one row per staff member currently clocked in on a job.
+// Stopping the timer converts the elapsed time into a jobs.staffTimeEntries
+// entry (the existing manual time-recording store), so labour cost,
+// back-costing and gross margin all flow through the existing recompute
+// paths. UNIQUE(employee_id) enforces one running timer per person.
+export const activeTimers = pgTable("active_timers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id"),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  employeeId: varchar("employee_id").notNull().unique(),
+  startedAt: timestamp("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type ActiveTimer = typeof activeTimers.$inferSelect;
+
 // Tree markers schemas
 export const insertTreeMarkerSchema = createInsertSchema(treeMarkers).omit({
   id: true,
