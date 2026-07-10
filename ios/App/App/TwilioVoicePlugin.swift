@@ -423,6 +423,10 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
                 .replacingOccurrences(of: "AVAudioSessionMode", with: ""),
             "options": optNames.joined(separator: "+"),
             "error": self.lastRouteError,
+            // The webview UI ships from the production server while native
+            // code ships via TestFlight — they can be different versions.
+            // Stamp which native build produced this event.
+            "nativeBuild": "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?")(\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))",
         ])
     }
 
