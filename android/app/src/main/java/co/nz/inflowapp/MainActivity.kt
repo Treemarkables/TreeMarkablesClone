@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import co.nz.inflowapp.voice.TwilioVoicePlugin
@@ -30,6 +32,19 @@ class MainActivity : BridgeActivity() {
 
         VoiceConnectionService.registerPhoneAccount(this)
         requestRuntimePermissions()
+
+        // Bridge the token the moment FCM issues it. On a cold start the token arrives
+        // seconds AFTER onResume, so resume-only bridging missed it until the next
+        // background/foreground cycle (Android twin of the iOS cold-boot bridge race —
+        // see bridgeTokenToWebView in AppDelegate+Firebase.swift).
+        VoiceFirebaseMessagingService.onTokenReceived = {
+            runOnUiThread { bridgeFcmTokenToWebView() }
+        }
+    }
+
+    override fun onDestroy() {
+        VoiceFirebaseMessagingService.onTokenReceived = null
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -37,17 +52,30 @@ class MainActivity : BridgeActivity() {
         bridgeFcmTokenToWebView()
     }
 
-    private fun bridgeFcmTokenToWebView() {
+    private fun bridgeFcmTokenToWebView(attempt: Int = 0) {
+        if (attempt >= 20) return
         val token = VoiceFirebaseMessagingService.lastToken ?: return
+        val webView = bridge?.webView ?: run {
+            Handler(Looper.getMainLooper()).postDelayed({ bridgeFcmTokenToWebView(attempt + 1) }, 500)
+            return
+        }
+        // Only inject once the document is the remote app — mid-boot the webview is still
+        // on about:blank and the localStorage write + event land on the wrong origin and
+        // are silently lost (while evaluateJavascript reports success). Same origin-guard
+        // lesson as iOS; protocol check avoids hardcoding the host here.
         val js = """
             (function() {
+              if (location.protocol !== 'https:') return 'not-ready';
               try { localStorage.setItem('__nativeFcmToken', '$token'); } catch (e) {}
               window.__pendingNativeFcmToken = '$token';
               window.dispatchEvent(new CustomEvent('nativeFcmToken', { detail: '$token' }));
+              return 'ok';
             })();
         """.trimIndent()
-        bridge?.webView?.post {
-            bridge?.webView?.evaluateJavascript(js, null)
+        webView.evaluateJavascript(js) { result ->
+            if (result == null || !result.contains("ok")) {
+                webView.postDelayed({ bridgeFcmTokenToWebView(attempt + 1) }, 500)
+            }
         }
     }
 

@@ -33,17 +33,23 @@ class VoiceFirebaseMessagingService : FirebaseMessagingService() {
     companion object {
         private const val TAG = "InflowFCM"
 
-        /** Last FCM token seen — injected into the webview by MainActivity on resume. */
+        /** Last FCM token seen — injected into the webview by MainActivity. */
         @Volatile var lastToken: String? = null
+
+        /** Set by MainActivity so a token arriving after onResume still bridges immediately. */
+        @Volatile var onTokenReceived: ((String) -> Unit)? = null
     }
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         Log.d(TAG, "FCM token: ${token.take(20)}…")
-        // Per-user registration: stash the token so MainActivity bridges it into the webview
-        // on resume; the web app then POSTs it to /api/notifications/register-token with the
+        // Per-user registration: stash the token and poke MainActivity to bridge it into the
+        // webview; the web app then POSTs it to /api/notifications/register-token with the
         // logged-in employee's session cookie. No native POST + no hardcoded owner id.
+        // The callback matters: on a cold start this token arrives seconds AFTER onResume,
+        // so resume-only bridging silently missed it until the next foreground cycle.
         lastToken = token
+        onTokenReceived?.invoke(token)
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
