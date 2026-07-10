@@ -10,6 +10,7 @@ export interface TwilioVoicePluginInterface {
   mute(options: { muted: boolean }): Promise<void>;
   setSpeaker(options: { on: boolean }): Promise<void>;
   sendDigits(options: { digits: string }): Promise<void>;
+  showAudioRoutePicker(): Promise<void>;
   addListener(
     event: string,
     handler: (data: Record<string, string>) => void,
@@ -44,6 +45,9 @@ export interface CallEvent {
   outputs?: string;
   onSpeaker?: string;
   speakerSelected?: string;
+  category?: string;
+  mode?: string;
+  options?: string;
 }
 
 export interface TwilioVoiceOptions {
@@ -219,6 +223,15 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
     [isNative],
   );
 
+  const showAudioRoutePicker = useCallback(async () => {
+    if (!isNative) return;
+    try {
+      await TwilioVoice.showAudioRoutePicker();
+    } catch (err) {
+      console.warn("[TwilioVoice] showAudioRoutePicker failed:", err);
+    }
+  }, [isNative]);
+
   return {
     isNative,
     answer,
@@ -227,6 +240,7 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
     mute,
     setSpeaker,
     sendDigits,
+    showAudioRoutePicker,
     refetchToken: fetchTokenAndRegister,
   };
 }
