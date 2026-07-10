@@ -52,6 +52,7 @@ import {
   MoreHorizontal,
   Mic,
   Navigation,
+  ScrollText,
   Calendar as CalendarIcon,
   TrendingUp,
   Send,
@@ -100,6 +101,7 @@ import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { OnMyWayDialog } from "@/components/OnMyWayDialog";
+import { ProgressRecapDialog } from "@/components/ProgressRecapDialog";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardDesktopTab =
@@ -281,6 +283,7 @@ export function JobCardDesktop({
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showOnMyWay, setShowOnMyWay] = useState(false);
+  const [showProgressRecap, setShowProgressRecap] = useState(false);
   const { toast } = useToast();
   const { webCallAvailable, startCall } = useWebCall();
 
@@ -701,6 +704,13 @@ export function JobCardDesktop({
                     Profit Tracker
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem
+                  onClick={() => setShowProgressRecap(true)}
+                  data-testid="more-progress-recap"
+                >
+                  <ScrollText className="w-4 h-4 mr-2 text-purple-600" />
+                  Progress Recap
+                </DropdownMenuItem>
                 {actions?.sendToXero && (
                   // Sent/sending state reads this card's own fresh job query,
                   // so it flips live — no close/reopen. Stays clickable when
@@ -794,6 +804,13 @@ export function JobCardDesktop({
           onClose={() => setShowEmailModal(false)}
           job={job}
           customer={customer}
+        />
+      )}
+      {showProgressRecap && (
+        <ProgressRecapDialog
+          isOpen={showProgressRecap}
+          onClose={() => setShowProgressRecap(false)}
+          jobId={jobId}
         />
       )}
       {showOnMyWay && (
