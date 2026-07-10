@@ -98,6 +98,7 @@ class TwilioVoicePlugin : Plugin(), VoiceCallState.Listener {
 
     @PluginMethod
     fun answer(call: PluginCall) {
+        IncomingCallNotifier.cancel(context)
         val connection = VoiceCallState.activeConnection
         if (connection != null) {
             // Route through Telecom so native + in-app stay in sync.
@@ -112,6 +113,7 @@ class TwilioVoicePlugin : Plugin(), VoiceCallState.Listener {
 
     @PluginMethod
     fun reject(call: PluginCall) {
+        IncomingCallNotifier.cancel(context)
         VoiceCallState.activeInvite?.reject(context)
         VoiceCallState.activeConnection?.setDisconnected(DisconnectCause(DisconnectCause.REJECTED))
         VoiceCallState.activeConnection?.destroy()

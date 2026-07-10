@@ -45,9 +45,10 @@ class VoiceConnectionService : ConnectionService() {
     ): Connection {
         val callExtras = request.extras.getBundle(TelecomManager.EXTRA_INCOMING_CALL_EXTRAS)
             ?: request.extras
-        @Suppress("DEPRECATION")
-        val invite: CallInvite? =
-            callExtras.getParcelable(VoiceConstants.EXTRA_INCOMING_CALL_INVITE)
+        // The CallInvite itself never travels through Telecom extras (the system process
+        // can't unparcel app classes — BadParcelableException kills the ring). It lives
+        // in-process on VoiceCallState, set by the FCM service before addNewIncomingCall.
+        val invite: CallInvite? = VoiceCallState.activeInvite
         val from = callExtras.getString(VoiceConstants.EXTRA_CALL_FROM) ?: invite?.from ?: "Unknown"
 
         val connection = VoiceConnection(applicationContext).apply {

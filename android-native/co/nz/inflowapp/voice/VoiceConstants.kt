@@ -21,8 +21,16 @@ object VoiceConstants {
     const val EXTRA_CALL_TO = "CALL_TO"
     const val EXTRA_CALL_SID = "CALL_SID"
 
-    // Notification channel for the (fallback) full-screen incoming-call notification.
-    const val NOTIFICATION_CHANNEL_ID = "inflow_incoming_calls"
+    // Notification action plumbing. Answer routes through MainActivity (an activity
+    // PendingIntent — receivers can't start activities on modern Android); Decline
+    // goes through VoiceCallActionReceiver (no UI needed).
+    const val EXTRA_PERFORM_ANSWER = "PERFORM_ANSWER"
+    const val ACTION_DECLINE_CALL = "co.nz.inflowapp.voice.DECLINE_CALL"
+
+    // Notification channel for the full-screen incoming-call notification (the primary
+    // ring surface — self-managed Telecom calls get no system UI/ringtone).
+    // v2: channel settings are immutable once created; v1 was created silent.
+    const val NOTIFICATION_CHANNEL_ID = "inflow_incoming_calls_v2"
     const val NOTIFICATION_CHANNEL_NAME = "Incoming calls"
     const val INCOMING_CALL_NOTIFICATION_ID = 4321
 

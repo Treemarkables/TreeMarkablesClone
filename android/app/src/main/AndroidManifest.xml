@@ -48,6 +48,9 @@
                 <action android:name="android.telecom.ConnectionService" />
             </intent-filter>
         </service>
+        <receiver
+            android:name="co.nz.inflowapp.voice.VoiceCallActionReceiver"
+            android:exported="false" />
     </application>
 
     <!-- Permissions -->

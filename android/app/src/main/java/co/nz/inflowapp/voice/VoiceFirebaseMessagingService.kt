@@ -95,8 +95,12 @@ class VoiceFirebaseMessagingService : FirebaseMessagingService() {
                 TelecomManager.EXTRA_INCOMING_CALL_ADDRESS,
                 Uri.fromParts("tel", from, null),
             )
+            // NEVER put the CallInvite Parcelable in here: this bundle is unparceled by
+            // the SYSTEM Telecom process, which doesn't have Twilio's classes — it throws
+            // BadParcelableException and the system silently REJECTS the incoming call
+            // (onFailedIncomingCall, no ring). The invite stays in-process via
+            // VoiceCallState.activeInvite (set above); only framework-safe types here.
             val callExtras = Bundle().apply {
-                putParcelable(VoiceConstants.EXTRA_INCOMING_CALL_INVITE, callInvite)
                 putString(VoiceConstants.EXTRA_CALL_FROM, from)
                 putString(VoiceConstants.EXTRA_CALL_TO, callInvite.to ?: "")
                 putString(VoiceConstants.EXTRA_CALL_SID, callInvite.callSid)
@@ -107,10 +111,15 @@ class VoiceFirebaseMessagingService : FirebaseMessagingService() {
         try {
             telecomManager.addNewIncomingCall(handle, extras)
         } catch (e: SecurityException) {
-            // PhoneAccount not registered/enabled — fall back to a full-screen notification.
+            // PhoneAccount not registered/enabled — Telecom refused; the notification
+            // below still provides the ring.
             Log.e(TAG, "addNewIncomingCall failed: ${e.message}")
-            IncomingCallNotifier.show(this, from, callInvite)
         }
+
+        // ALWAYS show the full-screen ringing notification: our PhoneAccount is
+        // self-managed, so Telecom renders no incoming-call UI and plays no ringtone —
+        // without this the call "rings" silently and invisibly.
+        IncomingCallNotifier.show(this, from, callInvite)
 
         // Mirror iOS: surface to JS as soon as possible. data values must be strings.
         VoiceCallState.emit(

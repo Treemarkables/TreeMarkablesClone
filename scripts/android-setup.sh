@@ -145,6 +145,9 @@ services = """        <service
                 <action android:name="android.telecom.ConnectionService" />
             </intent-filter>
         </service>
+        <receiver
+            android:name="co.nz.inflowapp.voice.VoiceCallActionReceiver"
+            android:exported="false" />
 """
 
 # Insert permissions right after the opening <manifest ...> tag.

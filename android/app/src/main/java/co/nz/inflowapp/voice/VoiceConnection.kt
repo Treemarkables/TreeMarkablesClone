@@ -19,6 +19,7 @@ class VoiceConnection(private val appContext: Context) : Connection() {
 
     override fun onAnswer() {
         super.onAnswer()
+        IncomingCallNotifier.cancel(appContext)
         val invite = callInvite ?: run {
             setDisconnected(DisconnectCause(DisconnectCause.ERROR))
             destroy()
@@ -33,6 +34,7 @@ class VoiceConnection(private val appContext: Context) : Connection() {
 
     override fun onReject() {
         super.onReject()
+        IncomingCallNotifier.cancel(appContext)
         callInvite?.reject(appContext)
         VoiceCallState.activeInvite = null
         setDisconnected(DisconnectCause(DisconnectCause.REJECTED))
@@ -43,6 +45,7 @@ class VoiceConnection(private val appContext: Context) : Connection() {
 
     override fun onDisconnect() {
         super.onDisconnect()
+        IncomingCallNotifier.cancel(appContext)
         VoiceCallState.activeCall?.disconnect()
         callInvite?.reject(appContext)
         setDisconnected(DisconnectCause(DisconnectCause.LOCAL))

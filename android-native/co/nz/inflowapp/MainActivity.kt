@@ -1,6 +1,7 @@
 package co.nz.inflowapp
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -8,8 +9,12 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import co.nz.inflowapp.voice.IncomingCallNotifier
+import co.nz.inflowapp.voice.TwilioCallListener
 import co.nz.inflowapp.voice.TwilioVoicePlugin
+import co.nz.inflowapp.voice.VoiceCallState
 import co.nz.inflowapp.voice.VoiceConnectionService
+import co.nz.inflowapp.voice.VoiceConstants
 import co.nz.inflowapp.voice.VoiceFirebaseMessagingService
 import com.getcapacitor.BridgeActivity
 
@@ -40,11 +45,41 @@ class MainActivity : BridgeActivity() {
         VoiceFirebaseMessagingService.onTokenReceived = {
             runOnUiThread { bridgeFcmTokenToWebView() }
         }
+
+        // Cold-launch answer: the notification's Answer button may start the activity fresh.
+        handleCallActionIntent(intent)
     }
 
     override fun onDestroy() {
         VoiceFirebaseMessagingService.onTokenReceived = null
         super.onDestroy()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleCallActionIntent(intent)
+    }
+
+    /**
+     * The "Answer" button on the incoming-call notification launches this activity with
+     * PERFORM_ANSWER (activity PendingIntent — receivers can't start UI). Answer through
+     * Telecom so native + web state stay in sync; the web overlay then shows the in-call
+     * controls (EVENT_CALL_ANSWERED → connecting → active).
+     */
+    private fun handleCallActionIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(VoiceConstants.EXTRA_PERFORM_ANSWER, false) != true) return
+        intent.removeExtra(VoiceConstants.EXTRA_PERFORM_ANSWER)
+        IncomingCallNotifier.cancel(this)
+        val connection = VoiceCallState.activeConnection
+        if (connection != null) {
+            connection.onAnswer()
+        } else {
+            VoiceCallState.activeInvite?.let { invite ->
+                VoiceCallState.activeCall = invite.accept(applicationContext, TwilioCallListener())
+                VoiceCallState.activeInvite = null
+                VoiceCallState.emit(VoiceConstants.EVENT_CALL_ANSWERED)
+            }
+        }
     }
 
     override fun onResume() {
