@@ -19,7 +19,7 @@ import {
   type InventoryTransaction, type InsertInventoryTransaction,
   type Material, type InsertMaterial,
   type Service, type InsertService,
-  photos, type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
+  photos, type Photo, type PhotoSearch,
   videos, type Video, type InsertVideo, type UpdateVideo, type VideoSearch,
   helpArticles, type HelpArticle, type InsertHelpArticle, type UpdateHelpArticle,
   type Invoice, type InsertInvoice, type InvoiceSection, type InsertInvoiceSection, type UpdateInvoiceSection,
@@ -795,17 +795,7 @@ export interface IStorage {
   getConversationMessages(conversationId: string): Promise<ConversationMessage[]>;
   markConversationMessagesAsRead(conversationId: string, readBy: string): Promise<void>;
 
-  // Enhanced Photo Management
-  createPhoto(data: InsertPhoto): Promise<Photo>;
-  getPhoto(id: string): Promise<Photo | undefined>;
-  updatePhoto(id: string, updates: UpdatePhoto): Promise<Photo>;
-  deletePhoto(id: string): Promise<void>;
-  getPhotosByJob(jobId: string, filters?: { type?: string; category?: string }): Promise<Photo[]>;
-  getPhotosByCustomer(customerId: string): Promise<Photo[]>;
-  getPublicPhotos(limit?: number, offset?: number): Promise<Photo[]>;
-  getFeaturedPhotos(limit?: number): Promise<Photo[]>;
-  getPhotosByType(type: string, jobId?: string): Promise<Photo[]>;
-  getBeforeAfterPairs(jobId: string): Promise<Photo[][]>;
+  // Photo search (photos table rows; Library page)
   searchPhotos(filters: PhotoSearch): Promise<Photo[]>;
 
   // Job Videos (Loom replacement)
@@ -5786,16 +5776,6 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.conversations.id, conversationId));
   }
 
-  async createPhoto(data: InsertPhoto): Promise<Photo> { throw new Error("Not implemented"); }
-  async getPhoto(id: string): Promise<Photo | undefined> { return undefined; }
-  async updatePhoto(id: string, updates: UpdatePhoto): Promise<Photo> { throw new Error("Not implemented"); }
-  async deletePhoto(id: string): Promise<void> { }
-  async getPhotosByJob(jobId: string, filters?: any): Promise<Photo[]> { return []; }
-  async getPhotosByCustomer(customerId: string): Promise<Photo[]> { return []; }
-  async getPublicPhotos(limit?: number, offset?: number): Promise<Photo[]> { return []; }
-  async getFeaturedPhotos(limit?: number): Promise<Photo[]> { return []; }
-  async getPhotosByType(type: string, jobId?: string): Promise<Photo[]> { return []; }
-  async getBeforeAfterPairs(jobId: string): Promise<Photo[][]> { return []; }
   async searchPhotos(filters: PhotoSearch): Promise<Photo[]> {
     const conditions = [];
     if (filters.q) {
