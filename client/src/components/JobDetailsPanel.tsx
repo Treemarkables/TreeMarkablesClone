@@ -27,6 +27,7 @@ import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { SpeechToQuote } from "@/components/SpeechToQuote";
 import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAutocomplete";
 import { JobSiteMapSection } from "@/components/JobSiteMapSection";
+import { JobTimerControl } from "@/components/JobTimerControl";
 
 // The Web Speech API (webkitSpeechRecognition) is present on `window` inside the
 // iOS Capacitor WKWebView but is a silent no-op there — recognition never starts,
@@ -420,6 +421,9 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
 
   return (
     <div className="p-4 space-y-3.5">
+      {/* ── Live job timer — clock in/out; stopped time lands in labour ── */}
+      <JobTimerControl jobId={jobId} />
+
       {/* ── Customer card ──
           Two flavours: when there's a linked customer, show the standard
           name + address + map link. When there isn't (drafts created from

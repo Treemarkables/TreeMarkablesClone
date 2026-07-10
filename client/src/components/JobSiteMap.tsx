@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
+  ImageOverlay,
   Marker,
   Popup,
   useMapEvents,
@@ -15,7 +16,18 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { MapPin, Plus, Trash2, Save, X, TreePine, Loader2 } from "lucide-react";
+import {
+  MapPin,
+  Plus,
+  Trash2,
+  Save,
+  X,
+  TreePine,
+  Loader2,
+  Upload,
+  Image as ImageIcon,
+  Globe,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -41,7 +53,13 @@ interface TreeMarker {
   notes: string | null;
   markerType: string;
   color: string;
+  // 'map' = geographic coords; 'image' = normalized 0..1 coords on the job's
+  // uploaded site photo (lat = y from top, lng = x from left).
+  surface?: string;
 }
+
+// Fixed CRS.Simple height for the uploaded photo; width scales by aspect.
+const IMG_PLANE_H = 1000;
 
 interface JobSiteMapProps {
   jobId: string;
@@ -156,6 +174,14 @@ function GeocodedCenter({
   return null;
 }
 
+function FitImageBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
+  const map = useMap();
+  useEffect(() => {
+    map.fitBounds(bounds);
+  }, [map, bounds]);
+  return null;
+}
+
 export function JobSiteMap({
   jobId,
   address,
@@ -165,6 +191,85 @@ export function JobSiteMap({
   const { toast } = useToast();
   const [isAddingMarker, setIsAddingMarker] = useState(false);
   const [geocodeFailed, setGeocodeFailed] = useState(false);
+  const [manualView, setManualView] = useState<"satellite" | "photo" | null>(null);
+  const [imgAspect, setImgAspect] = useState<number | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: siteImageUrl } = useQuery<string | null>({
+    queryKey: ["/api/jobs", jobId, "site-map-image"],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/site-map-image`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      return data.success ? data.data.imageUrl : null;
+    },
+  });
+
+  // Photo view is the default whenever a site photo exists (council jobs:
+  // the card address is the billing address, so the satellite view is moot).
+  const view: "satellite" | "photo" =
+    manualView ?? (siteImageUrl ? "photo" : "satellite");
+
+  // Natural aspect ratio of the uploaded photo → CRS.Simple plane size.
+  useEffect(() => {
+    setImgAspect(null);
+    if (!siteImageUrl) return;
+    const img = new Image();
+    img.onload = () => {
+      if (img.naturalWidth && img.naturalHeight) {
+        setImgAspect(img.naturalWidth / img.naturalHeight);
+      }
+    };
+    img.src = siteImageUrl;
+  }, [siteImageUrl]);
+
+  const imgPlaneW = imgAspect ? IMG_PLANE_H * imgAspect : IMG_PLANE_H;
+  const imgBounds: L.LatLngBoundsExpression = [
+    [0, 0],
+    [IMG_PLANE_H, imgPlaneW],
+  ];
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await fetch(`/api/jobs/${jobId}/site-map-image`, {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        // Surface the server's reason — a bare "failed" hides whether it was
+        // auth, size, storage, or the DB, which made prod failures undiagnosable.
+        const detail = await res
+          .json()
+          .then((d) => d?.message)
+          .catch(() => null);
+        throw new Error(detail || `Upload failed (${res.status})`);
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "site-map-image"],
+      });
+      setManualView("photo");
+    } catch (err) {
+      toast({
+        title: "Upload Error",
+        description:
+          err instanceof Error && err.message
+            ? err.message
+            : "Failed to upload the site photo",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
   const [editingMarker, setEditingMarker] = useState<TreeMarker | null>(null);
   const [newMarkerPosition, setNewMarkerPosition] = useState<{
     lat: number;
@@ -188,6 +293,22 @@ export function JobSiteMap({
     },
   });
 
+  // Each view only shows its own markers — photo markers carry normalized
+  // coords that would be nonsense latitudes on the satellite map.
+  const visibleMarkers = markers.filter((m) =>
+    view === "photo" ? m.surface === "image" : m.surface !== "image",
+  );
+
+  // Photo-view positions: stored normalized (y from top, x from left) →
+  // CRS.Simple plane (lat grows upward).
+  const markerPlanePosition = (m: TreeMarker): [number, number] =>
+    view === "photo"
+      ? [
+          (1 - parseFloat(m.latitude)) * IMG_PLANE_H,
+          parseFloat(m.longitude) * imgPlaneW,
+        ]
+      : [parseFloat(m.latitude), parseFloat(m.longitude)];
+
   const createMarkerMutation = useMutation({
     mutationFn: async (marker: {
       latitude: number;
@@ -196,6 +317,7 @@ export function JobSiteMap({
       notes: string;
       markerType: string;
       color: string;
+      surface: string;
     }) => {
       return apiRequest("POST", `/api/jobs/${jobId}/tree-markers`, marker);
     },
@@ -274,13 +396,23 @@ export function JobSiteMap({
 
   const handleSaveNewMarker = () => {
     if (!newMarkerPosition) return;
+    // Photo view: convert the CRS.Simple click into normalized image coords.
+    const latitude =
+      view === "photo"
+        ? 1 - newMarkerPosition.lat / IMG_PLANE_H
+        : newMarkerPosition.lat;
+    const longitude =
+      view === "photo"
+        ? newMarkerPosition.lng / imgPlaneW
+        : newMarkerPosition.lng;
     createMarkerMutation.mutate({
-      latitude: newMarkerPosition.lat,
-      longitude: newMarkerPosition.lng,
+      latitude,
+      longitude,
       label: markerForm.label,
       notes: markerForm.notes,
       markerType: markerForm.markerType,
       color: markerForm.color,
+      surface: view === "photo" ? "image" : "map",
     });
   };
 
@@ -324,115 +456,202 @@ export function JobSiteMap({
     );
   }
 
+  const markerPins = (
+    <>
+      {visibleMarkers.map((marker) => (
+        <Marker
+          key={marker.id}
+          position={markerPlanePosition(marker)}
+          icon={createTreeIcon(marker.color)}
+          eventHandlers={{
+            click: () => openEditDialog(marker),
+          }}
+        >
+          <Popup>
+            <div className="min-w-[150px]">
+              <p className="font-medium">{marker.label || "Unmarked tree"}</p>
+              {marker.notes && (
+                <p className="text-sm text-gray-600 mt-1">{marker.notes}</p>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 w-full"
+                onClick={() => openEditDialog(marker)}
+              >
+                Edit
+              </Button>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+
+      {newMarkerPosition && (
+        <Marker
+          position={[newMarkerPosition.lat, newMarkerPosition.lng]}
+          icon={createTreeIcon(markerForm.color)}
+        />
+      )}
+    </>
+  );
+
   return (
     <div className={`relative ${className}`}>
-      <div className="absolute top-2 right-2 z-[1000] flex gap-2">
+      <div className="flex items-center gap-1 mb-2">
+        {siteImageUrl && (
+          <>
+            <Button
+              size="sm"
+              variant={view === "photo" ? "secondary" : "ghost"}
+              onClick={() => {
+                setManualView("photo");
+                setIsAddingMarker(false);
+                setNewMarkerPosition(null);
+              }}
+              className="text-xs"
+            >
+              <ImageIcon className="h-3 w-3 mr-1" />
+              Site Photo
+            </Button>
+            <Button
+              size="sm"
+              variant={view === "satellite" ? "secondary" : "ghost"}
+              onClick={() => {
+                setManualView("satellite");
+                setIsAddingMarker(false);
+                setNewMarkerPosition(null);
+              }}
+              className="text-xs"
+            >
+              <Globe className="h-3 w-3 mr-1" />
+              Satellite
+            </Button>
+          </>
+        )}
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handlePhotoUpload}
+        />
         <Button
           size="sm"
-          variant={isAddingMarker ? "default" : "outline"}
-          onClick={() => {
-            setIsAddingMarker(!isAddingMarker);
-            setNewMarkerPosition(null);
-          }}
-          className="shadow-lg"
+          variant="ghost"
+          onClick={() => photoInputRef.current?.click()}
+          disabled={uploadingPhoto}
+          className="text-xs text-muted-foreground ml-auto"
+          title="For sites the job address doesn't cover (e.g. council jobs) — mark trees on your own aerial or plan photo"
         >
-          {isAddingMarker ? (
-            <>
-              <X className="h-4 w-4 mr-1" />
-              Cancel
-            </>
+          {uploadingPhoto ? (
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
           ) : (
-            <>
-              <Plus className="h-4 w-4 mr-1" />
-              Add Marker
-            </>
+            <Upload className="h-3 w-3 mr-1" />
           )}
+          {siteImageUrl ? "Replace Photo" : "Upload Site Photo"}
         </Button>
       </div>
 
-      {isAddingMarker && (
-        <div className="absolute top-2 left-2 z-[1000] bg-card border border-border px-3 py-2 rounded-lg shadow-lg text-sm">
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-green-600" />
-            <span>Click on the map to place a marker</span>
-          </div>
-        </div>
-      )}
-
-      <MapContainer
-        center={center}
-        zoom={18}
-        style={{ height: "400px", width: "100%" }}
-        className="rounded-lg z-0"
-      >
-        {/* Esri serves genuine native imagery to z20+ across NZ (LINZ-sourced;
-            verified z21 over Gisborne). Native to 20, z21 upscales so thin
-            rural coverage degrades to soft imagery instead of blank tiles. */}
-        <TileLayer
-          attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          maxNativeZoom={20}
-          maxZoom={21}
-        />
-        {address && (
-          <GeocodedCenter
-            address={address}
-            onResult={(found) => setGeocodeFailed(!found)}
-          />
-        )}
-        <MapClickHandler
-          onMapClick={handleMapClick}
-          isAddingMarker={isAddingMarker}
-        />
-
-        {markers.map((marker) => (
-          <Marker
-            key={marker.id}
-            position={[
-              parseFloat(marker.latitude),
-              parseFloat(marker.longitude),
-            ]}
-            icon={createTreeIcon(marker.color)}
-            eventHandlers={{
-              click: () => openEditDialog(marker),
+      <div className="relative">
+        <div className="absolute top-2 right-2 z-[1000] flex gap-2">
+          <Button
+            size="sm"
+            variant={isAddingMarker ? "default" : "outline"}
+            onClick={() => {
+              setIsAddingMarker(!isAddingMarker);
+              setNewMarkerPosition(null);
             }}
+            className="shadow-lg"
           >
-            <Popup>
-              <div className="min-w-[150px]">
-                <p className="font-medium">{marker.label || "Unmarked tree"}</p>
-                {marker.notes && (
-                  <p className="text-sm text-gray-600 mt-1">{marker.notes}</p>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2 w-full"
-                  onClick={() => openEditDialog(marker)}
-                >
-                  Edit
-                </Button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+            {isAddingMarker ? (
+              <>
+                <X className="h-4 w-4 mr-1" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4 mr-1" />
+                Add Marker
+              </>
+            )}
+          </Button>
+        </div>
 
-        {newMarkerPosition && (
-          <Marker
-            position={[newMarkerPosition.lat, newMarkerPosition.lng]}
-            icon={createTreeIcon(markerForm.color)}
-          />
+        {isAddingMarker && (
+          <div className="absolute top-2 left-2 z-[1000] bg-card border border-border px-3 py-2 rounded-lg shadow-lg text-sm">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-green-600" />
+              <span>Click on the {view === "photo" ? "photo" : "map"} to place a marker</span>
+            </div>
+          </div>
         )}
-      </MapContainer>
 
-      {geocodeFailed && (
+        {view === "photo" ? (
+          !imgAspect ? (
+            <div className="flex items-center justify-center h-64 bg-muted rounded-lg">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <MapContainer
+              key={`photo-${siteImageUrl}`}
+              crs={L.CRS.Simple}
+              center={[IMG_PLANE_H / 2, imgPlaneW / 2]}
+              zoom={0}
+              minZoom={-2}
+              maxZoom={4}
+              style={{ height: "400px", width: "100%" }}
+              className="rounded-lg z-0 bg-muted"
+            >
+              <FitImageBounds bounds={imgBounds} />
+              <ImageOverlay url={siteImageUrl!} bounds={imgBounds} />
+              <MapClickHandler
+                onMapClick={handleMapClick}
+                isAddingMarker={isAddingMarker}
+              />
+              {markerPins}
+            </MapContainer>
+          )
+        ) : (
+          <MapContainer
+            key="satellite"
+            center={center}
+            zoom={18}
+            style={{ height: "400px", width: "100%" }}
+            className="rounded-lg z-0"
+          >
+            {/* Esri serves genuine native imagery to z20+ across NZ (LINZ-sourced;
+                verified z21 over Gisborne). Native to 20, z21 upscales so thin
+                rural coverage degrades to soft imagery instead of blank tiles. */}
+            <TileLayer
+              attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxNativeZoom={20}
+              maxZoom={21}
+            />
+            {address && (
+              <GeocodedCenter
+                address={address}
+                onResult={(found) => setGeocodeFailed(!found)}
+              />
+            )}
+            <MapClickHandler
+              onMapClick={handleMapClick}
+              isAddingMarker={isAddingMarker}
+            />
+            {markerPins}
+          </MapContainer>
+        )}
+      </div>
+
+      {view === "satellite" && geocodeFailed && (
         <p className="mt-1 text-xs text-muted-foreground">
           Address not found on map — pan/zoom to the property manually.
         </p>
       )}
 
-      {markers.length > 0 && (
+      {visibleMarkers.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {markers.map((marker) => (
+          {visibleMarkers.map((marker) => (
             <div
               key={marker.id}
               className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs cursor-pointer hover:bg-accent"

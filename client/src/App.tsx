@@ -45,7 +45,6 @@ const Videos = lazy(() => import("@/pages/Videos"));
 const Library = lazy(() => import("@/pages/Library"));
 const Help = lazy(() => import("@/pages/Help"));
 const HelpAdmin = lazy(() => import("@/pages/admin/HelpAdmin"));
-const Pipeline = lazy(() => import("@/pages/Pipeline"));
 const Opportunities = lazy(() => import("@/pages/Opportunities"));
 const ConversationDetail = lazy(() => import("@/pages/ConversationDetail"));
 const Reputation = lazy(() => import("@/pages/Reputation"));
@@ -108,7 +107,6 @@ const CompetencyRegister = lazy(() => import("@/pages/CompetencyRegister"));
 const SWMSBuilder = lazy(() => import("@/pages/SWMSBuilder"));
 const NotifiableEvents = lazy(() => import("@/pages/NotifiableEvents"));
 const EquipmentRegister = lazy(() => import("@/pages/EquipmentRegister"));
-const AIDispatchScheduler = lazy(() => import("@/pages/AIDispatchScheduler"));
 const ChecklistTemplatePage = lazy(() => import("@/pages/ChecklistTemplatePage"));
 const RoleChecklistSettings = lazy(() => import("@/pages/RoleChecklistSettings"));
 const QuotingProcessSettings = lazy(() => import("@/pages/QuotingProcessSettings"));
@@ -1173,13 +1171,6 @@ function Router() {
       <Route path="/watch/:videoId" component={WatchVideo}/>
       
       {/* Dashboard pages with sidebar - Admin only */}
-      <Route path="/pipeline">
-        <ProtectedRoute>
-          <SidebarLayout>
-            <Pipeline />
-          </SidebarLayout>
-        </ProtectedRoute>
-      </Route>
       <Route path="/opportunities">
         <ProtectedRoute>
           <SidebarLayout>
@@ -1652,14 +1643,6 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <EquipmentRegister />
-          </SidebarLayout>
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/ai-scheduler">
-        <ProtectedRoute>
-          <SidebarLayout>
-            <AIDispatchScheduler />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

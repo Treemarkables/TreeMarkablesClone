@@ -156,7 +156,7 @@ import { renderBrandedEmail, renderInvoiceEmail } from "./emailTemplates";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter, type BeforeAfterBranding } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
-import { renderSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
+import { renderSiteMapSnapshot, renderImageSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
 import { queueJobPush, removeJobEvents, getConnectionForUser } from "./services/googleCalendarSync";
@@ -4816,81 +4816,6 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     } catch (error) {
       console.error('Error fetching batch customers:', error);
       res.status(500).json({ success: false, message: 'Error fetching batch customers' });
-    }
-  });
-
-  // ========================================
-  // PIPELINE LEAD MANAGEMENT API ROUTES
-  // ========================================
-
-  app.post('/api/pipeline-leads', async (req: Request, res: Response) => {
-    try {
-      const validation = insertLeadSchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid lead data',
-          errors: validation.error.errors 
-        });
-      }
-
-      const lead = await storage.createPipelineLead(validation.data);
-      broadcast(['/api/pipeline-leads']);
-      res.json({ success: true, data: lead });
-    } catch (error) {
-      console.error('Error creating pipeline lead:', error);
-      res.status(500).json({ success: false, message: 'Error creating lead' });
-    }
-  });
-
-  app.get('/api/pipeline-leads', async (req: Request, res: Response) => {
-    try {
-      const { status } = req.query;
-      let leads;
-      
-      if (status && typeof status === 'string') {
-        leads = await storage.getPipelineLeadsByStatus(status);
-      } else {
-        leads = await storage.getAllPipelineLeads();
-      }
-      
-      res.json({ success: true, data: leads });
-    } catch (error) {
-      console.error('Error fetching pipeline leads:', error);
-      res.status(500).json({ success: false, message: 'Error fetching leads' });
-    }
-  });
-
-  app.get('/api/pipeline-leads/:id', async (req: Request, res: Response) => {
-    try {
-      const lead = await storage.getPipelineLead(req.params.id);
-      if (!lead) {
-        return res.status(404).json({ success: false, message: 'Lead not found' });
-      }
-      res.json({ success: true, data: lead });
-    } catch (error) {
-      console.error('Error fetching pipeline lead:', error);
-      res.status(500).json({ success: false, message: 'Error fetching lead' });
-    }
-  });
-
-  app.put('/api/pipeline-leads/:id', async (req: Request, res: Response) => {
-    try {
-      const updates = insertLeadSchema.partial().safeParse(req.body);
-      if (!updates.success) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid update data',
-          errors: updates.error.errors 
-        });
-      }
-
-      const lead = await storage.updatePipelineLead(req.params.id, updates.data);
-      broadcast(['/api/pipeline-leads']);
-      res.json({ success: true, data: lead });
-    } catch (error) {
-      console.error('Error updating pipeline lead:', error);
-      res.status(500).json({ success: false, message: 'Error updating lead' });
     }
   });
 
@@ -11739,11 +11664,11 @@ Draft the reply now.`;
           if (isReschedule) {
             await storage.createNotification({
               title: `Reschedule requested — Job #${recentJob.jobNumber}`,
-              message: `Customer ${customer.name} may be requesting a new time slot for Job #${recentJob.jobNumber} via SMS. Consider re-proposing via AI Smart Dispatch.`,
+              message: `Customer ${customer.name} may be requesting a new time slot for Job #${recentJob.jobNumber} via SMS.`,
               type: 'reschedule_request',
               priority: 'high',
               isRead: false,
-              actionUrl: '/ai-scheduler',
+              actionUrl: '/dispatch',
               jobId: recentJob.id,
             }).catch(() => { /* non-critical */ });
           }
@@ -14054,6 +13979,195 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     } catch (error) {
       console.error('Error deleting time entry:', error);
       res.status(500).json({ success: false, message: 'Error deleting time entry' });
+    }
+  });
+
+  // ── Live job timer (clock in/out) ─────────────────────────────────────────
+  // Start/stop from the job card. Stopping converts the elapsed time into a
+  // jobs.staffTimeEntries entry so labour cost, back-costing and gross margin
+  // reuse the exact recompute paths the manual RecordedTimeEntries flow uses.
+
+  // Stop a running timer: write the time entry, recompute labour + margin,
+  // diary-log, delete the timer row. Shared by /timer/stop and start-with-switch.
+  async function finalizeTimer(timer: { id: string; jobId: string; employeeId: string; startedAt: Date | string }) {
+    const elapsedMs = Date.now() - new Date(timer.startedAt).getTime();
+    // Round to 2dp hours, minimum 1 minute so an accidental tap-tap still
+    // produces a visible, deletable entry rather than a silent no-op.
+    const hours = Math.max(0.02, Math.round((elapsedMs / 3_600_000) * 100) / 100);
+
+    const employee = await storage.getEmployee(timer.employeeId);
+    const chargeRate = employee?.chargeOutRate ? parseFloat(String(employee.chargeOutRate)) : 0;
+    const costRate = employee?.hourlyRate ? parseFloat(String(employee.hourlyRate)) : undefined;
+
+    await storage.addStaffTimeEntry(timer.jobId, {
+      employeeId: timer.employeeId,
+      hours,
+      rate: chargeRate,
+      costRate,
+      date: new Date().toISOString().split('T')[0],
+    });
+
+    // Recalculate labour cost from cost rates (same maths as the manual flow)
+    const entries = await storage.getJobStaffTimeEntries(timer.jobId);
+    const totalLaborCost = await entries.reduce(async (accPromise: Promise<number>, e: any) => {
+      const acc = await accPromise;
+      let cr = e.costRate;
+      if (cr === undefined || cr === null) {
+        const emp = e.employeeId ? await storage.getEmployee(e.employeeId) : null;
+        cr = emp?.hourlyRate ? parseFloat(String(emp.hourlyRate)) : 0;
+      }
+      return acc + (e.hours * (cr || 0));
+    }, Promise.resolve(0));
+    await storage.updateJobExpenses(timer.jobId, { actualLaborCosts: totalLaborCost });
+    await storage.calculateAndUpdateGrossMargin(timer.jobId);
+
+    const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
+    await storage.createJobDiaryEntry({
+      jobId: timer.jobId,
+      entryType: 'note',
+      title: 'Timer stopped',
+      description: `${employeeName}: ${hours} hours (live timer)`,
+      authorName: employeeName,
+      authorRole: 'system',
+      isPrivate: false,
+    }).catch(() => { /* non-critical */ });
+
+    await storage.deleteTimer(timer.id);
+    return { hours, jobId: timer.jobId };
+  }
+
+  // Enrich timer rows with employee names for display.
+  async function enrichTimers(timers: Array<{ employeeId: string } & Record<string, any>>) {
+    return Promise.all(timers.map(async (t) => {
+      const emp = await storage.getEmployee(t.employeeId);
+      return {
+        ...t,
+        employeeName: emp ? `${emp.firstName} ${emp.lastName}` : 'Unknown Staff',
+      };
+    }));
+  }
+
+  // Running timers on THIS job — drives the job-card timer list.
+  app.get('/api/jobs/:id/timers', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const timers = await storage.getActiveTimersForJob(req.params.id);
+      res.json({ success: true, data: await enrichTimers(timers) });
+    } catch (error) {
+      console.error('Error fetching job timers:', error);
+      res.status(500).json({ success: false, message: 'Error fetching job timers' });
+    }
+  });
+
+  // All running timers for the business — the staff-picker uses this to badge
+  // people who are already clocked in elsewhere.
+  app.get('/api/timers/active', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const timers = await storage.getAllActiveTimers();
+      const enriched = await Promise.all((await enrichTimers(timers)).map(async (t) => {
+        const job = await storage.getJob(t.jobId);
+        return { ...t, jobNumber: job?.jobNumber ?? null };
+      }));
+      res.json({ success: true, data: enriched });
+    } catch (error) {
+      console.error('Error fetching active timers:', error);
+      res.status(500).json({ success: false, message: 'Error fetching active timers' });
+    }
+  });
+
+  // Clock in one or more staff members on a job (the picker sends
+  // employeeIds; no body defaults to just the logged-in user). Staff already
+  // running on THIS job are skipped (idempotent); staff running on ANOTHER
+  // job have that timer finalized first — the picker shows a "on Job #N"
+  // badge so the person tapping Start knows that will happen.
+  app.post('/api/jobs/:id/timer/start', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const jobId = req.params.id;
+      const job = await storage.getJob(jobId);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+      const requested: string[] = Array.isArray(req.body?.employeeIds) && req.body.employeeIds.length > 0
+        ? req.body.employeeIds
+        : [req.session.employeeId];
+      // De-dupe, cap defensively
+      const employeeIds = Array.from(new Set(requested)).slice(0, 50);
+
+      const started: any[] = [];
+      const switchedJobIds = new Set<string>();
+      for (const employeeId of employeeIds) {
+        const employee = await storage.getEmployee(employeeId);
+        if (!employee) continue; // unknown/other-tenant id — skip
+        const running = await storage.getActiveTimerForEmployee(employeeId);
+        if (running) {
+          if (running.jobId === jobId) continue; // already clocked in here
+          await finalizeTimer(running);          // stop-and-switch
+          switchedJobIds.add(running.jobId);
+        }
+        started.push(await storage.startTimer(jobId, employeeId));
+      }
+
+      res.json({
+        success: true,
+        data: {
+          started: await enrichTimers(started),
+          // Jobs whose timers were finalized by the switch — client refreshes their labour
+          switchedJobIds: Array.from(switchedJobIds),
+        },
+      });
+    } catch (error) {
+      console.error('Error starting timer(s):', error);
+      res.status(500).json({ success: false, message: 'Error starting timer(s)' });
+    }
+  });
+
+  // Clock out. body.timerId stops that specific timer (any staff member's —
+  // foremen stop their crew); no body stops the logged-in user's own timer.
+  app.post('/api/timer/stop', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      let timer;
+      if (req.body?.timerId) {
+        const all = await storage.getAllActiveTimers();
+        timer = all.find(t => t.id === req.body.timerId) ?? null;
+      } else {
+        timer = await storage.getActiveTimerForEmployee(req.session.employeeId);
+      }
+      if (!timer) {
+        return res.status(404).json({ success: false, message: 'No running timer' });
+      }
+      const result = await finalizeTimer(timer);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error stopping timer:', error);
+      res.status(500).json({ success: false, message: 'Error stopping timer' });
+    }
+  });
+
+  // Clock out everyone on a job at once ("Stop all" — end of day).
+  app.post('/api/jobs/:id/timers/stop-all', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const timers = await storage.getActiveTimersForJob(req.params.id);
+      const results = [];
+      for (const t of timers) {
+        results.push(await finalizeTimer(t)); // sequential — labour recompute isn't concurrent-safe
+      }
+      res.json({ success: true, data: { stopped: results.length } });
+    } catch (error) {
+      console.error('Error stopping job timers:', error);
+      res.status(500).json({ success: false, message: 'Error stopping job timers' });
     }
   });
 
@@ -22355,12 +22469,12 @@ Transcription: ${transcriptText}`;
             await storage.createNotification({
               type: 'reschedule_request',
               title: `Reschedule requested — Job #${job.jobNumber}`,
-              message: `Customer may be requesting a new time slot for Job #${job.jobNumber}. Consider re-proposing via AI Smart Dispatch.`,
+              message: `Customer may be requesting a new time slot for Job #${job.jobNumber}.`,
               priority: 'high',
               isRead: false,
               jobId: job.id,
               metadata: { emailAddress: actualFromEmail || actualFrom, trigger: 'email_reply' },
-              actionUrl: '/ai-scheduler',
+              actionUrl: '/dispatch',
             });
           }
         } catch (notifError) {
@@ -22472,11 +22586,11 @@ Transcription: ${transcriptText}`;
             if (rescheduleKeywords.test(cleanedBody)) {
               await storage.createNotification({
                 title: `Reschedule requested — Job #${job.jobNumber}`,
-                message: `Customer may be requesting a new time slot for Job #${job.jobNumber}. Consider re-proposing via AI Smart Dispatch.`,
+                message: `Customer may be requesting a new time slot for Job #${job.jobNumber}.`,
                 type: 'reschedule_request',
                 priority: 'high',
                 isRead: false,
-                actionUrl: '/ai-scheduler',
+                actionUrl: '/dispatch',
                 jobId: job.id,
               });
             }
@@ -31181,10 +31295,13 @@ Transcription: ${transcriptText}`;
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
       }
-      const { latitude, longitude, label, notes, markerType, color } = req.body;
+      const { latitude, longitude, label, notes, markerType, color, surface } = req.body;
 
       if (!latitude || !longitude) {
         return res.status(400).json({ success: false, message: 'Latitude and longitude are required' });
+      }
+      if (surface !== undefined && surface !== 'map' && surface !== 'image') {
+        return res.status(400).json({ success: false, message: "surface must be 'map' or 'image'" });
       }
 
       // Under RLS a foreign tenant's job reads as absent — blocks attaching
@@ -31201,7 +31318,8 @@ Transcription: ${transcriptText}`;
         label: label || null,
         notes: notes || null,
         markerType: markerType || 'tree',
-        color: color || '#22c55e'
+        color: color || '#22c55e',
+        surface: surface || 'map'
       });
       
       res.json({ success: true, data: marker });
@@ -31257,8 +31375,64 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  // Render the job's site map (satellite tiles + numbered markers) as a PNG.
-  // Streams the image directly — no GCS involved, so it's verifiable locally.
+  // The uploaded base image for the job's site map (photo mode — council jobs
+  // where the card address is the billing address, not the site).
+  app.get("/api/jobs/:id/site-map-image", async (req, res) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      const siteMap = await storage.getJobSiteMapImage(req.params.id);
+      res.json({ success: true, data: { imageUrl: siteMap?.imageUrl || null } });
+    } catch (error) {
+      console.error('Error fetching site map image:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch site map image' });
+    }
+  });
+
+  app.post("/api/jobs/:id/site-map-image", imageUpload.single('photo'), async (req, res) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No photo provided' });
+      }
+      if (!(req.file.mimetype || '').toLowerCase().startsWith('image/')) {
+        return res.status(400).json({ success: false, message: 'Site map must be an image' });
+      }
+      const svc = new PhotoStorageService();
+      const { url } = await svc.uploadPhoto(req.file.buffer, req.file.originalname, req.file.mimetype);
+      await storage.upsertJobSiteMapImage(req.params.id, url);
+      res.json({ success: true, data: { imageUrl: url } });
+    } catch (error) {
+      console.error('Error uploading site map image:', error);
+      res.status(500).json({ success: false, message: 'Failed to upload site map image' });
+    }
+  });
+
+  // Compose the job's site-map snapshot: markers over the uploaded site photo
+  // when one exists and has markers, otherwise over stitched satellite tiles.
+  const composeSiteMapPng = async (jobId: string): Promise<Buffer> => {
+    const markers = await storage.getTreeMarkersByJob(jobId);
+    const siteMap = await storage.getJobSiteMapImage(jobId);
+    const imageMarkers = markers.filter((m) => m.surface === 'image');
+    if (siteMap?.imageUrl && imageMarkers.length > 0) {
+      const svc = new PhotoStorageService();
+      const downloaded = await svc.downloadPhotoBuffer(siteMap.imageUrl);
+      if (downloaded?.exists) {
+        return renderImageSiteMapSnapshot(downloaded.buffer, imageMarkers);
+      }
+    }
+    return renderSiteMapSnapshot(markers.filter((m) => m.surface !== 'image'));
+  };
+
+  // Render the job's site map (base + numbered markers) as a PNG.
+  // Streams the image directly — no GCS write, so it's verifiable locally.
   app.get("/api/jobs/:id/site-map.png", async (req, res) => {
     try {
       if (!req.session.employeeId) {
@@ -31268,8 +31442,7 @@ Transcription: ${transcriptText}`;
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
-      const markers = await storage.getTreeMarkersByJob(req.params.id);
-      const png = await renderSiteMapSnapshot(markers);
+      const png = await composeSiteMapPng(req.params.id);
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'no-store');
       res.send(png);
@@ -31294,8 +31467,7 @@ Transcription: ${transcriptText}`;
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
-      const markers = await storage.getTreeMarkersByJob(req.params.id);
-      const png = await renderSiteMapSnapshot(markers);
+      const png = await composeSiteMapPng(req.params.id);
       const svc = new PhotoStorageService();
       const { url, thumbnailUrl } = await svc.uploadPhoto(
         png,
@@ -32246,550 +32418,6 @@ If you cannot find a value, use null. Do not guess.`
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ success: false, message: 'Failed to clear history' });
-    }
-  });
-
-  // ========================================
-  // AI SMART DISPATCH SCHEDULING
-  // ========================================
-
-  // GET /api/scheduling/revenue/:date — daily revenue summary for dispatch board
-  app.get('/api/scheduling/revenue/:date', requireAdmin, async (req: Request, res: Response) => {
-    try {
-      const { date } = req.params;
-      // Use NZ (Pacific/Auckland) timezone boundaries so morning NZ jobs aren't missed
-      const NZ_TZ = 'Pacific/Auckland';
-      const dayStart = fromZonedTime(`${date}T00:00:00`, NZ_TZ);
-      const dayEnd = fromZonedTime(`${date}T23:59:59.999`, NZ_TZ);
-
-      const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
-      const settings = await storage.getBusinessSettings();
-      const dailyTarget = Number(settings.dailyRevenueTarget) || 3500;
-
-      const dayJobs = allJobs.filter(j => {
-        if (!j.scheduledDate) return false;
-        const d = new Date(j.scheduledDate);
-        return d >= dayStart && d <= dayEnd && j.status !== 'completed' && j.status !== 'unsuccessful';
-      });
-
-      const scheduledRevenue = dayJobs.reduce((sum, j) => {
-        if (j.subtotal && Number(j.subtotal) > 0) return sum + Number(j.subtotal);
-        if (j.totalAmount && Number(j.totalAmount) > 0) return sum + Number(j.totalAmount);
-        return sum;
-      }, 0);
-
-      return res.json({
-        success: true,
-        data: {
-          date,
-          scheduledRevenue,
-          dailyTarget,
-          percentComplete: dailyTarget > 0 ? Math.round((scheduledRevenue / dailyTarget) * 100) : 0,
-          jobCount: dayJobs.length,
-          belowTarget: scheduledRevenue < dailyTarget,
-        },
-      });
-    } catch (error) {
-      console.error('[AI Dispatch] Revenue summary error:', error);
-      return res.status(500).json({ success: false, message: 'Error fetching revenue summary' });
-    }
-  });
-
-  // POST /api/scheduling/propose — AI scheduling engine
-  app.post('/api/scheduling/propose', requireAdmin, async (req: Request, res: Response) => {
-    try {
-      const { targetDate, revenueTarget: overrideTarget } = req.body;
-      if (!targetDate) return res.status(400).json({ success: false, message: 'targetDate is required' });
-
-      const settings = await storage.getBusinessSettings();
-      const dailyTarget = overrideTarget || Number(settings.dailyRevenueTarget) || 3500;
-
-      // Fetch all the data needed for constraint checking
-      const [allEmployees, allEquipment, { jobs: allJobs }] = await Promise.all([
-        storage.getAllEmployees(),
-        storage.getAllEquipment(),
-        storage.getAllJobs({ limit: 999999 }),
-      ]);
-
-      // Get unscheduled work orders only (status === 'work_order')
-      // Already-scheduled jobs are excluded to avoid double-booking or re-confirming them.
-      const unscheduledJobs = allJobs.filter(j => j.status === 'work_order');
-
-      const activeStaff = allEmployees.filter(e => e.isActive && e.status === 'active');
-      const availableEquipment = allEquipment.filter(e => e.isActive && e.status === 'available');
-
-      // Build equipment licenceRequired map
-      const equipLicenceMap: Record<string, string | null> = {};
-      for (const eq of allEquipment) {
-        equipLicenceMap[eq.id] = eq.licenceRequired || null;
-        equipLicenceMap[eq.name] = eq.licenceRequired || null;
-      }
-
-      // Build staff licences map
-      const staffLicenceMap: Record<string, string[]> = {};
-      for (const emp of allEmployees) {
-        staffLicenceMap[emp.id] = [
-          ...(emp.licences || []),
-          ...(emp.certifications || []),
-        ];
-      }
-
-      // Build proposals using OpenAI GPT
-      const jobSummaries = unscheduledJobs.slice(0, 30).map(j => ({
-        id: j.id,
-        jobNumber: j.jobNumber,
-        title: j.title || 'Tree service',
-        address: j.address,
-        status: j.status,
-        revenue: Number(j.subtotal || j.totalAmount || 0),
-        estimatedDuration: j.estimatedDuration || 4,
-        equipment: j.equipment || [],
-      }));
-
-      const staffSummaries = activeStaff.map(e => ({
-        id: e.id,
-        name: `${e.firstName} ${e.lastName}`,
-        position: e.position,
-        licences: staffLicenceMap[e.id] || [],
-      }));
-
-      const equipSummaries = availableEquipment.map(e => ({
-        id: e.id,
-        name: e.name,
-        type: e.type,
-        licenceRequired: e.licenceRequired || null,
-      }));
-
-      const systemPrompt = `You are an expert field-service business scheduling assistant. Your job is to propose MULTIPLE RANKED schedule alternatives for the day, each prioritising a different optimisation goal:
-
-Alternative 1 (rank 1): "Maximum Revenue" — pick the combination of jobs that maximises total revenue, even if it means a heavier workload.
-Alternative 2 (rank 2): "Balanced Crew" — distribute work evenly across crew, favouring jobs matched well to available staff licences.
-Alternative 3 (rank 3): "Quick Wins" — prioritise shorter jobs that can definitely be completed in the day, minimising risk.
-
-Rules for ALL alternatives:
-- Assign crew based on their licences/tickets matching equipment requirements
-- No double-booking of staff or equipment across jobs in the same alternative
-- Assign realistic start and end times starting from 07:00
-- Check equipment licence requirements — at least one crew member must hold the required licence
-- Flag any conflicts clearly
-
-Return a valid JSON object only (no markdown) with this EXACT structure:
-{
-  "alternatives": [
-    {
-      "rank": 1,
-      "label": "Maximum Revenue",
-      "summaryNote": "Brief explanation",
-      "totalRevenue": number,
-      "meetsTarget": boolean,
-      "conflicts": ["Any overall conflicts"],
-      "proposedJobs": [
-        {
-          "jobId": "string",
-          "jobNumber": "string",
-          "title": "string",
-          "address": "string",
-          "revenue": number,
-          "estimatedDuration": number,
-          "proposedStartTime": "08:00",
-          "proposedEndTime": "12:00",
-          "assignedStaffIds": ["staffId1"],
-          "assignedStaffNames": ["Name 1"],
-          "equipmentNeeded": ["equipment name"],
-          "licenceMatches": [{"equipment": "EWP", "licence": "EWP Ticket", "heldBy": "Staff Name"}],
-          "conflicts": []
-        }
-      ]
-    }
-  ],
-  "revenueTarget": number
-}`;
-
-      // Find any already-scheduled jobs for this date so GPT knows who's busy
-      const proposeDayStart = new Date(targetDate + 'T00:00:00.000Z');
-      const proposeDayEnd = new Date(targetDate + 'T23:59:59.999Z');
-      const alreadyScheduledToday = allJobs.filter(j => {
-        if (!j.scheduledDate) return false;
-        const d = new Date(j.scheduledDate);
-        // 'scheduled' status retired 2026-05 — any work_order with a date
-        // on this day occupies a slot.
-        return d >= proposeDayStart && d <= proposeDayEnd && j.status === 'work_order';
-      }).map(j => ({
-        jobNumber: j.jobNumber,
-        title: j.title || 'existing job',
-        assignedTeam: j.assignedTeam || [],
-        equipmentIds: j.equipment || [],
-        startTime: j.scheduledStartTime || '08:00',
-        endTime: j.scheduledEndTime || '17:00',
-      }));
-
-      const userPrompt = `Target date: ${targetDate}
-Daily revenue target: $${dailyTarget} NZD
-
-Already scheduled jobs for this date (staff AND equipment NOT available during these slots):
-${alreadyScheduledToday.length > 0 ? JSON.stringify(alreadyScheduledToday, null, 2) : 'None'}
-
-Available unscheduled work orders (${jobSummaries.length} jobs):
-${JSON.stringify(jobSummaries, null, 2)}
-
-Available staff (${staffSummaries.length} people):
-${JSON.stringify(staffSummaries, null, 2)}
-
-Available equipment (${equipSummaries.length} items):
-${JSON.stringify(equipSummaries, null, 2)}
-
-Equipment→Licence requirements:
-${JSON.stringify(Object.fromEntries(availableEquipment.filter(e => e.licenceRequired).map(e => [e.name, e.licenceRequired])), null, 2)}
-
-Generate 3 ranked schedule alternatives as specified. Each alternative must have different job selections or different crew assignments. Respect existing bookings — do not assign staff already scheduled. For each alternative, verify licence requirements and flag any conflicts.`;
-
-      const aiResponse = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-      });
-
-      const proposalText = aiResponse.choices[0].message.content || '{}';
-      let rawProposal: { alternatives?: Array<{ rank: number; label: string; summaryNote: string; totalRevenue: number; meetsTarget: boolean; conflicts: string[]; proposedJobs: unknown[] }>; revenueTarget?: number; proposedJobs?: unknown[] };
-      try {
-        rawProposal = JSON.parse(proposalText);
-      } catch {
-        rawProposal = {};
-      }
-
-      // Normalise: support both legacy single-proposal and new ranked-alternatives format
-      const alternatives = rawProposal.alternatives && rawProposal.alternatives.length > 0
-        ? rawProposal.alternatives
-        : rawProposal.proposedJobs
-          ? [{ rank: 1, label: 'Proposed Schedule', summaryNote: '', totalRevenue: 0, meetsTarget: false, conflicts: [], proposedJobs: rawProposal.proposedJobs }]
-          : [];
-
-      // Notify that schedule alternatives are ready for review
-      if (alternatives.length > 0) {
-        await storage.createNotification({
-          title: `AI Dispatch: ${alternatives.length} schedule alternatives ready`,
-          message: `${alternatives.length} ranked schedule proposals generated for ${targetDate}. Review and confirm your preferred option.`,
-          type: 'schedule_proposal_ready',
-          priority: 'medium',
-          isRead: false,
-          actionUrl: '/ai-scheduler',
-        }).catch(() => { /* non-critical */ });
-      }
-
-      return res.json({
-        success: true,
-        data: {
-          alternatives,
-          revenueTarget: dailyTarget,
-          targetDate,
-          generatedAt: new Date().toISOString(),
-        },
-      });
-    } catch (error) {
-      console.error('[AI Dispatch] Propose error:', error);
-      return res.status(500).json({ success: false, message: 'Error generating schedule proposal' });
-    }
-  });
-
-  // POST /api/scheduling/confirm — confirm a proposed schedule with server-side constraint re-check
-  app.post('/api/scheduling/confirm', requireAdmin, async (req: Request, res: Response) => {
-    try {
-      const { targetDate, proposedJobs } = req.body;
-      if (!targetDate || !Array.isArray(proposedJobs)) {
-        return res.status(400).json({ success: false, message: 'targetDate and proposedJobs are required' });
-      }
-
-      // === SERVER-SIDE CONSTRAINT VALIDATION ===
-      const [allEmployeesForValidation, allEquipmentForValidation] = await Promise.all([
-        storage.getAllEmployees(),
-        storage.getAllEquipment(),
-      ]);
-
-      const employeeMap: Record<string, typeof allEmployeesForValidation[0]> = {};
-      for (const emp of allEmployeesForValidation) employeeMap[emp.id] = emp;
-
-      const equipmentMap: Record<string, typeof allEquipmentForValidation[0]> = {};
-      for (const eq of allEquipmentForValidation) {
-        equipmentMap[eq.id] = eq;
-        equipmentMap[eq.name] = eq;
-      }
-
-      const validationErrors: string[] = [];
-
-      // Track staff and equipment time slots for double-booking detection
-      const staffTimeSlots: Record<string, Array<{ start: string; end: string; jobTitle: string }>> = {};
-      const equipmentTimeSlots: Record<string, Array<{ start: string; end: string; jobTitle: string }>> = {};
-
-      // Collect resolved equipment IDs per proposed job (for persisting to jobs.equipment on confirm)
-      const resolvedEquipmentByJob: Record<string, string[]> = {};
-
-      const timeToMinutes = (t: string) => {
-        const [h, m] = t.split(':').map(Number);
-        return h * 60 + (m || 0);
-      };
-
-      // Pre-populate time slots with already-scheduled jobs for the target date
-      // This prevents confirming proposals that conflict with existing bookings
-      const proposedJobIds = new Set(proposedJobs.map((pj: { jobId?: string }) => pj.jobId));
-      const allJobsForDate = await storage.getAllJobs({ limit: 999999 });
-      const dayStart = new Date(targetDate + 'T00:00:00.000Z');
-      const dayEnd = new Date(targetDate + 'T23:59:59.999Z');
-      const existingDayJobs = allJobsForDate.filter(j => {
-        if (proposedJobIds.has(j.id)) return false; // Skip jobs in this proposal
-        if (!j.scheduledDate) return false;
-        const d = new Date(j.scheduledDate);
-        // 'scheduled' status retired 2026-05 — any work_order with a date
-        // on this day occupies a slot.
-        return d >= dayStart && d <= dayEnd && j.status === 'work_order';
-      });
-      for (const ej of existingDayJobs) {
-        const existStart = ej.scheduledStartTime || '08:00';
-        const existEnd = ej.scheduledEndTime || '17:00';
-        const ejLabel = `existing Job #${ej.jobNumber}`;
-        // Pre-populate staff time slots from existing scheduled jobs
-        const existingTeam = ej.assignedTeam;
-        if (Array.isArray(existingTeam)) {
-          for (const sid of existingTeam) {
-            if (typeof sid !== 'string') continue;
-            if (!staffTimeSlots[sid]) staffTimeSlots[sid] = [];
-            staffTimeSlots[sid].push({ start: existStart, end: existEnd, jobTitle: ejLabel });
-          }
-        }
-        // Pre-populate equipment time slots from existing scheduled jobs (uses jobs.equipment field)
-        const existingEquipment = ej.equipment;
-        if (Array.isArray(existingEquipment)) {
-          for (const eqId of existingEquipment) {
-            if (typeof eqId !== 'string') continue;
-            if (!equipmentTimeSlots[eqId]) equipmentTimeSlots[eqId] = [];
-            equipmentTimeSlots[eqId].push({ start: existStart, end: existEnd, jobTitle: ejLabel });
-          }
-        }
-      }
-
-      for (const pj of proposedJobs) {
-        if (!pj.jobId) continue;
-
-        const assignedStaffIds: string[] = pj.assignedStaffIds || [];
-        const equipmentNeeded: string[] = pj.equipmentNeeded || [];
-        const startTime: string = pj.proposedStartTime || '08:00';
-        const endTime: string = pj.proposedEndTime || '17:00';
-        const jobLabel = pj.title || pj.jobId;
-
-        // 1. Validate that assigned staff members exist and are active
-        for (const staffId of assignedStaffIds) {
-          const emp = employeeMap[staffId];
-          if (!emp) {
-            validationErrors.push(`Job "${jobLabel}": Staff ID ${staffId} not found`);
-            continue;
-          }
-          if (!emp.isActive) {
-            validationErrors.push(`Job "${jobLabel}": Staff member ${emp.firstName} ${emp.lastName} is not active`);
-          }
-
-          // 2. Check for time-slot double-booking
-          if (!staffTimeSlots[staffId]) staffTimeSlots[staffId] = [];
-          const startMins = timeToMinutes(startTime);
-          const endMins = timeToMinutes(endTime);
-          for (const slot of staffTimeSlots[staffId]) {
-            const existingStart = timeToMinutes(slot.start);
-            const existingEnd = timeToMinutes(slot.end);
-            if (startMins < existingEnd && endMins > existingStart) {
-              validationErrors.push(
-                `Double-booking: ${emp.firstName} ${emp.lastName} is assigned to both "${jobLabel}" (${startTime}–${endTime}) and "${slot.jobTitle}" (${slot.start}–${slot.end})`
-              );
-            }
-          }
-          staffTimeSlots[staffId].push({ start: startTime, end: endTime, jobTitle: jobLabel });
-        }
-
-        // 3. Validate licence requirements for equipment
-        const staffLicences = new Set<string>();
-        for (const staffId of assignedStaffIds) {
-          const emp = employeeMap[staffId];
-          if (!emp) continue;
-          for (const lic of (emp.licences || [])) staffLicences.add(lic.toLowerCase());
-          for (const cert of (emp.certifications || [])) staffLicences.add(cert.toLowerCase());
-        }
-
-        if (!resolvedEquipmentByJob[pj.jobId]) resolvedEquipmentByJob[pj.jobId] = [];
-
-        for (const equipName of equipmentNeeded) {
-          const eq = equipmentMap[equipName];
-          if (!eq) continue;
-
-          // Collect resolved equipment ID for job persistence
-          if (eq.id && !resolvedEquipmentByJob[pj.jobId].includes(eq.id)) {
-            resolvedEquipmentByJob[pj.jobId].push(eq.id);
-          }
-
-          // 4. Check equipment is active/available
-          if (!eq.isActive) {
-            validationErrors.push(`Job "${jobLabel}": Equipment "${equipName}" is not active`);
-          }
-          if (eq.status && eq.status !== 'available' && eq.status !== 'in_use') {
-            validationErrors.push(`Job "${jobLabel}": Equipment "${equipName}" has status "${eq.status}" and may not be available`);
-          }
-
-          // 5. Check equipment double-booking (time overlap across jobs)
-          const equipKey = eq.id || equipName;
-          if (!equipmentTimeSlots[equipKey]) equipmentTimeSlots[equipKey] = [];
-          const startMins = timeToMinutes(startTime);
-          const endMins = timeToMinutes(endTime);
-          for (const slot of equipmentTimeSlots[equipKey]) {
-            const existingStart = timeToMinutes(slot.start);
-            const existingEnd = timeToMinutes(slot.end);
-            if (startMins < existingEnd && endMins > existingStart) {
-              validationErrors.push(
-                `Equipment double-booking: "${equipName}" is assigned to both "${jobLabel}" (${startTime}–${endTime}) and "${slot.jobTitle}" (${slot.start}–${slot.end})`
-              );
-            }
-          }
-          equipmentTimeSlots[equipKey].push({ start: startTime, end: endTime, jobTitle: jobLabel });
-
-          // 6. Validate licence requirements for equipment
-          const required = eq.licenceRequired;
-          // Sentinel values that mean "no licence required"
-          const NO_LICENCE_SENTINELS = new Set(['none', 'none required', 'n/a', 'na', 'not required', 'no requirement', 'any', '']);
-          if (required && !NO_LICENCE_SENTINELS.has(required.trim().toLowerCase())) {
-            const requiredLower = required.trim().toLowerCase();
-            const hasLicence = Array.from(staffLicences).some(l =>
-              l.includes(requiredLower) || requiredLower.includes(l)
-            );
-            if (!hasLicence) {
-              validationErrors.push(
-                `Job "${jobLabel}": Equipment "${equipName}" requires "${required}" but no assigned crew member holds this licence`
-              );
-            }
-          }
-        }
-      }
-
-      // If hard validation errors exist, block confirmation
-      if (validationErrors.length > 0) {
-        return res.status(422).json({
-          success: false,
-          message: 'Schedule validation failed — constraint violations detected',
-          validationErrors,
-        });
-      }
-      // === END VALIDATION ===
-
-      const updatedJobs = [];
-      const draftMessages = [];
-
-      for (const pj of proposedJobs) {
-        if (!pj.jobId) continue;
-        const job = await storage.getJob(pj.jobId);
-        if (!job) continue;
-
-        // Set the scheduled date — store as date-only (no time component) matching the job form pattern.
-        // Actual start/end wall-clock times are kept in scheduledStartTime/scheduledEndTime strings.
-        const scheduledDate = new Date(targetDate);
-        const equipsForJob = resolvedEquipmentByJob[pj.jobId] || [];
-        const next = statusAfterBooking(job.status);
-        const updated = await storage.updateJob(pj.jobId, {
-          scheduledDate,
-          scheduledStartTime: pj.proposedStartTime || '08:00',
-          scheduledEndTime: pj.proposedEndTime || '17:00',
-          assignedTeam: pj.assignedStaffIds || [],
-          ...(next ? { status: next } : {}),
-          ...(equipsForJob.length > 0 ? { equipment: equipsForJob } : {}),
-        });
-        updatedJobs.push(updated);
-
-        // Create a pending customer notification draft
-        const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
-        if (customer) {
-          const nzDate = new Date(targetDate).toLocaleDateString('en-NZ', {
-            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Pacific/Auckland',
-          });
-          const nzTime = pj.proposedStartTime || '8:00';
-          const serviceType = job.serviceType || 'service';
-          const address = job.address ? ` at ${job.address}` : '';
-          const __confirmBiz = (await storage.getBusinessSettingsForBusiness(job.businessId))?.businessName || '';
-
-          const hasPhone = !!(customer.phone || customer.mobile);
-          const channel: 'sms' | 'email' = hasPhone ? 'sms' : 'email';
-          const interpolate = (tmpl: string) => tmpl
-            .replace(/\{\{customerName\}\}/gi, customer.name)
-            .replace(/\{\{serviceType\}\}/gi, serviceType)
-            .replace(/\{\{jobTitle\}\}/gi, job.title || serviceType)
-            .replace(/\{\{address\}\}/gi, job.address || '')
-            .replace(/\{\{date\}\}/gi, nzDate)
-            .replace(/\{\{time\}\}/gi, nzTime)
-            .replace(/\{\{jobNumber\}\}/gi, job.jobNumber?.toString() || '');
-
-          const fallbackMessage = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative.${__confirmBiz ? ` Thanks, ${__confirmBiz}.` : ' Thanks.'}`;
-
-          // Try to find a template from the template library (channel-aware)
-          let message: string = fallbackMessage;
-          try {
-            if (channel === 'sms') {
-              const allSmsTemplates = await storage.getAllSmsTemplates();
-              const t = allSmsTemplates.find(t => t.isActive && t.category === 'confirmation' && t.isDefault)
-                || allSmsTemplates.find(t => t.isActive && t.category === 'confirmation');
-              if (t) message = interpolate(t.message);
-            } else {
-              const allEmailTemplates = await storage.getAllEmailTemplates();
-              const t = allEmailTemplates.find(t => t.isActive && t.category === 'confirmation' && t.isDefault)
-                || allEmailTemplates.find(t => t.isActive && t.category === 'confirmation');
-              if (t) message = interpolate(t.textContent || t.htmlContent.replace(/<[^>]*>/g, ' ').trim());
-            }
-          } catch {
-            // Keep fallback message
-          }
-
-          const draft = await storage.createPendingOutboundMessage({
-            jobId: job.id,
-            customerId: customer.id,
-            recipientName: customer.name,
-            recipientPhone: customer.phone || customer.mobile || undefined,
-            recipientEmail: job.jobContactEmail || customer.email || undefined,
-            message,
-            channel,
-            status: 'pending',
-            proposalNumber: job.jobNumber,
-          });
-          draftMessages.push(draft);
-        }
-
-        // Log to job diary
-        const crewNames = (pj.assignedStaffNames || []).join(', ') || 'unassigned';
-        const diaryContent = `Job scheduled for ${targetDate} at ${pj.proposedStartTime || '08:00'} via AI Smart Dispatch. Crew: ${crewNames}`;
-        await storage.createJobDiaryEntry({
-          jobId: pj.jobId,
-          entryType: 'note',
-          title: 'AI Smart Dispatch scheduled',
-          description: diaryContent,
-          content: diaryContent,
-          authorName: 'AI Smart Dispatch',
-          authorRole: 'manager',
-          metadata: { source: 'ai_dispatch', targetDate, assignedStaff: pj.assignedStaffIds },
-        });
-      }
-
-      // Create notification for pending messages
-      if (draftMessages.length > 0) {
-        await storage.createNotification({
-          title: `${draftMessages.length} customer confirmation${draftMessages.length > 1 ? 's' : ''} ready to send`,
-          message: `AI Dispatch created ${draftMessages.length} draft confirmation message${draftMessages.length > 1 ? 's' : ''} for your approval`,
-          type: 'holding_message_pending',
-          priority: 'medium',
-          isRead: false,
-          actionUrl: '/communications?tab=pending',
-        });
-      }
-
-      return res.json({
-        success: true,
-        data: { updatedJobs: updatedJobs.length, draftMessages: draftMessages.length },
-      });
-    } catch (error) {
-      console.error('[AI Dispatch] Confirm error:', error);
-      return res.status(500).json({ success: false, message: 'Error confirming schedule' });
     }
   });
 

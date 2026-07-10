@@ -114,14 +114,32 @@ app.get('/health', (_req, res) => {
 const LEGACY_APP_HOST = 'app.treemarkables.co.nz';
 const REDIRECT_PATH_PREFIXES = ['/proposal', '/invoice', '/quote', '/watch', '/review', '/customer-portal'];
 const APP_HOST = (() => { try { return new URL(APP_URL).host; } catch { return ''; } })();
+// Full cutover switch: when LEGACY_HOST_REDIRECT_ALL=true (set in DO once the
+// owner is ready), EVERY browser page-load on the legacy app host 301s to
+// APP_URL — not just the customer-link prefixes. Deliberately excluded even
+// then:
+//   - /api/*     — Twilio/Stripe/etc. webhooks still point at the old host
+//                  (Stripe treats a 301 as delivery failure), and an already-
+//                  open SPA tab keeps its session working mid-flight.
+//   - /objects/* — media referenced from old emails/documents.
+//   - non-GET/HEAD — form posts etc. must not lose their bodies to a redirect.
+// ⚠️ Flipping this also moves the iOS shell (which still loads the old host,
+// see capacitor allowNavigation) — sessions are per-host, so users get the
+// login screen once. Coordinate with a native rebuild or accept the re-login.
+const REDIRECT_ALL = (process.env.LEGACY_HOST_REDIRECT_ALL || '').trim().toLowerCase() === 'true';
 app.use((req, res, next) => {
-  if (
-    APP_HOST &&
-    APP_HOST !== LEGACY_APP_HOST &&
-    req.hostname === LEGACY_APP_HOST &&
-    REDIRECT_PATH_PREFIXES.some((p) => req.path === p || req.path.startsWith(p + '/'))
-  ) {
-    return res.redirect(301, `${APP_URL}${req.originalUrl}`);
+  if (APP_HOST && APP_HOST !== LEGACY_APP_HOST && req.hostname === LEGACY_APP_HOST) {
+    const isCustomerLink = REDIRECT_PATH_PREFIXES.some(
+      (p) => req.path === p || req.path.startsWith(p + '/'),
+    );
+    const isFullCutoverPath =
+      REDIRECT_ALL &&
+      (req.method === 'GET' || req.method === 'HEAD') &&
+      !req.path.startsWith('/api') &&
+      !req.path.startsWith('/objects');
+    if (isCustomerLink || isFullCutoverPath) {
+      return res.redirect(301, `${APP_URL}${req.originalUrl}`);
+    }
   }
   next();
 });
@@ -797,6 +815,49 @@ The {businessName} Team';
         DO $$ BEGIN
           IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
             GRANT SELECT, INSERT, UPDATE, DELETE ON tree_markers TO app_tenant;
+          END IF;
+        END $$;
+        -- Site-map photo mode: markers can live on an uploaded image instead
+        -- of the satellite map (council jobs where the card address is the
+        -- billing address, not the site). Mirrors
+        -- migrations/manual/20260710_site_map_photo_mode.sql.
+        ALTER TABLE tree_markers ADD COLUMN IF NOT EXISTS surface TEXT NOT NULL DEFAULT 'map';
+        CREATE TABLE IF NOT EXISTS job_site_maps (
+          business_id VARCHAR,
+          job_id VARCHAR PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+          image_url TEXT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        ALTER TABLE job_site_maps ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON job_site_maps;
+        CREATE POLICY tenant_isolation ON job_site_maps
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON job_site_maps TO app_tenant;
+          END IF;
+        END $$;
+        -- Live job timers (clock in/out). Stopping a timer writes into
+        -- jobs.staff_time_entries. Mirrors
+        -- migrations/manual/20260710_active_timers.sql.
+        CREATE TABLE IF NOT EXISTS active_timers (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          business_id VARCHAR,
+          job_id VARCHAR NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+          employee_id VARCHAR NOT NULL UNIQUE,
+          started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        ALTER TABLE active_timers ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON active_timers;
+        CREATE POLICY tenant_isolation ON active_timers
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON active_timers TO app_tenant;
           END IF;
         END $$;
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (

@@ -1101,6 +1101,15 @@ export interface IStorage {
   updateTreeMarker(id: string, updates: schema.UpdateTreeMarker): Promise<schema.TreeMarker>;
   deleteTreeMarker(id: string): Promise<boolean>;
   getTreeMarkersByJob(jobId: string): Promise<schema.TreeMarker[]>;
+  getJobSiteMapImage(jobId: string): Promise<schema.JobSiteMapImage | null>;
+  upsertJobSiteMapImage(jobId: string, imageUrl: string): Promise<schema.JobSiteMapImage>;
+
+  // Live job timers (clock in/out)
+  getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null>;
+  getActiveTimersForJob(jobId: string): Promise<schema.ActiveTimer[]>;
+  getAllActiveTimers(): Promise<schema.ActiveTimer[]>;
+  startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer>;
+  deleteTimer(id: string): Promise<boolean>;
 
   // Mulch Drops
   createMulchDrop(drop: schema.InsertMulchDrop): Promise<schema.MulchDrop>;
@@ -7597,6 +7606,60 @@ class DatabaseStorage implements IStorage {
       .from(schema.treeMarkers)
       .where(eq(schema.treeMarkers.jobId, jobId))
       .orderBy(schema.treeMarkers.createdAt);
+  }
+
+  async getJobSiteMapImage(jobId: string): Promise<schema.JobSiteMapImage | null> {
+    const [result] = await db.select()
+      .from(schema.jobSiteMaps)
+      .where(eq(schema.jobSiteMaps.jobId, jobId));
+    return result || null;
+  }
+
+  async upsertJobSiteMapImage(jobId: string, imageUrl: string): Promise<schema.JobSiteMapImage> {
+    const existing = await this.getJobSiteMapImage(jobId);
+    if (existing) {
+      const [updated] = await db.update(schema.jobSiteMaps)
+        .set({ imageUrl, updatedAt: new Date() })
+        .where(eq(schema.jobSiteMaps.jobId, jobId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(schema.jobSiteMaps)
+      .values(withTenant({ jobId, imageUrl }))
+      .returning();
+    return created;
+  }
+
+  // ─── Live job timers (clock in/out) ───────────────────────────────────────
+  async getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null> {
+    const [timer] = await db.select()
+      .from(schema.activeTimers)
+      .where(eq(schema.activeTimers.employeeId, employeeId));
+    return timer ?? null;
+  }
+
+  async getActiveTimersForJob(jobId: string): Promise<schema.ActiveTimer[]> {
+    return await db.select()
+      .from(schema.activeTimers)
+      .where(eq(schema.activeTimers.jobId, jobId));
+  }
+
+  async getAllActiveTimers(): Promise<schema.ActiveTimer[]> {
+    return await db.select().from(schema.activeTimers);
+  }
+
+  async startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer> {
+    const [timer] = await db.insert(schema.activeTimers)
+      .values(withTenant({ jobId, employeeId }))
+      .returning();
+    return timer;
+  }
+
+  async deleteTimer(id: string): Promise<boolean> {
+    const result = await db.delete(schema.activeTimers)
+      .where(eq(schema.activeTimers.id, id))
+      .returning();
+    return result.length > 0;
   }
 
   // ─── Mulch Drops ──────────────────────────────────────────────────────────
