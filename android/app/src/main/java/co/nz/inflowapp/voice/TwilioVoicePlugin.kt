@@ -153,9 +153,15 @@ class TwilioVoicePlugin : Plugin(), VoiceCallState.Listener {
         }
 
         override fun onError(error: RegistrationException, accessToken: String, fcmToken: String) {
+            android.util.Log.e(
+                "InflowTwilioReg",
+                "Registration onError code=${error.errorCode} message=${error.message}",
+            )
             VoiceCallState.emit(
                 VoiceConstants.EVENT_REGISTRATION_ERROR,
-                JSONObject().put("message", error.message ?: "registration error"),
+                JSONObject()
+                    .put("code", error.errorCode)
+                    .put("message", error.message ?: "registration error"),
             )
         }
     }
