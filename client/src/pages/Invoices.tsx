@@ -207,10 +207,15 @@ export default function Invoices() {
 
   const invoices = invoicesResponse?.data || [];
 
-  // Sent to the customer (sentDate stamped by the invoice email) but never
-  // pushed to Xero. Cancelled invoices don't need to reach Xero.
+  // Sent to the customer but never pushed to Xero. Status is the reliable
+  // signal — legacy sends and the create-and-send path set status without
+  // stamping sentDate. Paid counts as sent: it went out and still isn't in
+  // Xero. Cancelled invoices don't need to reach Xero.
   const isSentNotInXero = (invoice: InvoiceWithRelations) =>
-    !!invoice.sentDate && !invoice.xeroInvoiceId && invoice.status !== "cancelled";
+    !invoice.xeroInvoiceId &&
+    (invoice.status === "sent" ||
+      invoice.status === "paid" ||
+      (!!invoice.sentDate && invoice.status !== "cancelled"));
 
   const handleEditInvoice = (invoice: InvoiceWithRelations) => {
     setEditingInvoice(invoice);
@@ -504,7 +509,11 @@ export default function Invoices() {
                         </p>
                       )}
 
-                      {invoice.xeroSyncedAt && (
+                      {/* Only claim "Sent to Xero" when the Xero link (the id)
+                          actually exists — legacy rows can carry a stale
+                          xeroSyncedAt with no id and land in the Not in Xero
+                          tab, where this line would contradict the filter. */}
+                      {invoice.xeroSyncedAt && invoice.xeroInvoiceId && (
                         <p
                           className="text-xs text-muted-foreground"
                           data-testid={`text-sent-date-${invoice.id}`}
