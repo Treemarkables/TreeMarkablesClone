@@ -42,6 +42,14 @@ interface AudioRouteInfo {
   /** Error text from the last native route attempt (setCategory/override
    *  failures) — empty when the calls succeeded. */
   error: string;
+  /** Live session config as the system holds it (category/mode/options) plus
+   *  which native event emitted it — build 34 showed the route calls
+   *  succeeding with no effect, so whether OUR config is actually live is
+   *  now the question. */
+  category: string;
+  mode: string;
+  options: string;
+  context: string;
 }
 
 export function TwilioCallProvider({ children }: { children: ReactNode }) {
@@ -125,10 +133,14 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
       outputs: data.outputs || "",
       onSpeaker: data.onSpeaker === "true",
       error: data.error || "",
+      category: data.category || "",
+      mode: data.mode || "",
+      options: data.options || "",
+      context: data.context || "",
     });
   }, []);
 
-  const { isNative, hangup, mute, setSpeaker, sendDigits } = useTwilioVoice({
+  const { isNative, hangup, mute, setSpeaker, sendDigits, showAudioRoutePicker } = useTwilioVoice({
     onIncomingCall: handleIncomingCall,
     onCallAnswered: handleCallAnswered,
     onCallConnected: handleCallConnected,
@@ -196,6 +208,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
           onToggleMute={onToggleMute}
           onToggleSpeaker={onToggleSpeaker}
           onSendDigit={sendDigits}
+          onShowRoutePicker={showAudioRoutePicker}
         />
       )}
     </>
@@ -228,6 +241,7 @@ function CallScreen({
   onToggleMute,
   onToggleSpeaker,
   onSendDigit,
+  onShowRoutePicker,
 }: {
   callState: CallState;
   callInfo: CallInfo;
@@ -238,6 +252,7 @@ function CallScreen({
   onToggleMute: () => void;
   onToggleSpeaker: () => void;
   onSendDigit: (digit: string) => void;
+  onShowRoutePicker: () => void;
 }) {
   const [seconds, setSeconds] = useState(0);
   const [showKeypad, setShowKeypad] = useState(false);
@@ -293,13 +308,23 @@ function CallScreen({
               "Receiver", the override isn't holding — that's the diagnostic
               we can't get any other way (device logs are unreadable). */}
           {audioRoute && (
-            <p
-              className="text-white/40 text-xs mt-2 max-w-[85vw] break-words"
-              data-testid="call-audio-route"
-            >
-              Audio: {audioRoute.outputs || "unknown"}
-              {audioRoute.error && ` — ${audioRoute.error}`}
-            </p>
+            <>
+              <p
+                className="text-white/40 text-xs mt-2 max-w-[85vw] break-words"
+                data-testid="call-audio-route"
+              >
+                Audio: {audioRoute.outputs || "unknown"}
+                {audioRoute.error && ` — ${audioRoute.error}`}
+              </p>
+              {/* Live session config as iOS holds it. If this doesn't read
+                  PlayAndRecord/VideoChat(+spkDefault) while the speaker is
+                  selected, our config isn't what's live — the next lead. */}
+              <p className="text-white/30 text-[10px] mt-0.5 max-w-[85vw] break-words">
+                {audioRoute.category}/{audioRoute.mode}
+                {audioRoute.options && ` +${audioRoute.options}`}
+                {audioRoute.context && ` · ${audioRoute.context}`}
+              </p>
+            </>
           )}
         </div>
       )}
@@ -373,6 +398,18 @@ function CallScreen({
             <span className="text-sm text-white/80">Speaker</span>
           </button>
         </div>
+
+        {/* System audio-output picker — the same control the native call UI
+            uses. A route picked there is user-selected at the OS level, which
+            outranks anything the app can request; the fallback when the
+            Speaker toggle's programmatic route change is ignored. */}
+        <button
+          onClick={onShowRoutePicker}
+          className="text-white/60 text-sm underline underline-offset-4 -mt-4"
+          data-testid="call-route-picker"
+        >
+          Audio output…
+        </button>
 
         <button
           onClick={onHangup}

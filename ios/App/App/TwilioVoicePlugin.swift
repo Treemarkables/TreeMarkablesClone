@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import AVFoundation
+import AVKit
 import Capacitor
 import TwilioVoice
 import PushKit
@@ -28,6 +29,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "mute", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setSpeaker", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "sendDigits", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "showAudioRoutePicker", returnType: CAPPluginReturnPromise),
     ]
 
     /// Shared instance so the AppDelegate can stand up VoIP push handling at app
@@ -61,6 +63,9 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     /// so a route failure that only logs is a route failure that never
     /// happened as far as debugging goes — this puts it on the call screen.
     private var lastRouteError = ""
+    /// Hidden system route-picker control, kept in the view hierarchy so its
+    /// popover survives presentation. Created lazily on first use.
+    private var routePickerView: AVRoutePickerView?
 
     // MARK: - Plugin Lifecycle
 
@@ -211,6 +216,39 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve()
     }
 
+    /// Presents the SYSTEM audio-output picker (the same control the native
+    /// call UI and Control Center use). A route the user picks there is a
+    /// user-selected route with top arbitration priority — the escape hatch
+    /// for when the app-level speaker override is accepted-but-ignored during
+    /// a CallKit call (observed on build 1.0(34): no error, route pinned to
+    /// receiver). AVRoutePickerView has no public "present" API; triggering
+    /// its internal button is the widely-used pattern.
+    @objc func showAudioRoutePicker(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let shared = TwilioVoicePlugin.shared
+            guard let hostView = self.bridge?.viewController?.view ?? shared.bridge?.viewController?.view else {
+                call.reject("No view to present from")
+                return
+            }
+            let picker: AVRoutePickerView
+            if let existing = shared.routePickerView, existing.superview != nil {
+                picker = existing
+            } else {
+                picker = AVRoutePickerView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+                picker.isHidden = false
+                picker.alpha = 0.02 // effectively invisible; isHidden blocks the popover on some iOS versions
+                hostView.addSubview(picker)
+                shared.routePickerView = picker
+            }
+            guard let button = picker.subviews.compactMap({ $0 as? UIButton }).first else {
+                call.reject("Route picker button not found")
+                return
+            }
+            button.sendActions(for: .touchUpInside)
+            call.resolve()
+        }
+    }
+
     @objc func setSpeaker(_ call: CAPPluginCall) {
         let on = call.getBool("on") ?? false
         // Drive speaker state on shared so the route-change watchdog and the
@@ -272,7 +310,20 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
             ]
             if on { options.insert(.defaultToSpeaker) }
             do {
-                try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
+                // Mode .videoChat when the speaker is on: build 1.0(34) showed
+                // both setCategory and the port override succeeding with the
+                // route pinned to the receiver anyway — iOS's route arbiter
+                // ignoring an app-level override during a CallKit call.
+                // .videoChat's SYSTEM default output is the loudspeaker
+                // (FaceTime-style), so the desired route no longer depends on
+                // the override being honoured; it also selects
+                // speaker-appropriate echo cancellation. Back to .voiceChat
+                // when toggled off.
+                try session.setCategory(
+                    .playAndRecord,
+                    mode: on ? .videoChat : .voiceChat,
+                    options: options
+                )
             } catch {
                 errs.append("setCategory: \(error.localizedDescription)")
             }
@@ -323,14 +374,28 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
             .map { $0.portType.rawValue }
             .joined(separator: ",")
         let onSpeaker = session.currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
+        // Session config as the system actually holds it, human-readable. If
+        // the call screen shows e.g. "Playback/Default" instead of
+        // "PlayAndRecord/VideoChat", something (the WKWebView is the usual
+        // culprit) rewrote the session behind our back — that's a different
+        // bug than the route arbiter ignoring an override.
+        let opts = session.categoryOptions
+        var optNames: [String] = []
+        if opts.contains(.defaultToSpeaker) { optNames.append("spkDefault") }
+        if opts.contains(.allowBluetoothHFP) { optNames.append("btHFP") }
+        if opts.contains(.allowBluetoothA2DP) { optNames.append("btA2DP") }
+        if opts.contains(.mixWithOthers) { optNames.append("mix") }
         notifyListeners("audioRoute", data: [
             "context": context,
             "outputs": outputs,
             "onSpeaker": onSpeaker ? "true" : "false",
             "speakerSelected": self.speakerOn ? "true" : "false",
             "attempts": String(self.speakerReassertAttempts),
-            "category": session.category.rawValue,
-            "mode": session.mode.rawValue,
+            "category": session.category.rawValue
+                .replacingOccurrences(of: "AVAudioSessionCategory", with: ""),
+            "mode": session.mode.rawValue
+                .replacingOccurrences(of: "AVAudioSessionMode", with: ""),
+            "options": optNames.joined(separator: "+"),
             "error": self.lastRouteError,
         ])
     }
