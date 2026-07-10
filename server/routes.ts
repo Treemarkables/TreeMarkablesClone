@@ -16516,6 +16516,87 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // ── Public job photo timeline (CompanyCam-style share link) ───────────────
+
+  // Get-or-create the job's shareable timeline link (session side).
+  app.post('/api/jobs/:jobId/timeline-link', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+      let link = await storage.getTimelineLinkForJob(job.id);
+      if (!link) {
+        const token = require('crypto').randomBytes(32).toString('hex');
+        link = await storage.createTimelineLink(job.id, token);
+      }
+      res.json({
+        success: true,
+        data: { url: `${APP_URL}/timeline/${link.token}`, token: link.token, isEnabled: link.isEnabled },
+      });
+    } catch (error) {
+      console.error('Error creating timeline link:', error);
+      res.status(500).json({ success: false, message: 'Error creating timeline link' });
+    }
+  });
+
+  // Public feed — session-less, token-gated. Runs reads inside the owning
+  // tenant's context (session-less = owner connection, so reads must
+  // self-scope). Only non-private diary photo entries are exposed.
+  app.get('/api/public/timeline/:token', async (req: Request, res: Response) => {
+    try {
+      const link = await storage.getTimelineLinkByToken(req.params.token);
+      if (!link || !link.isEnabled) {
+        return res.status(404).json({ success: false, message: 'Timeline not found' });
+      }
+
+      const payload = await runWithBusiness(link.businessId ?? undefined, async () => {
+        // Session-less = owner connection; every read here self-scopes (by the
+        // token row's jobId / businessId) rather than trusting ALS context.
+        const job = await storage.getJob(link.jobId);
+        if (!job) return null;
+        if (link.businessId && job.businessId && job.businessId !== link.businessId) return null;
+        const settings = await storage.getBusinessSettingsForBusiness(link.businessId ?? job.businessId);
+        const identity = getBusinessIdentity(settings);
+        const brand = getBrandColors(settings);
+        const entries = await storage.getJobDiaryEntriesByJob(link.jobId);
+
+        const feed = [...entries]
+          .filter((e: any) => !e.isPrivate &&
+            ((Array.isArray(e.photos) && e.photos.length > 0) || e.photoUrl))
+          .sort((a: any, b: any) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+          .map((e: any) => {
+            const photos: string[] = Array.isArray(e.photos) && e.photos.length > 0
+              ? e.photos
+              : (e.photoUrl ? [e.photoUrl] : []);
+            // Prefer the caption (description) unless it's the generic default.
+            const generic = /^photo added$|^\d+ photos added$/i.test((e.description || '').trim());
+            return {
+              id: e.id,
+              caption: generic ? '' : (e.description || '').trim(),
+              author: e.authorName || '',
+              createdAt: e.createdAt,
+              photos,
+            };
+          });
+
+        return {
+          business: { name: identity.name, headerColor: brand.headerColor, accentColor: brand.accentColor },
+          job: { jobNumber: job.jobNumber ?? null, title: job.title ?? null },
+          entries: feed,
+        };
+      });
+
+      if (!payload) return res.status(404).json({ success: false, message: 'Timeline not found' });
+      res.json({ success: true, data: payload });
+    } catch (error) {
+      console.error('Error fetching public timeline:', error);
+      res.status(500).json({ success: false, message: 'Error fetching timeline' });
+    }
+  });
+
   // Get photos for a job
   app.get('/api/jobs/:jobId/photos', async (req: Request, res: Response) => {
     try {

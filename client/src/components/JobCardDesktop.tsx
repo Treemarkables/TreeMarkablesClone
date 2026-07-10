@@ -52,6 +52,7 @@ import {
   MoreHorizontal,
   Mic,
   Navigation,
+  Link2,
   Calendar as CalendarIcon,
   TrendingUp,
   Send,
@@ -100,6 +101,7 @@ import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { OnMyWayDialog } from "@/components/OnMyWayDialog";
+import { ShareTimelineDialog } from "@/components/ShareTimelineDialog";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardDesktopTab =
@@ -281,6 +283,7 @@ export function JobCardDesktop({
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showOnMyWay, setShowOnMyWay] = useState(false);
+  const [showShareTimeline, setShowShareTimeline] = useState(false);
   const { toast } = useToast();
   const { webCallAvailable, startCall } = useWebCall();
 
@@ -701,6 +704,13 @@ export function JobCardDesktop({
                     Profit Tracker
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem
+                  onClick={() => setShowShareTimeline(true)}
+                  data-testid="more-share-timeline"
+                >
+                  <Link2 className="w-4 h-4 mr-2 text-blue-600" />
+                  Share Timeline
+                </DropdownMenuItem>
                 {actions?.sendToXero && (
                   // Sent/sending state reads this card's own fresh job query,
                   // so it flips live — no close/reopen. Stays clickable when
@@ -808,6 +818,13 @@ export function JobCardDesktop({
             undefined
           }
           address={(job?.address as string | undefined) || (customer?.address as string | undefined)}
+        />
+      )}
+      {showShareTimeline && (
+        <ShareTimelineDialog
+          isOpen={showShareTimeline}
+          onClose={() => setShowShareTimeline(false)}
+          jobId={jobId}
         />
       )}
 

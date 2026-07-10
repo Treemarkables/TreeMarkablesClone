@@ -4545,6 +4545,19 @@ export const jobSiteMaps = pgTable("job_site_maps", {
 
 export type JobSiteMapImage = typeof jobSiteMaps.$inferSelect;
 
+// Public job photo timeline — a token-gated, read-only customer link to the
+// job's photo feed (CompanyCam-style). One link per job; is_enabled allows
+// revoking without deleting the row (dead links 404 rather than leak).
+export const jobTimelineLinks = pgTable("job_timeline_links", {
+  businessId: varchar("business_id"),
+  jobId: varchar("job_id").primaryKey().references(() => jobs.id, { onDelete: 'cascade' }),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type JobTimelineLink = typeof jobTimelineLinks.$inferSelect;
+
 // Live job timer — one row per staff member currently clocked in on a job.
 // Stopping the timer converts the elapsed time into a jobs.staffTimeEntries
 // entry (the existing manual time-recording store), so labour cost,

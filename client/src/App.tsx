@@ -96,6 +96,7 @@ const InvoiceViewer = lazy(() => import("@/pages/InvoiceViewer"));
 const InvoiceView = lazy(() => import("@/pages/InvoiceView"));
 const PaymentComplete = lazy(() => import("@/pages/PaymentComplete"));
 const PublicReview = lazy(() => import("@/pages/PublicReview"));
+const PublicTimeline = lazy(() => import("@/pages/PublicTimeline"));
 const MulchDrops = lazy(() => import("@/pages/MulchDrops"));
 const NearMissReport = lazy(() => import("@/pages/NearMissReport"));
 const NearMissHistory = lazy(() => import("@/pages/NearMissHistory"));
@@ -1168,6 +1169,7 @@ function Router() {
       <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
       <Route path="/payment-complete" component={PaymentComplete}/>
       <Route path="/review/:token" component={PublicReview}/>
+      <Route path="/timeline/:token" component={PublicTimeline}/>
       <Route path="/watch/:videoId" component={WatchVideo}/>
       
       {/* Dashboard pages with sidebar - Admin only */}
