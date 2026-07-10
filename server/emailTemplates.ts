@@ -269,6 +269,9 @@ export interface InvoiceEmailOptions {
   };
   /** Per-business brand colours. Omit to keep Treemarkables' black + neon-green. */
   brand?: BrandColorInput;
+  /** Public review link (/review/:token). When set, a "How did we do?" block
+   *  renders between the bank details and the footer. */
+  reviewUrl?: string;
 }
 
 /**
@@ -325,6 +328,20 @@ export function renderInvoiceEmail(opts: InvoiceEmailOptions): string {
               ${opts.bank?.accountNumber ? `<tr><td style="color:${b.muted};">Account number</td><td style="font-weight:500;">${esc(opts.bank.accountNumber)}</td></tr>` : ''}
               ${opts.bank?.reference ? `<tr><td style="color:${b.muted};">Reference</td><td style="font-weight:500;">${esc(opts.bank.reference)}</td></tr>` : ''}
             </table>
+          </td></tr>
+        </table>
+      </td></tr>`
+    : '';
+
+  // Optional review ask — rides along with the invoice so the request lands
+  // while the job is fresh, without a separate email.
+  const reviewBlock = opts.reviewUrl
+    ? `<tr><td style="padding:6px 28px 4px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:${b.surface};border:1px solid ${b.line};border-radius:10px;">
+          <tr><td style="padding:16px 20px;">
+            <div style="color:${b.ink};font-size:14px;font-weight:700;margin-bottom:4px;">How did we do?</div>
+            <div style="color:${b.muted};font-size:13px;line-height:1.55;margin-bottom:12px;">If you have a spare minute, we'd really appreciate a quick review — it makes a big difference to a local business like ours.</div>
+            <a href="${opts.reviewUrl}" style="display:inline-block;background:${b.headerBg};color:${b.wordmark};padding:10px 18px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">Leave a review</a>
           </td></tr>
         </table>
       </td></tr>`
@@ -397,6 +414,8 @@ export function renderInvoiceEmail(opts: InvoiceEmailOptions): string {
       <tr><td style="height:8px;line-height:8px;font-size:0;">&nbsp;</td></tr>
 
       ${bankBlock}
+
+      ${reviewBlock}
 
       <!-- Footer band -->
       <tr><td style="background:${b.headerBg};padding:22px 28px;color:${b.onHeader};font-size:12px;line-height:1.7;">
