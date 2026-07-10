@@ -33562,10 +33562,6 @@ If you cannot find a value, use null. Do not guess.`
       const isEarlyStage =
         job.status === 'lead' || job.status === 'new' || job.status === 'quote';
 
-      // Site visit booked = a date is on the job. This is the "start of
-      // communication" trigger the user wants — no booking, no prompt.
-      const siteVisitBooked = !!job.scheduledDate;
-
       // New customer = this is the customer's only job
       const customerJobs = await storage.getJobsByCustomer(job.customerId);
       const isNew = customerJobs.length === 1;
@@ -33593,7 +33589,6 @@ If you cannot find a value, use null. Do not guess.`
 
       const shouldPrompt =
         isEarlyStage &&
-        siteVisitBooked &&
         isNew &&
         !hasProposal &&
         !alreadyHandled &&
