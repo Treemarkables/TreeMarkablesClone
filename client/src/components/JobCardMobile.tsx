@@ -36,6 +36,7 @@ import {
   Send,
   Loader2,
   Navigation,
+  FileImage,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -493,6 +494,7 @@ export function JobCardMobile({
                 <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actions?.proposal ?? actionStub("Proposal")} />
                 <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
                 <ActionTile label="On My Way" icon={Navigation} colour="orange" onClick={() => setShowOnMyWay(true)} />
+                <ActionTile label="Photo Report" icon={FileImage} colour="slate" onClick={() => window.open(`/api/jobs/${jobId}/photo-report.pdf`, "_blank")} />
                 <ActionTile
                   label={jobInQueue ? "In Queue" : "Queue Job"}
                   icon={ListOrdered}
