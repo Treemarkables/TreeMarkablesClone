@@ -883,6 +883,15 @@ The {businessName} Team';
           FROM jobs j WHERE n.job_id = j.id AND n.business_id IS DISTINCT FROM j.business_id;
         UPDATE job_quoting_process_completions q SET business_id = j.business_id
           FROM jobs j WHERE q.job_id = j.id AND q.business_id IS DISTINCT FROM j.business_id;
+        -- Round 2: the remaining multer instances (video/audio/csv/logo/near-miss
+        -- uploads) shared the same ALS loss. Job-linked videos take their job's
+        -- tenant (knowledge videos are business_id NULL by design and have no
+        -- job_id, so the join skips them); near-miss attachments take their parent
+        -- report's. Mirrors migrations/manual/20260710_multer_child_rows_backfill.sql.
+        UPDATE videos v SET business_id = j.business_id
+          FROM jobs j WHERE v.job_id = j.id AND v.business_id IS DISTINCT FROM j.business_id;
+        UPDATE near_miss_attachments a SET business_id = r.business_id
+          FROM near_miss_reports r WHERE a.report_id = r.id AND a.business_id IS DISTINCT FROM r.business_id;
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           role_key VARCHAR NOT NULL,

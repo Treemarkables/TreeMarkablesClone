@@ -1449,7 +1449,12 @@ class DatabaseStorage implements IStorage {
     highConfidenceMatches: number;
     willUpdateCount: number;
   }> {
-    const allCustomers = await this.getAllCustomers();
+    // Callers are multer CSV routes, where reads ride the owner (BYPASSRLS)
+    // connection — scope matching to the caller's tenant (bound by the route via
+    // runWithBusiness) so an import can never match/update another business's customer.
+    const matchBid = currentBusinessId();
+    const allCustomers = (await this.getAllCustomers())
+      .filter(c => !matchBid || c.businessId === matchBid);
     const matches: any[] = [];
     let matchableRows = 0;
     let highConfidenceMatches = 0;
@@ -4025,14 +4030,21 @@ class DatabaseStorage implements IStorage {
           customerName = `Customer-${Date.now()}-${i}`;
         }
 
-        // Check if customer already exists by ServiceM8 UUID or email
+        // Check if customer already exists by ServiceM8 UUID or email — scoped to
+        // the caller's tenant (multer route = owner-connection reads; matching
+        // another business's customer would silently skip the import for this one).
+        const importBid = currentBusinessId();
         let existingCustomer;
         if (normalizedRow.servicem8Uuid) {
           existingCustomer = await this.getCustomerByServiceM8Uuid(normalizedRow.servicem8Uuid);
+          if (existingCustomer && importBid && existingCustomer.businessId !== importBid) {
+            existingCustomer = undefined;
+          }
         }
         if (!existingCustomer && normalizedRow.email) {
           const customers = await this.getAllCustomers();
-          existingCustomer = customers.find(c => c.email === normalizedRow.email);
+          existingCustomer = customers.find(c => c.email === normalizedRow.email
+            && (!importBid || c.businessId === importBid));
         }
 
         if (existingCustomer) {
@@ -4118,8 +4130,12 @@ class DatabaseStorage implements IStorage {
       'notes': 'notes'
     };
 
-    // Get all customers for UUID mapping
-    const customers = await this.getAllCustomers();
+    // Get all customers for UUID mapping — scoped to the caller's tenant (multer
+    // route = owner-connection reads; an unscoped match would attach imported jobs
+    // to another business's customer).
+    const jobsBid = currentBusinessId();
+    const customers = (await this.getAllCustomers())
+      .filter(c => !jobsBid || c.businessId === jobsBid);
 
     for (let i = 0; i < csvData.length; i++) {
       try {
@@ -4151,9 +4167,10 @@ class DatabaseStorage implements IStorage {
         // Generate job number if missing
         const jobNumber = normalizedRow.jobNumber || `J-${Date.now()}-${i}`;
 
-        // Check if job already exists
+        // Check if job already exists — another tenant holding the same job number
+        // must not suppress this tenant's import.
         const existingJob = await this.getJobByJobNumber(jobNumber);
-        if (existingJob) {
+        if (existingJob && (!jobsBid || existingJob.businessId === jobsBid)) {
           console.log(`⏭️ Skipping existing job: ${jobNumber}`);
           continue;
         }

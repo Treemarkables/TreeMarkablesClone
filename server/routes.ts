@@ -4520,8 +4520,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   });
 
   // CSV Upload and Customer Matching endpoints
+  // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
+  // runWithBusiness re-binds it so matchCustomersFromCSV scopes to this tenant.
   app.post('/api/customers/csv-match', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No CSV file provided' });
       }
@@ -4547,8 +4552,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         });
       }
 
-      // Match customers using the storage layer
-      const matchingResult = await storage.matchCustomersFromCSV(parsedCsv.data);
+      // Match customers using the storage layer (tenant-scoped via the re-bound context)
+      const matchingResult = await runWithBusiness(req.session.businessId ?? undefined,
+        () => storage.matchCustomersFromCSV(parsedCsv.data));
 
       // Clean up uploaded file
       fs.unlinkSync(req.file.path);
@@ -4715,22 +4721,30 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   });
 
   // CSV Import endpoints
+  // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
+  // the whole import (batch row + created customers + matching reads) runs inside
+  // runWithBusiness so withTenant stamps and the matcher scopes to this tenant.
   app.post('/api/customers/csv-import', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No CSV file provided' });
       }
 
       const { importSource = 'csv_upload' } = req.body;
+      const importBusinessId = req.session.businessId ?? undefined;
 
-      // Create import batch for tracking
+      // Create import batch for tracking (stamped — multer route, ALS context lost)
       const batchData: schema.InsertCustomerImportBatch = {
         importType: 'csv_upload',
         status: 'processing',
         createdBy: 'user',
         fileName: req.file.originalname
       };
-      const importBatch = await storage.createCustomerImportBatch(batchData);
+      const importBatch = await runWithBusiness(importBusinessId,
+        () => storage.createCustomerImportBatch(batchData));
 
       // Read and parse the CSV file
       const csvContent = fs.readFileSync(req.file.path, 'utf8');
@@ -4756,12 +4770,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         });
       }
 
-      // Perform the import
-      const importResult = await storage.importCustomersFromCSV(
-        parsedCsv.data, 
-        importBatch.id, 
-        importSource
-      );
+      // Perform the import (tenant-scoped: matching + created customers)
+      const importResult = await runWithBusiness(importBusinessId,
+        () => storage.importCustomersFromCSV(
+          parsedCsv.data,
+          importBatch.id,
+          importSource
+        ));
 
       res.json({
         success: importResult.success,
@@ -4776,7 +4791,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (req.file && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
-      
+
       console.error('Error importing CSV file:', error);
       res.status(500).json({
         success: false,
@@ -8490,39 +8505,47 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   });
 
   // Upload a video to a job (staff). Streamed straight to GCS by videoUpload.
+  // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
+  // getJob rides the owner connection (hence the ownership check) and the videos
+  // insert needs runWithBusiness to stamp the tenant.
   app.post('/api/jobs/:jobId/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
-      if (!req.file) {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      const videoFile = req.file;
+      if (!videoFile) {
         return res.status(400).json({ success: false, message: 'No video file provided' });
       }
       const job = await storage.getJob(jobId);
-      if (!job) {
+      if (!job || (job.businessId && req.session.businessId && job.businessId !== req.session.businessId)) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
+      const jobBusinessId = job.businessId ?? req.session.businessId;
 
       // videoUpload's storage engine streamed the file to GCS and set these on req.file.
-      const url = req.file.path; // e.g. /objects/videos/<filename>
-      const filename = req.file.filename;
+      const url = videoFile.path; // e.g. /objects/videos/<filename>
+      const filename = videoFile.filename;
 
       const showToCustomer = req.body.showToCustomer === undefined
         ? true
         : req.body.showToCustomer === 'true' || req.body.showToCustomer === true;
 
-      const video = await storage.createVideo({
+      const video = await runWithBusiness(jobBusinessId ?? undefined, () => storage.createVideo({
         jobId,
         customerId: job.customerId ?? null,
         url,
         filename,
-        originalName: req.file.originalname,
-        mimeType: req.file.mimetype,
-        fileSize: req.file.size,
+        originalName: videoFile.originalname,
+        mimeType: videoFile.mimetype,
+        fileSize: videoFile.size,
         title: req.body.title || null,
         description: req.body.description || null,
         uploadedBy: req.body.uploadedBy || null,
         showToCustomer,
         processingStatus: 'ready',
-      });
+      }));
 
       // If this video is customer-visible, drop a clickable link line into the
       // job's description so it surfaces on the customer-facing quote page.
@@ -8608,20 +8631,29 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   const isContentPublisher = (businessId: string | undefined): boolean =>
     !!businessId && CONTENT_PUBLISHER_BUSINESS_IDS.has(businessId);
 
+  // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
+  // tenant identity comes from the session, reads ride the owner connection (hence
+  // the job ownership check), and the insert is stamped via runWithBusiness.
   app.post('/api/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
-      if (!req.file) {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+      const videoFile = req.file;
+      if (!videoFile) {
         return res.status(400).json({ success: false, message: 'No video file provided' });
       }
       // videoUpload's storage engine streamed the file to GCS and set these on req.file.
-      const url = req.file.path; // e.g. /objects/videos/<filename>
-      const filename = req.file.filename;
+      const url = videoFile.path; // e.g. /objects/videos/<filename>
+      const filename = videoFile.filename;
 
       let jobId: string | null = req.body.jobId || null;
       let customerId: string | null = null;
       if (jobId) {
+        // Owner-connection read — treat another tenant's job like a missing one
+        // (the link is optional metadata; matches the existing missing-job path).
         const job = await storage.getJob(jobId);
-        if (!job) {
+        if (!job || (job.businessId && req.session.businessId && job.businessId !== req.session.businessId)) {
           jobId = null;
         } else {
           customerId = job.customerId ?? null;
@@ -8630,29 +8662,32 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
       const kind = req.body.kind === 'knowledge' ? 'knowledge' : 'job';
       // Publishing into the global how-to library is restricted to content publishers.
-      if (kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+      // Session businessId, NOT currentBusinessId() — the ALS context is lost behind
+      // multer, so currentBusinessId() was always undefined here and this check
+      // 403'd every publisher.
+      if (kind === 'knowledge' && !isContentPublisher(req.session.businessId)) {
         return res.status(403).json({ success: false, message: 'Not authorized to publish knowledge videos.' });
       }
       const showToCustomer = req.body.showToCustomer === undefined
         ? true
         : req.body.showToCustomer === 'true' || req.body.showToCustomer === true;
 
-      const video = await storage.createVideo({
+      const video = await runWithBusiness(req.session.businessId ?? undefined, () => storage.createVideo({
         kind,
         category: req.body.category || null,
         jobId,
         customerId,
         url,
         filename,
-        originalName: req.file.originalname,
-        mimeType: req.file.mimetype,
-        fileSize: req.file.size,
+        originalName: videoFile.originalname,
+        mimeType: videoFile.mimetype,
+        fileSize: videoFile.size,
         title: req.body.title || null,
         description: req.body.description || null,
         uploadedBy: req.body.uploadedBy || null,
         showToCustomer,
         processingStatus: 'ready',
-      });
+      }));
 
       // If linked to a job and customer-visible, surface a clickable link in
       // the job's description (matches the per-job upload path above).
@@ -14678,6 +14713,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     logoUpload.array('photos', 10),
     async (req: Request, res: Response) => {
       try {
+        // Multer route (no session middleware ran the entitlement check the other
+        // review routes get) — require a login before writing files to public/.
+        if (!req.session.employeeId) {
+          return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
         const files = (req.files as Express.Multer.File[] | undefined) || [];
         if (files.length === 0) {
           return res.status(400).json({ success: false, message: 'No files uploaded' });
@@ -15755,8 +15795,14 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // ========================================
 
   // Import customers from ServiceM8 CSV export
+  // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
+  // runWithBusiness re-binds it so created customers are stamped and dedup
+  // matching scopes to this tenant.
   app.post('/api/import/customers', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No CSV file provided' });
       }
@@ -15777,8 +15823,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         });
       }
 
-      // Import the data
-      const importResult = await storage.importCustomersFromCsv(parsedCsv.data);
+      // Import the data (tenant-scoped via the re-bound context)
+      const importResult = await runWithBusiness(req.session.businessId ?? undefined,
+        () => storage.importCustomersFromCsv(parsedCsv.data));
 
       // Clean up uploaded file
       fs.unlinkSync(req.file.path);
@@ -15803,8 +15850,14 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Import jobs from ServiceM8 CSV export
+  // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
+  // runWithBusiness re-binds it so created jobs are stamped and the customer-UUID
+  // match scopes to this tenant.
   app.post('/api/import/jobs', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No CSV file provided' });
       }
@@ -15825,8 +15878,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         });
       }
 
-      // Import the data
-      const importResult = await storage.importJobsFromCsv(parsedCsv.data);
+      // Import the data (tenant-scoped via the re-bound context)
+      const importResult = await runWithBusiness(req.session.businessId ?? undefined,
+        () => storage.importJobsFromCsv(parsedCsv.data));
 
       // Clean up uploaded file
       fs.unlinkSync(req.file.path);
@@ -15852,8 +15906,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
 
   // Import quotes from ServiceM8 CSV export
+  // Multer route (importQuotesFromCsv is currently unimplemented, but keep the
+  // auth gate consistent with the other import routes).
   app.post('/api/import/quotes', csvUpload.single('csvFile'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No CSV file provided' });
       }
@@ -19135,11 +19194,18 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // Upload logo for templates — saves the file and propagates the new URL to all three
   // default templates (quote, proposal, invoice) so Settings → Company is the single
   // source of truth for the company logo.
+  // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
+  // the unscoped getDefaultDocumentTemplate here returned an ARBITRARY tenant's
+  // default template and then wrote this tenant's logo onto it.
   app.post('/api/templates/upload-logo', logoUpload.single('logo'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
       }
+      const logoBusinessId = req.session.businessId;
       // Upload through PhotoStorageService → GCS so the logo survives DO App
       // Platform deploys (the local uploads/ disk is ephemeral). We reuse the
       // photo bucket since GCS doesn't care about logical grouping and the
@@ -19152,13 +19218,19 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       );
 
       const defaults = await Promise.all([
-        storage.getDefaultDocumentTemplate('quote'),
-        storage.getDefaultDocumentTemplate('proposal'),
-        storage.getDefaultDocumentTemplate('invoice'),
+        storage.getDefaultDocumentTemplateForBusiness(logoBusinessId, 'quote'),
+        storage.getDefaultDocumentTemplateForBusiness(logoBusinessId, 'proposal'),
+        storage.getDefaultDocumentTemplateForBusiness(logoBusinessId, 'invoice'),
       ]);
       await Promise.all(
         defaults
           .filter((t): t is NonNullable<typeof t> => !!t)
+          // The ForBusiness lookup falls back to an unscoped default when the tenant
+          // has none — never write through that fallback onto another business's
+          // template. Unstamped (business_id NULL) legacy rows are TM's.
+          .filter(t => t.businessId
+            ? t.businessId === logoBusinessId
+            : !!logoBusinessId && TREEMARKABLES_BUSINESS_IDS.includes(logoBusinessId))
           .map(t => storage.updateDocumentTemplate(t.id, { logoUrl: url })),
       );
 
@@ -21212,14 +21284,17 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       const validation = insertCallSchema.safeParse(callData);
       if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid call data',
-          errors: validation.error.errors 
+          errors: validation.error.errors
         });
       }
 
-      const call = await storage.createCall(validation.data);
+      // Multer route (session-less: API-key auth) — the ALS tenant context is lost
+      // behind busboy anyway, so stamp the insert from the API key's business.
+      const callBusinessId = (req as any).apiKey?.businessId ?? req.session?.businessId;
+      const call = await runWithBusiness(callBusinessId ?? undefined, () => storage.createCall(validation.data));
 
       res.json({ 
         success: true, 
@@ -21782,7 +21857,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
       // Step 2: Extract quote details using GPT-5
       let __mobileQuoteKnowledge = '';
       try {
-        __mobileQuoteKnowledge = buildBusinessKnowledgeBlock(await storage.getBusinessSettings());
+        // Scoped lookup — this is a multer route (ALS tenant context lost), so the
+        // unscoped getBusinessSettings() would return an arbitrary tenant's row and
+        // leak its business knowledge into the prompt.
+        __mobileQuoteKnowledge = buildBusinessKnowledgeBlock(await storage.getBusinessSettingsForBusiness(businessId));
       } catch { /* knowledge is optional context */ }
       const extractionPrompt = `You are a quote assistant for a field-service business in New Zealand. 
 Extract the following information from this conversation transcription and return it as JSON:
@@ -29341,8 +29419,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   // Speech to Quote - Convert recorded speech to quote data
   app.post('/api/speech-to-quote', audioUpload.single('audio'), async (req, res) => {
     let audioFilePath: string | null = null;
-    
+
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No audio file uploaded' });
       }
@@ -29460,7 +29541,10 @@ Formatted task list:`;
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       let __webQuoteKnowledge = '';
       try {
-        __webQuoteKnowledge = buildBusinessKnowledgeBlock(await storage.getBusinessSettings());
+        // Scoped lookup — this is a multer route (ALS tenant context lost), so the
+        // unscoped getBusinessSettings() would return an arbitrary tenant's row and
+        // leak its business knowledge into the prompt.
+        __webQuoteKnowledge = buildBusinessKnowledgeBlock(await storage.getBusinessSettingsForBusiness(businessId));
       } catch { /* knowledge is optional context */ }
       const extractionPrompt = `You are a quote assistant for a field-service business in New Zealand. 
 Extract the following information from this conversation transcription and return it as JSON:
@@ -33140,19 +33224,29 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-reports/:id/attachments
+  // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
+  // the report read rides the owner connection (hence the ownership check) and the
+  // attachment insert is stamped from the parent report via runWithBusiness.
   app.post('/api/near-miss-reports/:id/attachments', nearMissUpload.single('file'), async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
-      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      if (!report || (report.businessId && req.session.businessId && report.businessId !== req.session.businessId)) {
+        return res.status(404).json({ success: false, message: 'Report not found' });
+      }
+      const reportBusinessId = report.businessId ?? req.session.businessId;
       if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
       const type = req.file.mimetype.startsWith('audio') ? 'voice_note' : 'photo';
       const filePath = req.file.path.replace(/\\/g, '/');
-      const [attachment] = await db.insert(schema.nearMissAttachments).values(withTenant({
-        reportId: req.params.id,
-        type,
-        filePath,
-        uploadedBy: req.session.employeeId || null,
-      })).returning();
+      const [attachment] = await runWithBusiness(reportBusinessId ?? undefined, () =>
+        db.insert(schema.nearMissAttachments).values(withTenant({
+          reportId: req.params.id,
+          type,
+          filePath,
+          uploadedBy: req.session.employeeId || null,
+        })).returning());
       res.json({ success: true, data: attachment });
     } catch (error) {
       res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to upload attachment' });
