@@ -107,6 +107,11 @@ const categories: Category[] = [
         tier: "Crew & up",
       },
       {
+        title: "Screenshot to quote",
+        body: "Paste a screenshot of a text or message thread — AI reads it, fills in the customer and job details, and you quote from there.",
+        tier: "Crew & up",
+      },
+      {
         title: "Quote follow-ups",
         body: "A follow-up queue with AI-drafted chasers, so sent quotes don't quietly go cold.",
         tier: "Crew & up",
@@ -222,6 +227,11 @@ const categories: Category[] = [
         body: "New inquiries get an instant acknowledgement while the lead lands in your pipeline.",
         tier: "Crew & up",
       },
+      {
+        title: "Gmail & Mailchimp",
+        body: "Email replies flow into the inbox through your Gmail, and your customer list syncs to Mailchimp audiences for campaigns.",
+        tier: "Crew & up",
+      },
     ],
   },
   {
@@ -252,8 +262,8 @@ const categories: Category[] = [
         tier: "All plans",
       },
       {
-        title: "Before & after",
-        body: "Paired before / after capture, so the transformation is documented on every job.",
+        title: "Before & after generator",
+        body: "Paired before / after capture, with a branded composite generated automatically — ready to share on social.",
         tier: "All plans",
       },
       {
@@ -273,7 +283,7 @@ const categories: Category[] = [
       },
       {
         title: "Job site map",
-        body: "A satellite map of the site with placeable markers — or drop markers on your own uploaded site plan for council and consent work.",
+        body: "A satellite map on the job card with placeable markers — pin the trees, hazards or work areas on the property, or mark up your own uploaded site plan for council work.",
         tier: "All plans",
       },
       {
@@ -492,7 +502,7 @@ const plans: {
       "Inbox, SMS bundle & message templates",
       "AI assist — speech-to-quote, follow-ups & lead capture",
       "Job costing, dashboards & document builder",
-      "Xero & Google Calendar sync",
+      "Xero, Google Calendar, Gmail & Mailchimp",
     ],
     highlight: true,
   },

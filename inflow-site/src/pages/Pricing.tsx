@@ -52,7 +52,7 @@ const tiers: Tier[] = [
       "Communications, inbox & templates",
       "AI assist — speech-to-quote, follow-ups & lead capture",
       "200 SMS / month included",
-      "Xero & Google Calendar sync",
+      "Xero, Google Calendar, Gmail & Mailchimp",
     ],
   },
   {
