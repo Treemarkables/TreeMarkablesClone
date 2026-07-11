@@ -7655,6 +7655,94 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     return rows.length > 0;
   };
 
+  // Voice check-off — crew says what's done ("pre-start's done and the signs
+  // are out"), GPT maps it to checklist item ids, we tick them. MUST register
+  // BEFORE the :itemId toggle below or 'voice-check' gets swallowed as an id.
+  // Metered as an AI action.
+  app.post('/api/jobs/:jobId/checklist/voice-check', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const transcript = String(req.body?.transcript || '').trim();
+      if (!transcript) {
+        return res.status(400).json({ success: false, message: 'transcript is required' });
+      }
+      if (jobId.startsWith('temp-')) {
+        return res.status(400).json({ success: false, message: 'Save the job before ticking checklist items' });
+      }
+      const job = await storage.getJob(jobId);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'checklist_voice_check');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
+      const tasks = await db.select({
+        itemId: schema.roleChecklistTasks.itemId,
+        label: schema.roleChecklistTasks.label,
+      }).from(schema.roleChecklistTasks)
+        .where(eq(schema.roleChecklistTasks.isEnabled, true));
+      if (tasks.length === 0) {
+        return res.status(400).json({ success: false, message: 'No checklist items configured' });
+      }
+
+      const completions = await storage.getJobChecklistCompletions(jobId);
+      const alreadyDone = new Set(completions.map((c: any) => c.itemId));
+
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'system',
+            content: 'You map a field worker\'s spoken update to checklist item ids. Respond ONLY with valid JSON: {"done": ["item-id", ...]}. Include an id ONLY when the speaker clearly states that task is finished — not planned, not in progress, not negated ("haven\'t done the pre-start" must NOT match pre-start). Unmatched speech is ignored.',
+          },
+          {
+            role: 'user',
+            content: `Checklist items:\n${tasks.map(t => `- ${t.itemId}: ${t.label}`).join('\n')}\n\nSpoken update: "${transcript}"`,
+          },
+        ],
+        response_format: { type: 'json_object' },
+      });
+
+      let done: string[] = [];
+      try {
+        const parsed = JSON.parse(completion.choices[0]?.message?.content || '{}');
+        if (Array.isArray(parsed.done)) done = parsed.done.filter((v: unknown) => typeof v === 'string');
+      } catch { /* fall through with empty */ }
+
+      const validIds = new Set(tasks.map(t => t.itemId));
+      const toCheck = done.filter(id => validIds.has(id) && !alreadyDone.has(id));
+
+      let employeeName: string | null = null;
+      if (req.session.employeeId) {
+        const employee = await storage.getEmployee(req.session.employeeId);
+        employeeName = employee
+          ? [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim() || employee.email || null
+          : null;
+      }
+      const checkedLabels: string[] = [];
+      for (const itemId of toCheck) {
+        await storage.setJobChecklistItem(jobId, itemId, req.session.employeeId ?? null, employeeName);
+        checkedLabels.push(tasks.find(t => t.itemId === itemId)?.label ?? itemId);
+      }
+
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'checklist_voice_check' });
+
+      res.json({
+        success: true,
+        data: {
+          checked: checkedLabels,
+          alreadyDone: done.filter(id => alreadyDone.has(id)).map(id => tasks.find(t => t.itemId === id)?.label ?? id),
+        },
+      });
+    } catch (error) {
+      console.error('Error in checklist voice check:', error);
+      res.status(500).json({ success: false, message: 'Error processing voice check-off' });
+    }
+  });
+
   app.post('/api/jobs/:jobId/checklist/:itemId', async (req: Request, res: Response) => {
     try {
       const { jobId, itemId } = req.params;
