@@ -37,6 +37,7 @@ import {
   Loader2,
   Navigation,
   Link2,
+  FileImage,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -74,6 +75,7 @@ import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { OnMyWayDialog } from "@/components/OnMyWayDialog";
 import { ShareTimelineDialog } from "@/components/ShareTimelineDialog";
+import { openPhotoReport } from "@/lib/openPhotoReport";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardMobileTab =
@@ -497,6 +499,7 @@ export function JobCardMobile({
                 <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
                 <ActionTile label="On My Way" icon={Navigation} colour="orange" onClick={() => setShowOnMyWay(true)} />
                 <ActionTile label="Share Timeline" icon={Link2} colour="blue" onClick={() => setShowShareTimeline(true)} />
+                <ActionTile label="Photo Report" icon={FileImage} colour="slate" onClick={() => openPhotoReport(jobId)} />
                 <ActionTile
                   label={jobInQueue ? "In Queue" : "Queue Job"}
                   icon={ListOrdered}

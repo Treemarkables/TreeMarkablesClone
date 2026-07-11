@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Inflow uses the camera so you can take photos of customer messages, job sites, and quotes to attach to leads.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Inflow uses your location to sort today's jobs by distance from you.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Inflow needs microphone access for voice calls with customers.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

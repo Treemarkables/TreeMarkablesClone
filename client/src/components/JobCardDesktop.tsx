@@ -53,6 +53,7 @@ import {
   Mic,
   Navigation,
   Link2,
+  FileImage,
   Calendar as CalendarIcon,
   TrendingUp,
   Send,
@@ -102,6 +103,7 @@ import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { OnMyWayDialog } from "@/components/OnMyWayDialog";
 import { ShareTimelineDialog } from "@/components/ShareTimelineDialog";
+import { openPhotoReport } from "@/lib/openPhotoReport";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardDesktopTab =
@@ -710,6 +712,13 @@ export function JobCardDesktop({
                 >
                   <Link2 className="w-4 h-4 mr-2 text-blue-600" />
                   Share Timeline
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => openPhotoReport(jobId)}
+                  data-testid="more-photo-report"
+                >
+                  <FileImage className="w-4 h-4 mr-2 text-slate-600" />
+                  Photo Report
                 </DropdownMenuItem>
                 {actions?.sendToXero && (
                   // Sent/sending state reads this card's own fresh job query,
