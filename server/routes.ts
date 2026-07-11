@@ -16516,6 +16516,72 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // AI progress recap — turns the job's diary into a short, customer-friendly
+  // progress update the owner can paste into an email or text (CompanyCam's
+  // "Progress Recap", GPT-written). Metered as an AI action.
+  app.post('/api/jobs/:jobId/progress-recap', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'progress_recap');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
+      const entries = await storage.getJobDiaryEntriesByJob(req.params.jobId);
+      const usable = [...entries]
+        .filter((e: any) => !e.isPrivate)
+        .sort((a: any, b: any) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime())
+        .slice(-80); // newest 80 — plenty of context without blowing the prompt
+
+      if (usable.length === 0) {
+        return res.status(400).json({ success: false, message: 'No diary activity to summarise yet' });
+      }
+
+      const digest = usable.map((e: any) => {
+        const when = e.createdAt ? getNZDateString(new Date(e.createdAt)) : '';
+        const photoCount = (Array.isArray(e.photos) ? e.photos.length : 0) + (e.photoUrl && !(Array.isArray(e.photos) && e.photos.length) ? 1 : 0);
+        const desc = String(e.description || '').slice(0, 300);
+        return `${when} [${e.entryType}] ${e.title}${desc && desc !== e.title ? ` — ${desc}` : ''}${photoCount ? ` (${photoCount} photo${photoCount > 1 ? 's' : ''})` : ''}`;
+      }).join('\n').slice(0, 12000);
+
+      const settings = await storage.getBusinessSettings();
+      const identity = getBusinessIdentity(settings);
+      const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'system',
+            content: `You write short progress updates for ${identity.name || 'a field-service business'} (New Zealand) to send to their customer. Warm, plain-English, professional. NZ English spelling. Plain text only — no markdown, no emoji, no headings. 120-200 words. Summarise what has been done so far and where the job is at. Never invent work that isn't in the log, never mention prices unless they appear in the log, and never include internal-sounding details (staff scheduling gripes, costs, margins).`,
+          },
+          {
+            role: 'user',
+            content: `Job: ${job.title || `#${job.jobNumber}`}${customer?.name ? `\nCustomer: ${customer.name}` : ''}${job.address ? `\nSite: ${job.address}` : ''}\nStatus: ${job.status}\n\nActivity log (oldest first):\n${digest}\n\nWrite the progress update addressed to the customer (start with "Hi ${customer?.name?.split(' ')[0] || 'there'},").`,
+          },
+        ],
+      });
+
+      const recap = completion.choices[0]?.message?.content?.trim();
+      if (!recap) {
+        return res.status(500).json({ success: false, message: 'Could not generate a recap' });
+      }
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'progress_recap' });
+
+      res.json({ success: true, data: { recap } });
+    } catch (error) {
+      console.error('Error generating progress recap:', error);
+      res.status(500).json({ success: false, message: 'Error generating progress recap' });
+    }
+  });
+
   // Get photos for a job
   app.get('/api/jobs/:jobId/photos', async (req: Request, res: Response) => {
     try {
