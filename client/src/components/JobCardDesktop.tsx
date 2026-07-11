@@ -52,6 +52,7 @@ import {
   MoreHorizontal,
   Mic,
   Navigation,
+  FileImage,
   Calendar as CalendarIcon,
   TrendingUp,
   Send,
@@ -100,6 +101,7 @@ import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { OnMyWayDialog } from "@/components/OnMyWayDialog";
+import { openPhotoReport } from "@/lib/openPhotoReport";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardDesktopTab =
@@ -701,6 +703,13 @@ export function JobCardDesktop({
                     Profit Tracker
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem
+                  onClick={() => openPhotoReport(jobId)}
+                  data-testid="more-photo-report"
+                >
+                  <FileImage className="w-4 h-4 mr-2 text-slate-600" />
+                  Photo Report
+                </DropdownMenuItem>
                 {actions?.sendToXero && (
                   // Sent/sending state reads this card's own fresh job query,
                   // so it flips live — no close/reopen. Stays clickable when
