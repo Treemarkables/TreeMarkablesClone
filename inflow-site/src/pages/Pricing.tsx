@@ -28,7 +28,7 @@ const tiers: Tier[] = [
       "Up to 3 users",
       "Jobs, scheduling & dispatch",
       "Quoting, proposals & invoicing",
-      "Customers & customer portal",
+      "Customers & leads",
       "Photos — 10 per job",
       "Mobile app & help hub",
     ],

@@ -176,11 +176,6 @@ const categories: Category[] = [
         tier: "All plans",
       },
       {
-        title: "Customer portal",
-        body: "A customer-facing portal where they view and accept quotes, proposals and invoices, and request new work.",
-        tier: "All plans",
-      },
-      {
         title: "AI lead capture",
         body: "Inbound emails and messages are parsed automatically into contact details and a job request — no re-typing.",
         tier: "Crew & up",
@@ -483,7 +478,7 @@ const plans: {
     includes: [
       "Jobs, calendar & scheduling",
       "Quotes, proposals & invoicing",
-      "Customers, leads & customer portal",
+      "Customers & leads",
       "Photos (10 per job), site map & job diary",
       "Tasks board & custom job lanes",
       "Mobile app, help hub & data import",
