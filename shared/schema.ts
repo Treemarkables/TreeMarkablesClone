@@ -383,6 +383,8 @@ export const jobs = pgTable("jobs", {
   description: text("description"),
   includeDescriptionInQuotesProposals: boolean("include_description_in_quotes_proposals").default(true),
   leadSource: text("lead_source"), // phone, website, referral, google, facebook, direct, other
+  importSource: text("import_source").default('manual'), // manual, csv_import, servicem8_import
+  externalId: text("external_id"), // Source-platform id (e.g. ServiceM8 job UUID) for import dedup
   address: text("address").notNull().default("Address not specified"),
   scheduledDate: timestamp("scheduled_date"),
   scheduledEndDate: timestamp("scheduled_end_date"), // For multi-day jobs — last day of the job

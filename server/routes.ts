@@ -24,6 +24,7 @@ import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
 import { resolveEntitlements } from "./tenancy/entitlements";
+import { testServiceM8Connection, runServiceM8Import } from "./services/servicem8Import";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
@@ -1031,6 +1032,13 @@ async function buildOnboardingChecklist(businessId: string) {
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.tenantChannels)
     .where(and(eq(schema.tenantChannels.businessId, businessId), eq(schema.tenantChannels.isActive, true)));
+  const [{ count: importedCustomerCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.customers)
+    .where(and(
+      eq(schema.customers.businessId, businessId),
+      sql`${schema.customers.importSource} IS NOT NULL AND ${schema.customers.importSource} <> 'manual'`,
+    ));
 
   const has = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
 
@@ -1042,6 +1050,7 @@ async function buildOnboardingChecklist(businessId: string) {
     { key: 'address', label: 'Business address', description: 'Shown on your documents.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyAddress) },
     { key: 'bank', label: 'Bank details', description: "So customers can pay your invoices — without it, no payment block shows.", path: '/settings/company', optional: false, done: has(settings?.bankAccountName) && has(settings?.bankAccountNumber) },
     { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: (channelCount ?? 0) > 0 },
+    { key: 'importData', label: 'Import your data', description: 'Bring your customers and jobs across from ServiceM8 or a CSV export.', path: '/settings/import', optional: true, done: (importedCustomerCount ?? 0) > 0 },
     { key: 'gst', label: 'GST number', description: 'Shown on tax invoices (only if GST-registered).', path: '/settings/company', optional: true, done: has(settings?.businessGstNumber) },
     { key: 'tradeVocabulary', label: 'Trade vocabulary', description: 'Improves voice-to-quote and AI accuracy for your trade.', path: '/settings/company', optional: true, done: has(settings?.tradeVocabulary) },
     { key: 'replyForward', label: 'Forward customer replies', description: 'Optionally copy job replies to your own inbox.', path: '/settings/company', optional: true, done: has(settings?.jobReplyForwardEmail) },
@@ -27956,64 +27965,60 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // =====================================
-  // ServiceM8 Integration API Routes
+  // ServiceM8 migration (per-tenant, API-key) — Settings → Import & Migration.
+  // Replaces the dead single-tenant /api/servicem8/* routes (their
+  // servicem8Service was never defined, so every call 500'd).
   // =====================================
 
-  // GET /api/servicem8/test - Test ServiceM8 API connection
-  app.get('/api/servicem8/test', async (req: Request, res: Response) => {
+  // Resolve the key to use: an explicitly typed one wins; the masked sentinel
+  // or an empty body falls back to the tenant's stored key.
+  async function resolveServiceM8Key(bodyKey: unknown): Promise<string | null> {
+    const typed = typeof bodyKey === 'string' ? bodyKey.trim() : '';
+    if (typed && typed !== '••••••••') return typed;
+    const settings = await storage.getBusinessSettings();
+    const stored = (settings?.servicem8ApiKey ?? '').trim();
+    return stored || null;
+  }
+
+  // POST /api/import/servicem8/test - Validate a ServiceM8 API key
+  app.post('/api/import/servicem8/test', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const result = await servicem8Service.testConnection();
-      res.json(result);
+      const apiKey = await resolveServiceM8Key(req.body?.apiKey);
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'Enter your ServiceM8 API key first.' });
+      }
+      const result = await testServiceM8Connection(apiKey);
+      res.json({ success: result.ok, message: result.message });
     } catch (error) {
       console.error('ServiceM8 test connection error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to test ServiceM8 connection'
-      });
+      res.status(500).json({ success: false, message: 'Failed to test the ServiceM8 connection' });
     }
   });
 
-  // POST /api/servicem8/import/customers - Import customers from ServiceM8
-  app.post('/api/servicem8/import/customers', async (req: Request, res: Response) => {
+  // POST /api/import/servicem8/run - Import the tenant's ServiceM8 clients + jobs.
+  // Idempotent: re-running skips already-imported records, so partial imports
+  // can simply be re-run.
+  app.post('/api/import/servicem8/run', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const result = await servicem8Service.importCustomers();
-      res.json(result);
+      const typedKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+      const apiKey = await resolveServiceM8Key(req.body?.apiKey);
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'Enter your ServiceM8 API key first.' });
+      }
+      const summary = await runServiceM8Import(apiKey);
+      // Persist a newly typed key only after a successful run, so re-runs
+      // don't need it re-entered. (Settings API already masks it on read.)
+      if (typedKey && typedKey !== '••••••••') {
+        await storage.updateBusinessSettings({ servicem8ApiKey: typedKey }).catch((e) =>
+          console.error('ServiceM8 key save failed (import succeeded):', e),
+        );
+      }
+      res.json({ success: true, data: summary });
     } catch (error) {
-      console.error('ServiceM8 customers import error:', error);
+      console.error('ServiceM8 import error:', error);
       res.status(500).json({
         success: false,
-        imported: 0,
-        errors: ['Failed to import customers from ServiceM8']
-      });
-    }
-  });
-
-  // POST /api/servicem8/update/customer-names - Update existing customer names with improved ServiceM8 data
-  app.post('/api/servicem8/update/customer-names', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.updateExistingCustomerNames();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 customer names update error:', error);
-      res.status(500).json({
-        success: false,
-        updated: 0,
-        errors: ['Failed to update customer names from ServiceM8']
-      });
-    }
-  });
-
-  // POST /api/servicem8/import/jobs - Import jobs from ServiceM8
-  app.post('/api/servicem8/import/jobs', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.importJobs();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 jobs import error:', error);
-      res.status(500).json({
-        success: false,
-        imported: 0,
-        errors: ['Failed to import jobs from ServiceM8']
+        message: error instanceof Error ? error.message : 'Failed to import data from ServiceM8',
       });
     }
   });
@@ -28479,39 +28484,6 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       });
     }
   });
-
-  // POST /api/servicem8/import/all - Import all data from ServiceM8
-  app.post('/api/servicem8/import/all', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.importAll();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 full import error:', error);
-      res.status(500).json({
-        success: false,
-        customers: { imported: 0, errors: [] },
-        jobs: { imported: 0, errors: [] },
-        message: 'Failed to import data from ServiceM8'
-      });
-    }
-  });
-
-  // POST /api/servicem8/sync - Sync existing data with complete ServiceM8 information
-  app.post('/api/servicem8/sync', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.syncExistingData();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 sync error:', error);
-      res.status(500).json({
-        success: false,
-        customers: { updated: 0, errors: [] },
-        jobs: { updated: 0, errors: [] },
-        message: 'Failed to sync data with ServiceM8'
-      });
-    }
-  });
-
 
   // Materials and Services API
   app.get("/api/materials-services", async (req: Request, res: Response) => {
