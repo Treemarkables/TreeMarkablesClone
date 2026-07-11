@@ -50,9 +50,9 @@ const tiers: Tier[] = [
       "Roles, permissions & time tracking",
       "Advanced analytics & job costing",
       "Communications, inbox & templates",
-      "AI assist — dispatch & speech-to-quote",
+      "AI assist — speech-to-quote, follow-ups & lead capture",
       "200 SMS / month included",
-      "Xero, Google Calendar, Gmail & Mailchimp",
+      "Xero & Google Calendar sync",
     ],
   },
   {
