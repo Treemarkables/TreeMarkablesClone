@@ -1111,6 +1111,11 @@ export interface IStorage {
   startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer>;
   deleteTimer(id: string): Promise<boolean>;
 
+  // Public job photo timeline links
+  getTimelineLinkForJob(jobId: string): Promise<schema.JobTimelineLink | null>;
+  getTimelineLinkByToken(token: string): Promise<schema.JobTimelineLink | null>;
+  createTimelineLink(jobId: string, token: string): Promise<schema.JobTimelineLink>;
+
   // Mulch Drops
   createMulchDrop(drop: schema.InsertMulchDrop): Promise<schema.MulchDrop>;
   reorderMulchDrops(orderedIds: string[]): Promise<void>;
@@ -7690,6 +7695,28 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.activeTimers.id, id))
       .returning();
     return result.length > 0;
+  }
+
+  // ─── Public job photo timeline links ──────────────────────────────────────
+  async getTimelineLinkForJob(jobId: string): Promise<schema.JobTimelineLink | null> {
+    const [link] = await db.select()
+      .from(schema.jobTimelineLinks)
+      .where(eq(schema.jobTimelineLinks.jobId, jobId));
+    return link ?? null;
+  }
+
+  async getTimelineLinkByToken(token: string): Promise<schema.JobTimelineLink | null> {
+    const [link] = await db.select()
+      .from(schema.jobTimelineLinks)
+      .where(eq(schema.jobTimelineLinks.token, token));
+    return link ?? null;
+  }
+
+  async createTimelineLink(jobId: string, token: string): Promise<schema.JobTimelineLink> {
+    const [link] = await db.insert(schema.jobTimelineLinks)
+      .values(withTenant({ jobId, token }))
+      .returning();
+    return link;
   }
 
   // ─── Mulch Drops ──────────────────────────────────────────────────────────
