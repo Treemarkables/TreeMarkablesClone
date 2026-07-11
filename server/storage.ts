@@ -916,12 +916,6 @@ export interface IStorage {
   getAllSmsTemplates(): Promise<SmsTemplate[]>;
   deleteSmsTemplate(id: string): Promise<void>;
 
-  // ServiceM8 Integration Management
-  createServicem8Config(config: InsertServicem8Config): Promise<Servicem8Config>;
-  getServicem8Config(): Promise<Servicem8Config | undefined>;
-  updateServicem8Config(id: string, updates: Partial<InsertServicem8Config>): Promise<Servicem8Config>;
-  deleteServicem8Config(id: string): Promise<void>;
-
   // ServiceM8 Data Import Management
   createServicem8Job(job: InsertServicem8Job): Promise<Servicem8Job>;
   getServicem8Job(id: string): Promise<Servicem8Job | undefined>;
@@ -6302,29 +6296,6 @@ class DatabaseStorage implements IStorage {
   
   async deleteSmsTemplate(id: string): Promise<void> {
     await db.delete(schema.smsTemplates).where(eq(schema.smsTemplates.id, id));
-  }
-
-  // ServiceM8 Integration Management
-  async createServicem8Config(config: InsertServicem8Config): Promise<Servicem8Config> {
-    const [servicem8Config] = await db.insert(schema.servicem8Config).values(config).returning();
-    return servicem8Config;
-  }
-
-  async getServicem8Config(): Promise<Servicem8Config | undefined> {
-    const [config] = await db.select().from(schema.servicem8Config).limit(1);
-    return config || undefined;
-  }
-
-  async updateServicem8Config(id: string, updates: Partial<InsertServicem8Config>): Promise<Servicem8Config> {
-    const [updatedConfig] = await db.update(schema.servicem8Config)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(schema.servicem8Config.id, id))
-      .returning();
-    return updatedConfig;
-  }
-
-  async deleteServicem8Config(id: string): Promise<void> {
-    await db.delete(schema.servicem8Config).where(eq(schema.servicem8Config.id, id));
   }
 
   // ServiceM8 Data Import Management - Stub implementations

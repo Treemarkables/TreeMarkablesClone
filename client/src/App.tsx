@@ -117,6 +117,7 @@ const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
 const SettingsAccount = lazy(() => import("@/pages/SettingsAccount"));
 const SettingsChannels = lazy(() => import("@/pages/SettingsChannels"));
 const SettingsSetup = lazy(() => import("@/pages/SettingsSetup"));
+const SettingsImport = lazy(() => import("@/pages/SettingsImport"));
 const AdminSubscribers = lazy(() => import("@/pages/AdminSubscribers"));
 const SettingsQuoteFollowup = lazy(() => import("@/pages/SettingsQuoteFollowup"));
 const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoReply"));
@@ -1509,6 +1510,11 @@ function Router() {
       <Route path="/settings/setup">
         <SidebarLayout>
           <SettingsSetup />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/import">
+        <SidebarLayout>
+          <SettingsImport />
         </SidebarLayout>
       </Route>
       <Route path="/admin/subscribers">

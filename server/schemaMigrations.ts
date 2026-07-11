@@ -119,6 +119,16 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS ai_knowledge text DEFAULT ''`,
     ],
   },
+  {
+    // ServiceM8 migration (Settings → Import & Migration): job-level import
+    // provenance + source id so re-running an import dedups instead of duplicating.
+    // Mirrors the columns customers has had since the original TM import.
+    name: "jobs-import-source-columns",
+    statements: [
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS import_source text DEFAULT 'manual'`,
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS external_id text`,
+    ],
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;
