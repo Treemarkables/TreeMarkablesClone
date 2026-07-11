@@ -103,7 +103,7 @@ export default function SettingsImport() {
               data-testid="input-sm8-api-key"
             />
             <p className="text-xs text-muted-foreground">
-              In ServiceM8, go to Settings &gt; Integrations &gt; API to generate a key for your account.
+              In the ServiceM8 web app, go to Settings &gt; API Keys (or Developer &gt; My Apps &gt; Private App) to generate a key.
             </p>
           </div>
 
