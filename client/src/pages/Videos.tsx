@@ -14,6 +14,7 @@ import { Trash2, Upload, Copy, Download, Video as VideoIcon, Search, Pencil, Che
 import { useToast } from "@/hooks/use-toast";
 import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
 import { isNativeApp } from "@/lib/platform";
+import { formatNZTime } from "@shared/dateUtils";
 
 // Per-video state for the native (iOS app) download path. The WKWebView ignores
 // Content-Disposition: attachment — navigating to the file just plays it — so on
@@ -395,6 +396,11 @@ export default function Videos() {
                       </Link>
                     ) : (
                       <span className="block text-xs text-muted-foreground">Not linked to a job yet</span>
+                    )}
+                    {v.createdAt && (
+                      <span className="block text-xs text-muted-foreground">
+                        Uploaded {formatNZTime(v.createdAt, "datetime")}
+                      </span>
                     )}
                   </div>
                   {!v.jobId && (
