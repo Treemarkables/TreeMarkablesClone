@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X, Briefcase, Loader2 } from "lucide-react";
+import { Trash2, Upload, Copy, Download, Video as VideoIcon, Search, Pencil, Check, X, Briefcase, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
 
@@ -126,6 +126,20 @@ export default function Videos() {
     navigator.clipboard?.writeText(`${window.location.origin}${url}`).catch(() => {
       toast({ title: "Could not copy link", variant: "destructive" });
     });
+  };
+
+  const displayTitle = (v: any) =>
+    v.title || v.originalName || (v.customerName ? `Walkthrough — ${v.customerName}` : "Untitled video");
+
+  const downloadVideo = (v: any) => {
+    // ?download=1 makes the server send Content-Disposition: attachment, so the
+    // anchor navigation becomes a save-file download instead of opening the player.
+    const a = document.createElement("a");
+    a.href = `${v.url}?download=1&name=${encodeURIComponent(displayTitle(v))}`;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   return (
@@ -283,7 +297,7 @@ export default function Videos() {
                         data-testid={`button-edit-title-${v.id}`}
                       >
                         <span className="text-sm font-medium truncate">
-                          {v.title || v.originalName || (v.customerName ? `Walkthrough — ${v.customerName}` : "Untitled video")}
+                          {displayTitle(v)}
                         </span>
                         <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
                       </button>
@@ -336,6 +350,16 @@ export default function Videos() {
                     data-testid={`button-library-copy-${v.id}`}
                   >
                     <Copy className="w-3.5 h-3.5 mr-1" /> Copy link
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadVideo(v)}
+                    aria-label="Download video"
+                    data-testid={`button-library-download-${v.id}`}
+                  >
+                    <Download className="w-3.5 h-3.5" />
                   </Button>
                   <Button
                     type="button"
