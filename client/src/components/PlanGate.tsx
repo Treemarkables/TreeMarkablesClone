@@ -41,18 +41,21 @@ export function UpgradeGate({
   const { can } = useAuth();
   if (can(requires)) return <>{children}</>;
 
+  const isAddon = requires.startsWith("addon:");
   const plan = PLAN_LABEL[requires] ?? "a higher";
   const what = feature ?? "This feature";
+  const heading = isAddon ? `${what} is a paid add-on` : `${what} is on the ${plan} plan`;
+  const body = isAddon
+    ? `Add ${feature ? feature.toLowerCase() : "this feature"} to your plan to unlock it.`
+    : `Upgrade your plan to unlock ${feature ? feature.toLowerCase() : "this feature"}.`;
   return (
     <div className="flex flex-col items-center justify-center text-center gap-4 py-16 px-6" data-testid="upgrade-gate">
       <div className="rounded-full bg-muted p-4">
         <Lock className="h-8 w-8 text-muted-foreground" />
       </div>
       <div>
-        <h2 className="text-xl font-semibold">{what} is on the {plan} plan</h2>
-        <p className="text-muted-foreground mt-1 max-w-md">
-          Upgrade your plan to unlock {feature ? feature.toLowerCase() : "this feature"}.
-        </p>
+        <h2 className="text-xl font-semibold">{heading}</h2>
+        <p className="text-muted-foreground mt-1 max-w-md">{body}</p>
       </div>
       <Button asChild>
         <Link href="/settings/billing">View plans</Link>
