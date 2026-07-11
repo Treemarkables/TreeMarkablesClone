@@ -16629,6 +16629,153 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Photo report PDF — compiles the job's photos (diary photo entries +
+  // before/after sets) into a branded, timestamped A4 document. Built for
+  // council consent evidence, insurance claims and customer records
+  // (CompanyCam-style "photo report").
+  app.get('/api/jobs/:jobId/photo-report.pdf', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+      const settings = await storage.getBusinessSettings();
+      const identity = getBusinessIdentity(settings);
+      const brand = getBrandColors(settings);
+      const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+
+      // Collect photos: diary entries (chronological, with captions), then the
+      // job's before/after sets. Dedupe by URL across all sources.
+      const entries = await storage.getJobDiaryEntriesByJob(req.params.jobId);
+      type ReportPhoto = { url: string; caption: string; when: Date | null; section: string };
+      const seen = new Set<string>();
+      const photosOut: ReportPhoto[] = [];
+      const push = (url: unknown, caption: string, when: Date | null, section: string) => {
+        if (!isSupportedPhotoUrl(url) || seen.has(url)) return;
+        seen.add(url);
+        photosOut.push({ url, caption, when, section });
+      };
+
+      [...entries]
+        .filter((e: any) => !e.isPrivate)
+        .sort((a: any, b: any) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime())
+        .forEach((e: any) => {
+          const caption = [e.title, e.authorName ? `— ${e.authorName}` : '']
+            .filter(Boolean).join(' ').trim();
+          const when = e.createdAt ? new Date(e.createdAt) : null;
+          for (const u of (Array.isArray(e.photos) ? e.photos : [])) push(u, caption, when, 'Job photos');
+          if (e.photoUrl) push(e.photoUrl, caption, when, 'Job photos');
+        });
+      for (const u of (job.beforePhotos ?? [])) push(u, 'Before', null, 'Before');
+      for (const u of (job.afterPhotos ?? [])) push(u, 'After', null, 'After');
+
+      if (photosOut.length === 0) {
+        return res.status(404).json({ success: false, message: 'This job has no photos yet' });
+      }
+
+      const MAX_PHOTOS = 60;
+      const truncatedCount = Math.max(0, photosOut.length - MAX_PHOTOS);
+      const selected = photosOut.slice(0, MAX_PHOTOS);
+
+      // Fetch + downscale up to 4 photos concurrently.
+      const photoSvc = new PhotoStorageService();
+      const buffers = new Map<string, Buffer>();
+      const queue = [...selected];
+      await Promise.all(Array.from({ length: 4 }, async () => {
+        for (let p = queue.shift(); p; p = queue.shift()) {
+          try {
+            const data = await loadPhotoBytesForAttachment(p.url, photoSvc);
+            if (!data?.buffer) continue;
+            buffers.set(p.url, await sharp(data.buffer)
+              .rotate()
+              .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 75 })
+              .toBuffer());
+          } catch (err) {
+            console.warn(`Photo report: skipping unloadable photo ${p.url}`, err);
+          }
+        }
+      }));
+
+      const renderable = selected.filter((p) => buffers.has(p.url));
+      if (renderable.length === 0) {
+        return res.status(500).json({ success: false, message: 'Could not load any photos for the report' });
+      }
+
+      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="photo-report-job-${job.jobNumber ?? job.id}.pdf"`);
+      doc.pipe(res);
+
+      const PAGE_W = 595.28, PAGE_H = 841.89, MARGIN = 40;
+      const CONTENT_W = PAGE_W - MARGIN * 2;
+
+      // Branded header band (per-tenant colours, same pair the emails use)
+      doc.rect(0, 0, PAGE_W, 88).fill(brand.headerColor);
+      doc.fillColor(brand.accentColor).fontSize(20).font('Helvetica-Bold')
+        .text(identity.name || 'Photo Report', MARGIN, 26, { width: CONTENT_W });
+      doc.fillColor('#9ca3af').fontSize(9).font('Helvetica')
+        .text('PHOTO REPORT', MARGIN, 54);
+
+      // Job summary block
+      let y = 108;
+      doc.fillColor('#111').fontSize(14).font('Helvetica-Bold')
+        .text(`Job ${job.jobNumber ?? ''}${job.title ? ` — ${job.title}` : ''}`, MARGIN, y, { width: CONTENT_W });
+      y = doc.y + 4;
+      doc.fontSize(10).font('Helvetica').fillColor('#444');
+      const summaryLines = [
+        customer?.name ? `Customer: ${customer.name}` : null,
+        job.address ? `Site: ${job.address}` : null,
+        `Photos: ${renderable.length}${truncatedCount > 0 ? ` (newest ${MAX_PHOTOS} shown, ${truncatedCount} more in the app)` : ''}`,
+        `Generated: ${new Date().toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Pacific/Auckland' })}`,
+      ].filter(Boolean) as string[];
+      for (const line of summaryLines) { doc.text(line, MARGIN, y, { width: CONTENT_W }); y = doc.y + 2; }
+      y += 8;
+
+      // Photo grid — 2 columns, caption + timestamp under each image.
+      const CELL_W = (CONTENT_W - 15) / 2;
+      const IMG_H = 180;
+      const CELL_H = IMG_H + 42;
+      let col = 0;
+      let currentSection = '';
+      const nzWhen = (d: Date | null) => d
+        ? d.toLocaleString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Pacific/Auckland' })
+        : '';
+
+      for (const p of renderable) {
+        if (p.section !== currentSection) {
+          // Section heading forces a new row
+          if (col !== 0) { y += CELL_H; col = 0; }
+          if (y + 24 + CELL_H > PAGE_H - MARGIN) { doc.addPage(); y = MARGIN; }
+          doc.fillColor('#111').fontSize(12).font('Helvetica-Bold').text(p.section, MARGIN, y);
+          y = doc.y + 6;
+          currentSection = p.section;
+        }
+        if (col === 0 && y + CELL_H > PAGE_H - MARGIN) { doc.addPage(); y = MARGIN; }
+        const x = MARGIN + col * (CELL_W + 15);
+        try {
+          doc.image(buffers.get(p.url)!, x, y, { fit: [CELL_W, IMG_H], align: 'center', valign: 'center' });
+        } catch { /* corrupt image — leave the cell blank rather than abort the report */ }
+        const meta = [p.caption, nzWhen(p.when)].filter(Boolean).join('  ·  ');
+        doc.fillColor('#555').fontSize(8).font('Helvetica')
+          .text(meta || ' ', x, y + IMG_H + 4, { width: CELL_W, height: 34, ellipsis: true });
+        col = col === 0 ? 1 : 0;
+        if (col === 0) y += CELL_H;
+      }
+
+      doc.end();
+    } catch (error) {
+      console.error('Error generating photo report:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Error generating photo report' });
+      } else {
+        res.end();
+      }
+    }
+  });
+
   // Delete a specific photo from a job
   app.delete('/api/jobs/:jobId/photos', async (req: Request, res: Response) => {
     try {
