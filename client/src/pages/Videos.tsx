@@ -13,6 +13,15 @@ import { Badge } from "@/components/ui/badge";
 import { Trash2, Upload, Copy, Download, Video as VideoIcon, Search, Pencil, Check, X, Briefcase, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
+import { isNativeApp } from "@/lib/platform";
+
+// Per-video state for the native (iOS app) download path. The WKWebView ignores
+// Content-Disposition: attachment — navigating to the file just plays it — so on
+// native we fetch the video into memory and hand it to the share sheet ("Save
+// Video" / "Save to Files"), same pattern as the job-photo download.
+type NativeDownloadState =
+  | { id: string; phase: "fetching"; percent: number }
+  | { id: string; phase: "ready"; file: File };
 
 export default function Videos() {
   const { toast } = useToast();
@@ -131,15 +140,84 @@ export default function Videos() {
   const displayTitle = (v: any) =>
     v.title || v.originalName || (v.customerName ? `Walkthrough — ${v.customerName}` : "Untitled video");
 
-  const downloadVideo = (v: any) => {
-    // ?download=1 makes the server send Content-Disposition: attachment, so the
-    // anchor navigation becomes a save-file download instead of opening the player.
-    const a = document.createElement("a");
-    a.href = `${v.url}?download=1&name=${encodeURIComponent(displayTitle(v))}`;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  const [nativeDownload, setNativeDownload] = useState<NativeDownloadState | null>(null);
+
+  const downloadVideo = async (v: any) => {
+    if (!isNativeApp()) {
+      // Browsers: ?download=1 makes the server send Content-Disposition:
+      // attachment, so the anchor navigation becomes a save-file download.
+      const a = document.createElement("a");
+      a.href = `${v.url}?download=1&name=${encodeURIComponent(displayTitle(v))}`;
+      a.download = "";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+
+    if ((window as any).Capacitor?.getPlatform?.() === "android") {
+      // Android shell: navigating to an attachment response fires the WebView
+      // DownloadListener (page never unloads) — same trick as openPhotoReport.
+      window.location.assign(`${v.url}?download=1&name=${encodeURIComponent(displayTitle(v))}`);
+      return;
+    }
+
+    // iOS app. Second tap on a staged file → straight to the share sheet.
+    if (nativeDownload?.phase === "ready" && nativeDownload.id === v.id) {
+      try {
+        await navigator.share({ files: [nativeDownload.file] });
+        setNativeDownload(null);
+      } catch (err: any) {
+        if (err?.name === "AbortError") return; // sheet closed — keep it staged
+        setNativeDownload(null);
+        toast({ title: "Could not save video", variant: "destructive" });
+      }
+      return;
+    }
+    if (nativeDownload?.phase === "fetching") return; // one at a time
+
+    try {
+      setNativeDownload({ id: v.id, phase: "fetching", percent: 0 });
+      const res = await fetch(v.url, { credentials: "include" });
+      if (!res.ok || !res.body) throw new Error("The video could not be fetched.");
+      const total = Number(res.headers.get("content-length") || 0);
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let loaded = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        if (total > 0) {
+          setNativeDownload({ id: v.id, phase: "fetching", percent: Math.round((loaded / total) * 100) });
+        }
+      }
+      const extension = (String(v.url).split(".").pop() || "mp4").toLowerCase();
+      const filename = `${displayTitle(v).replace(/[/\\:*?"<>|]+/g, " ").trim() || "video"}.${extension}`;
+      const file = new File(chunks, filename, {
+        type: res.headers.get("content-type") || "video/mp4",
+      });
+      if (!(typeof navigator.canShare === "function" && navigator.canShare({ files: [file] }))) {
+        throw new Error("Saving videos isn't supported in this app version.");
+      }
+      try {
+        await navigator.share({ files: [file] });
+        setNativeDownload(null);
+      } catch {
+        // The share sheet can refuse to open when the tap's user activation
+        // expired during a long fetch (or the user closed it). Stage the file
+        // so the button becomes "Save" and a fresh tap opens the sheet.
+        setNativeDownload({ id: v.id, phase: "ready", file });
+      }
+    } catch (err: any) {
+      setNativeDownload(null);
+      toast({
+        title: "Could not download video",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -356,10 +434,22 @@ export default function Videos() {
                     variant="outline"
                     size="sm"
                     onClick={() => downloadVideo(v)}
+                    disabled={nativeDownload?.phase === "fetching"}
                     aria-label="Download video"
                     data-testid={`button-library-download-${v.id}`}
                   >
-                    <Download className="w-3.5 h-3.5" />
+                    {nativeDownload?.id === v.id && nativeDownload.phase === "fetching" ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                        {nativeDownload.percent > 0 ? `${nativeDownload.percent}%` : "…"}
+                      </>
+                    ) : nativeDownload?.id === v.id && nativeDownload.phase === "ready" ? (
+                      <>
+                        <Download className="w-3.5 h-3.5 mr-1" /> Save
+                      </>
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
                   </Button>
                   <Button
                     type="button"
