@@ -1202,6 +1202,39 @@ The {businessName} Team';
         ON CONFLICT (key) DO NOTHING;
       `);
 
+      // Safety library tables: tenants can now add their own rows alongside the
+      // built-in seeds, so RLS needs a split policy — everyone reads the built-ins
+      // (is_built_in, business_id NULL), writes touch only your own rows. A plain
+      // tenant_isolation policy hides the seed rows from every tenant (NULL never
+      // equals current_setting). These tables also carried the legacy TM-id column
+      // DEFAULT (two of them NOT NULL), which mis-stamps every seed and every
+      // context-less insert as Treemarkables — same class as the multer/ALS bug —
+      // so the default/NOT NULL go, and seeds get un-stamped back to global.
+      // Mirrors migrations/manual/20260712_safety_library_rls.sql.
+      await pool.query(`
+        DO $$
+        DECLARE t TEXT;
+        BEGIN
+          FOREACH t IN ARRAY ARRAY['swms_templates','toolbox_talk_topics','prestart_checklist_templates','competency_types'] LOOP
+            EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS business_id VARCHAR', t);
+            EXECUTE format('ALTER TABLE %I ALTER COLUMN business_id DROP DEFAULT', t);
+            EXECUTE format('ALTER TABLE %I ALTER COLUMN business_id DROP NOT NULL', t);
+            EXECUTE format('UPDATE %I SET business_id = NULL WHERE is_built_in = true AND business_id IS NOT NULL', t);
+            EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_read ON %I', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_write ON %I', t);
+            EXECUTE format(
+              'CREATE POLICY tenant_read ON %I FOR SELECT USING (is_built_in = true OR business_id = nullif(current_setting(''app.current_business'', true), ''''))', t);
+            EXECUTE format(
+              'CREATE POLICY tenant_write ON %I USING (business_id = nullif(current_setting(''app.current_business'', true), '''')) WITH CHECK (business_id = nullif(current_setting(''app.current_business'', true), ''''))', t);
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+              EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO app_tenant', t);
+            END IF;
+          END LOOP;
+        END $$;
+      `);
+
       // --- Per-business GST number (trade-gen Phase A) ---
       // Isolated from the big block (its own try/catch) and split into two queries:
       // the column add + the TM seed are kept out of one batched statement to dodge a
