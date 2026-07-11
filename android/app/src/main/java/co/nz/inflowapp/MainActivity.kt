@@ -1,12 +1,18 @@
 package co.nz.inflowapp
 
 import android.Manifest
+import android.app.DownloadManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
+import android.webkit.CookieManager
+import android.webkit.URLUtil
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import co.nz.inflowapp.voice.IncomingCallNotifier
@@ -37,6 +43,7 @@ class MainActivity : BridgeActivity() {
 
         VoiceConnectionService.registerPhoneAccount(this)
         requestRuntimePermissions()
+        attachDownloadListener()
 
         // Bridge the token the moment FCM issues it. On a cold start the token arrives
         // seconds AFTER onResume, so resume-only bridging missed it until the next
@@ -110,6 +117,34 @@ class MainActivity : BridgeActivity() {
         webView.evaluateJavascript(js) { result ->
             if (result == null || !result.contains("ok")) {
                 webView.postDelayed({ bridgeFcmTokenToWebView(attempt + 1) }, 500)
+            }
+        }
+    }
+
+    /**
+     * Android's WebView can't render PDFs and silently drops attachment
+     * responses (e.g. the job photo-report PDF) unless a DownloadListener is
+     * attached. Hand them to DownloadManager with the session cookie so
+     * authenticated endpoints work; the file lands in Downloads with a
+     * completion notification. The page itself never unloads — the client
+     * navigates to the URL and this intercepts it (see openPhotoReport.ts).
+     */
+    private fun attachDownloadListener() {
+        bridge?.webView?.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            try {
+                val request = DownloadManager.Request(Uri.parse(url)).apply {
+                    CookieManager.getInstance().getCookie(url)?.let { addRequestHeader("Cookie", it) }
+                    addRequestHeader("User-Agent", userAgent)
+                    setMimeType(mimeType)
+                    setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    setDestinationInExternalPublicDir(
+                        Environment.DIRECTORY_DOWNLOADS,
+                        URLUtil.guessFileName(url, contentDisposition, mimeType),
+                    )
+                }
+                (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "WebView download failed for $url", e)
             }
         }
     }
