@@ -2,7 +2,7 @@ import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { UpgradeGate } from "@/components/PlanGate";
+import { PlanGate, UpgradeGate } from "@/components/PlanGate";
 import { BillingBanner } from "@/components/BillingBanner";
 import { GettingStarted } from "@/components/GettingStarted";
 import { PullToRefresh } from "@/components/PullToRefresh";
@@ -594,8 +594,10 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             <LogoSidebarTrigger size={36} />
 
             <div className="flex items-center gap-2">
-              {/* In-browser dialer (desktop web only) */}
-              <WebCallButton />
+              {/* In-browser dialer (desktop web only; part of the call-recording add-on) */}
+              <PlanGate requires="addon:call_recording">
+                <WebCallButton />
+              </PlanGate>
 
               {/* Notifications Bell */}
               <NotificationBell />
@@ -1243,7 +1245,9 @@ function Router() {
       <Route path="/calls">
         <ProtectedRoute>
           <SidebarLayout>
-            <Calls />
+            <UpgradeGate requires="addon:call_recording" feature="Call recording">
+              <Calls />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1257,7 +1261,9 @@ function Router() {
       <Route path="/unlinked-calls">
         <ProtectedRoute>
           <SidebarLayout>
-            <UnlinkedCalls />
+            <UpgradeGate requires="addon:call_recording" feature="Call recording">
+              <UnlinkedCalls />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

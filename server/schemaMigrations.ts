@@ -120,6 +120,16 @@ const MIGRATIONS: Migration[] = [
     ],
   },
   {
+    // Call recording add-on catalog entry — first gated add-on (calls sidebar/page/API
+    // gate on addon:call_recording). Purchase path ships later; comped businesses get
+    // it via resolveEntitlements.
+    name: "add-on-call-recording",
+    statements: [
+      `INSERT INTO add_ons (key, name, billing_type) VALUES ('call_recording', 'Call Recording', 'flat')
+        ON CONFLICT (key) DO NOTHING`,
+    ],
+  },
+  {
     // ServiceM8 migration (Settings → Import & Migration): job-level import
     // provenance + source id so re-running an import dedups instead of duplicating.
     // Mirrors the columns customers has had since the original TM import.

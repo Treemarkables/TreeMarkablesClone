@@ -2024,6 +2024,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/safety-analytics', requireEntitlement('plan:business', 'safety_analytics'));
   app.use('/api/workflows', requireEntitlement('plan:business', 'workflow_automation'));
   app.use('/api/lane-automations', requireEntitlement('plan:business', 'workflow_automation'));
+  // Calls (recorded call log) → call_recording add-on, any tier. Session-less
+  // Twilio webhooks pass through the gate untouched (no tenant context).
+  app.use('/api/calls', requireEntitlement('addon:call_recording', 'calls'));
   // Metrics Dashboard (advanced analytics) → Crew. These endpoints are exclusive to the
   // (UI-gated) Metrics Dashboard, so gating them is safe; /api/analytics/* is deliberately
   // NOT here — it's shared with the executive dashboard + settings. Profitability has no
@@ -2251,10 +2254,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const loginPermsSet = await getEmployeePermissions(employee).catch(() => new Set<string>());
       let loginPlanKey = 'freemium';
       let loginEntitlements: string[] = [];
-      if (employee.businessId && TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
-        loginPlanKey = 'business';
-        loginEntitlements = ['plan:crew', 'plan:business'];
-      } else if (employee.businessId) {
+      if (employee.businessId) {
+        // resolveEntitlements handles the comped Treemarkables case (full
+        // Business tier + every add-on) — no special-casing here.
         try {
           const ent = await resolveEntitlements(employee.businessId);
           loginPlanKey = ent.planKey;
@@ -2354,16 +2356,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const permsSet = await getEmployeePermissions(employee);
       const tier = employee.roleTierId ? await storage.getRoleTier(employee.roleTierId) : null;
 
-      // Subscription entitlements for plan-based UI gating. Treemarkables (platform
-      // owner) is comped → full Business-tier access; otherwise resolve from the live
-      // subscription. Mirrors the server feature gates so the UI matches enforcement.
+      // Subscription entitlements for plan-based UI gating. resolveEntitlements
+      // handles the comped Treemarkables case (full Business tier + every add-on).
+      // Mirrors the server feature gates so the UI matches enforcement.
       const __entBizId = req.session.businessId;
       let planKey = 'freemium';
       let entitlements: string[] = [];
-      if (__entBizId && TREEMARKABLES_BUSINESS_IDS.includes(__entBizId)) {
-        planKey = 'business';
-        entitlements = ['plan:crew', 'plan:business'];
-      } else if (__entBizId) {
+      if (__entBizId) {
         try {
           const ent = await resolveEntitlements(__entBizId);
           planKey = ent.planKey;
