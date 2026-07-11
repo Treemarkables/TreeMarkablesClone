@@ -2015,6 +2015,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/safety-analytics', requireEntitlement('plan:business', 'safety_analytics'));
   app.use('/api/workflows', requireEntitlement('plan:business', 'workflow_automation'));
   app.use('/api/lane-automations', requireEntitlement('plan:business', 'workflow_automation'));
+  // Calls (recorded call log) → call_recording add-on, any tier. Session-less
+  // Twilio webhooks pass through the gate untouched (no tenant context).
+  app.use('/api/calls', requireEntitlement('addon:call_recording', 'calls'));
   // Metrics Dashboard (advanced analytics) → Crew. These endpoints are exclusive to the
   // (UI-gated) Metrics Dashboard, so gating them is safe; /api/analytics/* is deliberately
   // NOT here — it's shared with the executive dashboard + settings. Profitability has no
@@ -2242,10 +2245,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const loginPermsSet = await getEmployeePermissions(employee).catch(() => new Set<string>());
       let loginPlanKey = 'freemium';
       let loginEntitlements: string[] = [];
-      if (employee.businessId && TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
-        loginPlanKey = 'business';
-        loginEntitlements = ['plan:crew', 'plan:business'];
-      } else if (employee.businessId) {
+      if (employee.businessId) {
+        // resolveEntitlements handles the comped Treemarkables case (full
+        // Business tier + every add-on) — no special-casing here.
         try {
           const ent = await resolveEntitlements(employee.businessId);
           loginPlanKey = ent.planKey;
@@ -2345,16 +2347,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const permsSet = await getEmployeePermissions(employee);
       const tier = employee.roleTierId ? await storage.getRoleTier(employee.roleTierId) : null;
 
-      // Subscription entitlements for plan-based UI gating. Treemarkables (platform
-      // owner) is comped → full Business-tier access; otherwise resolve from the live
-      // subscription. Mirrors the server feature gates so the UI matches enforcement.
+      // Subscription entitlements for plan-based UI gating. resolveEntitlements
+      // handles the comped Treemarkables case (full Business tier + every add-on).
+      // Mirrors the server feature gates so the UI matches enforcement.
       const __entBizId = req.session.businessId;
       let planKey = 'freemium';
       let entitlements: string[] = [];
-      if (__entBizId && TREEMARKABLES_BUSINESS_IDS.includes(__entBizId)) {
-        planKey = 'business';
-        entitlements = ['plan:crew', 'plan:business'];
-      } else if (__entBizId) {
+      if (__entBizId) {
         try {
           const ent = await resolveEntitlements(__entBizId);
           planKey = ent.planKey;
@@ -8452,9 +8451,15 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   }
 
   // Stream a video (public, range-aware so the <video> player can seek).
+  // ?download=1 forces a save-file download instead of in-page playback;
+  // ?name=<title> names the saved file (sanitized in videoStorage).
   app.get('/objects/videos/:filename', async (req: Request, res: Response) => {
     try {
-      await videoStorage.streamVideo(`/objects/videos/${req.params.filename}`, req, res);
+      const wantsDownload = req.query.download === '1' || req.query.download === 'true';
+      const downloadName = wantsDownload
+        ? (typeof req.query.name === 'string' && req.query.name) || req.params.filename
+        : undefined;
+      await videoStorage.streamVideo(`/objects/videos/${req.params.filename}`, req, res, { downloadName });
     } catch (error) {
       console.error('Error serving video:', error);
       if (!res.headersSent) res.status(500).json({ error: 'Error serving video' });
