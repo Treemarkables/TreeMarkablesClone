@@ -20,9 +20,31 @@
 import { db } from "../db";
 import * as schema from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { TREEMARKABLES_BUSINESS_IDS } from "@shared/roleChecklistAccess";
 import type { Entitlement, Capability } from "./capabilities";
 
 const PLAN_RANK: Record<string, number> = { freemium: 0, crew: 1, business: 2 };
+
+/** Every add-on entitlement in the catalog — granted wholesale to comped businesses. */
+const ALL_ADDON_ENTITLEMENTS: Entitlement[] = [
+  "addon:call_recording",
+  "addon:ai",
+  "addon:sms",
+  "addon:voice_agent",
+];
+
+/**
+ * Comped businesses get full Business-tier + every add-on, no subscription rows
+ * needed. Treemarkables (platform owner, both prod + dev-branch ids) is always
+ * comped — same footgun-avoidance as usageMeter.ts: flipping enforcement on must
+ * never lock the owner out of its own product. Extra ids via env (comma-separated).
+ */
+const COMPED = new Set(
+  (process.env.INFLOW_COMPED_BUSINESS_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+);
+function isComped(businessId: string): boolean {
+  return COMPED.has(businessId) || TREEMARKABLES_BUSINESS_IDS.includes(businessId);
+}
 
 export interface BusinessEntitlements {
   planKey: string;
@@ -40,6 +62,13 @@ function isEntitledStatus(status: string): boolean {
 
 /** Resolve a business's plan + active add-ons into its unlocked entitlement set. */
 export async function resolveEntitlements(businessId: string): Promise<BusinessEntitlements> {
+  if (isComped(businessId)) {
+    return {
+      planKey: "business",
+      entitlements: new Set<Entitlement>(["plan:crew", "plan:business", ...ALL_ADDON_ENTITLEMENTS]),
+    };
+  }
+
   const [sub] = await db
     .select()
     .from(schema.subscriptions)
@@ -102,9 +131,10 @@ export function unlockedCapabilities(entitlements: Set<Entitlement>, catalog: Ca
 // the entitlement that unlocks them. Keys NOT in this map are ungated (core
 // features available on every tier — jobs, customers, quotes, invoices, etc.).
 //
-// TIER GATES ONLY for now (plan:crew / plan:business). Add-on gates (calls,
-// sms, ai, payments) are intentionally DEFERRED — gating them would strip the
-// comped Treemarkables (Business, no add-ons) of features it uses today.
+// Tier gates (plan:crew / plan:business) plus the first add-on gate: calls.
+// Comped businesses (Treemarkables + INFLOW_COMPED_BUSINESS_IDS) get every
+// add-on from resolveEntitlements, so gating an add-on here no longer strips
+// the owner. Remaining add-on gates (sms, ai) are still deferred.
 // Placement follows the feature→tier mapping in INFLOW_SAAS_PLAN.md.
 // ============================================================================
 export const PERMISSION_ENTITLEMENTS: Record<string, Entitlement> = {
@@ -123,6 +153,10 @@ export const PERMISSION_ENTITLEMENTS: Record<string, Entitlement> = {
   // tiers), per the 2026-06-22 plan revision.
   "reporting.export": "plan:crew",
   "reporting.metrics": "plan:crew",
+  // Calls — paid add-on on any tier (capabilities.ts "Calls / voice"). Sidebar +
+  // page gate on the same entitlement via PlanGate/UpgradeGate.
+  "calls.view": "addon:call_recording",
+  "calls.make": "addon:call_recording",
   // NOTE (2026-06-22): marketing/reputation removed from the offering, so
   // reviews.* are no longer tier-gated here (the capability still exists in code
   // for the comped Treemarkables tenant, just isn't a sold differentiator).

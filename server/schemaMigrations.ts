@@ -119,6 +119,16 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS ai_knowledge text DEFAULT ''`,
     ],
   },
+  {
+    // Call recording add-on catalog entry — first gated add-on (calls sidebar/page/API
+    // gate on addon:call_recording). Purchase path ships later; comped businesses get
+    // it via resolveEntitlements.
+    name: "add-on-call-recording",
+    statements: [
+      `INSERT INTO add_ons (key, name, billing_type) VALUES ('call_recording', 'Call Recording', 'flat')
+        ON CONFLICT (key) DO NOTHING`,
+    ],
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

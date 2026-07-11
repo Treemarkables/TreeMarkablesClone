@@ -241,16 +241,18 @@ function SidebarNavContent({
                 </SidebarMenuItem>
               ))}
 
-              {/* Calls — recorded call log */}
+              {/* Calls — recorded call log (paid add-on, any tier) */}
               {isAdmin && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/calls"} className={ITEM}>
-                    <Link href="/calls" onClick={handleLinkClick} data-testid="link-calls">
-                      <NavIcon icon={Phone} />
-                      <span>Calls</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <PlanGate requires="addon:call_recording">
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location === "/calls"} className={ITEM}>
+                      <Link href="/calls" onClick={handleLinkClick} data-testid="link-calls">
+                        <NavIcon icon={Phone} />
+                        <span>Calls</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </PlanGate>
               )}
 
               {/* Staff Schedule */}
