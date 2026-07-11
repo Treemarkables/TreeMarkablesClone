@@ -8452,9 +8452,15 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   }
 
   // Stream a video (public, range-aware so the <video> player can seek).
+  // ?download=1 forces a save-file download instead of in-page playback;
+  // ?name=<title> names the saved file (sanitized in videoStorage).
   app.get('/objects/videos/:filename', async (req: Request, res: Response) => {
     try {
-      await videoStorage.streamVideo(`/objects/videos/${req.params.filename}`, req, res);
+      const wantsDownload = req.query.download === '1' || req.query.download === 'true';
+      const downloadName = wantsDownload
+        ? (typeof req.query.name === 'string' && req.query.name) || req.params.filename
+        : undefined;
+      await videoStorage.streamVideo(`/objects/videos/${req.params.filename}`, req, res, { downloadName });
     } catch (error) {
       console.error('Error serving video:', error);
       if (!res.headersSent) res.status(500).json({ error: 'Error serving video' });
