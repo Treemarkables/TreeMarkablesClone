@@ -73,6 +73,7 @@ import { JobBillingPanel } from "@/components/JobBillingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { OnMyWayDialog } from "@/components/OnMyWayDialog";
+import { openPhotoReport } from "@/lib/openPhotoReport";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardMobileTab =
@@ -494,7 +495,7 @@ export function JobCardMobile({
                 <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actions?.proposal ?? actionStub("Proposal")} />
                 <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
                 <ActionTile label="On My Way" icon={Navigation} colour="orange" onClick={() => setShowOnMyWay(true)} />
-                <ActionTile label="Photo Report" icon={FileImage} colour="slate" onClick={() => window.open(`/api/jobs/${jobId}/photo-report.pdf`, "_blank")} />
+                <ActionTile label="Photo Report" icon={FileImage} colour="slate" onClick={() => openPhotoReport(jobId)} />
                 <ActionTile
                   label={jobInQueue ? "In Queue" : "Queue Job"}
                   icon={ListOrdered}

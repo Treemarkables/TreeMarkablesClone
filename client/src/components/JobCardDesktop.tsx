@@ -101,6 +101,7 @@ import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { OnMyWayDialog } from "@/components/OnMyWayDialog";
+import { openPhotoReport } from "@/lib/openPhotoReport";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardDesktopTab =
@@ -703,7 +704,7 @@ export function JobCardDesktop({
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
-                  onClick={() => window.open(`/api/jobs/${jobId}/photo-report.pdf`, "_blank")}
+                  onClick={() => openPhotoReport(jobId)}
                   data-testid="more-photo-report"
                 >
                   <FileImage className="w-4 h-4 mr-2 text-slate-600" />
