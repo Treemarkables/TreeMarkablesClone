@@ -139,6 +139,40 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS external_id text`,
     ],
   },
+  {
+    // ServiceM8 import run lock + progress, shared across app instances.
+    // The app runs 2 instances — an in-memory guard let overlapping runs start
+    // (each blind to the other's), which duplicated every record ~11x on the
+    // first real migration. One row per business: `running` is the lock,
+    // `progress` the live state the status endpoint reports.
+    name: "servicem8-import-runs-table",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS servicem8_import_runs (
+        business_id varchar PRIMARY KEY REFERENCES businesses(id),
+        running boolean NOT NULL DEFAULT false,
+        progress jsonb,
+        started_at timestamp,
+        finished_at timestamp,
+        updated_at timestamp DEFAULT now()
+      )`,
+    ],
+    postChecks: async (client) => {
+      const role = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      if (role.rowCount === 0) return;
+      await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON servicem8_import_runs TO app_tenant`);
+      await client.query(`ALTER TABLE servicem8_import_runs ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = 'servicem8_import_runs'::regclass LIMIT 1`,
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON servicem8_import_runs
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+      }
+    },
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

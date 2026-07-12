@@ -17,9 +17,9 @@
 // username, "x" as password) — probe both once, then stick with what worked.
 // ============================================================================
 import { storage } from "../storage";
-import { db } from "../db";
+import { db, ownerDb } from "../db";
 import * as schema from "@shared/schema";
-import { isNotNull } from "drizzle-orm";
+import { isNotNull, sql } from "drizzle-orm";
 import { runWithBusiness } from "../tenancy/tenantStore";
 
 const BASE = "https://api.servicem8.com/api_1.0";
@@ -68,12 +68,15 @@ export interface SM8ImportSummary {
   errors: string[];
 }
 
-// ── Background-run progress ──────────────────────────────────────────────────
+// ── Background-run lock + progress (DB-backed, shared across instances) ─────
 // A full account is thousands of records, which blows past the ~100s edge
 // timeout on DO (Cloudflare 524), so the import runs detached from the request
-// and the UI polls /api/import/servicem8/status. State is in-memory per
-// businessId (latest run only) — fine on the single-process deployment; a
-// restart mid-run just means re-running (the import is idempotent).
+// and the UI polls /api/import/servicem8/status. The run lock and progress
+// live in servicem8_import_runs (one row per business): the app runs 2
+// instances, and the earlier in-memory guard let overlapping runs start —
+// each instance blind to the other's — which duplicated every record ~11x on
+// the first real migration. Rows are written on ownerDb with an explicit
+// business_id (background context; the atomic claim must not depend on ALS).
 export interface ImportProgress {
   running: boolean;
   phase: "connecting" | "fetching" | "customers" | "jobs" | "done" | "failed";
@@ -85,10 +88,52 @@ export interface ImportProgress {
   message?: string; // set when phase === "failed"
 }
 
-const importRuns = new Map<string, ImportProgress>();
+// A run whose row hasn't been touched for this long is presumed dead (instance
+// restarted mid-run) — the lock can be taken over and status reports failure.
+const STALE_RUN_MS = 10 * 60 * 1000;
 
-export function getServiceM8ImportStatus(businessId: string): ImportProgress | undefined {
-  return importRuns.get(businessId);
+export async function getServiceM8ImportStatus(businessId: string): Promise<ImportProgress | undefined> {
+  const res = await ownerDb.execute(
+    sql`SELECT running, progress, updated_at FROM servicem8_import_runs WHERE business_id = ${businessId}`,
+  );
+  const row = res.rows[0] as { running: boolean; progress: ImportProgress | null; updated_at: Date } | undefined;
+  if (!row?.progress) return undefined;
+  if (row.running && Date.now() - new Date(row.updated_at).getTime() > STALE_RUN_MS) {
+    return {
+      ...row.progress,
+      running: false,
+      phase: "failed",
+      message: "The import was interrupted (server restarted mid-run). Re-run it — anything already imported is skipped.",
+    };
+  }
+  return { ...row.progress, running: row.running };
+}
+
+/**
+ * Atomically claim the per-business run lock. INSERT-or-UPDATE guarded by
+ * `running = false` (or a stale heartbeat): exactly one caller across all app
+ * instances gets a row back; everyone else sees an empty RETURNING.
+ */
+async function claimRun(businessId: string, initial: ImportProgress): Promise<boolean> {
+  const res = await ownerDb.execute(sql`
+    INSERT INTO servicem8_import_runs (business_id, running, progress, started_at, finished_at, updated_at)
+    VALUES (${businessId}, true, ${JSON.stringify(initial)}::jsonb, now(), NULL, now())
+    ON CONFLICT (business_id) DO UPDATE
+      SET running = true, progress = EXCLUDED.progress, started_at = now(), finished_at = NULL, updated_at = now()
+      WHERE servicem8_import_runs.running = false
+         OR servicem8_import_runs.updated_at < now() - make_interval(secs => ${STALE_RUN_MS / 1000})
+    RETURNING business_id
+  `);
+  return res.rows.length > 0;
+}
+
+async function saveRun(businessId: string, progress: ImportProgress): Promise<void> {
+  await ownerDb.execute(sql`
+    UPDATE servicem8_import_runs
+    SET running = ${progress.running}, progress = ${JSON.stringify(progress)}::jsonb, updated_at = now(),
+        finished_at = ${progress.finishedAt ? new Date(progress.finishedAt) : null}
+    WHERE business_id = ${businessId}
+  `);
 }
 
 /**
@@ -97,14 +142,11 @@ export function getServiceM8ImportStatus(businessId: string): ImportProgress | u
  * taken at the start of each run and duplicate records.
  * `persistKey` is saved to the tenant's business_settings only after success.
  */
-export function startServiceM8Import(
+export async function startServiceM8Import(
   businessId: string,
   apiKey: string,
   persistKey?: string,
-): { started: boolean } {
-  const current = importRuns.get(businessId);
-  if (current?.running) return { started: false };
-
+): Promise<{ started: boolean }> {
   const progress: ImportProgress = {
     running: true,
     phase: "connecting",
@@ -113,11 +155,22 @@ export function startServiceM8Import(
     errors: [],
     startedAt: new Date().toISOString(),
   };
-  importRuns.set(businessId, progress);
+  if (!(await claimRun(businessId, progress))) return { started: false };
+
+  // Throttled persistence: the row's updated_at doubles as the run heartbeat.
+  let lastSave = 0;
+  const persistProgress = (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastSave < 2000) return;
+    lastSave = now;
+    void saveRun(businessId, progress).catch((e) =>
+      console.error("ServiceM8 import progress save failed:", e),
+    );
+  };
 
   void runWithBusiness(businessId, async () => {
     try {
-      await runServiceM8Import(apiKey, progress);
+      await runServiceM8Import(apiKey, progress, persistProgress);
       if (persistKey) {
         await storage
           .updateBusinessSettings({ servicem8ApiKey: persistKey })
@@ -131,6 +184,9 @@ export function startServiceM8Import(
     } finally {
       progress.running = false;
       progress.finishedAt = new Date().toISOString();
+      await saveRun(businessId, progress).catch((e) =>
+        console.error("ServiceM8 import final save failed:", e),
+      );
     }
   });
 
@@ -201,15 +257,20 @@ const STATUS_MAP: Record<string, string> = {
 /**
  * Import the tenant's ServiceM8 clients + jobs. Must run with tenant context
  * set (session ALS, or runWithBusiness for background runs) — all reads/writes
- * scope to that business. `progress`, when provided, is mutated live so the
- * status endpoint can report it.
+ * scope to that business. `progress`, when provided, is mutated live;
+ * `onProgress` (throttled by the caller) persists it for the status endpoint.
  */
-export async function runServiceM8Import(apiKey: string, progress?: ImportProgress): Promise<SM8ImportSummary> {
+export async function runServiceM8Import(
+  apiKey: string,
+  progress?: ImportProgress,
+  onProgress?: (force?: boolean) => void,
+): Promise<SM8ImportSummary> {
   const probe = await testServiceM8Connection(apiKey);
   if (!probe.ok || !probe.method) throw new Error(probe.message);
   const method = probe.method;
 
   if (progress) progress.phase = "fetching";
+  onProgress?.(true);
   const [companies, contacts, sm8Jobs] = [
     await fetchAll<SM8Company>(apiKey, method, "company"),
     await fetchAll<SM8Contact>(apiKey, method, "companycontact"),
@@ -257,6 +318,7 @@ export async function runServiceM8Import(apiKey: string, progress?: ImportProgre
     progress.customers.done++;
     progress.customers.imported = summary.customers.imported;
     progress.customers.skipped = summary.customers.skipped;
+    onProgress?.();
   };
   for (const company of activeCompanies) {
     const name = (company.name ?? "").trim();
@@ -295,12 +357,14 @@ export async function runServiceM8Import(apiKey: string, progress?: ImportProgre
   );
 
   if (progress) progress.phase = "jobs";
+  onProgress?.(true);
   const tickJob = () => {
     if (!progress) return;
     progress.jobs.done++;
     progress.jobs.imported = summary.jobs.imported;
     progress.jobs.skipped = summary.jobs.skipped;
     progress.jobs.noCustomer = summary.jobs.noCustomer;
+    onProgress?.();
   };
   for (const job of activeJobs) {
     if (existingExternalIds.has(job.uuid)) {
