@@ -2525,33 +2525,38 @@ class DatabaseStorage implements IStorage {
   }
 
   // Sequential Quote Number Generation
-  private static quoteNumberCounter: number = 1000;
-  
+  // Per-business quote counters (in-process). Mirrors getNextJobNumber: quote
+  // numbers are unique PER BUSINESS (quotes_business_quote_number_uniq), so one
+  // tenant's quoting never inflates another's and two tenants can't be handed a
+  // colliding quote number on customer-facing documents.
+  private static quoteNumberCounters = new Map<string, number>();
+
   async getNextQuoteNumber(): Promise<string> {
+    const businessId = currentBusinessId();
+    const key = businessId ?? "__global__";
+    const bump = (dbMax: number | null) => {
+      const floor = dbMax !== null ? dbMax + 1 : 1001;
+      const next = Math.max(DatabaseStorage.quoteNumberCounters.get(key) ?? 0, floor);
+      DatabaseStorage.quoteNumberCounters.set(key, next + 1);
+      return next.toString();
+    };
     try {
-      // Quote numbers are globally unique too — read the max from the owner connection,
-      // not the RLS-scoped `db`, so new tenants don't generate colliding quote numbers.
+      // Read the tenant's own max on the owner connection. Every caller runs with
+      // tenant context; a context-less caller falls back to the global max.
       const result = await ownerDb.select({
         maxQuoteNumber: sql<number>`CAST(MAX(CAST(${schema.quotes.quoteNumber} AS INTEGER)) AS INTEGER)`
       })
       .from(schema.quotes)
-      .where(sql`${schema.quotes.quoteNumber} ~ '^[0-9]+$'`); // Only numeric quote numbers
-      
-      if (result.length > 0 && result[0].maxQuoteNumber !== null) {
-        const maxQuoteNumber = result[0].maxQuoteNumber;
-        // Ensure our counter is at least as high as the maximum in database
-        DatabaseStorage.quoteNumberCounter = Math.max(DatabaseStorage.quoteNumberCounter, maxQuoteNumber + 1);
-      }
-      
-      const nextNumber = DatabaseStorage.quoteNumberCounter;
-      DatabaseStorage.quoteNumberCounter++;
-      return nextNumber.toString();
+      .where(
+        businessId
+          ? and(sql`${schema.quotes.quoteNumber} ~ '^[0-9]+$'`, eq(schema.quotes.businessId, businessId))
+          : sql`${schema.quotes.quoteNumber} ~ '^[0-9]+$'`, // Only numeric quote numbers
+      );
+      return bump(result[0]?.maxQuoteNumber ?? null);
     } catch (error) {
       // Fallback to counter-only approach if database query fails
       console.error('Database query failed for quote number, using fallback:', error);
-      const nextNumber = DatabaseStorage.quoteNumberCounter;
-      DatabaseStorage.quoteNumberCounter++;
-      return nextNumber.toString();
+      return bump(null);
     }
   }
 

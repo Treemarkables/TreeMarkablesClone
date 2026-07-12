@@ -23137,8 +23137,15 @@ Transcription: ${transcriptText}`;
             targetJob = await storage.getJobByJobNumber(jobNumberMatch[1]);
           }
           if (!targetJob && quoteNumberMatch) {
+            // Quote numbers are unique per business, not globally. This inbound
+            // handler runs session-less (sees all tenants), so only accept an
+            // UNAMBIGUOUS quote-number match — otherwise the UUID/job-number
+            // matchers above should have already resolved the right tenant.
             const jobs = await storage.getAllJobs({ quoteNumber: quoteNumberMatch[1] });
-            if (jobs && jobs.length > 0) targetJob = jobs[0];
+            if (jobs && jobs.length === 1) targetJob = jobs[0];
+            else if (jobs && jobs.length > 1) {
+              console.warn(`Quote number ${quoteNumberMatch[1]} matches multiple tenants — skipping quote-number match`);
+            }
           }
 
           if (targetJob) {

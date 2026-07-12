@@ -340,7 +340,9 @@ export const quotes = pgTable("quotes", {
   leadId: varchar("lead_id").references(() => leads.id),
   jobId: varchar("job_id").references(() => jobs.id),
   customerId: varchar("customer_id").references(() => customers.id),
-  quoteNumber: text("quote_number").notNull().unique(),
+  // Unique PER BUSINESS (quotes_business_quote_number_uniq below), not globally —
+  // each tenant runs its own quote sequence.
+  quoteNumber: text("quote_number").notNull(),
   description: text("description").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   validUntil: timestamp("valid_until"),
@@ -365,7 +367,9 @@ export const quotes = pgTable("quotes", {
   followUpNotes: text("follow_up_notes"),
   // Presentation method tracking for conversion rate analysis
   presentationMethod: text("presentation_method"), // on-site, sent-later, phone
-});
+}, (table) => ({
+  businessQuoteNumberUniq: uniqueIndex("quotes_business_quote_number_uniq").on(table.businessId, table.quoteNumber),
+}));
 
 // Job Management
 export const jobs = pgTable("jobs", {
@@ -2986,7 +2990,10 @@ export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   jobId: varchar("job_id").references(() => jobs.id),
-  invoiceNumber: text("invoice_number").notNull().unique(),
+  // Unique PER BUSINESS (invoices_business_invoice_number_uniq below), not
+  // globally — invoice numbers derive from the (now per-tenant) job number, so
+  // two tenants can each have invoice "4048".
+  invoiceNumber: text("invoice_number").notNull(),
   jobTitle: text("job_title").notNull(),
   address: text("address"), // Billing address for the invoice
   contactName: text("contact_name"), // Contact person name (e.g., "Sam Frasier" for Gisborne District Council)
@@ -3004,7 +3011,9 @@ export const invoices = pgTable("invoices", {
   xeroSyncedAt: timestamp("xero_synced_at"), // When invoice was last synced to Xero
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  businessInvoiceNumberUniq: uniqueIndex("invoices_business_invoice_number_uniq").on(table.businessId, table.invoiceNumber),
+}));
 
 // Invoice Sections — mirror of proposalSections, lets invoices carry photos +
 // narrative sections rendered on the customer-facing invoice page.
