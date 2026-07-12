@@ -2427,6 +2427,10 @@ class DatabaseStorage implements IStorage {
   // job is numbered 1001. Key "__global__" serves legacy tenant-less callers.
   private static jobNumberCounters = new Map<string, number>();
 
+  // Per-business in-memory guard for the gap-fill path: numbers handed out but
+  // not yet committed, so two rapid calls on one instance don't pick the same gap.
+  private static issuedFlooredNumbers = new Map<string, Set<number>>();
+
   async getNextJobNumber(): Promise<string> {
     // Job numbers are unique PER BUSINESS (jobs_business_job_number_uniq) —
     // each tenant runs its own sequence, so one tenant's activity or a bulk
@@ -2436,6 +2440,28 @@ class DatabaseStorage implements IStorage {
     // caller falls back to the old global sequence rather than colliding.
     const businessId = currentBusinessId();
     const key = businessId ?? "__global__";
+
+    // Gap-fill override: a business may set a job_number_floors row (e.g. after a
+    // migration inflated its numbers via the old shared sequence). When present,
+    // hand out the lowest FREE number at/above the floor — filling the gaps its
+    // existing jobs left — instead of max+1. This lets numbering resume from the
+    // last "correct" number without renumbering the real jobs already sent to
+    // customers. Never reuses anything below the floor.
+    if (businessId) {
+      try {
+        const floorRes = await ownerDb.execute(
+          sql`SELECT floor FROM job_number_floors WHERE business_id = ${businessId}`,
+        );
+        const floorRaw = (floorRes.rows[0] as { floor?: number | string } | undefined)?.floor;
+        if (floorRaw != null) {
+          return await this.nextFreeJobNumberFromFloor(businessId, Number(floorRaw));
+        }
+      } catch (error) {
+        // Fail open to the normal max+1 path — never block job creation on this.
+        console.error('job_number_floors lookup failed, using max+1:', error);
+      }
+    }
+
     const bump = (dbMax: number | null) => {
       const floor = dbMax !== null ? dbMax + 1 : 1001;
       const next = Math.max(DatabaseStorage.jobNumberCounters.get(key) ?? 0, floor);
@@ -2458,6 +2484,44 @@ class DatabaseStorage implements IStorage {
       console.error('Database query failed for job number, using fallback:', error);
       return bump(null);
     }
+  }
+
+  /**
+   * Lowest unused numeric job number ≥ floor for a business — the gap-fill path.
+   * Reads the business's taken numbers ≥ floor (a small set, since the floor sits
+   * just past the "correct" sequence), unions the in-memory issued-but-uncommitted
+   * set to bridge the assign→insert window within an instance, then walks up from
+   * the floor to the first free slot. Cross-instance races still can't create a
+   * duplicate — jobs_business_job_number_uniq rejects the second insert.
+   */
+  private async nextFreeJobNumberFromFloor(businessId: string, floor: number): Promise<string> {
+    const rows = await ownerDb
+      .select({ jobNumber: schema.jobs.jobNumber })
+      .from(schema.jobs)
+      .where(
+        and(
+          eq(schema.jobs.businessId, businessId),
+          sql`${schema.jobs.jobNumber} ~ '^[0-9]+$'`,
+          sql`CAST(${schema.jobs.jobNumber} AS INTEGER) >= ${floor}`,
+        ),
+      );
+    const taken = new Set<number>(rows.map((r) => parseInt(r.jobNumber, 10)));
+
+    let issued = DatabaseStorage.issuedFlooredNumbers.get(businessId);
+    if (!issued) {
+      issued = new Set<number>();
+      DatabaseStorage.issuedFlooredNumbers.set(businessId, issued);
+    }
+    // Drop issued numbers the DB now confirms — keep only still-in-flight ones.
+    for (const n of issued) {
+      if (taken.has(n)) issued.delete(n);
+      else taken.add(n);
+    }
+
+    let n = floor;
+    while (taken.has(n)) n++;
+    issued.add(n);
+    return String(n);
   }
 
   // Sequential Quote Number Generation

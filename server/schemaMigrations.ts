@@ -214,6 +214,38 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Per-business job-number floor (gap-fill). A row here switches a business's
+    // numberer from max+1 to "lowest free number ≥ floor", so numbering can
+    // resume from a known-good point after the old shared sequence inflated it —
+    // without renumbering real jobs already sent to customers. Only businesses
+    // that need it get a row (set manually); everyone else is unaffected.
+    name: "job-number-floors-table",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS job_number_floors (
+        business_id varchar PRIMARY KEY REFERENCES businesses(id),
+        floor integer NOT NULL,
+        note text,
+        created_at timestamp DEFAULT now()
+      )`,
+    ],
+    postChecks: async (client) => {
+      const role = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      if (role.rowCount === 0) return;
+      await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON job_number_floors TO app_tenant`);
+      await client.query(`ALTER TABLE job_number_floors ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = 'job_number_floors'::regclass LIMIT 1`,
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON job_number_floors
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+      }
+    },
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

@@ -570,6 +570,17 @@ export const jobs = pgTable("jobs", {
   businessJobNumberUniq: uniqueIndex("jobs_business_job_number_uniq").on(table.businessId, table.jobNumber),
 }));
 
+// Per-business job-number floor. When a business has a row here, getNextJobNumber
+// switches from max+1 to "lowest free number ≥ floor" (gap-fill) — used to resume
+// sane numbering after the old shared sequence inflated a tenant's numbers,
+// without renumbering real jobs already sent to customers. No row = normal max+1.
+export const jobNumberFloors = pgTable("job_number_floors", {
+  businessId: varchar("business_id").primaryKey().references(() => businesses.id),
+  floor: integer("floor").notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Job Diary Entries
 export const jobDiaryEntries = pgTable("job_diary_entries", {
   businessId: varchar("business_id"),
