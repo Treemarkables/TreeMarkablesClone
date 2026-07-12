@@ -35,8 +35,12 @@ const DIRECT_URL =
 // Small pg.Pool kept solely for connect-pg-simple (session store). connect-pg-simple
 // only runs plain SELECT/UPSERT (no session-level SET), so the pooler endpoint is fine.
 export const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 3,
+  // The session store loads + (re)saves a row on the pooler endpoint for EVERY
+  // request — including static/asset fetches, which carry the session cookie. At
+  // ~90ms/round trip to Sydney, max:3 became a hard throughput ceiling under any
+  // concurrency (requests queued waiting for a free connection). The pooler is
+  // PgBouncer, so a handful more client connections is cheap. Bump to relieve it.
+  max: Number(process.env.SESSION_POOL_MAX) || 10,
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 30000,
   ssl: sslFor(process.env.DATABASE_URL),
@@ -86,12 +90,32 @@ export interface TenantConnection {
  * of leaking via the owner connection — used for authenticated-route requests that
  * arrive without a resolved tenant.
  */
+/**
+ * The tenant GUC value is a business UUID (or "" to fail closed). To collapse the
+ * `SET ROLE` + `set_config` pair into a SINGLE round trip we must send them as one
+ * multi-statement simple query — and pg's parameterized (extended) protocol allows
+ * only ONE statement, so the value can't be a bound `$1`; it has to be inlined. We
+ * therefore validate it against a strict UUID/empty charset first, so the inlined
+ * literal can never carry a SQL injection. Anything unexpected collapses to "",
+ * which fails closed (RLS matches zero rows) rather than leaking.
+ */
+function tenantGucLiteral(businessId: string): string {
+  return /^[0-9a-fA-F-]{0,64}$/.test(businessId) ? businessId : "";
+}
+
 export async function acquireTenantDb(businessId: string): Promise<TenantConnection> {
   if (!tenantPool) throw new Error("TENANT_RLS_ENABLED is off — tenant pool unavailable");
   const client = await tenantPool.connect();
   try {
-    await client.query("SET ROLE app_tenant");
-    await client.query("SELECT set_config('app.current_business', $1, false)", [businessId]);
+    // One round trip instead of two. `SET ROLE` and `set_config(..., is_local=false)`
+    // are both session-scoped and persist on this pinned connection after the
+    // implicit transaction of the simple query commits — same end state as issuing
+    // them separately, but without the extra ~90ms Sydney round trip on every
+    // authenticated request. Value is charset-validated (see tenantGucLiteral).
+    const guc = tenantGucLiteral(businessId);
+    await client.query(
+      `SET ROLE app_tenant; SELECT set_config('app.current_business', '${guc}', false)`,
+    );
   } catch (e) {
     client.release();
     throw e;
@@ -99,8 +123,10 @@ export async function acquireTenantDb(businessId: string): Promise<TenantConnect
   const tenantDb = drizzlePg(client, { schema });
   const release = async () => {
     try {
-      await client.query("RESET ROLE");
-      await client.query("SELECT set_config('app.current_business', '', false)");
+      // Reset both in one round trip before returning the connection to the pool.
+      await client.query(
+        `RESET ROLE; SELECT set_config('app.current_business', '', false)`,
+      );
     } catch {
       /* dead/errored connection — the pool discards it on release, so no leak */
     }

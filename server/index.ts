@@ -174,7 +174,12 @@ if (!isDevelopment && !process.env.SESSION_SECRET) {
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
-    resave: true,
+    // resave:false — connect-pg-simple implements `touch`, so express-session
+    // keeps the session fresh (and rolling expiry works) without rewriting the
+    // whole row when nothing changed. resave:true forced a session-table WRITE to
+    // Sydney on every request even for pure reads — a wasted cross-region round
+    // trip on the busiest path in the app.
+    resave: false,
     saveUninitialized: false,
     rolling: true,
     name: 'treemarkables.sid',
