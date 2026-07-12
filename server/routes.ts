@@ -26,6 +26,7 @@ import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/
 import { resolveEntitlements } from "./tenancy/entitlements";
 import { testServiceM8Connection, startServiceM8Import, getServiceM8ImportStatus } from "./services/servicem8Import";
 import { jwksHandler } from "./tenancy/jwksHandler";
+import { cacheDeletePrefix } from "./perfCache";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db, ownerDb } from "./db";
@@ -26851,6 +26852,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             await ownerDb.update(schema.businessSettings)
               .set({ stripeConnectChargesEnabled: !!acct.charges_enabled })
               .where(eq(schema.businessSettings.stripeConnectAccountId, acct.id));
+            // Matched by Stripe account id, so we don't know which business's
+            // settings row changed — drop the whole settings cache namespace
+            // (rare event, tiny cache).
+            cacheDeletePrefix('bs:');
           } catch (e: any) {
             console.error('Stripe Connect account.updated sync failed:', e?.message);
           }
