@@ -24,7 +24,7 @@ import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
 import { resolveEntitlements } from "./tenancy/entitlements";
-import { testServiceM8Connection, runServiceM8Import } from "./services/servicem8Import";
+import { testServiceM8Connection, startServiceM8Import, getServiceM8ImportStatus } from "./services/servicem8Import";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
@@ -27995,32 +27995,43 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // POST /api/import/servicem8/run - Import the tenant's ServiceM8 clients + jobs.
-  // Idempotent: re-running skips already-imported records, so partial imports
-  // can simply be re-run.
+  // POST /api/import/servicem8/run - Kick off a BACKGROUND import of the
+  // tenant's ServiceM8 clients + jobs and return immediately (a full account
+  // takes minutes — holding the request open just hits the edge's ~100s
+  // timeout as a Cloudflare 524). The UI polls /status. Idempotent per run;
+  // overlapping runs are refused (409) so the dedup snapshot stays valid.
   app.post('/api/import/servicem8/run', requireAdmin, async (req: Request, res: Response) => {
     try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
       const typedKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
       const apiKey = await resolveServiceM8Key(req.body?.apiKey);
       if (!apiKey) {
         return res.status(400).json({ success: false, message: 'Enter your ServiceM8 API key first.' });
       }
-      const summary = await runServiceM8Import(apiKey);
       // Persist a newly typed key only after a successful run, so re-runs
       // don't need it re-entered. (Settings API already masks it on read.)
-      if (typedKey && typedKey !== '••••••••') {
-        await storage.updateBusinessSettings({ servicem8ApiKey: typedKey }).catch((e) =>
-          console.error('ServiceM8 key save failed (import succeeded):', e),
-        );
+      const persistKey = typedKey && typedKey !== '••••••••' ? typedKey : undefined;
+      const { started } = startServiceM8Import(businessId, apiKey, persistKey);
+      if (!started) {
+        return res.status(409).json({ success: false, message: 'An import is already running — wait for it to finish.' });
       }
-      res.json({ success: true, data: summary });
+      res.status(202).json({ success: true, data: { started: true } });
     } catch (error) {
       console.error('ServiceM8 import error:', error);
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to import data from ServiceM8',
+        message: error instanceof Error ? error.message : 'Failed to start the ServiceM8 import',
       });
     }
+  });
+
+  // GET /api/import/servicem8/status - Progress of the current/last background run.
+  app.get('/api/import/servicem8/status', requireAdmin, async (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    const progress = getServiceM8ImportStatus(businessId);
+    res.json({ success: true, data: progress ?? { running: false, phase: 'idle' } });
   });
 
   // POST /api/admin/clear-data - Clear all jobs and customers (for fresh imports)

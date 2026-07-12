@@ -20,6 +20,7 @@ import { storage } from "../storage";
 import { db } from "../db";
 import * as schema from "@shared/schema";
 import { isNotNull } from "drizzle-orm";
+import { runWithBusiness } from "../tenancy/tenantStore";
 
 const BASE = "https://api.servicem8.com/api_1.0";
 const PAGE_SIZE = 500;
@@ -65,6 +66,75 @@ export interface SM8ImportSummary {
   customers: { imported: number; skipped: number };
   jobs: { imported: number; skipped: number; noCustomer: number };
   errors: string[];
+}
+
+// ── Background-run progress ──────────────────────────────────────────────────
+// A full account is thousands of records, which blows past the ~100s edge
+// timeout on DO (Cloudflare 524), so the import runs detached from the request
+// and the UI polls /api/import/servicem8/status. State is in-memory per
+// businessId (latest run only) — fine on the single-process deployment; a
+// restart mid-run just means re-running (the import is idempotent).
+export interface ImportProgress {
+  running: boolean;
+  phase: "connecting" | "fetching" | "customers" | "jobs" | "done" | "failed";
+  customers: { done: number; total: number; imported: number; skipped: number };
+  jobs: { done: number; total: number; imported: number; skipped: number; noCustomer: number };
+  errors: string[];
+  startedAt: string;
+  finishedAt?: string;
+  message?: string; // set when phase === "failed"
+}
+
+const importRuns = new Map<string, ImportProgress>();
+
+export function getServiceM8ImportStatus(businessId: string): ImportProgress | undefined {
+  return importRuns.get(businessId);
+}
+
+/**
+ * Kick off a background import for a business. Returns started=false when a
+ * run is already in flight — overlapping runs would defeat the dedup snapshot
+ * taken at the start of each run and duplicate records.
+ * `persistKey` is saved to the tenant's business_settings only after success.
+ */
+export function startServiceM8Import(
+  businessId: string,
+  apiKey: string,
+  persistKey?: string,
+): { started: boolean } {
+  const current = importRuns.get(businessId);
+  if (current?.running) return { started: false };
+
+  const progress: ImportProgress = {
+    running: true,
+    phase: "connecting",
+    customers: { done: 0, total: 0, imported: 0, skipped: 0 },
+    jobs: { done: 0, total: 0, imported: 0, skipped: 0, noCustomer: 0 },
+    errors: [],
+    startedAt: new Date().toISOString(),
+  };
+  importRuns.set(businessId, progress);
+
+  void runWithBusiness(businessId, async () => {
+    try {
+      await runServiceM8Import(apiKey, progress);
+      if (persistKey) {
+        await storage
+          .updateBusinessSettings({ servicem8ApiKey: persistKey })
+          .catch((e) => console.error("ServiceM8 key save failed (import succeeded):", e));
+      }
+      progress.phase = "done";
+    } catch (e) {
+      progress.phase = "failed";
+      progress.message = e instanceof Error ? e.message : String(e);
+      console.error("ServiceM8 background import failed:", e);
+    } finally {
+      progress.running = false;
+      progress.finishedAt = new Date().toISOString();
+    }
+  });
+
+  return { started: true };
 }
 
 function authHeaders(apiKey: string, method: AuthMethod): Record<string, string> {
@@ -129,14 +199,17 @@ const STATUS_MAP: Record<string, string> = {
 };
 
 /**
- * Import the tenant's ServiceM8 clients + jobs. MUST run inside a session
- * request (ALS tenant context set) — all reads/writes scope to the caller.
+ * Import the tenant's ServiceM8 clients + jobs. Must run with tenant context
+ * set (session ALS, or runWithBusiness for background runs) — all reads/writes
+ * scope to that business. `progress`, when provided, is mutated live so the
+ * status endpoint can report it.
  */
-export async function runServiceM8Import(apiKey: string): Promise<SM8ImportSummary> {
+export async function runServiceM8Import(apiKey: string, progress?: ImportProgress): Promise<SM8ImportSummary> {
   const probe = await testServiceM8Connection(apiKey);
   if (!probe.ok || !probe.method) throw new Error(probe.message);
   const method = probe.method;
 
+  if (progress) progress.phase = "fetching";
   const [companies, contacts, sm8Jobs] = [
     await fetchAll<SM8Company>(apiKey, method, "company"),
     await fetchAll<SM8Contact>(apiKey, method, "companycontact"),
@@ -146,7 +219,7 @@ export async function runServiceM8Import(apiKey: string): Promise<SM8ImportSumma
   const summary: SM8ImportSummary = {
     customers: { imported: 0, skipped: 0 },
     jobs: { imported: 0, skipped: 0, noCustomer: 0 },
-    errors: [],
+    errors: progress ? progress.errors : [],
   };
   const addError = (msg: string) => {
     if (summary.errors.length < MAX_ERRORS) summary.errors.push(msg);
@@ -171,14 +244,25 @@ export async function runServiceM8Import(apiKey: string): Promise<SM8ImportSumma
     if (c.servicem8Uuid) customerIdBySm8.set(c.servicem8Uuid, c.id);
   }
 
-  for (const company of companies.filter(isActive)) {
-    if (customerIdBySm8.has(company.uuid)) {
-      summary.customers.skipped++;
-      continue;
-    }
+  const activeCompanies = companies.filter(isActive);
+  const activeJobs = sm8Jobs.filter(isActive);
+  if (progress) {
+    progress.phase = "customers";
+    progress.customers.total = activeCompanies.length;
+    progress.jobs.total = activeJobs.length;
+  }
+
+  const tickCustomer = () => {
+    if (!progress) return;
+    progress.customers.done++;
+    progress.customers.imported = summary.customers.imported;
+    progress.customers.skipped = summary.customers.skipped;
+  };
+  for (const company of activeCompanies) {
     const name = (company.name ?? "").trim();
-    if (!name) {
+    if (customerIdBySm8.has(company.uuid) || !name) {
       summary.customers.skipped++;
+      tickCustomer();
       continue;
     }
     const contact = contactByCompany.get(company.uuid);
@@ -197,6 +281,7 @@ export async function runServiceM8Import(apiKey: string): Promise<SM8ImportSumma
     } catch (e) {
       addError(`Customer "${name}": ${e instanceof Error ? e.message : String(e)}`);
     }
+    tickCustomer();
   }
 
   // ── Jobs ──────────────────────────────────────────────────────────────────
@@ -209,9 +294,18 @@ export async function runServiceM8Import(apiKey: string): Promise<SM8ImportSumma
     ).map((r) => r.externalId),
   );
 
-  for (const job of sm8Jobs.filter(isActive)) {
+  if (progress) progress.phase = "jobs";
+  const tickJob = () => {
+    if (!progress) return;
+    progress.jobs.done++;
+    progress.jobs.imported = summary.jobs.imported;
+    progress.jobs.skipped = summary.jobs.skipped;
+    progress.jobs.noCustomer = summary.jobs.noCustomer;
+  };
+  for (const job of activeJobs) {
     if (existingExternalIds.has(job.uuid)) {
       summary.jobs.skipped++;
+      tickJob();
       continue;
     }
     const customerId = job.company_uuid ? customerIdBySm8.get(job.company_uuid) : undefined;
@@ -241,6 +335,7 @@ export async function runServiceM8Import(apiKey: string): Promise<SM8ImportSumma
     } catch (e) {
       addError(`Job ${sm8Number ?? job.uuid}: ${e instanceof Error ? e.message : String(e)}`);
     }
+    tickJob();
   }
 
   return summary;
