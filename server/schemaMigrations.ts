@@ -139,6 +139,47 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS external_id text`,
     ],
   },
+  {
+    // Per-tenant job numbering (owner decision 2026-07-13): job numbers become
+    // unique PER BUSINESS instead of globally, so one tenant's activity (or a
+    // bulk migration) no longer inflates everyone else's numbers. The composite
+    // index goes in FIRST; only then is the legacy global constraint dropped in
+    // postChecks (globally-unique data always satisfies the composite, so the
+    // create can't fail and there is never a window without uniqueness).
+    // NOTE: the drop is a deliberate exception to the "strictly additive" rule —
+    // it removes a CONSTRAINT (schema shape), never data, and is guarded +
+    // idempotent via pg_catalog discovery (the constraint's name varies by how
+    // the DB was provisioned).
+    name: "jobs-per-tenant-numbering",
+    statements: [
+      `CREATE UNIQUE INDEX IF NOT EXISTS jobs_business_job_number_uniq ON jobs (business_id, job_number)`,
+    ],
+    postChecks: async (client) => {
+      // Unique CONSTRAINTS on exactly (job_number)
+      const cons = await client.query(`
+        SELECT c.conname FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        WHERE t.relname = 'jobs' AND c.contype = 'u' AND array_length(c.conkey, 1) = 1
+          AND (SELECT a.attname FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attnum = c.conkey[1]) = 'job_number'
+      `);
+      for (const row of cons.rows) {
+        await client.query(`ALTER TABLE jobs DROP CONSTRAINT "${row.conname}"`);
+      }
+      // Plain unique INDEXES on exactly (job_number) not backed by a constraint
+      const idx = await client.query(`
+        SELECT i.relname FROM pg_index x
+        JOIN pg_class i ON i.oid = x.indexrelid
+        JOIN pg_class t ON t.oid = x.indrelid
+        WHERE t.relname = 'jobs' AND x.indisunique AND x.indnatts = 1
+          AND i.relname <> 'jobs_business_job_number_uniq'
+          AND (SELECT a.attname FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attnum = x.indkey[0]) = 'job_number'
+          AND NOT EXISTS (SELECT 1 FROM pg_constraint pc WHERE pc.conindid = x.indexrelid)
+      `);
+      for (const row of idx.rows) {
+        await client.query(`DROP INDEX "${row.relname}"`);
+      }
+    },
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

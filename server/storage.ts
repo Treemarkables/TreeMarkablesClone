@@ -1822,8 +1822,17 @@ class DatabaseStorage implements IStorage {
   }
 
   async getJobByJobNumber(jobNumber: string): Promise<Job | undefined> {
-    const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.jobNumber, jobNumber));
-    return job || undefined;
+    // Job numbers are unique per business, not globally. In-session the RLS
+    // proxy scopes this to one tenant (at most one row). Session-less callers
+    // (inbound email/SMS matchers run as owner) see every tenant, so an
+    // ambiguous number must never be guessed at — refuse and let the caller's
+    // other matchers (UUID, phone) do the work.
+    const rows = await db.select().from(schema.jobs).where(eq(schema.jobs.jobNumber, jobNumber)).limit(2);
+    if (rows.length > 1) {
+      console.warn(`getJobByJobNumber("${jobNumber}"): matches multiple tenants — refusing to guess`);
+      return undefined;
+    }
+    return rows[0] || undefined;
   }
 
   async updateJob(id: string, updates: Partial<InsertJob>): Promise<Job> {
@@ -2414,36 +2423,40 @@ class DatabaseStorage implements IStorage {
   }
 
   // Sequential Job Number Generation
-  private static jobNumberCounter: number = 3312;
-  
+  // Per-business monotonic counters (in-process); a brand-new business's first
+  // job is numbered 1001. Key "__global__" serves legacy tenant-less callers.
+  private static jobNumberCounters = new Map<string, number>();
+
   async getNextJobNumber(): Promise<string> {
+    // Job numbers are unique PER BUSINESS (jobs_business_job_number_uniq) —
+    // each tenant runs its own sequence, so one tenant's activity or a bulk
+    // migration never inflates another tenant's numbers. The max is read from
+    // the owner connection with an explicit business filter: every caller runs
+    // with tenant context (session ALS or runWithBusiness); a context-less
+    // caller falls back to the old global sequence rather than colliding.
+    const businessId = currentBusinessId();
+    const key = businessId ?? "__global__";
+    const bump = (dbMax: number | null) => {
+      const floor = dbMax !== null ? dbMax + 1 : 1001;
+      const next = Math.max(DatabaseStorage.jobNumberCounters.get(key) ?? 0, floor);
+      DatabaseStorage.jobNumberCounters.set(key, next + 1);
+      return next.toString();
+    };
     try {
-      // Job numbers are GLOBALLY unique (one sequence across all tenants), so the max
-      // MUST be read from the owner connection. Reading via the RLS-scoped `db` returns
-      // only the current tenant's max, so a new tenant would generate low numbers that
-      // collide with another tenant's existing job numbers → unique-constraint violation
-      // → "Error creating job". Use ownerDb (BYPASSRLS) for the global max.
       const result = await ownerDb.select({
         maxJobNumber: sql<number>`CAST(MAX(CAST(${schema.jobs.jobNumber} AS INTEGER)) AS INTEGER)`
       })
       .from(schema.jobs)
-      .where(sql`${schema.jobs.jobNumber} ~ '^[0-9]+$'`); // Only numeric job numbers
-      
-      if (result.length > 0 && result[0].maxJobNumber !== null) {
-        const maxJobNumber = result[0].maxJobNumber;
-        // Ensure our counter is at least as high as the maximum in database
-        DatabaseStorage.jobNumberCounter = Math.max(DatabaseStorage.jobNumberCounter, maxJobNumber + 1);
-      }
-      
-      const nextNumber = DatabaseStorage.jobNumberCounter;
-      DatabaseStorage.jobNumberCounter++;
-      return nextNumber.toString();
+      .where(
+        businessId
+          ? and(sql`${schema.jobs.jobNumber} ~ '^[0-9]+$'`, eq(schema.jobs.businessId, businessId))
+          : sql`${schema.jobs.jobNumber} ~ '^[0-9]+$'`, // Only numeric job numbers
+      );
+      return bump(result[0]?.maxJobNumber ?? null);
     } catch (error) {
       // Fallback to counter-only approach if database query fails
       console.error('Database query failed for job number, using fallback:', error);
-      const nextNumber = DatabaseStorage.jobNumberCounter;
-      DatabaseStorage.jobNumberCounter++;
-      return nextNumber.toString();
+      return bump(null);
     }
   }
 
