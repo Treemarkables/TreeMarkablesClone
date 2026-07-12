@@ -28017,7 +28017,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // Persist a newly typed key only after a successful run, so re-runs
       // don't need it re-entered. (Settings API already masks it on read.)
       const persistKey = typedKey && typedKey !== '••••••••' ? typedKey : undefined;
-      const { started } = startServiceM8Import(businessId, apiKey, persistKey);
+      const { started } = await startServiceM8Import(businessId, apiKey, persistKey);
       if (!started) {
         return res.status(409).json({ success: false, message: 'An import is already running — wait for it to finish.' });
       }
@@ -28033,10 +28033,15 @@ Keep the tone professional but conversational. Use NZD for currency.`;
 
   // GET /api/import/servicem8/status - Progress of the current/last background run.
   app.get('/api/import/servicem8/status', requireAdmin, async (req: Request, res: Response) => {
-    const businessId = req.session.businessId;
-    if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
-    const progress = getServiceM8ImportStatus(businessId);
-    res.json({ success: true, data: progress ?? { running: false, phase: 'idle' } });
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+      const progress = await getServiceM8ImportStatus(businessId);
+      res.json({ success: true, data: progress ?? { running: false, phase: 'idle' } });
+    } catch (error) {
+      console.error('ServiceM8 import status error:', error);
+      res.status(500).json({ success: false, message: 'Failed to read import status' });
+    }
   });
 
   // POST /api/admin/clear-data - Clear all jobs and customers (for fresh imports)
