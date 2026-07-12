@@ -387,10 +387,12 @@ export async function createConversationNotification(conversation: {
                         conversation.source === 'web_form' ? 'Website' :
                         conversation.source || 'Message';
 
-    const jobId = await getConversationJobId(conversation.id);
-    const clickAction = jobId
-      ? `/dispatch?job=${jobId}&tab=diary`
-      : `/conversation/${conversation.id}`;
+    // A brand-new inquiry always deep-links to its conversation — never to a
+    // job derived merely from a matched customer's history. (getConversationJobId
+    // is for *reply* notifications on already-converted conversations; using it
+    // here sent returning-customer inquiries to the dispatch board instead of
+    // the conversation where the inquiry lives.)
+    const clickAction = `/conversation/${conversation.id}`;
 
     await pushToAdminsWithCustomerMessages({
       title: `New ${sourceLabel} Inquiry`,
@@ -400,7 +402,6 @@ export async function createConversationNotification(conversation: {
         type: 'new_conversation',
         conversationId: conversation.id,
         source: conversation.source || '',
-        jobId: jobId || '',
       },
     });
 
