@@ -114,7 +114,13 @@ export const queryClient = new QueryClient({
         return false;
       },
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-      gcTime: Infinity,
+      // Was Infinity — the cache never evicted, so it grew unbounded for the whole
+      // session. Every cache change re-serialized the ENTIRE cache to localStorage
+      // (see schedulePersist below), a main-thread JSON.stringify that got heavier
+      // the longer the app stayed open ("feels fine at first, sluggish after a
+      // while"). A bounded gcTime lets idle queries evict so that payload stays
+      // small; offline rehydration still works from the persisted snapshot.
+      gcTime: 30 * 60 * 1000,
       networkMode: 'online',
     },
     mutations: {
@@ -162,6 +168,11 @@ function hydratePersistedQueryCache() {
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+// Debounce well above the cadence of routine cache churn (the 60s notification
+// poll, SSE invalidations, focus refetches) so we serialize the cache at most
+// once every few seconds instead of up to once a second. The snapshot only needs
+// to be "recent enough" to warm a cold start, not real-time.
+const PERSIST_DEBOUNCE_MS = 5000;
 function schedulePersist() {
   if (persistTimer) return;
   persistTimer = setTimeout(() => {
@@ -183,7 +194,7 @@ function schedulePersist() {
         /* ignore */
       }
     }
-  }, 1000);
+  }, PERSIST_DEBOUNCE_MS);
 }
 
 if (typeof window !== "undefined") {
