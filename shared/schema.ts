@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real, index, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -378,7 +378,9 @@ export const jobs = pgTable("jobs", {
   // record is later updated.
   customerContactId: varchar("customer_contact_id").references(() => customerContacts.id, { onDelete: "set null" }),
   quoteId: varchar("quote_id").references(() => quotes.id),
-  jobNumber: text("job_number").notNull().unique(),
+  // Unique PER BUSINESS (jobs_business_job_number_uniq below), not globally —
+  // each tenant runs its own sequence; migrated jobs keep their source numbers.
+  jobNumber: text("job_number").notNull(),
   title: text("title"),
   description: text("description"),
   includeDescriptionInQuotesProposals: boolean("include_description_in_quotes_proposals").default(true),
@@ -564,7 +566,9 @@ export const jobs = pgTable("jobs", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastActivityAt: timestamp("last_activity_at"),
-});
+}, (table) => ({
+  businessJobNumberUniq: uniqueIndex("jobs_business_job_number_uniq").on(table.businessId, table.jobNumber),
+}));
 
 // Job Diary Entries
 export const jobDiaryEntries = pgTable("job_diary_entries", {

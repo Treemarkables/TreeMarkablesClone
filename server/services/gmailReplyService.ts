@@ -293,10 +293,18 @@ class GmailReplyService {
           const isJobNumber = /^\d+$/.test(jobIdentifier);
           
           if (isJobNumber) {
-            // Find job by job number
-            job = await db.query.jobs.findFirst({
-              where: eq(jobs.jobNumber, jobIdentifier)
+            // Find job by job number. Numbers are unique per business, and this
+            // poller runs session-less (sees all tenants) — only accept an
+            // unambiguous match; UUID aliases are unaffected.
+            const matches = await db.query.jobs.findMany({
+              where: eq(jobs.jobNumber, jobIdentifier),
+              limit: 2,
             });
+            if (matches.length > 1) {
+              console.warn(`📧 Job number ${jobIdentifier} matches multiple tenants — skipping number match`);
+            } else {
+              job = matches[0];
+            }
           } else {
             // Find job by UUID (database ID)
             job = await db.query.jobs.findFirst({

@@ -355,6 +355,12 @@ export async function runServiceM8Import(
         .where(isNotNull(schema.jobs.externalId))
     ).map((r) => r.externalId),
   );
+  // Job numbers are unique per business, so migrated jobs can keep the numbers
+  // the customer already knows from ServiceM8 — take the original when free.
+  // (Both reads are RLS-scoped to this tenant.)
+  const takenJobNumbers = new Set(
+    (await db.select({ jobNumber: schema.jobs.jobNumber }).from(schema.jobs)).map((r) => r.jobNumber),
+  );
 
   if (progress) progress.phase = "jobs";
   onProgress?.(true);
@@ -379,7 +385,11 @@ export async function runServiceM8Import(
     const sm8Number = job.generated_job_id ? String(job.generated_job_id) : null;
     const status = STATUS_MAP[job.status ?? ""] ?? "quote";
     try {
-      const jobNumber = await storage.getNextJobNumber();
+      const jobNumber =
+        sm8Number && /^\d+$/.test(sm8Number) && !takenJobNumbers.has(sm8Number)
+          ? sm8Number
+          : await storage.getNextJobNumber();
+      takenJobNumbers.add(jobNumber);
       await storage.createJob({
         jobNumber,
         customerId: customerId ?? null,
