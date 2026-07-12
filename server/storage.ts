@@ -80,6 +80,8 @@ import {
 import { randomUUID } from "crypto";
 import { db, ownerDb } from "./db";
 import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
+import { cacheGet, cacheSet, cacheDelete, cacheDeletePrefix } from "./perfCache";
+import { invalidateEntitlementsCache } from "./tenancy/entitlements";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
@@ -4540,18 +4542,39 @@ class DatabaseStorage implements IStorage {
   }
 
   // Role Tier Management
+  // Role tiers are read on every permission resolution (auth/me + every
+  // requirePermission route) but edited rarely — cache per tenant. role_tiers
+  // is a business_id table read through the RLS proxy, so the cache key MUST
+  // bind the request's tenant; with no tenant context (owner path/cron) we skip
+  // the cache rather than risk serving one tenant's tiers to another. Mutations
+  // are rare enough that they just drop the whole rt: namespace.
   async createRoleTier(tier: schema.InsertRoleTier): Promise<schema.RoleTier> {
     const [newTier] = await db.insert(schema.roleTiers).values(withTenant(tier as any)).returning();
+    cacheDeletePrefix("rt:");
     return newTier;
   }
 
   async getRoleTier(id: string): Promise<schema.RoleTier | undefined> {
+    const ctx = currentBusinessId();
+    const key = ctx ? `rt:${ctx}:id:${id}` : null;
+    if (key) {
+      const cached = cacheGet<schema.RoleTier>(key);
+      if (cached) return cached;
+    }
     const [tier] = await db.select().from(schema.roleTiers).where(eq(schema.roleTiers.id, id));
+    if (key && tier) cacheSet(key, tier, 60_000);
     return tier || undefined;
   }
 
   async getRoleTierByKey(key: string): Promise<schema.RoleTier | undefined> {
+    const ctx = currentBusinessId();
+    const cacheKey = ctx ? `rt:${ctx}:key:${key}` : null;
+    if (cacheKey) {
+      const cached = cacheGet<schema.RoleTier>(cacheKey);
+      if (cached) return cached;
+    }
     const [tier] = await db.select().from(schema.roleTiers).where(eq(schema.roleTiers.key, key));
+    if (cacheKey && tier) cacheSet(cacheKey, tier, 60_000);
     return tier || undefined;
   }
 
@@ -4564,15 +4587,24 @@ class DatabaseStorage implements IStorage {
       .set({ ...updates, updatedAt: new Date() } as any)
       .where(eq(schema.roleTiers.id, id))
       .returning();
+    cacheDeletePrefix("rt:");
     return updated;
   }
 
   async deleteRoleTier(id: string): Promise<void> {
     await db.delete(schema.roleTiers).where(eq(schema.roleTiers.id, id));
+    cacheDeletePrefix("rt:");
   }
 
   async getDefaultRoleTier(): Promise<schema.RoleTier | undefined> {
+    const ctx = currentBusinessId();
+    const key = ctx ? `rt:${ctx}:default` : null;
+    if (key) {
+      const cached = cacheGet<schema.RoleTier>(key);
+      if (cached) return cached;
+    }
     const [tier] = await db.select().from(schema.roleTiers).where(eq(schema.roleTiers.isDefault, true)).limit(1);
+    if (key && tier) cacheSet(key, tier, 60_000);
     return tier || undefined;
   }
 
@@ -5315,12 +5347,18 @@ class DatabaseStorage implements IStorage {
   // the business has no row; callers treat unset fields as blank (never TM's).
   async getBusinessSettingsForBusiness(businessId: string | null | undefined): Promise<BusinessSettings | undefined> {
     if (!businessId) return undefined;
+    // Read-mostly and re-fetched constantly (emails, PDFs, webhooks) — cache per
+    // business. Key binds the explicit businessId, so any calling context is safe.
+    // Misses aren't cached (a row may be created right after). Writers invalidate.
+    const cached = cacheGet<BusinessSettings>(`bs:${businessId}`);
+    if (cached) return cached;
     const [row] = await ownerDb
       .select()
       .from(schema.businessSettings)
       .where(eq(schema.businessSettings.businessId, businessId))
       .orderBy(sql`(${schema.businessSettings.id} = 'default') DESC`, asc(schema.businessSettings.createdAt))
       .limit(1);
+    if (row) cacheSet(`bs:${businessId}`, row, 30_000);
     return row;
   }
 
@@ -5341,6 +5379,7 @@ class DatabaseStorage implements IStorage {
       .set({ ...updates, updatedAt: new Date() } as any)
       .where(eq(schema.businessSettings.businessId, businessId))
       .returning();
+    cacheDelete(`bs:${businessId}`);
     return row;
   }
 
@@ -5417,18 +5456,31 @@ class DatabaseStorage implements IStorage {
 
   async setSubscriptionPlanForBusiness(businessId: string, planId: string): Promise<(typeof schema.subscriptions.$inferSelect) | undefined> {
     const existing = await this.getSubscriptionForBusiness(businessId);
+    let row: typeof schema.subscriptions.$inferSelect | undefined;
     if (existing) {
-      const [row] = await ownerDb.update(schema.subscriptions)
+      [row] = await ownerDb.update(schema.subscriptions)
         .set({ planId, status: 'active', updatedAt: new Date() })
         .where(eq(schema.subscriptions.id, existing.id)).returning();
-      return row;
+    } else {
+      [row] = await ownerDb.insert(schema.subscriptions)
+        .values({ businessId, planId, status: 'active' }).returning();
     }
-    const [row] = await ownerDb.insert(schema.subscriptions)
-      .values({ businessId, planId, status: 'active' }).returning();
+    // Plan changed — drop the cached entitlement resolution immediately.
+    invalidateEntitlementsCache(businessId);
     return row;
   }
 
   async getBusinessSettings(): Promise<BusinessSettings> {
+    // Cache per tenant, keyed on the request's AsyncLocalStorage businessId
+    // (same namespace as getBusinessSettingsForBusiness — both return the
+    // tenant's canonical row). NO tenant context (owner path, cron, webhook)
+    // → skip the cache entirely: there is no safe key, and a guessed one
+    // would be a cross-tenant leak.
+    const ctxBusinessId = currentBusinessId();
+    if (ctxBusinessId) {
+      const cached = cacheGet<BusinessSettings>(`bs:${ctxBusinessId}`);
+      if (cached) return cached;
+    }
     // Try to get existing business settings from database.
     // Deterministic ordering guards against stray duplicate rows for a tenant:
     // prefer the canonical id='default' row, then the oldest. Without this,
@@ -5440,6 +5492,7 @@ class DatabaseStorage implements IStorage {
       .orderBy(sql`(${schema.businessSettings.id} = 'default') DESC`, asc(schema.businessSettings.createdAt))
       .limit(1);
     if (existing) {
+      if (ctxBusinessId) cacheSet(`bs:${ctxBusinessId}`, existing, 30_000);
       return existing;
     }
     
@@ -5459,7 +5512,7 @@ class DatabaseStorage implements IStorage {
   async updateBusinessSettings(updates: UpdateBusinessSettings): Promise<BusinessSettings> {
     // Ensure we have a settings record first
     const existing = await this.getBusinessSettings();
-    
+
     // Update the settings
     const [updated] = await db.update(schema.businessSettings)
       .set({
@@ -5468,7 +5521,13 @@ class DatabaseStorage implements IStorage {
       })
       .where(eq(schema.businessSettings.id, existing.id))
       .returning();
-    
+
+    // Invalidate under the row's own businessId (most reliable) and the
+    // request context's, in case a legacy row predates the businessId stamp.
+    if (updated?.businessId) cacheDelete(`bs:${updated.businessId}`);
+    const ctxBusinessId = currentBusinessId();
+    if (ctxBusinessId) cacheDelete(`bs:${ctxBusinessId}`);
+
     return updated;
   }
   async resetBusinessSettings(): Promise<BusinessSettings> { throw new Error("Not implemented"); }

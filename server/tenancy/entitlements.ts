@@ -21,6 +21,7 @@ import { db } from "../db";
 import * as schema from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { TREEMARKABLES_BUSINESS_IDS } from "@shared/roleChecklistAccess";
+import { cacheGet, cacheSet, cacheDelete } from "../perfCache";
 import type { Entitlement, Capability } from "./capabilities";
 
 const PLAN_RANK: Record<string, number> = { freemium: 0, crew: 1, business: 2 };
@@ -60,6 +61,19 @@ function isEntitledStatus(status: string): boolean {
   return status === "active" || status === "trialing" || status === "past_due";
 }
 
+// Entitlements are read on nearly every authenticated request (auth/me, feature
+// gates, permission filtering) but change only on billing events — cache the
+// resolved result per business for a short TTL, invalidated by the subscription
+// writers (billing.syncFromStripeSubscription, setSubscriptionPlanForBusiness).
+// At ~90-100ms per cross-region query this saves up to 3 sequential round trips
+// per request. NOTE: add-on rows currently change only via manual SQL (no
+// purchase path yet) — those edits take up to the TTL to appear.
+const ENTITLEMENTS_TTL_MS = 60_000;
+
+export function invalidateEntitlementsCache(businessId: string): void {
+  cacheDelete(`ent:${businessId}`);
+}
+
 /** Resolve a business's plan + active add-ons into its unlocked entitlement set. */
 export async function resolveEntitlements(businessId: string): Promise<BusinessEntitlements> {
   if (isComped(businessId)) {
@@ -67,6 +81,14 @@ export async function resolveEntitlements(businessId: string): Promise<BusinessE
       planKey: "business",
       entitlements: new Set<Entitlement>(["plan:crew", "plan:business", ...ALL_ADDON_ENTITLEMENTS]),
     };
+  }
+
+  // Cache key binds the explicit businessId argument — safe in any context.
+  // Return a defensive copy of the Set so a caller mutating its result can
+  // never poison the cached entry.
+  const cached = cacheGet<BusinessEntitlements>(`ent:${businessId}`);
+  if (cached) {
+    return { planKey: cached.planKey, entitlements: new Set(cached.entitlements) };
   }
 
   const [sub] = await db
@@ -105,7 +127,9 @@ export async function resolveEntitlements(businessId: string): Promise<BusinessE
     );
   for (const a of addons) entitlements.add(`addon:${a.key}` as Entitlement);
 
-  return { planKey, entitlements };
+  cacheSet(`ent:${businessId}`, { planKey, entitlements }, ENTITLEMENTS_TTL_MS);
+  // Hand the caller its own copy — the cached Set must stay pristine.
+  return { planKey, entitlements: new Set(entitlements) };
 }
 
 /** Does an entitlement set satisfy a capability's `requires` gate? null = always available. */
