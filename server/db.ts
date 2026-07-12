@@ -35,6 +35,7 @@ const DIRECT_URL =
 // Small pg.Pool kept solely for connect-pg-simple (session store). connect-pg-simple
 // only runs plain SELECT/UPSERT (no session-level SET), so the pooler endpoint is fine.
 export const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
   // The session store loads + (re)saves a row on the pooler endpoint for EVERY
   // request — including static/asset fetches, which carry the session cookie. At
   // ~90ms/round trip to Sydney, max:3 became a hard throughput ceiling under any
