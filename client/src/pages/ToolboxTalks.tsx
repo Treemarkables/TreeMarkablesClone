@@ -23,7 +23,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Check, Trash2, Users, MapPin, CheckCircle2 } from "lucide-react";
+import { Plus, Check, Trash2, Users, MapPin, CheckCircle2, Lock, Pencil, Settings2 } from "lucide-react";
 import { format } from "date-fns";
 import type { ToolboxTalk, ToolboxTalkTopic, ToolboxTalkAttendee } from "@shared/schema";
 import SignaturePad from "@/components/SignaturePad";
@@ -56,6 +56,7 @@ export default function ToolboxTalks() {
   const { toast } = useToast();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [topicsOpen, setTopicsOpen] = useState(false);
   const [selectedTalkId, setSelectedTalkId] = useState<string | null>(null);
 
   const talksQuery = useQuery<ApiResponse<ToolboxTalkListItem[]>>({
@@ -78,10 +79,20 @@ export default function ToolboxTalks() {
             Run and record on-site safety talks, capture who attended, and collect sign-off.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} data-testid="button-new-talk">
-          <Plus className="mr-2 h-4 w-4" />
-          New toolbox talk
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setTopicsOpen(true)}
+            data-testid="button-manage-topics"
+          >
+            <Settings2 className="mr-2 h-4 w-4" />
+            Topics
+          </Button>
+          <Button onClick={() => setCreateOpen(true)} data-testid="button-new-talk">
+            <Plus className="mr-2 h-4 w-4" />
+            New toolbox talk
+          </Button>
+        </div>
       </div>
 
       {talksQuery.isLoading ? (
@@ -151,7 +162,223 @@ export default function ToolboxTalks() {
           toast({ variant: "destructive", title, description })
         }
       />
+
+      <TopicManagerDialog
+        open={topicsOpen}
+        onClose={() => setTopicsOpen(false)}
+        topics={topics}
+        onError={(title, description) =>
+          toast({ variant: "destructive", title, description })
+        }
+      />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Topic manager: built-in topics are read-only; custom topics belong to the
+// business and are fully editable.
+// ---------------------------------------------------------------------------
+interface TopicDraft {
+  title: string;
+  category: string;
+  talkingPoints: string;
+}
+
+function emptyTopicDraft(): TopicDraft {
+  return { title: "", category: "", talkingPoints: "" };
+}
+
+function TopicManagerDialog({
+  open,
+  onClose,
+  topics,
+  onError,
+}: {
+  open: boolean;
+  onClose: () => void;
+  topics: ToolboxTalkTopic[];
+  onError: (title: string, description: string) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  const [draft, setDraft] = useState<TopicDraft>(emptyTopicDraft());
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["/api/toolbox-talk-topics"] });
+
+  const fail = (title: string) => (error: unknown) =>
+    onError(title, error instanceof Error ? error.message : "Please try again.");
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const body = {
+        title: draft.title.trim(),
+        category: draft.category.trim() || undefined,
+        talkingPoints: draft.talkingPoints.trim() || undefined,
+      };
+      const res =
+        editingId === "new"
+          ? await apiRequest("POST", "/api/toolbox-talk-topics", body)
+          : await apiRequest("PUT", `/api/toolbox-talk-topics/${editingId}`, body);
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidate();
+      setEditingId(null);
+    },
+    onError: fail("Could not save topic"),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/toolbox-talk-topics/${id}`);
+      return res.json();
+    },
+    onSuccess: invalidate,
+    onError: fail("Could not remove topic"),
+  });
+
+  const beginEdit = (topic: ToolboxTalkTopic) => {
+    setDraft({
+      title: topic.title,
+      category: topic.category ?? "",
+      talkingPoints: topic.talkingPoints ?? "",
+    });
+    setEditingId(topic.id);
+  };
+
+  const handleClose = (next: boolean) => {
+    if (!next) {
+      setEditingId(null);
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        {editingId ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>{editingId === "new" ? "New topic" : "Edit topic"}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Title</Label>
+                <Input
+                  value={draft.title}
+                  onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                  placeholder="e.g. Ladder safety"
+                  data-testid="input-topic-title"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Input
+                  value={draft.category}
+                  onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+                  placeholder="Optional grouping, e.g. Equipment"
+                  data-testid="input-topic-category"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Talking points (one per line)</Label>
+                <Textarea
+                  value={draft.talkingPoints}
+                  onChange={(e) => setDraft({ ...draft, talkingPoints: e.target.value })}
+                  rows={6}
+                  data-testid="input-topic-points"
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setEditingId(null)} data-testid="button-topic-cancel">
+                Cancel
+              </Button>
+              <Button
+                disabled={!draft.title.trim() || saveMutation.isPending}
+                onClick={() => saveMutation.mutate()}
+                data-testid="button-topic-save"
+              >
+                Save topic
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Talk topics</DialogTitle>
+              <DialogDescription>
+                Built-in topics are read-only. Add your own topics for the talks your crew
+                actually runs.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              {topics.map((topic) => (
+                <div
+                  key={topic.id}
+                  className="bg-card border border-border rounded-lg p-3 flex items-center justify-between gap-3"
+                  data-testid={`row-topic-${topic.id}`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium truncate">{topic.title}</span>
+                      {topic.isBuiltIn && (
+                        <Badge variant="secondary" className="gap-1">
+                          <Lock className="h-3 w-3" />
+                          Built-in
+                        </Badge>
+                      )}
+                    </div>
+                    {topic.category && (
+                      <p className="text-xs text-muted-foreground">{topic.category}</p>
+                    )}
+                  </div>
+                  {!topic.isBuiltIn && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => beginEdit(topic)}
+                        aria-label={`Edit ${topic.title}`}
+                        data-testid={`button-topic-edit-${topic.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removeMutation.mutate(topic.id)}
+                        disabled={removeMutation.isPending}
+                        aria-label={`Remove ${topic.title}`}
+                        data-testid={`button-topic-remove-${topic.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {topics.length === 0 && (
+                <p className="text-sm text-muted-foreground">No topics yet.</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  setDraft(emptyTopicDraft());
+                  setEditingId("new");
+                }}
+                data-testid="button-topic-new"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New topic
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
