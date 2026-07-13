@@ -272,6 +272,13 @@ export function renderWelcomeEmail(opts: WelcomeEmailOptions): string {
       <tr><td style="padding:22px 28px;border-top:1px solid ${BRAND.line};color:${BRAND.muted};font-size:12px;line-height:1.6;text-align:center;background:#fafbfc;">
         <div>You're receiving this because an Inflow account was created for ${esc(opts.businessName)}.</div>
         <div style="margin-top:4px;">If this wasn't you, reply to this email and we'll sort it out.</div>
+        <div style="margin-top:16px;">
+          <a href="https://inflowapp.co.nz" style="text-decoration:none;color:${BRAND.ink};">
+            <img src="https://inflowapp.co.nz/inflow-icon-192.png" width="18" height="18" alt="Inflow" style="vertical-align:-4px;border:0;border-radius:4px;">
+            <span style="font-weight:700;font-size:13px;margin-left:6px;color:${BRAND.ink};">Inflow</span>
+          </a>
+          <div style="color:${BRAND.muted};font-size:11px;margin-top:4px;">The operating system for trades businesses &middot; <a href="https://inflowapp.co.nz" style="color:${BRAND.muted};">inflowapp.co.nz</a></div>
+        </div>
       </td></tr>
 
     </table>
