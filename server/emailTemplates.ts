@@ -225,19 +225,18 @@ export interface WelcomeEmailOptions {
   signInUrl: string;
   /** A few getting-started steps shown as a checklist. */
   steps: Array<{ label: string; hint: string }>;
-  /** Per-business brand colours. Omit to keep the platform black + neon-green. */
-  brand?: BrandColorInput;
 }
 
 /**
- * Signup confirmation / welcome email. Same branded header + footer style as the
- * money documents, but no total card — a greeting, a "you're in" line, a short
- * getting-started checklist, and a sign-in button. Header wordmark + footer use
- * the tenant's OWN business name (never the platform's), so the account owner
- * sees their brand.
+ * Signup confirmation / welcome email. Same layout as the money documents but
+ * no total card — a greeting, a "you're in" line, a short getting-started
+ * checklist, and a sign-in button. Deliberately NEUTRAL colours (slate header,
+ * white text) — a brand-new tenant has no brand colours yet, and defaulting to
+ * the platform black + neon painted every welcome in Treemarkables' look.
+ * Header wordmark + footer still use the tenant's OWN business name.
  */
 export function renderWelcomeEmail(opts: WelcomeEmailOptions): string {
-  const b = resolveBrand(opts.brand);
+  const b = { headerBg: BRAND.ink, wordmark: '#ffffff', accent: '#ffffff' };
   const steps = opts.steps
     .map(
       (s) => `
