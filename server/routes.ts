@@ -2131,6 +2131,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { businessId, employeeId } = await createTenant({ businessName, firstName, lastName, email, password });
 
+      // Welcome / confirmation email — best-effort, never blocks signup. Fires for
+      // free and paid alike since the account exists regardless of Stripe outcome.
+      emailService
+        .sendWelcomeEmail({ ownerEmail: email, ownerName: firstName, businessName })
+        .then((r) => { if (!r?.success) console.error('signup welcome email failed:', r?.error); })
+        .catch((e) => console.error('signup welcome email threw:', e?.message));
+
       // If they chose a paid plan, prepare a Checkout URL to redirect to after signup.
       let checkoutUrl: string | undefined;
       if (planKey && planKey !== 'freemium' && isStripeConfigured()) {

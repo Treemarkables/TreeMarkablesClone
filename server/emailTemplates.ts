@@ -216,6 +216,70 @@ export function renderBrandedEmail(opts: BrandedEmailOptions): string {
 </table>`;
 }
 
+export interface WelcomeEmailOptions {
+  /** Recipient's first name for the greeting. */
+  ownerName: string;
+  /** The new business's name (header wordmark + body). */
+  businessName: string;
+  /** Sign-in CTA URL (built from APP_URL). */
+  signInUrl: string;
+  /** A few getting-started steps shown as a checklist. */
+  steps: Array<{ label: string; hint: string }>;
+  /** Per-business brand colours. Omit to keep the platform black + neon-green. */
+  brand?: BrandColorInput;
+}
+
+/**
+ * Signup confirmation / welcome email. Same branded header + footer style as the
+ * money documents, but no total card — a greeting, a "you're in" line, a short
+ * getting-started checklist, and a sign-in button. Header wordmark + footer use
+ * the tenant's OWN business name (never the platform's), so the account owner
+ * sees their brand.
+ */
+export function renderWelcomeEmail(opts: WelcomeEmailOptions): string {
+  const b = resolveBrand(opts.brand);
+  const steps = opts.steps
+    .map(
+      (s) => `
+        <tr><td style="padding:8px 0;border-bottom:1px solid ${BRAND.line};">
+          <div style="font-weight:600;color:${BRAND.ink};font-size:14px;">${esc(s.label)}</div>
+          <div style="color:${BRAND.muted};font-size:13px;line-height:1.5;margin-top:2px;">${esc(s.hint)}</div>
+        </td></tr>`,
+    )
+    .join('');
+  return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:${BRAND.pageBg};margin:0;padding:0;">
+  <tr><td align="center" style="padding:24px 12px;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+
+      <tr><td style="background:${b.headerBg};padding:22px 28px;">
+        <div style="color:${b.wordmark};font-size:22px;font-weight:800;letter-spacing:-0.01em;line-height:1;text-transform:uppercase;">${esc(opts.businessName)}</div>
+      </td></tr>
+
+      <tr><td style="padding:28px 28px 8px;color:${BRAND.ink};font-size:15px;line-height:1.55;">
+        <p style="margin:0 0 14px;">Hi ${esc(opts.ownerName)},</p>
+        <p style="margin:0 0 6px;">Your Inflow account for <strong>${esc(opts.businessName)}</strong> is ready to go.</p>
+        <p style="margin:0 0 18px;color:${BRAND.muted};font-size:14px;">Here are a couple of things to set up first:</p>
+      </td></tr>
+
+      <tr><td style="padding:0 28px 8px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">${steps}</table>
+      </td></tr>
+
+      <tr><td style="padding:22px 28px 8px;text-align:center;">
+        <a href="${opts.signInUrl}" style="display:inline-block;background:${b.headerBg};color:${b.accent};padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;border:2px solid ${b.headerBg};">Sign in to Inflow &rarr;</a>
+        <div style="margin-top:12px;font-size:12px;color:${BRAND.muted};">Bookmark ${esc(opts.signInUrl)} to get back in any time.</div>
+      </td></tr>
+
+      <tr><td style="padding:22px 28px;border-top:1px solid ${BRAND.line};color:${BRAND.muted};font-size:12px;line-height:1.6;text-align:center;background:#fafbfc;">
+        <div>You're receiving this because an Inflow account was created for ${esc(opts.businessName)}.</div>
+        <div style="margin-top:4px;">If this wasn't you, reply to this email and we'll sort it out.</div>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>`;
+}
+
 /** Intro that keeps newlines and supports **bold** / *italic* from the composed
  *  message, while still escaping everything else. */
 function escRich(s: string): string {
