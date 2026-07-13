@@ -7,10 +7,11 @@
 // skips anything already imported (customers via customers.servicem8_uuid,
 // jobs via jobs.external_id) — so a partial import can simply be re-run.
 //
-// Called from session routes only: storage reads/writes are ALS/RLS-scoped to
-// the caller's tenant, and creates stamp business_id via withTenant. Replaces
-// the dead single-tenant `/api/servicem8/*` routes (servicem8Service was
-// referenced but never defined — every call 500'd).
+// Runs in the background under runWithBusiness (businessId only, no pinned
+// RLS connection — reads hit ownerDb), so every dedup read filters on the
+// tenant's businessId explicitly; creates stamp business_id via withTenant.
+// Replaces the dead single-tenant `/api/servicem8/*` routes (servicem8Service
+// was referenced but never defined — every call 500'd).
 //
 // Auth: ServiceM8 private-application API keys. Depending on account vintage
 // the key is accepted as an `X-Api-Key` header or as HTTP Basic (key as
@@ -19,8 +20,8 @@
 import { storage } from "../storage";
 import { db, ownerDb } from "../db";
 import * as schema from "@shared/schema";
-import { isNotNull, sql } from "drizzle-orm";
-import { runWithBusiness } from "../tenancy/tenantStore";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { runWithBusiness, currentBusinessId } from "../tenancy/tenantStore";
 
 const BASE = "https://api.servicem8.com/api_1.0";
 const PAGE_SIZE = 500;
@@ -256,15 +257,25 @@ const STATUS_MAP: Record<string, string> = {
 
 /**
  * Import the tenant's ServiceM8 clients + jobs. Must run with tenant context
- * set (session ALS, or runWithBusiness for background runs) — all reads/writes
- * scope to that business. `progress`, when provided, is mutated live;
- * `onProgress` (throttled by the caller) persists it for the status endpoint.
+ * set (session ALS, or runWithBusiness for background runs). Writes stamp
+ * business_id via withTenant, but reads CANNOT rely on RLS: background runs
+ * bind only the businessId — no pinned tenant connection — so `db` falls back
+ * to ownerDb and unfiltered reads scan every tenant. All dedup reads below
+ * filter on businessId explicitly; otherwise two tenants importing overlapping
+ * ServiceM8 accounts (Apex is deliberately seeded with Treemarkables' SM8
+ * data) would skip records that only exist in the other tenant and, worse,
+ * map company_uuid → the other tenant's customer id onto new jobs.
+ * `progress`, when provided, is mutated live; `onProgress` (throttled by the
+ * caller) persists it for the status endpoint.
  */
 export async function runServiceM8Import(
   apiKey: string,
   progress?: ImportProgress,
   onProgress?: (force?: boolean) => void,
 ): Promise<SM8ImportSummary> {
+  const businessId = currentBusinessId();
+  if (!businessId) throw new Error("ServiceM8 import requires tenant context — no businessId bound");
+
   const probe = await testServiceM8Connection(apiKey);
   if (!probe.ok || !probe.method) throw new Error(probe.message);
   const method = probe.method;
@@ -299,7 +310,12 @@ export async function runServiceM8Import(
   }
 
   // ── Customers ─────────────────────────────────────────────────────────────
-  const existingCustomers = await storage.getAllCustomers();
+  // Direct query, not storage.getAllCustomers() — that read is unscoped and on
+  // the owner connection would map company_uuid → another tenant's customer.
+  const existingCustomers = await db
+    .select({ id: schema.customers.id, servicem8Uuid: schema.customers.servicem8Uuid })
+    .from(schema.customers)
+    .where(eq(schema.customers.businessId, businessId));
   const customerIdBySm8 = new Map<string, string>();
   for (const c of existingCustomers) {
     if (c.servicem8Uuid) customerIdBySm8.set(c.servicem8Uuid, c.id);
@@ -352,14 +368,18 @@ export async function runServiceM8Import(
       await db
         .select({ externalId: schema.jobs.externalId })
         .from(schema.jobs)
-        .where(isNotNull(schema.jobs.externalId))
+        .where(and(eq(schema.jobs.businessId, businessId), isNotNull(schema.jobs.externalId)))
     ).map((r) => r.externalId),
   );
   // Job numbers are unique per business, so migrated jobs can keep the numbers
   // the customer already knows from ServiceM8 — take the original when free.
-  // (Both reads are RLS-scoped to this tenant.)
   const takenJobNumbers = new Set(
-    (await db.select({ jobNumber: schema.jobs.jobNumber }).from(schema.jobs)).map((r) => r.jobNumber),
+    (
+      await db
+        .select({ jobNumber: schema.jobs.jobNumber })
+        .from(schema.jobs)
+        .where(eq(schema.jobs.businessId, businessId))
+    ).map((r) => r.jobNumber),
   );
 
   if (progress) progress.phase = "jobs";
