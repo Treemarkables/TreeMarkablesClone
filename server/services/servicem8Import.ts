@@ -21,6 +21,7 @@ import { db, ownerDb } from "../db";
 import * as schema from "@shared/schema";
 import { isNotNull, sql } from "drizzle-orm";
 import { runWithBusiness } from "../tenancy/tenantStore";
+import { notifyEmployee } from "./notificationHelper";
 
 const BASE = "https://api.servicem8.com/api_1.0";
 const PAGE_SIZE = 500;
@@ -187,10 +188,62 @@ export async function startServiceM8Import(
       await saveRun(businessId, progress).catch((e) =>
         console.error("ServiceM8 import final save failed:", e),
       );
+      // The run outlives the page (and often the user's attention) — surface
+      // the outcome in the bell + a push so they don't have to keep checking.
+      await notifyImportFinished(progress).catch((e) =>
+        console.error("ServiceM8 import finish notification failed:", e),
+      );
     }
   });
 
   return { started: true };
+}
+
+/**
+ * Bell notification + push to the tenant's admins when a background run ends.
+ * Must run inside runWithBusiness — the employee lookup and notification
+ * insert rely on the ambient tenant context.
+ */
+async function notifyImportFinished(progress: ImportProgress): Promise<void> {
+  const failed = progress.phase === "failed";
+  const title = failed ? "ServiceM8 import failed" : "ServiceM8 import finished";
+  let message: string;
+  if (failed) {
+    message = `${progress.message ?? "Something went wrong."} Re-running is safe — anything already imported is skipped.`;
+  } else {
+    const parts = [
+      `${progress.customers.imported} customers and ${progress.jobs.imported} jobs imported`,
+    ];
+    const skipped = progress.customers.skipped + progress.jobs.skipped;
+    if (skipped > 0) parts.push(`${skipped} already present`);
+    if (progress.errors.length > 0) parts.push(`${progress.errors.length} records had errors`);
+    message = `${parts.join(", ")}.`;
+  }
+
+  await storage.createNotification({
+    title,
+    message,
+    type: "import_finished",
+    priority: failed ? "high" : "medium",
+    actionUrl: "/settings/import",
+    metadata: {
+      phase: progress.phase,
+      customersImported: progress.customers.imported,
+      jobsImported: progress.jobs.imported,
+      errorCount: progress.errors.length,
+    },
+  });
+
+  const employees = await storage.getAllEmployees();
+  for (const admin of employees.filter((e) => e.role === "admin")) {
+    await notifyEmployee(admin.id, {
+      title,
+      body: message,
+      clickAction: "/settings/import",
+      collapseId: "servicem8-import",
+      data: { type: "import_finished", phase: progress.phase },
+    });
+  }
 }
 
 function authHeaders(apiKey: string, method: AuthMethod): Record<string, string> {
