@@ -21126,7 +21126,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           ? `Email to ${recipientEmail} for ${jobLabel} was not delivered${bounceDetail}. Check the address and resend.${subjectSnippet}`
           : `${recipientEmail} marked your email as spam for ${jobLabel}. Consider using a different address.${subjectSnippet}`;
 
-        const actionUrl = matchedJob ? `/jobs/${matchedJob.id}` : '/invoices';
+        // Matched → the job's diary (where the bounce entry is written below);
+        // jobs open via /dispatch?job=, not a /jobs/:id route (which doesn't
+        // exist). Unmatched → the comms inbox, not /invoices (a bounce for a
+        // non-invoice email dumped the operator onto an unrelated list).
+        const actionUrl = matchedJob ? `/dispatch?job=${matchedJob.id}&tab=diary` : '/inbox';
 
         // Stamp the bounce/complaint notification + diary entry to the matched job's
         // tenant (owner-pathed webhook, no session). Unmatched events carry no tenant
