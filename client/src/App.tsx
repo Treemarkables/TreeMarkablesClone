@@ -1,8 +1,9 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Router as WouterRouter } from "wouter";
+import { useBrowserLocation } from "wouter/use-browser-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { UpgradeGate } from "@/components/PlanGate";
+import { PlanGate, UpgradeGate } from "@/components/PlanGate";
 import { BillingBanner } from "@/components/BillingBanner";
 import { GettingStarted } from "@/components/GettingStarted";
 import { PullToRefresh } from "@/components/PullToRefresh";
@@ -14,7 +15,35 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
 import { WebCallProvider } from "@/contexts/WebCallContext";
 import { WebCallButton } from "@/components/WebCallButton";
-import { lazy, Suspense } from "react";
+// NOTE: useState/useEffect/useCallback are imported further down (imports are
+// hoisted module-wide, so the hooks below can use them).
+import { lazy, Suspense, startTransition } from "react";
+
+// ---------------------------------------------------------------------------
+// Flash-free navigation. Wouter v3 reads the browser location through
+// useSyncExternalStore, whose updates React must render synchronously — so the
+// instant you navigate, the old page unmounts and the <Suspense> fallback
+// (deliberately null, see PageSpinner) renders while the next page's lazy chunk
+// downloads. That was the white flash between pages.
+//
+// This hook mirrors the real location into React state and updates it inside
+// startTransition. Transitions may suspend without falling back: React keeps
+// the OLD page on screen until the new page's chunk has loaded, then swaps.
+// navigate() is passed through untouched, so pushState/replaceState semantics
+// (and back/forward, which arrive via the same popstate subscription) are
+// unchanged — only the moment the router *sees* the new location is deferred.
+// ---------------------------------------------------------------------------
+function useTransitionedLocation(): [string, ReturnType<typeof useBrowserLocation>[1]] {
+  const [location, navigate] = useBrowserLocation();
+  const [shownLocation, setShownLocation] = useState(location);
+  useEffect(() => {
+    if (location !== shownLocation) {
+      startTransition(() => setShownLocation(location));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
+  return [shownLocation, navigate];
+}
 
 // Route targets are lazy-loaded so the initial JS bundle stays small. This is
 // the biggest lever on first-paint time — previously all ~90 pages were bundled
@@ -117,6 +146,7 @@ const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
 const SettingsAccount = lazy(() => import("@/pages/SettingsAccount"));
 const SettingsChannels = lazy(() => import("@/pages/SettingsChannels"));
 const SettingsSetup = lazy(() => import("@/pages/SettingsSetup"));
+const SettingsImport = lazy(() => import("@/pages/SettingsImport"));
 const AdminSubscribers = lazy(() => import("@/pages/AdminSubscribers"));
 const SettingsQuoteFollowup = lazy(() => import("@/pages/SettingsQuoteFollowup"));
 const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoReply"));
@@ -593,8 +623,10 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             <LogoSidebarTrigger size={36} />
 
             <div className="flex items-center gap-2">
-              {/* In-browser dialer (desktop web only) */}
-              <WebCallButton />
+              {/* In-browser dialer (desktop web only; part of the call-recording add-on) */}
+              <PlanGate requires="addon:call_recording">
+                <WebCallButton />
+              </PlanGate>
 
               {/* Notifications Bell */}
               <NotificationBell />
@@ -868,9 +900,59 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   );
 }
 
+// ---------------------------------------------------------------------------
+// Idle prefetch of the hottest page chunks. Every page is a lazy chunk fetched
+// on first navigation — from the Singapore origin, so a first visit to any page
+// pays a network round trip. Once a logged-in layout has mounted and the
+// browser is idle, quietly warm the chunks users bounce between most. The
+// import() specifiers match the lazy() declarations above, so the module cache
+// dedupes: a prefetched page renders instantly on navigation, and pages the
+// user already visited cost nothing to "prefetch" again. Runs once per session
+// (module flag), staggered one chunk per idle callback so it never competes
+// with real work — mid-range Android parse time is why pages were split in the
+// first place, and this must not reintroduce a startup parse storm.
+// ---------------------------------------------------------------------------
+const HOT_PAGE_CHUNKS: Array<() => Promise<unknown>> = [
+  () => import("@/pages/TodayDashboard"),
+  () => import("@/pages/Dispatch"),
+  () => import("@/pages/JobDashboard"),
+  () => import("@/pages/Opportunities"),
+  () => import("@/pages/Calendar"),
+  () => import("@/pages/Tasks"),
+  () => import("@/pages/Invoices"),
+  () => import("@/pages/Clients"),
+  () => import("@/pages/StaffSchedule"),
+  () => import("@/pages/Settings"),
+  () => import("@/pages/Videos"),
+  () => import("@/pages/Library"),
+  () => import("@/pages/MetricsDashboard"),
+  () => import("@/pages/Calls"),
+];
+let hotChunksPrefetched = false;
+function prefetchHotPageChunks() {
+  if (hotChunksPrefetched) return;
+  hotChunksPrefetched = true;
+  const idle: (cb: () => void) => void =
+    typeof window.requestIdleCallback === "function"
+      ? (cb) => window.requestIdleCallback(cb, { timeout: 10_000 })
+      : (cb) => window.setTimeout(cb, 1_500);
+  const queue = [...HOT_PAGE_CHUNKS];
+  const next = () => {
+    const load = queue.shift();
+    if (!load) return;
+    load().catch(() => {}).finally(() => idle(next));
+  };
+  idle(next);
+}
+
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const isMobile = useIsMobile();
+
+  // Warm the hot page chunks once the logged-in shell is up and idle.
+  useEffect(() => {
+    prefetchHotPageChunks();
+  }, []);
   
   const style = {
     "--sidebar-width": "16rem",
@@ -1242,7 +1324,9 @@ function Router() {
       <Route path="/calls">
         <ProtectedRoute>
           <SidebarLayout>
-            <Calls />
+            <UpgradeGate requires="addon:call_recording" feature="Call recording">
+              <Calls />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1256,7 +1340,9 @@ function Router() {
       <Route path="/unlinked-calls">
         <ProtectedRoute>
           <SidebarLayout>
-            <UnlinkedCalls />
+            <UpgradeGate requires="addon:call_recording" feature="Call recording">
+              <UnlinkedCalls />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1511,6 +1597,11 @@ function Router() {
           <SettingsSetup />
         </SidebarLayout>
       </Route>
+      <Route path="/settings/import">
+        <SidebarLayout>
+          <SettingsImport />
+        </SidebarLayout>
+      </Route>
       <Route path="/admin/subscribers">
         <SidebarLayout>
           <AdminSubscribers />
@@ -1757,6 +1848,11 @@ function App() {
 
   return (
     <ErrorBoundary>
+      {/* hook=useTransitionedLocation defers route swaps into a React
+          transition, so navigating to a not-yet-loaded lazy page keeps the
+          current page visible instead of flashing the (null) Suspense
+          fallback while the chunk downloads. */}
+      <WouterRouter hook={useTransitionedLocation}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <AuthProvider>
@@ -1777,6 +1873,7 @@ function App() {
           </AuthProvider>
         </TooltipProvider>
       </QueryClientProvider>
+      </WouterRouter>
     </ErrorBoundary>
   );
 }

@@ -24,7 +24,9 @@ import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
 import { resolveEntitlements } from "./tenancy/entitlements";
+import { testServiceM8Connection, startServiceM8Import, getServiceM8ImportStatus } from "./services/servicem8Import";
 import { jwksHandler } from "./tenancy/jwksHandler";
+import { cacheDeletePrefix } from "./perfCache";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db, ownerDb } from "./db";
@@ -1031,6 +1033,13 @@ async function buildOnboardingChecklist(businessId: string) {
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.tenantChannels)
     .where(and(eq(schema.tenantChannels.businessId, businessId), eq(schema.tenantChannels.isActive, true)));
+  const [{ count: importedCustomerCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.customers)
+    .where(and(
+      eq(schema.customers.businessId, businessId),
+      sql`${schema.customers.importSource} IS NOT NULL AND ${schema.customers.importSource} <> 'manual'`,
+    ));
 
   const has = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
 
@@ -1042,6 +1051,7 @@ async function buildOnboardingChecklist(businessId: string) {
     { key: 'address', label: 'Business address', description: 'Shown on your documents.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyAddress) },
     { key: 'bank', label: 'Bank details', description: "So customers can pay your invoices — without it, no payment block shows.", path: '/settings/company', optional: false, done: has(settings?.bankAccountName) && has(settings?.bankAccountNumber) },
     { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: (channelCount ?? 0) > 0 },
+    { key: 'importData', label: 'Import your data', description: 'Bring your customers and jobs across from ServiceM8 or a CSV export.', path: '/settings/import', optional: true, done: (importedCustomerCount ?? 0) > 0 },
     { key: 'gst', label: 'GST number', description: 'Shown on tax invoices (only if GST-registered).', path: '/settings/company', optional: true, done: has(settings?.businessGstNumber) },
     { key: 'tradeVocabulary', label: 'Trade vocabulary', description: 'Improves voice-to-quote and AI accuracy for your trade.', path: '/settings/company', optional: true, done: has(settings?.tradeVocabulary) },
     { key: 'replyForward', label: 'Forward customer replies', description: 'Optionally copy job replies to your own inbox.', path: '/settings/company', optional: true, done: has(settings?.jobReplyForwardEmail) },
@@ -2015,6 +2025,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/safety-analytics', requireEntitlement('plan:business', 'safety_analytics'));
   app.use('/api/workflows', requireEntitlement('plan:business', 'workflow_automation'));
   app.use('/api/lane-automations', requireEntitlement('plan:business', 'workflow_automation'));
+  // Calls (recorded call log) → call_recording add-on, any tier. Session-less
+  // Twilio webhooks pass through the gate untouched (no tenant context).
+  app.use('/api/calls', requireEntitlement('addon:call_recording', 'calls'));
   // Metrics Dashboard (advanced analytics) → Crew. These endpoints are exclusive to the
   // (UI-gated) Metrics Dashboard, so gating them is safe; /api/analytics/* is deliberately
   // NOT here — it's shared with the executive dashboard + settings. Profitability has no
@@ -2117,6 +2130,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { businessId, employeeId } = await createTenant({ businessName, firstName, lastName, email, password });
+
+      // Welcome / confirmation email — best-effort, never blocks signup. Fires for
+      // free and paid alike since the account exists regardless of Stripe outcome.
+      emailService
+        .sendWelcomeEmail({ ownerEmail: email, ownerName: firstName, businessName })
+        .then((r) => { if (!r?.success) console.error('signup welcome email failed:', r?.error); })
+        .catch((e) => console.error('signup welcome email threw:', e?.message));
 
       // If they chose a paid plan, prepare a Checkout URL to redirect to after signup.
       let checkoutUrl: string | undefined;
@@ -2242,10 +2262,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const loginPermsSet = await getEmployeePermissions(employee).catch(() => new Set<string>());
       let loginPlanKey = 'freemium';
       let loginEntitlements: string[] = [];
-      if (employee.businessId && TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
-        loginPlanKey = 'business';
-        loginEntitlements = ['plan:crew', 'plan:business'];
-      } else if (employee.businessId) {
+      if (employee.businessId) {
+        // resolveEntitlements handles the comped Treemarkables case (full
+        // Business tier + every add-on) — no special-casing here.
         try {
           const ent = await resolveEntitlements(employee.businessId);
           loginPlanKey = ent.planKey;
@@ -2345,16 +2364,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const permsSet = await getEmployeePermissions(employee);
       const tier = employee.roleTierId ? await storage.getRoleTier(employee.roleTierId) : null;
 
-      // Subscription entitlements for plan-based UI gating. Treemarkables (platform
-      // owner) is comped → full Business-tier access; otherwise resolve from the live
-      // subscription. Mirrors the server feature gates so the UI matches enforcement.
+      // Subscription entitlements for plan-based UI gating. resolveEntitlements
+      // handles the comped Treemarkables case (full Business tier + every add-on).
+      // Mirrors the server feature gates so the UI matches enforcement.
       const __entBizId = req.session.businessId;
       let planKey = 'freemium';
       let entitlements: string[] = [];
-      if (__entBizId && TREEMARKABLES_BUSINESS_IDS.includes(__entBizId)) {
-        planKey = 'business';
-        entitlements = ['plan:crew', 'plan:business'];
-      } else if (__entBizId) {
+      if (__entBizId) {
         try {
           const ent = await resolveEntitlements(__entBizId);
           planKey = ent.planKey;
@@ -23128,8 +23144,15 @@ Transcription: ${transcriptText}`;
             targetJob = await storage.getJobByJobNumber(jobNumberMatch[1]);
           }
           if (!targetJob && quoteNumberMatch) {
+            // Quote numbers are unique per business, not globally. This inbound
+            // handler runs session-less (sees all tenants), so only accept an
+            // UNAMBIGUOUS quote-number match — otherwise the UUID/job-number
+            // matchers above should have already resolved the right tenant.
             const jobs = await storage.getAllJobs({ quoteNumber: quoteNumberMatch[1] });
-            if (jobs && jobs.length > 0) targetJob = jobs[0];
+            if (jobs && jobs.length === 1) targetJob = jobs[0];
+            else if (jobs && jobs.length > 1) {
+              console.warn(`Quote number ${quoteNumberMatch[1]} matches multiple tenants — skipping quote-number match`);
+            }
           }
 
           if (targetJob) {
@@ -26843,6 +26866,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             await ownerDb.update(schema.businessSettings)
               .set({ stripeConnectChargesEnabled: !!acct.charges_enabled })
               .where(eq(schema.businessSettings.stripeConnectAccountId, acct.id));
+            // Matched by Stripe account id, so we don't know which business's
+            // settings row changed — drop the whole settings cache namespace
+            // (rare event, tiny cache).
+            cacheDeletePrefix('bs:');
           } catch (e: any) {
             console.error('Stripe Connect account.updated sync failed:', e?.message);
           }
@@ -27957,65 +27984,77 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // =====================================
-  // ServiceM8 Integration API Routes
+  // ServiceM8 migration (per-tenant, API-key) — Settings → Import & Migration.
+  // Replaces the dead single-tenant /api/servicem8/* routes (their
+  // servicem8Service was never defined, so every call 500'd).
   // =====================================
 
-  // GET /api/servicem8/test - Test ServiceM8 API connection
-  app.get('/api/servicem8/test', async (req: Request, res: Response) => {
+  // Resolve the key to use: an explicitly typed one wins; the masked sentinel
+  // or an empty body falls back to the tenant's stored key.
+  async function resolveServiceM8Key(bodyKey: unknown): Promise<string | null> {
+    const typed = typeof bodyKey === 'string' ? bodyKey.trim() : '';
+    if (typed && typed !== '••••••••') return typed;
+    const settings = await storage.getBusinessSettings();
+    const stored = (settings?.servicem8ApiKey ?? '').trim();
+    return stored || null;
+  }
+
+  // POST /api/import/servicem8/test - Validate a ServiceM8 API key
+  app.post('/api/import/servicem8/test', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const result = await servicem8Service.testConnection();
-      res.json(result);
+      const apiKey = await resolveServiceM8Key(req.body?.apiKey);
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'Enter your ServiceM8 API key first.' });
+      }
+      const result = await testServiceM8Connection(apiKey);
+      res.json({ success: result.ok, message: result.message });
     } catch (error) {
       console.error('ServiceM8 test connection error:', error);
+      res.status(500).json({ success: false, message: 'Failed to test the ServiceM8 connection' });
+    }
+  });
+
+  // POST /api/import/servicem8/run - Kick off a BACKGROUND import of the
+  // tenant's ServiceM8 clients + jobs and return immediately (a full account
+  // takes minutes — holding the request open just hits the edge's ~100s
+  // timeout as a Cloudflare 524). The UI polls /status. Idempotent per run;
+  // overlapping runs are refused (409) so the dedup snapshot stays valid.
+  app.post('/api/import/servicem8/run', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+      const typedKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+      const apiKey = await resolveServiceM8Key(req.body?.apiKey);
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'Enter your ServiceM8 API key first.' });
+      }
+      // Persist a newly typed key only after a successful run, so re-runs
+      // don't need it re-entered. (Settings API already masks it on read.)
+      const persistKey = typedKey && typedKey !== '••••••••' ? typedKey : undefined;
+      const { started } = await startServiceM8Import(businessId, apiKey, persistKey);
+      if (!started) {
+        return res.status(409).json({ success: false, message: 'An import is already running — wait for it to finish.' });
+      }
+      res.status(202).json({ success: true, data: { started: true } });
+    } catch (error) {
+      console.error('ServiceM8 import error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to test ServiceM8 connection'
+        message: error instanceof Error ? error.message : 'Failed to start the ServiceM8 import',
       });
     }
   });
 
-  // POST /api/servicem8/import/customers - Import customers from ServiceM8
-  app.post('/api/servicem8/import/customers', async (req: Request, res: Response) => {
+  // GET /api/import/servicem8/status - Progress of the current/last background run.
+  app.get('/api/import/servicem8/status', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const result = await servicem8Service.importCustomers();
-      res.json(result);
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+      const progress = await getServiceM8ImportStatus(businessId);
+      res.json({ success: true, data: progress ?? { running: false, phase: 'idle' } });
     } catch (error) {
-      console.error('ServiceM8 customers import error:', error);
-      res.status(500).json({
-        success: false,
-        imported: 0,
-        errors: ['Failed to import customers from ServiceM8']
-      });
-    }
-  });
-
-  // POST /api/servicem8/update/customer-names - Update existing customer names with improved ServiceM8 data
-  app.post('/api/servicem8/update/customer-names', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.updateExistingCustomerNames();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 customer names update error:', error);
-      res.status(500).json({
-        success: false,
-        updated: 0,
-        errors: ['Failed to update customer names from ServiceM8']
-      });
-    }
-  });
-
-  // POST /api/servicem8/import/jobs - Import jobs from ServiceM8
-  app.post('/api/servicem8/import/jobs', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.importJobs();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 jobs import error:', error);
-      res.status(500).json({
-        success: false,
-        imported: 0,
-        errors: ['Failed to import jobs from ServiceM8']
-      });
+      console.error('ServiceM8 import status error:', error);
+      res.status(500).json({ success: false, message: 'Failed to read import status' });
     }
   });
 
@@ -28480,39 +28519,6 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       });
     }
   });
-
-  // POST /api/servicem8/import/all - Import all data from ServiceM8
-  app.post('/api/servicem8/import/all', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.importAll();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 full import error:', error);
-      res.status(500).json({
-        success: false,
-        customers: { imported: 0, errors: [] },
-        jobs: { imported: 0, errors: [] },
-        message: 'Failed to import data from ServiceM8'
-      });
-    }
-  });
-
-  // POST /api/servicem8/sync - Sync existing data with complete ServiceM8 information
-  app.post('/api/servicem8/sync', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.syncExistingData();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 sync error:', error);
-      res.status(500).json({
-        success: false,
-        customers: { updated: 0, errors: [] },
-        jobs: { updated: 0, errors: [] },
-        message: 'Failed to sync data with ServiceM8'
-      });
-    }
-  });
-
 
   // Materials and Services API
   app.get("/api/materials-services", async (req: Request, res: Response) => {

@@ -1,5 +1,7 @@
 import { getUncachableResendClient } from '../resendClient';
 import { formatNZTime } from '@shared/dateUtils';
+import { renderWelcomeEmail } from '../emailTemplates';
+import { APP_URL } from '../config/appUrl';
 
 // Split a recipient field into individual addresses. Accepts a single address,
 // a comma/semicolon-separated string ("a@x.com, b@y.com"), or an array. Returns
@@ -395,6 +397,43 @@ class EmailService {
       subject,
       text,
       html
+    });
+  }
+
+  /**
+   * Signup confirmation email to a newly-created tenant's owner. Sent under the
+   * new business's own name (fromName), with a sign-in link + getting-started
+   * steps. Best-effort: callers should not block signup on the result.
+   */
+  async sendWelcomeEmail(params: {
+    ownerEmail: string;
+    ownerName: string;
+    businessName: string;
+  }): Promise<EmailResult> {
+    const signInUrl = `${APP_URL}/login`;
+    const html = renderWelcomeEmail({
+      ownerName: params.ownerName || 'there',
+      businessName: params.businessName,
+      signInUrl,
+      steps: [
+        { label: 'Add your company details', hint: 'Your name, logo, contact info and bank details — shown on your quotes and invoices. Settings → Company Info.' },
+        { label: 'Bring your data across', hint: 'Import your existing customers and jobs from ServiceM8 or a CSV. Settings → Import & Migration.' },
+      ],
+    });
+    const text = `Hi ${params.ownerName || 'there'},\n\n`
+      + `Your Inflow account for ${params.businessName} is ready to go.\n\n`
+      + `A couple of things to set up first:\n`
+      + `- Add your company details (name, logo, contact, bank) in Settings → Company Info\n`
+      + `- Bring your data across from ServiceM8 or CSV in Settings → Import & Migration\n\n`
+      + `Sign in: ${signInUrl}\n\n`
+      + `If this wasn't you, just reply to this email.`;
+
+    return this.sendEmail({
+      to: params.ownerEmail,
+      fromName: params.businessName,
+      subject: `Welcome to Inflow — ${params.businessName} is ready`,
+      text,
+      html,
     });
   }
 

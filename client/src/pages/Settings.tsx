@@ -40,6 +40,7 @@ import {
   BookOpen,
   Search,
   Rocket,
+  Database,
   type LucideIcon
 } from "lucide-react";
 import { Link } from "wouter";
@@ -125,6 +126,13 @@ const settingsSections: SettingSection[] = [
         description: "Phone numbers and emails that route calls, texts and replies to you",
         icon: Plug,
         path: "/settings/channels"
+      },
+      {
+        id: "import",
+        title: "Import & Migration",
+        description: "Bring your customers and jobs across from ServiceM8 or CSV",
+        icon: Database,
+        path: "/settings/import"
       }
     ]
   },
