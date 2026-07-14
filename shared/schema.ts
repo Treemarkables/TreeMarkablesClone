@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real, index, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -340,7 +340,9 @@ export const quotes = pgTable("quotes", {
   leadId: varchar("lead_id").references(() => leads.id),
   jobId: varchar("job_id").references(() => jobs.id),
   customerId: varchar("customer_id").references(() => customers.id),
-  quoteNumber: text("quote_number").notNull().unique(),
+  // Unique PER BUSINESS (quotes_business_quote_number_uniq below), not globally —
+  // each tenant runs its own quote sequence.
+  quoteNumber: text("quote_number").notNull(),
   description: text("description").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   validUntil: timestamp("valid_until"),
@@ -365,7 +367,9 @@ export const quotes = pgTable("quotes", {
   followUpNotes: text("follow_up_notes"),
   // Presentation method tracking for conversion rate analysis
   presentationMethod: text("presentation_method"), // on-site, sent-later, phone
-});
+}, (table) => ({
+  businessQuoteNumberUniq: uniqueIndex("quotes_business_quote_number_uniq").on(table.businessId, table.quoteNumber),
+}));
 
 // Job Management
 export const jobs = pgTable("jobs", {
@@ -378,11 +382,15 @@ export const jobs = pgTable("jobs", {
   // record is later updated.
   customerContactId: varchar("customer_contact_id").references(() => customerContacts.id, { onDelete: "set null" }),
   quoteId: varchar("quote_id").references(() => quotes.id),
-  jobNumber: text("job_number").notNull().unique(),
+  // Unique PER BUSINESS (jobs_business_job_number_uniq below), not globally —
+  // each tenant runs its own sequence; migrated jobs keep their source numbers.
+  jobNumber: text("job_number").notNull(),
   title: text("title"),
   description: text("description"),
   includeDescriptionInQuotesProposals: boolean("include_description_in_quotes_proposals").default(true),
   leadSource: text("lead_source"), // phone, website, referral, google, facebook, direct, other
+  importSource: text("import_source").default('manual'), // manual, csv_import, servicem8_import
+  externalId: text("external_id"), // Source-platform id (e.g. ServiceM8 job UUID) for import dedup
   address: text("address").notNull().default("Address not specified"),
   scheduledDate: timestamp("scheduled_date"),
   scheduledEndDate: timestamp("scheduled_end_date"), // For multi-day jobs — last day of the job
@@ -562,6 +570,19 @@ export const jobs = pgTable("jobs", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastActivityAt: timestamp("last_activity_at"),
+}, (table) => ({
+  businessJobNumberUniq: uniqueIndex("jobs_business_job_number_uniq").on(table.businessId, table.jobNumber),
+}));
+
+// Per-business job-number floor. When a business has a row here, getNextJobNumber
+// switches from max+1 to "lowest free number ≥ floor" (gap-fill) — used to resume
+// sane numbering after the old shared sequence inflated a tenant's numbers,
+// without renumbering real jobs already sent to customers. No row = normal max+1.
+export const jobNumberFloors = pgTable("job_number_floors", {
+  businessId: varchar("business_id").primaryKey().references(() => businesses.id),
+  floor: integer("floor").notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Job Diary Entries
@@ -2969,7 +2990,10 @@ export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   jobId: varchar("job_id").references(() => jobs.id),
-  invoiceNumber: text("invoice_number").notNull().unique(),
+  // Unique PER BUSINESS (invoices_business_invoice_number_uniq below), not
+  // globally — invoice numbers derive from the (now per-tenant) job number, so
+  // two tenants can each have invoice "4048".
+  invoiceNumber: text("invoice_number").notNull(),
   jobTitle: text("job_title").notNull(),
   address: text("address"), // Billing address for the invoice
   contactName: text("contact_name"), // Contact person name (e.g., "Sam Frasier" for Gisborne District Council)
@@ -2987,7 +3011,9 @@ export const invoices = pgTable("invoices", {
   xeroSyncedAt: timestamp("xero_synced_at"), // When invoice was last synced to Xero
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  businessInvoiceNumberUniq: uniqueIndex("invoices_business_invoice_number_uniq").on(table.businessId, table.invoiceNumber),
+}));
 
 // Invoice Sections — mirror of proposalSections, lets invoices carry photos +
 // narrative sections rendered on the customer-facing invoice page.
@@ -4544,6 +4570,19 @@ export const jobSiteMaps = pgTable("job_site_maps", {
 });
 
 export type JobSiteMapImage = typeof jobSiteMaps.$inferSelect;
+
+// Public job photo timeline — a token-gated, read-only customer link to the
+// job's photo feed (CompanyCam-style). One link per job; is_enabled allows
+// revoking without deleting the row (dead links 404 rather than leak).
+export const jobTimelineLinks = pgTable("job_timeline_links", {
+  businessId: varchar("business_id"),
+  jobId: varchar("job_id").primaryKey().references(() => jobs.id, { onDelete: 'cascade' }),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type JobTimelineLink = typeof jobTimelineLinks.$inferSelect;
 
 // Live job timer — one row per staff member currently clocked in on a job.
 // Stopping the timer converts the elapsed time into a jobs.staffTimeEntries

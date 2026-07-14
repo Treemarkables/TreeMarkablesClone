@@ -80,6 +80,8 @@ import {
 import { randomUUID } from "crypto";
 import { db, ownerDb } from "./db";
 import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
+import { cacheGet, cacheSet, cacheDelete, cacheDeletePrefix } from "./perfCache";
+import { invalidateEntitlementsCache } from "./tenancy/entitlements";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
@@ -916,38 +918,6 @@ export interface IStorage {
   getAllSmsTemplates(): Promise<SmsTemplate[]>;
   deleteSmsTemplate(id: string): Promise<void>;
 
-  // ServiceM8 Integration Management
-  createServicem8Config(config: InsertServicem8Config): Promise<Servicem8Config>;
-  getServicem8Config(): Promise<Servicem8Config | undefined>;
-  updateServicem8Config(id: string, updates: Partial<InsertServicem8Config>): Promise<Servicem8Config>;
-  deleteServicem8Config(id: string): Promise<void>;
-
-  // ServiceM8 Data Import Management
-  createServicem8Job(job: InsertServicem8Job): Promise<Servicem8Job>;
-  getServicem8Job(id: string): Promise<Servicem8Job | undefined>;
-  getServicem8JobByUuid(uuid: string): Promise<Servicem8Job | undefined>;
-  updateServicem8Job(id: string, updates: Partial<InsertServicem8Job>): Promise<Servicem8Job>;
-  getAllServicem8Jobs(): Promise<Servicem8Job[]>;
-  
-  createServicem8DiaryEntry(entry: InsertServicem8DiaryEntry): Promise<Servicem8DiaryEntry>;
-  getServicem8DiaryEntry(id: string): Promise<Servicem8DiaryEntry | undefined>;
-  getServicem8DiaryEntriesByJob(jobUuid: string): Promise<Servicem8DiaryEntry[]>;
-  
-  createServicem8Quote(quote: InsertServicem8Quote): Promise<Servicem8Quote>;
-  getServicem8Quote(id: string): Promise<Servicem8Quote | undefined>;
-  getServicem8QuoteByUuid(uuid: string): Promise<Servicem8Quote | undefined>;
-  
-  createServicem8Company(company: InsertServicem8Company): Promise<Servicem8Company>;
-  getServicem8Company(id: string): Promise<Servicem8Company | undefined>;
-  getServicem8CompanyByUuid(uuid: string): Promise<Servicem8Company | undefined>;
-  
-  createServicem8Invoice(invoice: InsertServicem8Invoice): Promise<Servicem8Invoice>;
-  getServicem8Invoice(id: string): Promise<Servicem8Invoice | undefined>;
-  getServicem8InvoiceByJobUuid(jobUuid: string): Promise<Servicem8Invoice | undefined>;
-  
-  createServicem8Material(material: InsertServicem8Material): Promise<Servicem8Material>;
-  getServicem8MaterialsByJob(jobUuid: string): Promise<Servicem8Material[]>;
-
   // Document Template Management
   createDocumentTemplate(template: InsertDocumentTemplate): Promise<DocumentTemplate>;
   getDocumentTemplate(id: string): Promise<DocumentTemplate | undefined>;
@@ -1110,6 +1080,11 @@ export interface IStorage {
   getAllActiveTimers(): Promise<schema.ActiveTimer[]>;
   startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer>;
   deleteTimer(id: string): Promise<boolean>;
+
+  // Public job photo timeline links
+  getTimelineLinkForJob(jobId: string): Promise<schema.JobTimelineLink | null>;
+  getTimelineLinkByToken(token: string): Promise<schema.JobTimelineLink | null>;
+  createTimelineLink(jobId: string, token: string): Promise<schema.JobTimelineLink>;
 
   // Mulch Drops
   createMulchDrop(drop: schema.InsertMulchDrop): Promise<schema.MulchDrop>;
@@ -1847,8 +1822,17 @@ class DatabaseStorage implements IStorage {
   }
 
   async getJobByJobNumber(jobNumber: string): Promise<Job | undefined> {
-    const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.jobNumber, jobNumber));
-    return job || undefined;
+    // Job numbers are unique per business, not globally. In-session the RLS
+    // proxy scopes this to one tenant (at most one row). Session-less callers
+    // (inbound email/SMS matchers run as owner) see every tenant, so an
+    // ambiguous number must never be guessed at — refuse and let the caller's
+    // other matchers (UUID, phone) do the work.
+    const rows = await db.select().from(schema.jobs).where(eq(schema.jobs.jobNumber, jobNumber)).limit(2);
+    if (rows.length > 1) {
+      console.warn(`getJobByJobNumber("${jobNumber}"): matches multiple tenants — refusing to guess`);
+      return undefined;
+    }
+    return rows[0] || undefined;
   }
 
   async updateJob(id: string, updates: Partial<InsertJob>): Promise<Job> {
@@ -2439,67 +2423,140 @@ class DatabaseStorage implements IStorage {
   }
 
   // Sequential Job Number Generation
-  private static jobNumberCounter: number = 3312;
-  
+  // Per-business monotonic counters (in-process); a brand-new business's first
+  // job is numbered 1001. Key "__global__" serves legacy tenant-less callers.
+  private static jobNumberCounters = new Map<string, number>();
+
+  // Per-business in-memory guard for the gap-fill path: numbers handed out but
+  // not yet committed, so two rapid calls on one instance don't pick the same gap.
+  private static issuedFlooredNumbers = new Map<string, Set<number>>();
+
   async getNextJobNumber(): Promise<string> {
+    // Job numbers are unique PER BUSINESS (jobs_business_job_number_uniq) —
+    // each tenant runs its own sequence, so one tenant's activity or a bulk
+    // migration never inflates another tenant's numbers. The max is read from
+    // the owner connection with an explicit business filter: every caller runs
+    // with tenant context (session ALS or runWithBusiness); a context-less
+    // caller falls back to the old global sequence rather than colliding.
+    const businessId = currentBusinessId();
+    const key = businessId ?? "__global__";
+
+    // Gap-fill override: a business may set a job_number_floors row (e.g. after a
+    // migration inflated its numbers via the old shared sequence). When present,
+    // hand out the lowest FREE number at/above the floor — filling the gaps its
+    // existing jobs left — instead of max+1. This lets numbering resume from the
+    // last "correct" number without renumbering the real jobs already sent to
+    // customers. Never reuses anything below the floor.
+    if (businessId) {
+      try {
+        const floorRes = await ownerDb.execute(
+          sql`SELECT floor FROM job_number_floors WHERE business_id = ${businessId}`,
+        );
+        const floorRaw = (floorRes.rows[0] as { floor?: number | string } | undefined)?.floor;
+        if (floorRaw != null) {
+          return await this.nextFreeJobNumberFromFloor(businessId, Number(floorRaw));
+        }
+      } catch (error) {
+        // Fail open to the normal max+1 path — never block job creation on this.
+        console.error('job_number_floors lookup failed, using max+1:', error);
+      }
+    }
+
+    const bump = (dbMax: number | null) => {
+      const floor = dbMax !== null ? dbMax + 1 : 1001;
+      const next = Math.max(DatabaseStorage.jobNumberCounters.get(key) ?? 0, floor);
+      DatabaseStorage.jobNumberCounters.set(key, next + 1);
+      return next.toString();
+    };
     try {
-      // Job numbers are GLOBALLY unique (one sequence across all tenants), so the max
-      // MUST be read from the owner connection. Reading via the RLS-scoped `db` returns
-      // only the current tenant's max, so a new tenant would generate low numbers that
-      // collide with another tenant's existing job numbers → unique-constraint violation
-      // → "Error creating job". Use ownerDb (BYPASSRLS) for the global max.
       const result = await ownerDb.select({
         maxJobNumber: sql<number>`CAST(MAX(CAST(${schema.jobs.jobNumber} AS INTEGER)) AS INTEGER)`
       })
       .from(schema.jobs)
-      .where(sql`${schema.jobs.jobNumber} ~ '^[0-9]+$'`); // Only numeric job numbers
-      
-      if (result.length > 0 && result[0].maxJobNumber !== null) {
-        const maxJobNumber = result[0].maxJobNumber;
-        // Ensure our counter is at least as high as the maximum in database
-        DatabaseStorage.jobNumberCounter = Math.max(DatabaseStorage.jobNumberCounter, maxJobNumber + 1);
-      }
-      
-      const nextNumber = DatabaseStorage.jobNumberCounter;
-      DatabaseStorage.jobNumberCounter++;
-      return nextNumber.toString();
+      .where(
+        businessId
+          ? and(sql`${schema.jobs.jobNumber} ~ '^[0-9]+$'`, eq(schema.jobs.businessId, businessId))
+          : sql`${schema.jobs.jobNumber} ~ '^[0-9]+$'`, // Only numeric job numbers
+      );
+      return bump(result[0]?.maxJobNumber ?? null);
     } catch (error) {
       // Fallback to counter-only approach if database query fails
       console.error('Database query failed for job number, using fallback:', error);
-      const nextNumber = DatabaseStorage.jobNumberCounter;
-      DatabaseStorage.jobNumberCounter++;
-      return nextNumber.toString();
+      return bump(null);
     }
   }
 
+  /**
+   * Lowest unused numeric job number ≥ floor for a business — the gap-fill path.
+   * Reads the business's taken numbers ≥ floor (a small set, since the floor sits
+   * just past the "correct" sequence), unions the in-memory issued-but-uncommitted
+   * set to bridge the assign→insert window within an instance, then walks up from
+   * the floor to the first free slot. Cross-instance races still can't create a
+   * duplicate — jobs_business_job_number_uniq rejects the second insert.
+   */
+  private async nextFreeJobNumberFromFloor(businessId: string, floor: number): Promise<string> {
+    const rows = await ownerDb
+      .select({ jobNumber: schema.jobs.jobNumber })
+      .from(schema.jobs)
+      .where(
+        and(
+          eq(schema.jobs.businessId, businessId),
+          sql`${schema.jobs.jobNumber} ~ '^[0-9]+$'`,
+          sql`CAST(${schema.jobs.jobNumber} AS INTEGER) >= ${floor}`,
+        ),
+      );
+    const taken = new Set<number>(rows.map((r) => parseInt(r.jobNumber, 10)));
+
+    let issued = DatabaseStorage.issuedFlooredNumbers.get(businessId);
+    if (!issued) {
+      issued = new Set<number>();
+      DatabaseStorage.issuedFlooredNumbers.set(businessId, issued);
+    }
+    // Drop issued numbers the DB now confirms — keep only still-in-flight ones.
+    for (const n of issued) {
+      if (taken.has(n)) issued.delete(n);
+      else taken.add(n);
+    }
+
+    let n = floor;
+    while (taken.has(n)) n++;
+    issued.add(n);
+    return String(n);
+  }
+
   // Sequential Quote Number Generation
-  private static quoteNumberCounter: number = 1000;
-  
+  // Per-business quote counters (in-process). Mirrors getNextJobNumber: quote
+  // numbers are unique PER BUSINESS (quotes_business_quote_number_uniq), so one
+  // tenant's quoting never inflates another's and two tenants can't be handed a
+  // colliding quote number on customer-facing documents.
+  private static quoteNumberCounters = new Map<string, number>();
+
   async getNextQuoteNumber(): Promise<string> {
+    const businessId = currentBusinessId();
+    const key = businessId ?? "__global__";
+    const bump = (dbMax: number | null) => {
+      const floor = dbMax !== null ? dbMax + 1 : 1001;
+      const next = Math.max(DatabaseStorage.quoteNumberCounters.get(key) ?? 0, floor);
+      DatabaseStorage.quoteNumberCounters.set(key, next + 1);
+      return next.toString();
+    };
     try {
-      // Quote numbers are globally unique too — read the max from the owner connection,
-      // not the RLS-scoped `db`, so new tenants don't generate colliding quote numbers.
+      // Read the tenant's own max on the owner connection. Every caller runs with
+      // tenant context; a context-less caller falls back to the global max.
       const result = await ownerDb.select({
         maxQuoteNumber: sql<number>`CAST(MAX(CAST(${schema.quotes.quoteNumber} AS INTEGER)) AS INTEGER)`
       })
       .from(schema.quotes)
-      .where(sql`${schema.quotes.quoteNumber} ~ '^[0-9]+$'`); // Only numeric quote numbers
-      
-      if (result.length > 0 && result[0].maxQuoteNumber !== null) {
-        const maxQuoteNumber = result[0].maxQuoteNumber;
-        // Ensure our counter is at least as high as the maximum in database
-        DatabaseStorage.quoteNumberCounter = Math.max(DatabaseStorage.quoteNumberCounter, maxQuoteNumber + 1);
-      }
-      
-      const nextNumber = DatabaseStorage.quoteNumberCounter;
-      DatabaseStorage.quoteNumberCounter++;
-      return nextNumber.toString();
+      .where(
+        businessId
+          ? and(sql`${schema.quotes.quoteNumber} ~ '^[0-9]+$'`, eq(schema.quotes.businessId, businessId))
+          : sql`${schema.quotes.quoteNumber} ~ '^[0-9]+$'`, // Only numeric quote numbers
+      );
+      return bump(result[0]?.maxQuoteNumber ?? null);
     } catch (error) {
       // Fallback to counter-only approach if database query fails
       console.error('Database query failed for quote number, using fallback:', error);
-      const nextNumber = DatabaseStorage.quoteNumberCounter;
-      DatabaseStorage.quoteNumberCounter++;
-      return nextNumber.toString();
+      return bump(null);
     }
   }
 
@@ -4567,18 +4624,39 @@ class DatabaseStorage implements IStorage {
   }
 
   // Role Tier Management
+  // Role tiers are read on every permission resolution (auth/me + every
+  // requirePermission route) but edited rarely — cache per tenant. role_tiers
+  // is a business_id table read through the RLS proxy, so the cache key MUST
+  // bind the request's tenant; with no tenant context (owner path/cron) we skip
+  // the cache rather than risk serving one tenant's tiers to another. Mutations
+  // are rare enough that they just drop the whole rt: namespace.
   async createRoleTier(tier: schema.InsertRoleTier): Promise<schema.RoleTier> {
     const [newTier] = await db.insert(schema.roleTiers).values(withTenant(tier as any)).returning();
+    cacheDeletePrefix("rt:");
     return newTier;
   }
 
   async getRoleTier(id: string): Promise<schema.RoleTier | undefined> {
+    const ctx = currentBusinessId();
+    const key = ctx ? `rt:${ctx}:id:${id}` : null;
+    if (key) {
+      const cached = cacheGet<schema.RoleTier>(key);
+      if (cached) return cached;
+    }
     const [tier] = await db.select().from(schema.roleTiers).where(eq(schema.roleTiers.id, id));
+    if (key && tier) cacheSet(key, tier, 60_000);
     return tier || undefined;
   }
 
   async getRoleTierByKey(key: string): Promise<schema.RoleTier | undefined> {
+    const ctx = currentBusinessId();
+    const cacheKey = ctx ? `rt:${ctx}:key:${key}` : null;
+    if (cacheKey) {
+      const cached = cacheGet<schema.RoleTier>(cacheKey);
+      if (cached) return cached;
+    }
     const [tier] = await db.select().from(schema.roleTiers).where(eq(schema.roleTiers.key, key));
+    if (cacheKey && tier) cacheSet(cacheKey, tier, 60_000);
     return tier || undefined;
   }
 
@@ -4591,15 +4669,24 @@ class DatabaseStorage implements IStorage {
       .set({ ...updates, updatedAt: new Date() } as any)
       .where(eq(schema.roleTiers.id, id))
       .returning();
+    cacheDeletePrefix("rt:");
     return updated;
   }
 
   async deleteRoleTier(id: string): Promise<void> {
     await db.delete(schema.roleTiers).where(eq(schema.roleTiers.id, id));
+    cacheDeletePrefix("rt:");
   }
 
   async getDefaultRoleTier(): Promise<schema.RoleTier | undefined> {
+    const ctx = currentBusinessId();
+    const key = ctx ? `rt:${ctx}:default` : null;
+    if (key) {
+      const cached = cacheGet<schema.RoleTier>(key);
+      if (cached) return cached;
+    }
     const [tier] = await db.select().from(schema.roleTiers).where(eq(schema.roleTiers.isDefault, true)).limit(1);
+    if (key && tier) cacheSet(key, tier, 60_000);
     return tier || undefined;
   }
 
@@ -5342,12 +5429,18 @@ class DatabaseStorage implements IStorage {
   // the business has no row; callers treat unset fields as blank (never TM's).
   async getBusinessSettingsForBusiness(businessId: string | null | undefined): Promise<BusinessSettings | undefined> {
     if (!businessId) return undefined;
+    // Read-mostly and re-fetched constantly (emails, PDFs, webhooks) — cache per
+    // business. Key binds the explicit businessId, so any calling context is safe.
+    // Misses aren't cached (a row may be created right after). Writers invalidate.
+    const cached = cacheGet<BusinessSettings>(`bs:${businessId}`);
+    if (cached) return cached;
     const [row] = await ownerDb
       .select()
       .from(schema.businessSettings)
       .where(eq(schema.businessSettings.businessId, businessId))
       .orderBy(sql`(${schema.businessSettings.id} = 'default') DESC`, asc(schema.businessSettings.createdAt))
       .limit(1);
+    if (row) cacheSet(`bs:${businessId}`, row, 30_000);
     return row;
   }
 
@@ -5368,6 +5461,7 @@ class DatabaseStorage implements IStorage {
       .set({ ...updates, updatedAt: new Date() } as any)
       .where(eq(schema.businessSettings.businessId, businessId))
       .returning();
+    cacheDelete(`bs:${businessId}`);
     return row;
   }
 
@@ -5444,18 +5538,31 @@ class DatabaseStorage implements IStorage {
 
   async setSubscriptionPlanForBusiness(businessId: string, planId: string): Promise<(typeof schema.subscriptions.$inferSelect) | undefined> {
     const existing = await this.getSubscriptionForBusiness(businessId);
+    let row: typeof schema.subscriptions.$inferSelect | undefined;
     if (existing) {
-      const [row] = await ownerDb.update(schema.subscriptions)
+      [row] = await ownerDb.update(schema.subscriptions)
         .set({ planId, status: 'active', updatedAt: new Date() })
         .where(eq(schema.subscriptions.id, existing.id)).returning();
-      return row;
+    } else {
+      [row] = await ownerDb.insert(schema.subscriptions)
+        .values({ businessId, planId, status: 'active' }).returning();
     }
-    const [row] = await ownerDb.insert(schema.subscriptions)
-      .values({ businessId, planId, status: 'active' }).returning();
+    // Plan changed — drop the cached entitlement resolution immediately.
+    invalidateEntitlementsCache(businessId);
     return row;
   }
 
   async getBusinessSettings(): Promise<BusinessSettings> {
+    // Cache per tenant, keyed on the request's AsyncLocalStorage businessId
+    // (same namespace as getBusinessSettingsForBusiness — both return the
+    // tenant's canonical row). NO tenant context (owner path, cron, webhook)
+    // → skip the cache entirely: there is no safe key, and a guessed one
+    // would be a cross-tenant leak.
+    const ctxBusinessId = currentBusinessId();
+    if (ctxBusinessId) {
+      const cached = cacheGet<BusinessSettings>(`bs:${ctxBusinessId}`);
+      if (cached) return cached;
+    }
     // Try to get existing business settings from database.
     // Deterministic ordering guards against stray duplicate rows for a tenant:
     // prefer the canonical id='default' row, then the oldest. Without this,
@@ -5467,6 +5574,7 @@ class DatabaseStorage implements IStorage {
       .orderBy(sql`(${schema.businessSettings.id} = 'default') DESC`, asc(schema.businessSettings.createdAt))
       .limit(1);
     if (existing) {
+      if (ctxBusinessId) cacheSet(`bs:${ctxBusinessId}`, existing, 30_000);
       return existing;
     }
     
@@ -5486,7 +5594,7 @@ class DatabaseStorage implements IStorage {
   async updateBusinessSettings(updates: UpdateBusinessSettings): Promise<BusinessSettings> {
     // Ensure we have a settings record first
     const existing = await this.getBusinessSettings();
-    
+
     // Update the settings
     const [updated] = await db.update(schema.businessSettings)
       .set({
@@ -5495,7 +5603,13 @@ class DatabaseStorage implements IStorage {
       })
       .where(eq(schema.businessSettings.id, existing.id))
       .returning();
-    
+
+    // Invalidate under the row's own businessId (most reliable) and the
+    // request context's, in case a legacy row predates the businessId stamp.
+    if (updated?.businessId) cacheDelete(`bs:${updated.businessId}`);
+    const ctxBusinessId = currentBusinessId();
+    if (ctxBusinessId) cacheDelete(`bs:${ctxBusinessId}`);
+
     return updated;
   }
   async resetBusinessSettings(): Promise<BusinessSettings> { throw new Error("Not implemented"); }
@@ -6298,67 +6412,6 @@ class DatabaseStorage implements IStorage {
   async deleteSmsTemplate(id: string): Promise<void> {
     await db.delete(schema.smsTemplates).where(eq(schema.smsTemplates.id, id));
   }
-
-  // ServiceM8 Integration Management
-  async createServicem8Config(config: InsertServicem8Config): Promise<Servicem8Config> {
-    const [servicem8Config] = await db.insert(schema.servicem8Config).values(config).returning();
-    return servicem8Config;
-  }
-
-  async getServicem8Config(): Promise<Servicem8Config | undefined> {
-    const [config] = await db.select().from(schema.servicem8Config).limit(1);
-    return config || undefined;
-  }
-
-  async updateServicem8Config(id: string, updates: Partial<InsertServicem8Config>): Promise<Servicem8Config> {
-    const [updatedConfig] = await db.update(schema.servicem8Config)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(schema.servicem8Config.id, id))
-      .returning();
-    return updatedConfig;
-  }
-
-  async deleteServicem8Config(id: string): Promise<void> {
-    await db.delete(schema.servicem8Config).where(eq(schema.servicem8Config.id, id));
-  }
-
-  // ServiceM8 Data Import Management - Stub implementations
-  async createServicem8Job(job: InsertServicem8Job): Promise<Servicem8Job> { throw new Error("Not implemented"); }
-  async getServicem8Job(id: string): Promise<Servicem8Job | undefined> { return undefined; }
-  async getServicem8JobByUuid(uuid: string): Promise<Servicem8Job | undefined> { return undefined; }
-  async updateServicem8Job(id: string, updates: Partial<InsertServicem8Job>): Promise<Servicem8Job> { throw new Error("Not implemented"); }
-  async getAllServicem8Jobs(): Promise<Servicem8Job[]> { return []; }
-
-  async createServicem8DiaryEntry(entry: InsertServicem8DiaryEntry): Promise<Servicem8DiaryEntry> { throw new Error("Not implemented"); }
-  async getServicem8DiaryEntry(id: string): Promise<Servicem8DiaryEntry | undefined> { return undefined; }
-  async getServicem8DiaryEntriesByJob(servicem8JobUuid: string): Promise<Servicem8DiaryEntry[]> { return []; }
-  async updateServicem8DiaryEntry(id: string, updates: Partial<InsertServicem8DiaryEntry>): Promise<Servicem8DiaryEntry> { throw new Error("Not implemented"); }
-  async getAllServicem8DiaryEntries(): Promise<Servicem8DiaryEntry[]> { return []; }
-
-  async createServicem8Quote(quote: InsertServicem8Quote): Promise<Servicem8Quote> { throw new Error("Not implemented"); }
-  async getServicem8Quote(id: string): Promise<Servicem8Quote | undefined> { return undefined; }
-  async getServicem8QuoteByUuid(uuid: string): Promise<Servicem8Quote | undefined> { return undefined; }
-  async updateServicem8Quote(id: string, updates: Partial<InsertServicem8Quote>): Promise<Servicem8Quote> { throw new Error("Not implemented"); }
-  async getAllServicem8Quotes(): Promise<Servicem8Quote[]> { return []; }
-
-  async createServicem8Company(company: InsertServicem8Company): Promise<Servicem8Company> { throw new Error("Not implemented"); }
-  async getServicem8Company(id: string): Promise<Servicem8Company | undefined> { return undefined; }
-  async getServicem8CompanyByUuid(uuid: string): Promise<Servicem8Company | undefined> { return undefined; }
-  async updateServicem8Company(id: string, updates: Partial<InsertServicem8Company>): Promise<Servicem8Company> { throw new Error("Not implemented"); }
-  async getAllServicem8Companies(): Promise<Servicem8Company[]> { return []; }
-
-  async createServicem8Invoice(invoice: InsertServicem8Invoice): Promise<Servicem8Invoice> { throw new Error("Not implemented"); }
-  async getServicem8Invoice(id: string): Promise<Servicem8Invoice | undefined> { return undefined; }
-  async getServicem8InvoiceByUuid(uuid: string): Promise<Servicem8Invoice | undefined> { return undefined; }
-  async getServicem8InvoiceByJobUuid(jobUuid: string): Promise<Servicem8Invoice | undefined> { return undefined; }
-  async updateServicem8Invoice(id: string, updates: Partial<InsertServicem8Invoice>): Promise<Servicem8Invoice> { throw new Error("Not implemented"); }
-  async getAllServicem8Invoices(): Promise<Servicem8Invoice[]> { return []; }
-
-  async createServicem8Material(material: InsertServicem8Material): Promise<Servicem8Material> { throw new Error("Not implemented"); }
-  async getServicem8Material(id: string): Promise<Servicem8Material | undefined> { return undefined; }
-  async getServicem8MaterialsByJob(jobUuid: string): Promise<Servicem8Material[]> { return []; }
-  async updateServicem8Material(id: string, updates: Partial<InsertServicem8Material>): Promise<Servicem8Material> { throw new Error("Not implemented"); }
-  async getAllServicem8Materials(): Promise<Servicem8Material[]> { return []; }
 
   // ========================================
   // DOCUMENT TEMPLATE MANAGEMENT
@@ -7690,6 +7743,28 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.activeTimers.id, id))
       .returning();
     return result.length > 0;
+  }
+
+  // ─── Public job photo timeline links ──────────────────────────────────────
+  async getTimelineLinkForJob(jobId: string): Promise<schema.JobTimelineLink | null> {
+    const [link] = await db.select()
+      .from(schema.jobTimelineLinks)
+      .where(eq(schema.jobTimelineLinks.jobId, jobId));
+    return link ?? null;
+  }
+
+  async getTimelineLinkByToken(token: string): Promise<schema.JobTimelineLink | null> {
+    const [link] = await db.select()
+      .from(schema.jobTimelineLinks)
+      .where(eq(schema.jobTimelineLinks.token, token));
+    return link ?? null;
+  }
+
+  async createTimelineLink(jobId: string, token: string): Promise<schema.JobTimelineLink> {
+    const [link] = await db.insert(schema.jobTimelineLinks)
+      .values(withTenant({ jobId, token }))
+      .returning();
+    return link;
   }
 
   // ─── Mulch Drops ──────────────────────────────────────────────────────────

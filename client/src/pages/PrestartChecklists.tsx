@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, Eye, ClipboardList, Loader2 } from "lucide-react";
+import { Plus, Trash2, Eye, ClipboardList, Loader2, Lock, Pencil, Copy, Settings2 } from "lucide-react";
 import { format } from "date-fns";
 import type { PrestartChecklistTemplate, PrestartChecklist } from "@shared/schema";
 import SignaturePad from "@/components/SignaturePad";
@@ -44,17 +44,9 @@ interface ChecklistResult {
 type TemplateWithItems = PrestartChecklistTemplate & { items: ChecklistItem[] };
 type ChecklistWithResults = PrestartChecklist & { results: ChecklistResult[] };
 
-const EQUIPMENT_TYPES = [
-  "chainsaw",
-  "chipper",
-  "stump_grinder",
-  "ewp",
-  "rigging",
-  "vehicle",
-] as const;
-type EquipmentType = (typeof EQUIPMENT_TYPES)[number];
-
-const EQUIPMENT_LABELS: Record<EquipmentType, string> = {
+// Friendly names for the built-in equipment types; custom types added through
+// the template manager fall through to a prettified version of the raw value.
+const EQUIPMENT_LABELS: Record<string, string> = {
   chainsaw: "Chainsaw",
   chipper: "Chipper",
   stump_grinder: "Stump grinder",
@@ -64,7 +56,10 @@ const EQUIPMENT_LABELS: Record<EquipmentType, string> = {
 };
 
 function equipmentLabel(type: string): string {
-  return (EQUIPMENT_LABELS as Record<string, string>)[type] ?? type;
+  const known = EQUIPMENT_LABELS[type];
+  if (known) return known;
+  const words = type.replace(/_/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 const STATUS_OPTIONS: { value: ResultStatus; label: string }[] = [
@@ -78,7 +73,17 @@ export default function PrestartChecklists() {
 
   const [filterType, setFilterType] = useState<string>("all");
   const [isNewOpen, setIsNewOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [viewId, setViewId] = useState<string | null>(null);
+
+  // All active checklist templates (built-in + this business's custom ones).
+  const { data: templatesData } = useQuery<{
+    success: boolean;
+    data: TemplateWithItems[];
+  }>({
+    queryKey: ["/api/prestart-templates"],
+  });
+  const allTemplates = templatesData?.data ?? [];
 
   // ---- List query ----
   const listUrl =
@@ -104,42 +109,31 @@ export default function PrestartChecklists() {
   const [results, setResults] = useState<ChecklistResult[]>([]);
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
 
-  // ---- Templates query (only when a type is chosen in the new dialog) ----
-  const { data: templateData, isFetching: templatesFetching } = useQuery<{
-    success: boolean;
-    data: TemplateWithItems[];
-  }>({
-    queryKey: [`/api/prestart-templates?equipmentType=${formType}`],
-    enabled: isNewOpen && formType !== "",
-  });
-
-  // Load the first template's items into the results scaffold when type changes.
-  const loadedTemplateKey = useMemo(() => {
-    const first = templateData?.data?.[0];
-    if (!first) return null;
-    return `${formType}:${first.id}`;
-  }, [templateData, formType]);
-
-  // Derive results from the loaded template once, keyed by template.
-  const [appliedKey, setAppliedKey] = useState<string | null>(null);
-  if (
-    isNewOpen &&
-    loadedTemplateKey &&
-    loadedTemplateKey !== appliedKey &&
-    templateData?.data?.[0]
-  ) {
-    const first = templateData.data[0];
-    setActiveTemplateId(first.id);
+  // Choosing a template drives everything: equipment type comes from the
+  // template row, and its items scaffold the results.
+  function applyTemplate(templateId: string) {
+    const tpl = allTemplates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    setActiveTemplateId(tpl.id);
+    setFormType(tpl.equipmentType);
     setResults(
-      (first.items ?? []).map((item) => ({
+      (tpl.items ?? []).map((item) => ({
         itemId: item.id,
         label: item.label,
         status: "pass" as ResultStatus,
         note: "",
       })),
     );
-    setAppliedKey(loadedTemplateKey);
   }
+
+  // Distinct equipment types across templates + recorded checks (covers types
+  // whose template was later removed).
+  const equipmentTypes = useMemo(() => {
+    const types = new Set<string>();
+    for (const t of allTemplates) types.add(t.equipmentType);
+    for (const c of checklists) types.add(c.equipmentType);
+    return Array.from(types).sort();
+  }, [allTemplates, checklists]);
 
   const passed = results.length > 0 && results.every((r) => r.status !== "fail");
 
@@ -151,7 +145,6 @@ export default function PrestartChecklists() {
     setSignatureDataUrl("");
     setResults([]);
     setActiveTemplateId(null);
-    setAppliedKey(null);
   }
 
   function updateResult(itemId: string, patch: Partial<ChecklistResult>) {
@@ -222,8 +215,8 @@ export default function PrestartChecklists() {
     if (!formType) {
       toast({
         variant: "destructive",
-        title: "Equipment type required",
-        description: "Choose an equipment type before saving.",
+        title: "Checklist required",
+        description: "Choose a checklist before saving.",
       });
       return;
     }
@@ -231,7 +224,7 @@ export default function PrestartChecklists() {
       toast({
         variant: "destructive",
         title: "No checklist items",
-        description: "No template items are loaded for this equipment type.",
+        description: "The chosen checklist has no items — add some in Templates.",
       });
       return;
     }
@@ -254,16 +247,26 @@ export default function PrestartChecklists() {
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold">Pre-start Checklists</h1>
-        <Button
-          onClick={() => {
-            resetForm();
-            setIsNewOpen(true);
-          }}
-          data-testid="button-new-prestart"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          New pre-start check
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setManageOpen(true)}
+            data-testid="button-manage-prestart-templates"
+          >
+            <Settings2 className="mr-2 h-4 w-4" />
+            Templates
+          </Button>
+          <Button
+            onClick={() => {
+              resetForm();
+              setIsNewOpen(true);
+            }}
+            data-testid="button-new-prestart"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New pre-start check
+          </Button>
+        </div>
       </div>
 
       {/* Filter */}
@@ -275,9 +278,9 @@ export default function PrestartChecklists() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All equipment</SelectItem>
-            {EQUIPMENT_TYPES.map((t) => (
+            {equipmentTypes.map((t) => (
               <SelectItem key={t} value={t}>
-                {EQUIPMENT_LABELS[t]}
+                {equipmentLabel(t)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -369,23 +372,18 @@ export default function PrestartChecklists() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Equipment type</Label>
+              <Label>Checklist</Label>
               <Select
-                value={formType}
-                onValueChange={(v) => {
-                  setFormType(v);
-                  setAppliedKey(null);
-                  setResults([]);
-                  setActiveTemplateId(null);
-                }}
+                value={activeTemplateId ?? ""}
+                onValueChange={applyTemplate}
               >
                 <SelectTrigger data-testid="select-new-equipment">
-                  <SelectValue placeholder="Choose equipment" />
+                  <SelectValue placeholder="Choose a checklist" />
                 </SelectTrigger>
                 <SelectContent>
-                  {EQUIPMENT_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {EQUIPMENT_LABELS[t]}
+                  {allTemplates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -415,14 +413,9 @@ export default function PrestartChecklists() {
                   </div>
                 </div>
 
-                {templatesFetching ? (
-                  <div className="flex items-center gap-2 py-6 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading checklist…
-                  </div>
-                ) : results.length === 0 ? (
+                {results.length === 0 ? (
                   <p className="py-4 text-sm text-muted-foreground">
-                    No checklist template found for this equipment type.
+                    This checklist has no items yet — add some in Templates.
                   </p>
                 ) : (
                   <div className="space-y-3">
@@ -632,6 +625,271 @@ export default function PrestartChecklists() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PrestartTemplateManagerDialog
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        templates={allTemplates}
+        onError={(title, description) =>
+          toast({ variant: "destructive", title, description })
+        }
+      />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Template manager: built-in checklists are read-only (duplicate to
+// customize); custom ones — any equipment type — are fully editable.
+// ---------------------------------------------------------------------------
+interface PrestartTemplateDraft {
+  name: string;
+  equipmentType: string;
+  itemsText: string;
+}
+
+// Custom types are stored as snake_case slugs so filtering by equipmentType
+// groups consistently (e.g. "Scissor lift" -> scissor_lift).
+function toEquipmentSlug(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+function PrestartTemplateManagerDialog({
+  open,
+  onClose,
+  templates,
+  onError,
+}: {
+  open: boolean;
+  onClose: () => void;
+  templates: TemplateWithItems[];
+  onError: (title: string, description: string) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  const [draft, setDraft] = useState<PrestartTemplateDraft>({
+    name: "",
+    equipmentType: "",
+    itemsText: "",
+  });
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["/api/prestart-templates"] });
+
+  const fail = (title: string) => (error: unknown) =>
+    onError(title, error instanceof Error ? error.message : "Please try again.");
+
+  const draftBody = () => ({
+    name: draft.name.trim(),
+    equipmentType: toEquipmentSlug(draft.equipmentType),
+    items: draft.itemsText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((label, i) => ({ id: `item-${i + 1}`, label })),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const body = draftBody();
+      const res =
+        editingId === "new"
+          ? await apiRequest("POST", "/api/prestart-templates", body)
+          : await apiRequest("PUT", `/api/prestart-templates/${editingId}`, body);
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidate();
+      setEditingId(null);
+    },
+    onError: fail("Could not save template"),
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (tpl: TemplateWithItems) => {
+      const res = await apiRequest("POST", "/api/prestart-templates", {
+        name: `${tpl.name} (copy)`,
+        equipmentType: tpl.equipmentType,
+        items: tpl.items ?? [],
+      });
+      return res.json();
+    },
+    onSuccess: invalidate,
+    onError: fail("Could not duplicate template"),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/prestart-templates/${id}`);
+      return res.json();
+    },
+    onSuccess: invalidate,
+    onError: fail("Could not remove template"),
+  });
+
+  const beginEdit = (tpl: TemplateWithItems) => {
+    setDraft({
+      name: tpl.name,
+      equipmentType: tpl.equipmentType,
+      itemsText: (tpl.items ?? []).map((i) => i.label).join("\n"),
+    });
+    setEditingId(tpl.id);
+  };
+
+  const handleClose = (next: boolean) => {
+    if (!next) {
+      setEditingId(null);
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        {editingId ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>
+                {editingId === "new" ? "New checklist template" : "Edit checklist template"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Template name</Label>
+                  <Input
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                    placeholder="e.g. Excavator daily pre-start"
+                    data-testid="input-prestart-template-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Equipment type</Label>
+                  <Input
+                    value={draft.equipmentType}
+                    onChange={(e) => setDraft({ ...draft, equipmentType: e.target.value })}
+                    placeholder="e.g. excavator"
+                    data-testid="input-prestart-template-type"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Checklist items (one per line)</Label>
+                <Textarea
+                  value={draft.itemsText}
+                  onChange={(e) => setDraft({ ...draft, itemsText: e.target.value })}
+                  rows={8}
+                  data-testid="input-prestart-template-items"
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setEditingId(null)}
+                data-testid="button-prestart-template-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={
+                  !draft.name.trim() ||
+                  !draft.equipmentType.trim() ||
+                  saveMutation.isPending
+                }
+                onClick={() => saveMutation.mutate()}
+                data-testid="button-prestart-template-save"
+              >
+                Save template
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Checklist templates</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Built-in checklists are read-only — duplicate one to customize it, or add a
+              checklist for any equipment your business runs.
+            </p>
+            <div className="space-y-2">
+              {templates.map((tpl) => (
+                <div
+                  key={tpl.id}
+                  className="bg-card border border-border rounded-lg p-3 flex items-center justify-between gap-3"
+                  data-testid={`row-prestart-template-${tpl.id}`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium truncate">{tpl.name}</span>
+                      {tpl.isBuiltIn && (
+                        <Badge variant="secondary" className="gap-1">
+                          <Lock className="h-3 w-3" />
+                          Built-in
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {equipmentLabel(tpl.equipmentType)} · {(tpl.items ?? []).length} items
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => duplicateMutation.mutate(tpl)}
+                      disabled={duplicateMutation.isPending}
+                      aria-label={`Duplicate ${tpl.name}`}
+                      data-testid={`button-prestart-template-duplicate-${tpl.id}`}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    {!tpl.isBuiltIn && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => beginEdit(tpl)}
+                          aria-label={`Edit ${tpl.name}`}
+                          data-testid={`button-prestart-template-edit-${tpl.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => removeMutation.mutate(tpl.id)}
+                          disabled={removeMutation.isPending}
+                          aria-label={`Remove ${tpl.name}`}
+                          data-testid={`button-prestart-template-remove-${tpl.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {templates.length === 0 && (
+                <p className="text-sm text-muted-foreground">No templates yet.</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  setDraft({ name: "", equipmentType: "", itemsText: "" });
+                  setEditingId("new");
+                }}
+                data-testid="button-prestart-template-new"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New template
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

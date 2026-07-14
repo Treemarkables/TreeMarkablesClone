@@ -24,7 +24,9 @@ import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
 import { resolveEntitlements } from "./tenancy/entitlements";
+import { testServiceM8Connection, startServiceM8Import, getServiceM8ImportStatus } from "./services/servicem8Import";
 import { jwksHandler } from "./tenancy/jwksHandler";
+import { cacheDeletePrefix } from "./perfCache";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db, ownerDb } from "./db";
@@ -1031,6 +1033,13 @@ async function buildOnboardingChecklist(businessId: string) {
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.tenantChannels)
     .where(and(eq(schema.tenantChannels.businessId, businessId), eq(schema.tenantChannels.isActive, true)));
+  const [{ count: importedCustomerCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.customers)
+    .where(and(
+      eq(schema.customers.businessId, businessId),
+      sql`${schema.customers.importSource} IS NOT NULL AND ${schema.customers.importSource} <> 'manual'`,
+    ));
 
   const has = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
 
@@ -1042,6 +1051,7 @@ async function buildOnboardingChecklist(businessId: string) {
     { key: 'address', label: 'Business address', description: 'Shown on your documents.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyAddress) },
     { key: 'bank', label: 'Bank details', description: "So customers can pay your invoices — without it, no payment block shows.", path: '/settings/company', optional: false, done: has(settings?.bankAccountName) && has(settings?.bankAccountNumber) },
     { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: (channelCount ?? 0) > 0 },
+    { key: 'importData', label: 'Import your data', description: 'Bring your customers and jobs across from ServiceM8 or a CSV export.', path: '/settings/import', optional: true, done: (importedCustomerCount ?? 0) > 0 },
     { key: 'gst', label: 'GST number', description: 'Shown on tax invoices (only if GST-registered).', path: '/settings/company', optional: true, done: has(settings?.businessGstNumber) },
     { key: 'tradeVocabulary', label: 'Trade vocabulary', description: 'Improves voice-to-quote and AI accuracy for your trade.', path: '/settings/company', optional: true, done: has(settings?.tradeVocabulary) },
     { key: 'replyForward', label: 'Forward customer replies', description: 'Optionally copy job replies to your own inbox.', path: '/settings/company', optional: true, done: has(settings?.jobReplyForwardEmail) },
@@ -2015,6 +2025,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/safety-analytics', requireEntitlement('plan:business', 'safety_analytics'));
   app.use('/api/workflows', requireEntitlement('plan:business', 'workflow_automation'));
   app.use('/api/lane-automations', requireEntitlement('plan:business', 'workflow_automation'));
+  // Calls (recorded call log) → call_recording add-on, any tier. Session-less
+  // Twilio webhooks pass through the gate untouched (no tenant context).
+  app.use('/api/calls', requireEntitlement('addon:call_recording', 'calls'));
   // Metrics Dashboard (advanced analytics) → Crew. These endpoints are exclusive to the
   // (UI-gated) Metrics Dashboard, so gating them is safe; /api/analytics/* is deliberately
   // NOT here — it's shared with the executive dashboard + settings. Profitability has no
@@ -2117,6 +2130,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { businessId, employeeId } = await createTenant({ businessName, firstName, lastName, email, password });
+
+      // Welcome / confirmation email — best-effort, never blocks signup. Fires for
+      // free and paid alike since the account exists regardless of Stripe outcome.
+      emailService
+        .sendWelcomeEmail({ ownerEmail: email, ownerName: firstName, businessName })
+        .then((r) => { if (!r?.success) console.error('signup welcome email failed:', r?.error); })
+        .catch((e) => console.error('signup welcome email threw:', e?.message));
 
       // If they chose a paid plan, prepare a Checkout URL to redirect to after signup.
       let checkoutUrl: string | undefined;
@@ -2242,10 +2262,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const loginPermsSet = await getEmployeePermissions(employee).catch(() => new Set<string>());
       let loginPlanKey = 'freemium';
       let loginEntitlements: string[] = [];
-      if (employee.businessId && TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
-        loginPlanKey = 'business';
-        loginEntitlements = ['plan:crew', 'plan:business'];
-      } else if (employee.businessId) {
+      if (employee.businessId) {
+        // resolveEntitlements handles the comped Treemarkables case (full
+        // Business tier + every add-on) — no special-casing here.
         try {
           const ent = await resolveEntitlements(employee.businessId);
           loginPlanKey = ent.planKey;
@@ -2345,16 +2364,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const permsSet = await getEmployeePermissions(employee);
       const tier = employee.roleTierId ? await storage.getRoleTier(employee.roleTierId) : null;
 
-      // Subscription entitlements for plan-based UI gating. Treemarkables (platform
-      // owner) is comped → full Business-tier access; otherwise resolve from the live
-      // subscription. Mirrors the server feature gates so the UI matches enforcement.
+      // Subscription entitlements for plan-based UI gating. resolveEntitlements
+      // handles the comped Treemarkables case (full Business tier + every add-on).
+      // Mirrors the server feature gates so the UI matches enforcement.
       const __entBizId = req.session.businessId;
       let planKey = 'freemium';
       let entitlements: string[] = [];
-      if (__entBizId && TREEMARKABLES_BUSINESS_IDS.includes(__entBizId)) {
-        planKey = 'business';
-        entitlements = ['plan:crew', 'plan:business'];
-      } else if (__entBizId) {
+      if (__entBizId) {
         try {
           const ent = await resolveEntitlements(__entBizId);
           planKey = ent.planKey;
@@ -8452,9 +8468,15 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   }
 
   // Stream a video (public, range-aware so the <video> player can seek).
+  // ?download=1 forces a save-file download instead of in-page playback;
+  // ?name=<title> names the saved file (sanitized in videoStorage).
   app.get('/objects/videos/:filename', async (req: Request, res: Response) => {
     try {
-      await videoStorage.streamVideo(`/objects/videos/${req.params.filename}`, req, res);
+      const wantsDownload = req.query.download === '1' || req.query.download === 'true';
+      const downloadName = wantsDownload
+        ? (typeof req.query.name === 'string' && req.query.name) || req.params.filename
+        : undefined;
+      await videoStorage.streamVideo(`/objects/videos/${req.params.filename}`, req, res, { downloadName });
     } catch (error) {
       console.error('Error serving video:', error);
       if (!res.headersSent) res.status(500).json({ error: 'Error serving video' });
@@ -16516,6 +16538,87 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // ── Public job photo timeline (CompanyCam-style share link) ───────────────
+
+  // Get-or-create the job's shareable timeline link (session side).
+  app.post('/api/jobs/:jobId/timeline-link', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+      let link = await storage.getTimelineLinkForJob(job.id);
+      if (!link) {
+        const token = require('crypto').randomBytes(32).toString('hex');
+        link = await storage.createTimelineLink(job.id, token);
+      }
+      res.json({
+        success: true,
+        data: { url: `${APP_URL}/timeline/${link.token}`, token: link.token, isEnabled: link.isEnabled },
+      });
+    } catch (error) {
+      console.error('Error creating timeline link:', error);
+      res.status(500).json({ success: false, message: 'Error creating timeline link' });
+    }
+  });
+
+  // Public feed — session-less, token-gated. Runs reads inside the owning
+  // tenant's context (session-less = owner connection, so reads must
+  // self-scope). Only non-private diary photo entries are exposed.
+  app.get('/api/public/timeline/:token', async (req: Request, res: Response) => {
+    try {
+      const link = await storage.getTimelineLinkByToken(req.params.token);
+      if (!link || !link.isEnabled) {
+        return res.status(404).json({ success: false, message: 'Timeline not found' });
+      }
+
+      const payload = await runWithBusiness(link.businessId ?? undefined, async () => {
+        // Session-less = owner connection; every read here self-scopes (by the
+        // token row's jobId / businessId) rather than trusting ALS context.
+        const job = await storage.getJob(link.jobId);
+        if (!job) return null;
+        if (link.businessId && job.businessId && job.businessId !== link.businessId) return null;
+        const settings = await storage.getBusinessSettingsForBusiness(link.businessId ?? job.businessId);
+        const identity = getBusinessIdentity(settings);
+        const brand = getBrandColors(settings);
+        const entries = await storage.getJobDiaryEntriesByJob(link.jobId);
+
+        const feed = [...entries]
+          .filter((e: any) => !e.isPrivate &&
+            ((Array.isArray(e.photos) && e.photos.length > 0) || e.photoUrl))
+          .sort((a: any, b: any) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+          .map((e: any) => {
+            const photos: string[] = Array.isArray(e.photos) && e.photos.length > 0
+              ? e.photos
+              : (e.photoUrl ? [e.photoUrl] : []);
+            // Prefer the caption (description) unless it's the generic default.
+            const generic = /^photo added$|^\d+ photos added$/i.test((e.description || '').trim());
+            return {
+              id: e.id,
+              caption: generic ? '' : (e.description || '').trim(),
+              author: e.authorName || '',
+              createdAt: e.createdAt,
+              photos,
+            };
+          });
+
+        return {
+          business: { name: identity.name, headerColor: brand.headerColor, accentColor: brand.accentColor },
+          job: { jobNumber: job.jobNumber ?? null, title: job.title ?? null },
+          entries: feed,
+        };
+      });
+
+      if (!payload) return res.status(404).json({ success: false, message: 'Timeline not found' });
+      res.json({ success: true, data: payload });
+    } catch (error) {
+      console.error('Error fetching public timeline:', error);
+      res.status(500).json({ success: false, message: 'Error fetching timeline' });
+    }
+  });
+
   // Get photos for a job
   app.get('/api/jobs/:jobId/photos', async (req: Request, res: Response) => {
     try {
@@ -21023,7 +21126,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           ? `Email to ${recipientEmail} for ${jobLabel} was not delivered${bounceDetail}. Check the address and resend.${subjectSnippet}`
           : `${recipientEmail} marked your email as spam for ${jobLabel}. Consider using a different address.${subjectSnippet}`;
 
-        const actionUrl = matchedJob ? `/jobs/${matchedJob.id}` : '/invoices';
+        // Matched → the job's diary (where the bounce entry is written below);
+        // jobs open via /dispatch?job=, not a /jobs/:id route (which doesn't
+        // exist). Unmatched → the comms inbox, not /invoices (a bounce for a
+        // non-invoice email dumped the operator onto an unrelated list).
+        const actionUrl = matchedJob ? `/dispatch?job=${matchedJob.id}&tab=diary` : '/inbox';
 
         // Stamp the bounce/complaint notification + diary entry to the matched job's
         // tenant (owner-pathed webhook, no session). Unmatched events carry no tenant
@@ -23041,8 +23148,15 @@ Transcription: ${transcriptText}`;
             targetJob = await storage.getJobByJobNumber(jobNumberMatch[1]);
           }
           if (!targetJob && quoteNumberMatch) {
+            // Quote numbers are unique per business, not globally. This inbound
+            // handler runs session-less (sees all tenants), so only accept an
+            // UNAMBIGUOUS quote-number match — otherwise the UUID/job-number
+            // matchers above should have already resolved the right tenant.
             const jobs = await storage.getAllJobs({ quoteNumber: quoteNumberMatch[1] });
-            if (jobs && jobs.length > 0) targetJob = jobs[0];
+            if (jobs && jobs.length === 1) targetJob = jobs[0];
+            else if (jobs && jobs.length > 1) {
+              console.warn(`Quote number ${quoteNumberMatch[1]} matches multiple tenants — skipping quote-number match`);
+            }
           }
 
           if (targetJob) {
@@ -26756,6 +26870,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             await ownerDb.update(schema.businessSettings)
               .set({ stripeConnectChargesEnabled: !!acct.charges_enabled })
               .where(eq(schema.businessSettings.stripeConnectAccountId, acct.id));
+            // Matched by Stripe account id, so we don't know which business's
+            // settings row changed — drop the whole settings cache namespace
+            // (rare event, tiny cache).
+            cacheDeletePrefix('bs:');
           } catch (e: any) {
             console.error('Stripe Connect account.updated sync failed:', e?.message);
           }
@@ -27870,65 +27988,77 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // =====================================
-  // ServiceM8 Integration API Routes
+  // ServiceM8 migration (per-tenant, API-key) — Settings → Import & Migration.
+  // Replaces the dead single-tenant /api/servicem8/* routes (their
+  // servicem8Service was never defined, so every call 500'd).
   // =====================================
 
-  // GET /api/servicem8/test - Test ServiceM8 API connection
-  app.get('/api/servicem8/test', async (req: Request, res: Response) => {
+  // Resolve the key to use: an explicitly typed one wins; the masked sentinel
+  // or an empty body falls back to the tenant's stored key.
+  async function resolveServiceM8Key(bodyKey: unknown): Promise<string | null> {
+    const typed = typeof bodyKey === 'string' ? bodyKey.trim() : '';
+    if (typed && typed !== '••••••••') return typed;
+    const settings = await storage.getBusinessSettings();
+    const stored = (settings?.servicem8ApiKey ?? '').trim();
+    return stored || null;
+  }
+
+  // POST /api/import/servicem8/test - Validate a ServiceM8 API key
+  app.post('/api/import/servicem8/test', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const result = await servicem8Service.testConnection();
-      res.json(result);
+      const apiKey = await resolveServiceM8Key(req.body?.apiKey);
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'Enter your ServiceM8 API key first.' });
+      }
+      const result = await testServiceM8Connection(apiKey);
+      res.json({ success: result.ok, message: result.message });
     } catch (error) {
       console.error('ServiceM8 test connection error:', error);
+      res.status(500).json({ success: false, message: 'Failed to test the ServiceM8 connection' });
+    }
+  });
+
+  // POST /api/import/servicem8/run - Kick off a BACKGROUND import of the
+  // tenant's ServiceM8 clients + jobs and return immediately (a full account
+  // takes minutes — holding the request open just hits the edge's ~100s
+  // timeout as a Cloudflare 524). The UI polls /status. Idempotent per run;
+  // overlapping runs are refused (409) so the dedup snapshot stays valid.
+  app.post('/api/import/servicem8/run', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+      const typedKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+      const apiKey = await resolveServiceM8Key(req.body?.apiKey);
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'Enter your ServiceM8 API key first.' });
+      }
+      // Persist a newly typed key only after a successful run, so re-runs
+      // don't need it re-entered. (Settings API already masks it on read.)
+      const persistKey = typedKey && typedKey !== '••••••••' ? typedKey : undefined;
+      const { started } = await startServiceM8Import(businessId, apiKey, persistKey);
+      if (!started) {
+        return res.status(409).json({ success: false, message: 'An import is already running — wait for it to finish.' });
+      }
+      res.status(202).json({ success: true, data: { started: true } });
+    } catch (error) {
+      console.error('ServiceM8 import error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to test ServiceM8 connection'
+        message: error instanceof Error ? error.message : 'Failed to start the ServiceM8 import',
       });
     }
   });
 
-  // POST /api/servicem8/import/customers - Import customers from ServiceM8
-  app.post('/api/servicem8/import/customers', async (req: Request, res: Response) => {
+  // GET /api/import/servicem8/status - Progress of the current/last background run.
+  app.get('/api/import/servicem8/status', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const result = await servicem8Service.importCustomers();
-      res.json(result);
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+      const progress = await getServiceM8ImportStatus(businessId);
+      res.json({ success: true, data: progress ?? { running: false, phase: 'idle' } });
     } catch (error) {
-      console.error('ServiceM8 customers import error:', error);
-      res.status(500).json({
-        success: false,
-        imported: 0,
-        errors: ['Failed to import customers from ServiceM8']
-      });
-    }
-  });
-
-  // POST /api/servicem8/update/customer-names - Update existing customer names with improved ServiceM8 data
-  app.post('/api/servicem8/update/customer-names', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.updateExistingCustomerNames();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 customer names update error:', error);
-      res.status(500).json({
-        success: false,
-        updated: 0,
-        errors: ['Failed to update customer names from ServiceM8']
-      });
-    }
-  });
-
-  // POST /api/servicem8/import/jobs - Import jobs from ServiceM8
-  app.post('/api/servicem8/import/jobs', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.importJobs();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 jobs import error:', error);
-      res.status(500).json({
-        success: false,
-        imported: 0,
-        errors: ['Failed to import jobs from ServiceM8']
-      });
+      console.error('ServiceM8 import status error:', error);
+      res.status(500).json({ success: false, message: 'Failed to read import status' });
     }
   });
 
@@ -28393,39 +28523,6 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       });
     }
   });
-
-  // POST /api/servicem8/import/all - Import all data from ServiceM8
-  app.post('/api/servicem8/import/all', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.importAll();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 full import error:', error);
-      res.status(500).json({
-        success: false,
-        customers: { imported: 0, errors: [] },
-        jobs: { imported: 0, errors: [] },
-        message: 'Failed to import data from ServiceM8'
-      });
-    }
-  });
-
-  // POST /api/servicem8/sync - Sync existing data with complete ServiceM8 information
-  app.post('/api/servicem8/sync', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.syncExistingData();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 sync error:', error);
-      res.status(500).json({
-        success: false,
-        customers: { updated: 0, errors: [] },
-        jobs: { updated: 0, errors: [] },
-        message: 'Failed to sync data with ServiceM8'
-      });
-    }
-  });
-
 
   // Materials and Services API
   app.get("/api/materials-services", async (req: Request, res: Response) => {
@@ -32824,6 +32921,46 @@ If you cannot find a value, use null. Do not guess.`
     } catch (e) { ssErr(res, e, 'Failed to fetch topics'); }
   });
 
+  // Custom topic CRUD. Built-in library rows are platform content: readable by every
+  // tenant, never editable through the API (RLS write policies enforce the same).
+  const topicInsert = schema.insertToolboxTalkTopicSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const topicUpdate = topicInsert.partial();
+
+  app.post('/api/toolbox-talk-topics', async (req: Request, res: Response) => {
+    try {
+      const data = topicInsert.parse(req.body);
+      const [row] = await db.insert(schema.toolboxTalkTopics)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create topic'); }
+  });
+
+  app.put('/api/toolbox-talk-topics/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.toolboxTalkTopics).where(eq(schema.toolboxTalkTopics.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Topic not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in topics cannot be edited — duplicate one to customize it.' });
+      const data = topicUpdate.parse(req.body);
+      const [row] = await db.update(schema.toolboxTalkTopics)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.toolboxTalkTopics.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update topic'); }
+  });
+
+  app.delete('/api/toolbox-talk-topics/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.toolboxTalkTopics).where(eq(schema.toolboxTalkTopics.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Topic not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in topics cannot be removed.' });
+      // Soft delete: past talks may reference the topic id.
+      await db.update(schema.toolboxTalkTopics)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.toolboxTalkTopics.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove topic'); }
+  });
+
   app.get('/api/toolbox-talks', async (req: Request, res: Response) => {
     try {
       const { status } = req.query;
@@ -32903,6 +33040,45 @@ If you cannot find a value, use null. Do not guess.`
         .where(and(...conditions)).orderBy(schema.prestartChecklistTemplates.sortOrder);
       res.json({ success: true, data: templates });
     } catch (e) { ssErr(res, e, 'Failed to fetch templates'); }
+  });
+
+  // Custom pre-start template CRUD (built-ins read-only, same contract as topics).
+  const prestartTemplateInsert = schema.insertPrestartTemplateSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const prestartTemplateUpdate = prestartTemplateInsert.partial();
+
+  app.post('/api/prestart-templates', async (req: Request, res: Response) => {
+    try {
+      const data = prestartTemplateInsert.parse(req.body);
+      const [row] = await db.insert(schema.prestartChecklistTemplates)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create template'); }
+  });
+
+  app.put('/api/prestart-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.prestartChecklistTemplates).where(eq(schema.prestartChecklistTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be edited — duplicate one to customize it.' });
+      const data = prestartTemplateUpdate.parse(req.body);
+      const [row] = await db.update(schema.prestartChecklistTemplates)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.prestartChecklistTemplates.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update template'); }
+  });
+
+  app.delete('/api/prestart-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.prestartChecklistTemplates).where(eq(schema.prestartChecklistTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be removed.' });
+      // Soft delete: completed checklists hold an FK to their template.
+      await db.update(schema.prestartChecklistTemplates)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.prestartChecklistTemplates.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove template'); }
   });
 
   app.get('/api/prestart-checklists', async (req: Request, res: Response) => {
@@ -33045,6 +33221,45 @@ If you cannot find a value, use null. Do not guess.`
     } catch (e) { ssErr(res, e, 'Failed to fetch competency types'); }
   });
 
+  // Custom competency-type CRUD (built-ins read-only, same contract as topics).
+  const competencyTypeInsert = schema.insertCompetencyTypeSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const competencyTypeUpdate = competencyTypeInsert.partial();
+
+  app.post('/api/competency-types', async (req: Request, res: Response) => {
+    try {
+      const data = competencyTypeInsert.parse(req.body);
+      const [row] = await db.insert(schema.competencyTypes)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create competency type'); }
+  });
+
+  app.put('/api/competency-types/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.competencyTypes).where(eq(schema.competencyTypes.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Competency type not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in competency types cannot be edited.' });
+      const data = competencyTypeUpdate.parse(req.body);
+      const [row] = await db.update(schema.competencyTypes)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.competencyTypes.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update competency type'); }
+  });
+
+  app.delete('/api/competency-types/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.competencyTypes).where(eq(schema.competencyTypes.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Competency type not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in competency types cannot be removed.' });
+      // Soft delete: employee competencies may reference the type id.
+      await db.update(schema.competencyTypes)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.competencyTypes.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove competency type'); }
+  });
+
   app.get('/api/employee-competencies', async (req: Request, res: Response) => {
     try {
       const { employeeId, expiringOnly } = req.query;
@@ -33093,6 +33308,63 @@ If you cannot find a value, use null. Do not guess.`
         .where(eq(schema.swmsTemplates.isActive, true)).orderBy(schema.swmsTemplates.sortOrder, schema.swmsTemplates.name);
       res.json({ success: true, data: templates });
     } catch (e) { ssErr(res, e, 'Failed to fetch SWMS templates'); }
+  });
+
+  // Custom SWMS-template CRUD (built-ins read-only, same contract as topics).
+  const swmsTemplateInsert = schema.insertSwmsTemplateSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const swmsTemplateUpdate = swmsTemplateInsert.partial();
+
+  app.post('/api/swms-templates', async (req: Request, res: Response) => {
+    try {
+      const data = swmsTemplateInsert.parse(req.body);
+      const [row] = await db.insert(schema.swmsTemplates)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create SWMS template'); }
+  });
+
+  // Copy any visible template (typically a built-in) into an editable custom one.
+  app.post('/api/swms-templates/:id/duplicate', async (req: Request, res: Response) => {
+    try {
+      const [source] = await db.select().from(schema.swmsTemplates).where(eq(schema.swmsTemplates.id, req.params.id));
+      if (!source) return res.status(404).json({ success: false, message: 'Template not found' });
+      const [row] = await db.insert(schema.swmsTemplates)
+        .values(withTenant({
+          name: `${source.name} (copy)`,
+          category: source.category,
+          activityDescription: source.activityDescription,
+          defaultPpe: source.defaultPpe ?? [],
+          steps: source.steps ?? [],
+          sortOrder: 100,
+        })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to duplicate SWMS template'); }
+  });
+
+  app.put('/api/swms-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.swmsTemplates).where(eq(schema.swmsTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be edited — duplicate one to customize it.' });
+      const data = swmsTemplateUpdate.parse(req.body);
+      const [row] = await db.update(schema.swmsTemplates)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.swmsTemplates.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update SWMS template'); }
+  });
+
+  app.delete('/api/swms-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.swmsTemplates).where(eq(schema.swmsTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be removed.' });
+      // Soft delete keeps the contract consistent with the other safety libraries.
+      await db.update(schema.swmsTemplates)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.swmsTemplates.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove SWMS template'); }
   });
 
   app.get('/api/swms', async (req: Request, res: Response) => {

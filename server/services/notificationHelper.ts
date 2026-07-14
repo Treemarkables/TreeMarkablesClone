@@ -121,7 +121,7 @@ export async function notifyNewLead(adminEmployeeId: string, customerName: strin
   return notifyEmployee(adminEmployeeId, {
     title: '🌟 New Lead',
     body: `New inquiry from ${customerName} via ${source}`,
-    clickAction: '/conversations',
+    clickAction: '/inbox',
     data: {
       type: 'new_lead',
       customerName,
@@ -300,7 +300,7 @@ export async function notifyCustomerSmsReply(customerName: string, messageBody: 
     return await pushToAdminsWithCustomerMessages({
       title,
       body,
-      clickAction: '/conversations',
+      clickAction: '/inbox',
       data: { type: 'sms_reply', customerName, jobNumber: jobNumber || '' },
     });
   } catch (error) {
@@ -328,31 +328,6 @@ export async function pushToAdminsWithCustomerMessages(options: NotificationOpti
   } catch (error) {
     console.error('Error pushing to admins:', error);
     return 0;
-  }
-}
-
-/**
- * For a conversation, return the jobId of the most recent non-archived job
- * for its customer. Used so push notifications about a reply can deep-link
- * to the job card's diary tab once the conversation has been converted to a
- * lead/job, instead of back to the generic Conversations list.
- *
- * Fetches the conversation from storage to read customerId — callers pass
- * partial objects without FKs, so we can't rely on them for the lookup.
- */
-async function getConversationJobId(conversationId: string): Promise<string | null> {
-  try {
-    const full = await storage.getConversation(conversationId);
-    const customerId = full?.customerId;
-    if (!customerId) return null;
-    const jobs = await storage.getJobsByCustomer(customerId);
-    const active = jobs.find(
-      (j: any) => j.status !== 'archived' && j.status !== 'unsuccessful',
-    );
-    return (active ?? jobs[0])?.id ?? null;
-  } catch (error) {
-    console.error('Error looking up job for conversation:', error);
-    return null;
   }
 }
 
@@ -387,10 +362,11 @@ export async function createConversationNotification(conversation: {
                         conversation.source === 'web_form' ? 'Website' :
                         conversation.source || 'Message';
 
-    const jobId = await getConversationJobId(conversation.id);
-    const clickAction = jobId
-      ? `/dispatch?job=${jobId}&tab=diary`
-      : `/conversation/${conversation.id}`;
+    // A brand-new inquiry always deep-links to its conversation — never to a
+    // job derived merely from a matched customer's history. (An earlier
+    // customer-job lookup sent returning-customer inquiries to an unrelated
+    // job's dispatch board instead of the conversation where the inquiry lives.)
+    const clickAction = `/conversation/${conversation.id}`;
 
     await pushToAdminsWithCustomerMessages({
       title: `New ${sourceLabel} Inquiry`,
@@ -400,7 +376,6 @@ export async function createConversationNotification(conversation: {
         type: 'new_conversation',
         conversationId: conversation.id,
         source: conversation.source || '',
-        jobId: jobId || '',
       },
     });
 
@@ -584,10 +559,13 @@ export async function notifyConversationReply(conversation: {
       ? `${senderName}: ${replyPreview.slice(0, 100)}${replyPreview.length > 100 ? '…' : ''}`
       : `${senderName} replied via ${sourceLabel}`;
 
-    const jobId = await getConversationJobId(conversation.id);
-    const clickAction = jobId
-      ? `/dispatch?job=${jobId}&tab=diary`
-      : `/conversation/${conversation.id}`;
+    // A reply that arrived on a conversation always deep-links to that
+    // conversation. (Job-matched replies take a separate path in
+    // gmailReplyService that carries the real linked jobId and routes to the
+    // job diary. Here we must NOT derive a job from the customer's history — a
+    // prior/unrelated job sent returning-customer replies to the wrong
+    // dispatch board instead of the conversation.)
+    const clickAction = `/conversation/${conversation.id}`;
 
     await storage.createNotification({
       title: `${sourceLabel} reply from ${senderName}`,
@@ -598,7 +576,6 @@ export async function notifyConversationReply(conversation: {
       metadata: {
         conversationId: conversation.id,
         source: conversation.source,
-        jobId: jobId || undefined,
         ...(messageId && { messageId }),
       }
     });
@@ -611,7 +588,6 @@ export async function notifyConversationReply(conversation: {
         type: 'conversation_reply',
         conversationId: conversation.id,
         source: conversation.source || '',
-        jobId: jobId || '',
       },
     });
 

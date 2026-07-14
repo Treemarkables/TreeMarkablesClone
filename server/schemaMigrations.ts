@@ -119,6 +119,180 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS ai_knowledge text DEFAULT ''`,
     ],
   },
+  {
+    // Call recording add-on catalog entry — first gated add-on (calls sidebar/page/API
+    // gate on addon:call_recording). Purchase path ships later; comped businesses get
+    // it via resolveEntitlements.
+    name: "add-on-call-recording",
+    statements: [
+      `INSERT INTO add_ons (key, name, billing_type) VALUES ('call_recording', 'Call Recording', 'flat')
+        ON CONFLICT (key) DO NOTHING`,
+    ],
+  },
+  {
+    // ServiceM8 migration (Settings → Import & Migration): job-level import
+    // provenance + source id so re-running an import dedups instead of duplicating.
+    // Mirrors the columns customers has had since the original TM import.
+    name: "jobs-import-source-columns",
+    statements: [
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS import_source text DEFAULT 'manual'`,
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS external_id text`,
+    ],
+  },
+  {
+    // ServiceM8 import run lock + progress, shared across app instances.
+    // The app runs 2 instances — an in-memory guard let overlapping runs start
+    // (each blind to the other's), which duplicated every record ~11x on the
+    // first real migration. One row per business: `running` is the lock,
+    // `progress` the live state the status endpoint reports.
+    name: "servicem8-import-runs-table",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS servicem8_import_runs (
+        business_id varchar PRIMARY KEY REFERENCES businesses(id),
+        running boolean NOT NULL DEFAULT false,
+        progress jsonb,
+        started_at timestamp,
+        finished_at timestamp,
+        updated_at timestamp DEFAULT now()
+      )`,
+    ],
+    postChecks: async (client) => {
+      const role = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      if (role.rowCount === 0) return;
+      await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON servicem8_import_runs TO app_tenant`);
+      await client.query(`ALTER TABLE servicem8_import_runs ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = 'servicem8_import_runs'::regclass LIMIT 1`,
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON servicem8_import_runs
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+      }
+    },
+  },
+  {
+    // Per-tenant job numbering (owner decision 2026-07-13): job numbers become
+    // unique PER BUSINESS instead of globally, so one tenant's activity (or a
+    // bulk migration) no longer inflates everyone else's numbers. The composite
+    // index goes in FIRST; only then is the legacy global constraint dropped in
+    // postChecks (globally-unique data always satisfies the composite, so the
+    // create can't fail and there is never a window without uniqueness).
+    // NOTE: the drop is a deliberate exception to the "strictly additive" rule —
+    // it removes a CONSTRAINT (schema shape), never data, and is guarded +
+    // idempotent via pg_catalog discovery (the constraint's name varies by how
+    // the DB was provisioned).
+    name: "jobs-per-tenant-numbering",
+    statements: [
+      `CREATE UNIQUE INDEX IF NOT EXISTS jobs_business_job_number_uniq ON jobs (business_id, job_number)`,
+    ],
+    postChecks: async (client) => {
+      // Unique CONSTRAINTS on exactly (job_number)
+      const cons = await client.query(`
+        SELECT c.conname FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        WHERE t.relname = 'jobs' AND c.contype = 'u' AND array_length(c.conkey, 1) = 1
+          AND (SELECT a.attname FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attnum = c.conkey[1]) = 'job_number'
+      `);
+      for (const row of cons.rows) {
+        await client.query(`ALTER TABLE jobs DROP CONSTRAINT "${row.conname}"`);
+      }
+      // Plain unique INDEXES on exactly (job_number) not backed by a constraint
+      const idx = await client.query(`
+        SELECT i.relname FROM pg_index x
+        JOIN pg_class i ON i.oid = x.indexrelid
+        JOIN pg_class t ON t.oid = x.indrelid
+        WHERE t.relname = 'jobs' AND x.indisunique AND x.indnatts = 1
+          AND i.relname <> 'jobs_business_job_number_uniq'
+          AND (SELECT a.attname FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attnum = x.indkey[0]) = 'job_number'
+          AND NOT EXISTS (SELECT 1 FROM pg_constraint pc WHERE pc.conindid = x.indexrelid)
+      `);
+      for (const row of idx.rows) {
+        await client.query(`DROP INDEX "${row.relname}"`);
+      }
+    },
+  },
+  {
+    // Per-business job-number floor (gap-fill). A row here switches a business's
+    // numberer from max+1 to "lowest free number ≥ floor", so numbering can
+    // resume from a known-good point after the old shared sequence inflated it —
+    // without renumbering real jobs already sent to customers. Only businesses
+    // that need it get a row (set manually); everyone else is unaffected.
+    name: "job-number-floors-table",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS job_number_floors (
+        business_id varchar PRIMARY KEY REFERENCES businesses(id),
+        floor integer NOT NULL,
+        note text,
+        created_at timestamp DEFAULT now()
+      )`,
+    ],
+    postChecks: async (client) => {
+      const role = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      if (role.rowCount === 0) return;
+      await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON job_number_floors TO app_tenant`);
+      await client.query(`ALTER TABLE job_number_floors ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = 'job_number_floors'::regclass LIMIT 1`,
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON job_number_floors
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+      }
+    },
+  },
+  {
+    // Per-tenant quote + invoice numbering (mirrors jobs-per-tenant-numbering).
+    // Quote numbers come from getNextQuoteNumber (now per-business); invoice
+    // numbers derive from the job number (already per-tenant since #417), so two
+    // tenants can legitimately share "4048". Composite indexes go in FIRST, then
+    // the legacy global unique constraints/indexes are dropped (globally-unique
+    // data always satisfies the composite → no unprotected window). The drops are
+    // the same documented exception to additive-only as the jobs migration, and
+    // are guarded + idempotent via pg_catalog discovery (constraint names vary).
+    name: "quotes-invoices-per-tenant-numbering",
+    statements: [
+      `CREATE UNIQUE INDEX IF NOT EXISTS quotes_business_quote_number_uniq ON quotes (business_id, quote_number)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS invoices_business_invoice_number_uniq ON invoices (business_id, invoice_number)`,
+    ],
+    postChecks: async (client) => {
+      for (const [tbl, col, keep] of [
+        ["quotes", "quote_number", "quotes_business_quote_number_uniq"],
+        ["invoices", "invoice_number", "invoices_business_invoice_number_uniq"],
+      ] as const) {
+        // Drop unique CONSTRAINTS on exactly (col)
+        const cons = await client.query(
+          `SELECT c.conname FROM pg_constraint c
+           JOIN pg_class t ON t.oid = c.conrelid
+           WHERE t.relname = $1 AND c.contype = 'u' AND array_length(c.conkey, 1) = 1
+             AND (SELECT a.attname FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attnum = c.conkey[1]) = $2`,
+          [tbl, col],
+        );
+        for (const row of cons.rows) {
+          await client.query(`ALTER TABLE ${tbl} DROP CONSTRAINT "${row.conname}"`);
+        }
+        // Drop plain unique INDEXES on exactly (col) not backed by a constraint
+        const idx = await client.query(
+          `SELECT i.relname FROM pg_index x
+           JOIN pg_class i ON i.oid = x.indexrelid
+           JOIN pg_class t ON t.oid = x.indrelid
+           WHERE t.relname = $1 AND x.indisunique AND x.indnatts = 1
+             AND i.relname <> $3
+             AND (SELECT a.attname FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attnum = x.indkey[0]) = $2
+             AND NOT EXISTS (SELECT 1 FROM pg_constraint pc WHERE pc.conindid = x.indexrelid)`,
+          [tbl, col, keep],
+        );
+        for (const row of idx.rows) {
+          await client.query(`DROP INDEX "${row.relname}"`);
+        }
+      }
+    },
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;
