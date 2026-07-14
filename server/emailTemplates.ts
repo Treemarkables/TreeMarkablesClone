@@ -225,19 +225,18 @@ export interface WelcomeEmailOptions {
   signInUrl: string;
   /** A few getting-started steps shown as a checklist. */
   steps: Array<{ label: string; hint: string }>;
-  /** Per-business brand colours. Omit to keep the platform black + neon-green. */
-  brand?: BrandColorInput;
 }
 
 /**
- * Signup confirmation / welcome email. Same branded header + footer style as the
- * money documents, but no total card — a greeting, a "you're in" line, a short
- * getting-started checklist, and a sign-in button. Header wordmark + footer use
- * the tenant's OWN business name (never the platform's), so the account owner
- * sees their brand.
+ * Signup confirmation / welcome email. Same layout as the money documents but
+ * no total card — a greeting, a "you're in" line, a short getting-started
+ * checklist, and a sign-in button. Deliberately NEUTRAL colours (slate header,
+ * white text) — a brand-new tenant has no brand colours yet, and defaulting to
+ * the platform black + neon painted every welcome in Treemarkables' look.
+ * Header wordmark + footer still use the tenant's OWN business name.
  */
 export function renderWelcomeEmail(opts: WelcomeEmailOptions): string {
-  const b = resolveBrand(opts.brand);
+  const b = { headerBg: BRAND.ink, wordmark: '#ffffff', accent: '#ffffff' };
   const steps = opts.steps
     .map(
       (s) => `
@@ -273,6 +272,13 @@ export function renderWelcomeEmail(opts: WelcomeEmailOptions): string {
       <tr><td style="padding:22px 28px;border-top:1px solid ${BRAND.line};color:${BRAND.muted};font-size:12px;line-height:1.6;text-align:center;background:#fafbfc;">
         <div>You're receiving this because an Inflow account was created for ${esc(opts.businessName)}.</div>
         <div style="margin-top:4px;">If this wasn't you, reply to this email and we'll sort it out.</div>
+        <div style="margin-top:16px;">
+          <a href="https://inflowapp.co.nz" style="text-decoration:none;color:${BRAND.ink};">
+            <img src="https://inflowapp.co.nz/inflow-icon-192.png" width="18" height="18" alt="Inflow" style="vertical-align:-4px;border:0;border-radius:4px;">
+            <span style="font-weight:700;font-size:13px;margin-left:6px;color:${BRAND.ink};">Inflow</span>
+          </a>
+          <div style="color:${BRAND.muted};font-size:11px;margin-top:4px;">The operating system for trades businesses &middot; <a href="https://inflowapp.co.nz" style="color:${BRAND.muted};">inflowapp.co.nz</a></div>
+        </div>
       </td></tr>
 
     </table>
