@@ -1336,9 +1336,11 @@ export function ProposalBuilder({
     const firstName = customerName.split(" ")[0];
     const totalAmount = grandTotal.toFixed(2);
 
-    // Create short proposal link if we have a proposal ID (include https:// for clickability)
+    // Create short proposal link if we have a proposal ID (include https:// for clickability).
+    // Use the public accept page — the bare /proposal/:id viewer needs a session, so
+    // customers opening it from an SMS hit a "not found" page under RLS.
     const shortLink = proposalId
-      ? `https://${window.location.host}/proposal/${proposalId}`
+      ? `https://${window.location.host}/proposal/${proposalId}/accept`
       : "";
 
     setSmsForm({

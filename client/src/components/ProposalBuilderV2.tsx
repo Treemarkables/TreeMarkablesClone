@@ -1972,18 +1972,26 @@ export function ProposalBuilderV2({
     setEmailForm({ to: email, cc: "", subject: "Treemarkables Quote", message: "Thank you for your inquiry, we are pleased to provide you with the following proposal." });
   }, [customEmail, job, customer]);
 
-  const initSmsForm = useCallback(() => {
+  const initSmsForm = useCallback((overrideId?: string) => {
     const phone = (customer as { phone?: string } | null)?.phone || (job as { jobContactMobile?: string } | null)?.jobContactMobile || (job as { jobContactPhone?: string } | null)?.jobContactPhone || "";
     const name = (customer as { name?: string } | null)?.name || "Valued Customer";
     const first = name.split(" ")[0];
-    const link = draftId ? `${window.location.origin}/proposal/${draftId}` : "";
+    // Link to the public accept page (same URL the email CTA uses) — it loads via
+    // /api/proposals/:id/public, which works without a session. The bare /proposal/:id
+    // viewer fetches session-authed endpoints, so customers opening it from an SMS
+    // got an empty "not found" page under RLS.
+    const docLabel = isQuote ? "quote" : "proposal";
+    const linkId = overrideId || draftId;
+    const link = linkId
+      ? `${window.location.origin}/proposal/${linkId}/accept${isQuote ? "?type=quote" : ""}`
+      : "";
     setSmsForm({
       to: phone,
       message: link
-        ? `Hi ${first}, your proposal is ready! Total: ${fmtNZD(grandTotal)}. View: ${link}\nJules\nTreemarkables`
-        : `Hi ${first}, your proposal is ready! Total: ${fmtNZD(grandTotal)}.\nJules\nTreemarkables`,
+        ? `Hi ${first}, your ${docLabel} is ready! Total: ${fmtNZD(grandTotal)}. View: ${link}\nJules\nTreemarkables`
+        : `Hi ${first}, your ${docLabel} is ready! Total: ${fmtNZD(grandTotal)}.\nJules\nTreemarkables`,
     });
-  }, [customer, job, draftId, grandTotal]);
+  }, [customer, job, draftId, grandTotal, isQuote]);
 
   const handleSendEmail = async () => {
     if (!emailForm.to.trim() || !emailForm.subject.trim()) {
@@ -2151,7 +2159,14 @@ export function ProposalBuilderV2({
               <BuilderToolbarButton
                 icon={MessageSquare}
                 label={isQuote ? "SMS quote" : "SMS proposal"}
-                onClick={() => { initSmsForm(); setShowSmsDialog(true); }}
+                onClick={async () => {
+                  // Persist the draft first so the composed message can include the
+                  // view link — composing before the first save produced an SMS with
+                  // no link at all (the draft only got created on Send).
+                  const id = draftId || (await ensureDraftSaved());
+                  initSmsForm(id || undefined);
+                  setShowSmsDialog(true);
+                }}
                 aria-label={isQuote ? "SMS quote" : "SMS proposal"}
                 className="bg-green-600 hover:bg-green-700"
               />
