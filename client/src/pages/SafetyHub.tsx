@@ -31,7 +31,7 @@ const PLANNING: ModuleCard[] = [
   },
   {
     title: "SWMS",
-    description: "Build safe work method statements from arborist task templates.",
+    description: "Build safe work method statements from task templates or your own.",
     href: "/safety/swms",
     icon: FileText,
     iconClass: "bg-emerald-100 text-emerald-600",
@@ -55,7 +55,7 @@ const PLANNING: ModuleCard[] = [
 const CHECKS: ModuleCard[] = [
   {
     title: "Pre-start Checklists",
-    description: "Daily equipment checks: chainsaw, chipper, stump grinder, EWP, rigging, vehicle.",
+    description: "Daily pre-start checks for the equipment your crew runs.",
     href: "/safety/prestart-checklists",
     icon: ClipboardCheck,
     iconClass: "bg-blue-100 text-blue-600",

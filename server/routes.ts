@@ -21126,7 +21126,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           ? `Email to ${recipientEmail} for ${jobLabel} was not delivered${bounceDetail}. Check the address and resend.${subjectSnippet}`
           : `${recipientEmail} marked your email as spam for ${jobLabel}. Consider using a different address.${subjectSnippet}`;
 
-        const actionUrl = matchedJob ? `/jobs/${matchedJob.id}` : '/invoices';
+        // Matched → the job's diary (where the bounce entry is written below);
+        // jobs open via /dispatch?job=, not a /jobs/:id route (which doesn't
+        // exist). Unmatched → the comms inbox, not /invoices (a bounce for a
+        // non-invoice email dumped the operator onto an unrelated list).
+        const actionUrl = matchedJob ? `/dispatch?job=${matchedJob.id}&tab=diary` : '/inbox';
 
         // Stamp the bounce/complaint notification + diary entry to the matched job's
         // tenant (owner-pathed webhook, no session). Unmatched events carry no tenant
@@ -32917,6 +32921,46 @@ If you cannot find a value, use null. Do not guess.`
     } catch (e) { ssErr(res, e, 'Failed to fetch topics'); }
   });
 
+  // Custom topic CRUD. Built-in library rows are platform content: readable by every
+  // tenant, never editable through the API (RLS write policies enforce the same).
+  const topicInsert = schema.insertToolboxTalkTopicSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const topicUpdate = topicInsert.partial();
+
+  app.post('/api/toolbox-talk-topics', async (req: Request, res: Response) => {
+    try {
+      const data = topicInsert.parse(req.body);
+      const [row] = await db.insert(schema.toolboxTalkTopics)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create topic'); }
+  });
+
+  app.put('/api/toolbox-talk-topics/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.toolboxTalkTopics).where(eq(schema.toolboxTalkTopics.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Topic not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in topics cannot be edited — duplicate one to customize it.' });
+      const data = topicUpdate.parse(req.body);
+      const [row] = await db.update(schema.toolboxTalkTopics)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.toolboxTalkTopics.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update topic'); }
+  });
+
+  app.delete('/api/toolbox-talk-topics/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.toolboxTalkTopics).where(eq(schema.toolboxTalkTopics.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Topic not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in topics cannot be removed.' });
+      // Soft delete: past talks may reference the topic id.
+      await db.update(schema.toolboxTalkTopics)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.toolboxTalkTopics.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove topic'); }
+  });
+
   app.get('/api/toolbox-talks', async (req: Request, res: Response) => {
     try {
       const { status } = req.query;
@@ -32996,6 +33040,45 @@ If you cannot find a value, use null. Do not guess.`
         .where(and(...conditions)).orderBy(schema.prestartChecklistTemplates.sortOrder);
       res.json({ success: true, data: templates });
     } catch (e) { ssErr(res, e, 'Failed to fetch templates'); }
+  });
+
+  // Custom pre-start template CRUD (built-ins read-only, same contract as topics).
+  const prestartTemplateInsert = schema.insertPrestartTemplateSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const prestartTemplateUpdate = prestartTemplateInsert.partial();
+
+  app.post('/api/prestart-templates', async (req: Request, res: Response) => {
+    try {
+      const data = prestartTemplateInsert.parse(req.body);
+      const [row] = await db.insert(schema.prestartChecklistTemplates)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create template'); }
+  });
+
+  app.put('/api/prestart-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.prestartChecklistTemplates).where(eq(schema.prestartChecklistTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be edited — duplicate one to customize it.' });
+      const data = prestartTemplateUpdate.parse(req.body);
+      const [row] = await db.update(schema.prestartChecklistTemplates)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.prestartChecklistTemplates.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update template'); }
+  });
+
+  app.delete('/api/prestart-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.prestartChecklistTemplates).where(eq(schema.prestartChecklistTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be removed.' });
+      // Soft delete: completed checklists hold an FK to their template.
+      await db.update(schema.prestartChecklistTemplates)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.prestartChecklistTemplates.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove template'); }
   });
 
   app.get('/api/prestart-checklists', async (req: Request, res: Response) => {
@@ -33138,6 +33221,45 @@ If you cannot find a value, use null. Do not guess.`
     } catch (e) { ssErr(res, e, 'Failed to fetch competency types'); }
   });
 
+  // Custom competency-type CRUD (built-ins read-only, same contract as topics).
+  const competencyTypeInsert = schema.insertCompetencyTypeSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const competencyTypeUpdate = competencyTypeInsert.partial();
+
+  app.post('/api/competency-types', async (req: Request, res: Response) => {
+    try {
+      const data = competencyTypeInsert.parse(req.body);
+      const [row] = await db.insert(schema.competencyTypes)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create competency type'); }
+  });
+
+  app.put('/api/competency-types/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.competencyTypes).where(eq(schema.competencyTypes.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Competency type not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in competency types cannot be edited.' });
+      const data = competencyTypeUpdate.parse(req.body);
+      const [row] = await db.update(schema.competencyTypes)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.competencyTypes.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update competency type'); }
+  });
+
+  app.delete('/api/competency-types/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.competencyTypes).where(eq(schema.competencyTypes.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Competency type not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in competency types cannot be removed.' });
+      // Soft delete: employee competencies may reference the type id.
+      await db.update(schema.competencyTypes)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.competencyTypes.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove competency type'); }
+  });
+
   app.get('/api/employee-competencies', async (req: Request, res: Response) => {
     try {
       const { employeeId, expiringOnly } = req.query;
@@ -33186,6 +33308,63 @@ If you cannot find a value, use null. Do not guess.`
         .where(eq(schema.swmsTemplates.isActive, true)).orderBy(schema.swmsTemplates.sortOrder, schema.swmsTemplates.name);
       res.json({ success: true, data: templates });
     } catch (e) { ssErr(res, e, 'Failed to fetch SWMS templates'); }
+  });
+
+  // Custom SWMS-template CRUD (built-ins read-only, same contract as topics).
+  const swmsTemplateInsert = schema.insertSwmsTemplateSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const swmsTemplateUpdate = swmsTemplateInsert.partial();
+
+  app.post('/api/swms-templates', async (req: Request, res: Response) => {
+    try {
+      const data = swmsTemplateInsert.parse(req.body);
+      const [row] = await db.insert(schema.swmsTemplates)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create SWMS template'); }
+  });
+
+  // Copy any visible template (typically a built-in) into an editable custom one.
+  app.post('/api/swms-templates/:id/duplicate', async (req: Request, res: Response) => {
+    try {
+      const [source] = await db.select().from(schema.swmsTemplates).where(eq(schema.swmsTemplates.id, req.params.id));
+      if (!source) return res.status(404).json({ success: false, message: 'Template not found' });
+      const [row] = await db.insert(schema.swmsTemplates)
+        .values(withTenant({
+          name: `${source.name} (copy)`,
+          category: source.category,
+          activityDescription: source.activityDescription,
+          defaultPpe: source.defaultPpe ?? [],
+          steps: source.steps ?? [],
+          sortOrder: 100,
+        })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to duplicate SWMS template'); }
+  });
+
+  app.put('/api/swms-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.swmsTemplates).where(eq(schema.swmsTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be edited — duplicate one to customize it.' });
+      const data = swmsTemplateUpdate.parse(req.body);
+      const [row] = await db.update(schema.swmsTemplates)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.swmsTemplates.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update SWMS template'); }
+  });
+
+  app.delete('/api/swms-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.swmsTemplates).where(eq(schema.swmsTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be removed.' });
+      // Soft delete keeps the contract consistent with the other safety libraries.
+      await db.update(schema.swmsTemplates)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.swmsTemplates.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove SWMS template'); }
   });
 
   app.get('/api/swms', async (req: Request, res: Response) => {

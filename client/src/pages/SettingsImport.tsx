@@ -172,7 +172,12 @@ export default function SettingsImport() {
 
           {running && status && (
             <div className="rounded-lg border border-border p-4 space-y-3" data-testid="sm8-import-progress">
-              <p className="font-medium">{PHASE_LABEL[status.phase] ?? "Importing…"}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">{PHASE_LABEL[status.phase] ?? "Importing…"}</p>
+                <span className="text-sm text-muted-foreground tabular-nums" data-testid="sm8-import-percent">
+                  {progressPct}%
+                </span>
+              </div>
               <Progress value={progressPct} />
               <ul className="text-sm text-muted-foreground space-y-1">
                 {(status.phase === "customers" || status.phase === "jobs") && (
