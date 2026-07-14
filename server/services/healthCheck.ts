@@ -5,7 +5,8 @@ import * as notificationHelper from './notificationHelper';
 import { getTwilioClient } from './twilioClient';
 import { runWithBusiness } from '../tenancy/tenantStore';
 import * as schema from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
+import { APP_URL } from '../config/appUrl';
 
 /**
  * Scheduled, self-contained health checks for the customer-facing pipeline.
@@ -136,6 +137,63 @@ async function verifyVisibleUnderTenant(
   }
 }
 
+/** Customer document links: prove the newest proposal is reachable ANONYMOUSLY
+ *  through the public URL — the exact path a customer follows from an SMS/email
+ *  link. Round-trips the whole chain (DNS/Cloudflare → DO → tenantMiddleware
+ *  owner-path allowlist → /api/proposals/:id/public), so a regression in any
+ *  layer (route rename, RLS allowlist change, domain/redirect breakage) alerts
+ *  the owner within 15 minutes instead of surfacing as customer complaints.
+ *  Added after the July 2026 dead-SMS-link incident, which only existed in
+ *  production (local dev runs RLS-off) and was found by a customer. */
+async function runCustomerLinkCheck(): Promise<CheckResult> {
+  const name = 'Customer proposal links (public view)';
+
+  let proposalId: string | undefined;
+  try {
+    const [latest] = await db
+      .select({ id: schema.proposals.id })
+      .from(schema.proposals)
+      .orderBy(desc(schema.proposals.createdAt))
+      .limit(1);
+    proposalId = latest?.id;
+  } catch (e) {
+    return { name, ok: false, detail: `could not load a proposal to probe: ${(e as Error).message}` };
+  }
+  if (!proposalId) {
+    return { name, ok: true, detail: 'no proposals in the database yet — nothing to probe' };
+  }
+
+  // In production probe the real public URL (exercises Cloudflare + DO edge).
+  // Elsewhere probe the local server — APP_URL falls back to the prod domain,
+  // and a dev DB's proposal id would 404 against prod, false-alerting.
+  const base =
+    process.env.NODE_ENV === 'production'
+      ? APP_URL
+      : `http://localhost:${process.env.PORT || 5000}`;
+  const url = `${base}/api/proposals/${proposalId}/public`;
+
+  try {
+    // Plain fetch, no cookies — deliberately anonymous, like a customer.
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) {
+      return {
+        name,
+        ok: false,
+        detail:
+          `anonymous GET ${url} returned ${res.status} — customers opening proposal ` +
+          `links from SMS/email would see "Proposal not found"`,
+      };
+    }
+    const body = (await res.json()) as { success?: boolean };
+    if (!body?.success) {
+      return { name, ok: false, detail: `anonymous GET ${url} returned 200 but success=false` };
+    }
+    return { name, ok: true, detail: `customer links ok (anonymous public fetch of latest proposal succeeded)` };
+  } catch (e) {
+    return { name, ok: false, detail: `anonymous GET ${url} failed: ${(e as Error).message}` };
+  }
+}
+
 /** Twilio inbound: credentials valid, account active, inbound number wired to the
  *  answer webhook that rings the app. */
 async function runTwilioConfigCheck(): Promise<CheckResult> {
@@ -183,7 +241,7 @@ async function runTwilioConfigCheck(): Promise<CheckResult> {
 
 async function runHealthChecks(): Promise<void> {
   const results: CheckResult[] = [];
-  for (const run of [runLeadPipelineCheck, runTwilioConfigCheck]) {
+  for (const run of [runLeadPipelineCheck, runTwilioConfigCheck, runCustomerLinkCheck]) {
     try {
       results.push(await run());
     } catch (e) {
@@ -281,7 +339,7 @@ async function sendRecovery(): Promise<void> {
 
 /** Start the recurring health-check worker. Gated by RUN_CRONS at the call site. */
 export function startHealthCheckWorker(): void {
-  console.log('[health] starting health-check worker (forms + phone, every 15m)');
+  console.log('[health] starting health-check worker (forms + phone + customer links, every 15m)');
   setTimeout(() => {
     runHealthChecks().catch((e) => console.error('[health] run error:', (e as Error).message));
   }, INITIAL_DELAY_MS);

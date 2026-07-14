@@ -198,6 +198,17 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   }
 
   if (!actualProposalResponse?.success || !actualProposalResponse?.data) {
+    // This page loads the proposal through session-authed endpoints, so an
+    // anonymous customer (e.g. following an older SMS link) always lands here
+    // even when the proposal exists. Hand them to the accept page, which reads
+    // the session-less /api/proposals/:id/public route — that rescues every
+    // /proposal/:id link already sitting in customers' phones. Staff (who have
+    // a session) only reach this branch when the proposal is genuinely gone,
+    // and the accept page shows its own not-found card for that case.
+    if (proposalId && !isPreviewMode) {
+      window.location.replace(`/proposal/${proposalId}/accept`);
+      return null;
+    }
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <Card className="w-full max-w-md">
