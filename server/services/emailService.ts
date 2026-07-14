@@ -432,6 +432,9 @@ class EmailService {
       to: params.ownerEmail,
       fromName: params.businessName,
       subject: `Welcome to Inflow — ${params.businessName} is ready`,
+      // Platform-level email: replies must reach the Inflow inbox, not the
+      // Treemarkables default (info@treemarkables.nz) the fallback would pick.
+      replyTo: process.env.INFLOW_SUPPORT_EMAIL || 'hello@inflowapp.co.nz',
       text,
       html,
     });
