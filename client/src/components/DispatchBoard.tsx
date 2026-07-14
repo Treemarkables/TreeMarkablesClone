@@ -76,6 +76,7 @@ import {
   CircleDollarSign,
   Wrench,
   CalendarCheck,
+  CalendarX,
   Reply,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -90,7 +91,13 @@ import {
   isWithinInterval,
   addMinutes,
 } from "date-fns";
-import { nzTimeToUTC, utcToNZTime, getJobScheduledNZDates } from "@shared/dateUtils";
+import {
+  nzTimeToUTC,
+  utcToNZTime,
+  getJobScheduledNZDates,
+  getNZDateString,
+  hasUpcomingBookingNZ,
+} from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -489,66 +496,6 @@ const timeSlots = [
   "19:00",
 ];
 
-// Job filter options similar to ServiceM8
-const jobFilterOptions = [
-  {
-    value: "all",
-    label: "All Jobs",
-    icon: List,
-    description:
-      "Active jobs with Quote or Work Order status (excludes completed).",
-  },
-  {
-    value: "action_required",
-    label: "Action Required",
-    icon: AlertTriangle,
-    description:
-      "Jobs that need to be scheduled, sent to a Queue, or actioned in some way.",
-  },
-  {
-    value: "for_review",
-    label: "For My Review",
-    icon: Target,
-    description: "Jobs that specifically need your attention.",
-  },
-  {
-    value: "leads",
-    label: "Leads",
-    icon: User,
-    description: "Potential customers and job inquiries.",
-  },
-  {
-    value: "quotes",
-    label: "Quotes",
-    icon: MessageSquare,
-    description: "Jobs with a Quote status.",
-  },
-  {
-    value: "work_orders",
-    label: "Work Orders",
-    icon: Settings,
-    description: "Confirmed jobs with work order status.",
-  },
-  {
-    value: "unscheduled",
-    label: "Unscheduled Jobs",
-    icon: Calendar,
-    description: "Jobs without a future booking and not in a Queue.",
-  },
-  {
-    value: "in_progress",
-    label: "In Progress Jobs",
-    icon: Zap,
-    description: "Jobs with a future booking.",
-  },
-  {
-    value: "completed",
-    label: "Completed Jobs",
-    icon: Check,
-    description: "Jobs recently updated to a Completed or Unsuccessful status.",
-  },
-];
-
 export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const { toast } = useToast();
   const [location] = useLocation();
@@ -710,7 +657,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     { value: "lead",       label: "Lead",      Icon: UserCog,         pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
     { value: "queue",      label: "Queue",     Icon: Inbox,           pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
     { value: "quote",      label: "Quote",     Icon: CircleDollarSign,pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-    { value: "work_order", label: "W/O",       Icon: Wrench,          pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
+    { value: "work_order", label: "Unscheduled", Icon: CalendarX,     pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
     { value: "scheduled",  label: "Scheduled", Icon: CalendarCheck,   pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
   ];
 
@@ -720,8 +667,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     queue: { title: "Dispatch Queue", subtitle: "Jobs parked and waiting" },
     quote: { title: "Quotes", subtitle: "Quote status" },
     mulch: { title: "Mulch", subtitle: "Mulch status" },
-    work_order: { title: "Work Orders", subtitle: "Work order status" },
-    scheduled: { title: "Scheduled", subtitle: "Scheduled status" },
+    work_order: { title: "Unscheduled", subtitle: "Work orders awaiting a booking" },
+    scheduled: { title: "Scheduled", subtitle: "Booked on the calendar" },
   };
 
   // Panel title for the active multi-select filter set ([] = All).
@@ -731,7 +678,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       : jobFilters.map((f) => filterMeta[f]?.title ?? f).join(" + ");
 
   // The awaiting-confirmation badge/toggle only makes sense on views that can
-  // contain unconfirmed work orders: All, or any selection including W/O or Scheduled.
+  // contain unconfirmed work orders: All, or any selection including Unscheduled or Scheduled.
   const showUnconfirmedBadge =
     jobFilters.length === 0 ||
     jobFilters.includes("scheduled") ||
@@ -1703,6 +1650,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     const isSearching = searchQuery.trim().length > 0;
 
+    // Boundary for the Unscheduled/Scheduled partition — computed once per
+    // memo run; the 30s poll refreshes `jobs`' identity, keeping it current.
+    const todayNZ = getNZDateString(new Date());
+
     const filtered = jobs
       .filter((job) => {
         // Always exclude terminal statuses from quick search
@@ -1722,12 +1673,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           return job.laneId === laneFilter;
         }
 
-        // Status filters are multi-select and OR-combined — e.g. W/O + Scheduled
-        // together shows every work_order regardless of booking state (needed
-        // when rescheduling: booked and bookable jobs side by side).
-        // 'scheduled' status retired 2026-05 — the W/O and Scheduled filters
-        // partition work_orders by whether they have a scheduledDate set,
-        // so every work_order matches exactly one of the two.
+        // Status filters are multi-select and OR-combined — e.g. Unscheduled +
+        // Scheduled together shows every work_order regardless of booking state
+        // (needed when rescheduling: booked and bookable jobs side by side).
+        // 'scheduled' status retired 2026-05 — the Unscheduled and Scheduled
+        // filters partition work_orders by whether they have a current-or-future
+        // booking, so every work_order matches exactly one of the two. A booking
+        // entirely in the past (e.g. rained off) returns to Unscheduled so it
+        // can be rebooked instead of hiding under Scheduled forever.
         if (jobFilters.length > 0) {
           return jobFilters.some((f) => {
             // Queued jobs belong exclusively to the Queue filter
@@ -1736,8 +1689,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             if (f === "lead") return job.status === "lead";
             if (f === "quote") return job.status === "quote";
             if (f === "mulch") return job.status === "mulch";
-            if (f === "work_order") return job.status === "work_order" && !job.scheduledDate;
-            if (f === "scheduled") return job.status === "work_order" && !!job.scheduledDate;
+            if (f === "work_order") return job.status === "work_order" && !hasUpcomingBookingNZ(job, todayNZ);
+            if (f === "scheduled") return job.status === "work_order" && hasUpcomingBookingNZ(job, todayNZ);
             return false;
           });
         }
@@ -1854,9 +1807,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       // jobs that predate the workOrderAt column — lastActivityAt gets bumped on every email,
       // note, or edit, which caused those jobs to reshuffle whenever they were touched.
       // createdAt is immutable so positions stay stable.
-      // FIFO only applies when W/O is the sole active filter — mixed selections
-      // (e.g. W/O + Scheduled) fall through to the activity sort below, since
-      // FIFO-by-conversion-time is meaningless for already-booked jobs.
+      // FIFO only applies when Unscheduled is the sole active filter — mixed
+      // selections (e.g. Unscheduled + Scheduled) fall through to the activity
+      // sort below, since FIFO-by-conversion-time is meaningless for
+      // already-booked jobs.
       if (jobFilters.length === 1 && jobFilters[0] === "work_order") {
         const getAcceptedTime = (job: JobAssignment): number => {
           if (job.workOrderAt) return new Date(job.workOrderAt).getTime();
@@ -2229,6 +2183,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // so the rest of the work runs in the background. The dispatch board
     // refetches when the staff-assignments POST resolves; on failure we toast.
     setPendingDrop(null);
+
+    // Optimistically apply the same updates to the cached jobs list so the
+    // card moves out of the Unscheduled pile the instant the drop is
+    // confirmed. Invalidating ["/api/jobs"] alone doesn't touch this list —
+    // its key is the full parameterized JOBS_QUERY_KEY — so without this the
+    // card lingered until the 30s poll.
+    queryClient.setQueryData([JOBS_QUERY_KEY], (prev: any) =>
+      prev?.data
+        ? {
+            ...prev,
+            data: prev.data.map((j: any) =>
+              j.id === jobId ? { ...j, ...updates } : j,
+            ),
+          }
+        : prev,
+    );
+
     (async () => {
       try {
         await fetch(`/api/jobs/${jobId}`, {
@@ -2253,9 +2224,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           }),
         });
 
+        queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
         queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
         queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
       } catch {
+        // Refetch rolls the optimistic patch back to server truth.
+        queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
         toast({
           title: "Scheduling Failed",
           description: "Could not schedule the job. Please try again.",
@@ -3002,6 +2976,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                       </div>
                                     )}
 
+                                    {/* Missed booking — the date passed without completion, so
+                                        the job is back under Unscheduled; explain why it reappeared */}
+                                    {job.status === "work_order" &&
+                                      job.scheduledDate &&
+                                      !hasUpcomingBookingNZ(job) && (
+                                        <div className="mb-1">
+                                          <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
+                                            <CalendarX className="h-3 w-3 mr-1" />
+                                            Was booked{" "}
+                                            {format(new Date(job.scheduledDate), "MMM d")} — needs
+                                            rebooking
+                                          </Badge>
+                                        </div>
+                                      )}
+
                                     {/* Row 2d: Lane chip (when the job sits in a custom lane) */}
                                     {job.laneId && laneMap.get(job.laneId) && (
                                       <div className="mb-1">
@@ -3439,6 +3428,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </Badge>
                           </div>
                         )}
+
+                        {/* Missed booking — the date passed without completion, so the
+                            job is back under Unscheduled; explain why it reappeared */}
+                        {job.status === "work_order" &&
+                          job.scheduledDate &&
+                          !hasUpcomingBookingNZ(job) && (
+                            <div className="mb-1.5">
+                              <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
+                                <CalendarX className="h-3 w-3 mr-1" />
+                                Was booked{" "}
+                                {format(new Date(job.scheduledDate), "MMM d")} — needs
+                                rebooking
+                              </Badge>
+                            </div>
+                          )}
 
                         {/* Row 3: Description snippet — always 1 line for consistent card height */}
                         <p className="text-sm text-gray-500 line-clamp-1 mb-2 min-h-5">
