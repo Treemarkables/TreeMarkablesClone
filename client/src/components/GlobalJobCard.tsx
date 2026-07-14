@@ -741,9 +741,6 @@ export function GlobalJobCard({
   const [isStaffTimeDialogOpen, setIsStaffTimeDialogOpen] = useState(false);
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [isEmailComposerOpen, setIsEmailComposerOpen] = useState(false);
-  const [emailContext, setEmailContext] = useState<
-    "general" | "quote" | "invoice" | "proposal"
-  >("general");
   const [isSMSComposerOpen, setIsSMSComposerOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
@@ -1430,7 +1427,6 @@ export function GlobalJobCard({
   useEffect(() => {
     const handleOpenEmailComposer = (event: CustomEvent) => {
       const { to, subject, context } = event.detail;
-      setEmailContext("general");
       setIsEmailComposerOpen(true);
 
       // Pre-fill email fields after modal opens
@@ -2908,12 +2904,7 @@ export function GlobalJobCard({
   });
 
   // Fetch proposal data for this job (always fetch when job exists)
-  const {
-    data: jobProposalResponse,
-    isLoading: isProposalLoading,
-    isFetching: isProposalFetching,
-    refetch: refetchProposals,
-  } = useQuery({
+  const { data: jobProposalResponse } = useQuery({
     queryKey: ["/api/proposals", editingJob?.id],
     queryFn: async () => {
       const response = await fetch(
@@ -3016,33 +3007,6 @@ export function GlobalJobCard({
     if (eq.name) equipmentLicenceMap[eq.name] = eq.licenceRequired || null;
   }
 
-  // Create proposal mutation
-  const createProposalMutation = useMutation({
-    mutationFn: async () => {
-      if (!editingJob?.id || !selectedCustomer?.id) {
-        throw new Error("Job and customer are required");
-      }
-
-      const proposalData = {
-        jobId: editingJob.id,
-        customerId: selectedCustomer.id,
-        title: editingJob.title || "Proposal",
-        proposalNumber: `PROP-${Date.now()}`,
-        introduction: editingJob.description || "",
-        conclusion: "",
-        status: "draft" as const,
-        deliveryMethod: "email" as const,
-        createdBy: "system",
-      };
-
-      const response = await apiRequest("POST", "/api/proposals", proposalData);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
-    },
-  });
-
   // Create quote mutation
   const createQuoteMutation = useMutation({
     mutationFn: async () => {
@@ -3106,79 +3070,7 @@ export function GlobalJobCard({
   });
 
   // Handle email click
-  const handleEmailClick = async (
-    context: "general" | "quote" | "invoice" | "proposal" = "general",
-  ) => {
-    setEmailContext(context);
-
-    // For quote emails, ensure a quote exists before opening composer
-    if (context === "quote" && editingJob?.id && selectedCustomer?.id) {
-      const hasQuote =
-        jobQuoteResponse?.success && jobQuoteResponse.data.length > 0;
-
-      if (!hasQuote) {
-        try {
-          // Create quote and wait for the result
-          const quoteResult = await createQuoteMutation.mutateAsync();
-
-          if (!quoteResult?.data?.id) {
-            throw new Error("Failed to create quote");
-          }
-
-          // Refetch and verify we have the quote data
-          const refetchResult = await refetchQuotes();
-
-          if (!refetchResult.data?.success || !refetchResult.data.data.length) {
-            throw new Error("Failed to load created quote");
-          }
-        } catch (error) {
-          console.error("Failed to create quote:", error);
-          toast({
-            title: "Error",
-            description: "Failed to create quote. Please try again.",
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-    }
-
-    // For proposal emails, ensure a proposal exists before opening composer
-    if (context === "proposal" && editingJob?.id && selectedCustomer?.id) {
-      // Wait for proposal query to be fully settled (not loading or fetching)
-      if (isProposalLoading || isProposalFetching) {
-        toast({
-          title: "Loading",
-          description: "Please wait while we load proposal data...",
-        });
-        return;
-      }
-
-      const hasProposal =
-        jobProposalResponse?.success && jobProposalResponse.data.length > 0;
-
-      if (!hasProposal) {
-        try {
-          // Create proposal and wait for the result
-          await createProposalMutation.mutateAsync();
-          // Refetch and verify we have the proposal data
-          const refetchResult = await refetchProposals();
-
-          if (!refetchResult.data?.success || !refetchResult.data.data.length) {
-            throw new Error("Failed to load created proposal");
-          }
-        } catch (error) {
-          console.error("Failed to create proposal:", error);
-          toast({
-            title: "Error",
-            description: "Failed to create proposal. Please try again.",
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-    }
-
+  const handleEmailClick = () => {
     setIsEmailComposerOpen(true);
   };
 
@@ -9926,8 +9818,6 @@ The Treemarkables Team`;
                                         className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                         onClick={(e) => {
                                           e.preventDefault();
-                                          // Set email context to invoice and open email composer
-                                          setEmailContext("invoice");
                                           setIsInvoiceModalOpen(true);
                                         }}
                                       >
@@ -10454,284 +10344,9 @@ The Treemarkables Team`;
               watchedTenantContactLastName || editingJob?.tenantContactLastName,
           }}
           customEmail={
-            emailContext !== "invoice"
-              ? watchedJobContactEmail ||
-                editingJob?.jobContactEmail ||
-                undefined
-              : undefined
+            watchedJobContactEmail || editingJob?.jobContactEmail || undefined
           }
-          customer={
-            emailContext === "invoice" && editingJob
-              ? {
-                  ...selectedCustomer,
-                  billingContactEmail:
-                    watchedBillingContactEmail ||
-                    editingJob.billingContactEmail,
-                  email:
-                    watchedBillingContactEmail ||
-                    editingJob.billingContactEmail ||
-                    editingJob.jobContactEmail ||
-                    selectedCustomer?.email,
-                  phone:
-                    editingJob.billingContactPhone ||
-                    editingJob.billingContactMobile ||
-                    editingJob.jobContactPhone ||
-                    selectedCustomer?.phone,
-                  address:
-                    editingJob.billingAddress ||
-                    editingJob.address ||
-                    selectedCustomer?.address,
-                  // Use billing name override from FORM (current unsaved value) first, then fall back to saved value
-                  name:
-                    watchedBillingNameOverride ||
-                    editingJob.billingNameOverride ||
-                    selectedCustomer?.name ||
-                    `${editingJob.jobContactFirstName || ""} ${editingJob.jobContactLastName || ""}`.trim(),
-                }
-              : selectedCustomer
-          }
-          quoteData={
-            emailContext === "quote" &&
-            jobQuoteResponse?.success &&
-            jobQuoteResponse.data.length > 0
-              ? {
-                  id: jobQuoteResponse.data[0].id,
-                  quoteNumber: jobQuoteResponse.data[0].quoteNumber,
-                  totalAmount: jobQuoteResponse.data[0].amount,
-                  validUntil: jobQuoteResponse.data[0].validUntil,
-                  status: jobQuoteResponse.data[0].status,
-                  lineItems: watchedLineItems,
-                }
-              : undefined
-          }
-          invoiceData={
-            emailContext === "invoice"
-              ? (() => {
-                  // Priority 1: If there are unsaved line items in the billing tab, use those (user is actively editing)
-                  const currentLineItems = form.getValues("lineItems");
-                  const hasUnsavedLineItems =
-                    currentLineItems && currentLineItems.length > 0;
-
-                  if (hasUnsavedLineItems) {
-                    console.log(
-                      "📋 Using unsaved line items from billing tab:",
-                      currentLineItems,
-                    );
-
-                    // Calculate subtotal from current line items
-                    const subtotal = currentLineItems.reduce(
-                      (sum: number, item: any) => {
-                        const itemTotal =
-                          parseFloat(item.total) ||
-                          parseFloat(item.quantity) *
-                            parseFloat(item.unitPrice);
-                        return sum + itemTotal;
-                      },
-                      0,
-                    );
-
-                    const gstAmount = subtotal * 0.15;
-                    const totalAmount = subtotal + gstAmount;
-
-                    // Use existing invoice number if one exists, otherwise generate new one
-                    const existingInvoice = jobInvoiceResponse?.data?.[0];
-                    const invoiceNumber =
-                      existingInvoice?.invoiceNumber ||
-                      `${editingJob?.jobNumber || "0000"}`;
-
-                    return {
-                      id: existingInvoice?.id || editingJob?.id,
-                      jobId: editingJob?.id,
-                      invoiceNumber,
-                      customerId: editingJob?.customerId || "",
-                      amount: subtotal,
-                      totalAmount,
-                      status: existingInvoice?.status || "draft",
-                      issueDate:
-                        existingInvoice?.issueDate || new Date().toISOString(),
-                      dueDate:
-                        existingInvoice?.dueDate ||
-                        new Date(
-                          Date.now() + 7 * 24 * 60 * 60 * 1000,
-                        ).toISOString(),
-                      paymentTerms:
-                        existingInvoice?.paymentTerms ||
-                        invoiceTemplate?.paymentTerms ||
-                        "Payment due within 7 days",
-                      lineItems: formData.lineItems,
-                      description:
-                        editingJob?.description || editingJob?.title || "",
-                      photos: [],
-                      notes: existingInvoice?.notes,
-                      createdAt:
-                        existingInvoice?.createdAt || new Date().toISOString(),
-                    };
-                  }
-
-                  // Priority 2: Check if there's a saved invoice for this job
-                  const existingInvoice = jobInvoiceResponse?.data?.[0];
-
-                  if (existingInvoice) {
-                    console.log(
-                      "📋 Using existing saved invoice:",
-                      existingInvoice.invoiceNumber,
-                    );
-
-                    // Convert database format to display format
-                    const lineItems = (existingInvoice.items || []).map(
-                      (item: any) => ({
-                        id: item.id,
-                        description: item.description,
-                        quantity: parseFloat(item.quantity) || 1,
-                        unitPrice: parseFloat(item.rate || item.unitPrice) || 0,
-                        total: parseFloat(item.amount || item.total) || 0,
-                        unit: item.unit || "ea",
-                        category: item.category,
-                      }),
-                    );
-
-                    // Calculate amounts from existing invoice
-                    const subtotal =
-                      typeof existingInvoice.amount === "string"
-                        ? parseFloat(existingInvoice.amount)
-                        : existingInvoice.amount;
-                    const gstAmount = subtotal * 0.15;
-                    const totalAmount = subtotal + gstAmount;
-
-                    return {
-                      id: existingInvoice.id,
-                      jobId: existingInvoice.jobId,
-                      invoiceNumber: existingInvoice.invoiceNumber,
-                      customerId: existingInvoice.customerId,
-                      amount: subtotal,
-                      totalAmount,
-                      status: existingInvoice.status,
-                      issueDate: existingInvoice.issueDate,
-                      dueDate: existingInvoice.dueDate,
-                      paymentTerms: existingInvoice.paymentTerms,
-                      lineItems,
-                      description:
-                        existingInvoice.description ||
-                        existingInvoice.notes ||
-                        editingJob?.description ||
-                        editingJob?.title ||
-                        "",
-                      photos: [],
-                      notes: existingInvoice.notes,
-                      createdAt: existingInvoice.createdAt,
-                    };
-                  }
-
-                  // If no existing invoice, construct from proposal if available, otherwise from job
-                  const proposal = jobProposalResponse?.data?.[0];
-                  console.log(
-                    "📋 Creating invoice data from proposal:",
-                    proposal?.id,
-                  );
-                  console.log(
-                    "📋 Proposal has sections:",
-                    !!proposal?.sections,
-                    "sections count:",
-                    proposal?.sections?.length || 0,
-                  );
-                  let lineItems: any[] = [];
-                  let photos: any[] = [];
-
-                  if (proposal?.sections) {
-                    // Extract line items from all proposal sections
-                    lineItems = proposal.sections.flatMap((section: any) =>
-                      (section.lineItems || []).map((item: any) => ({
-                        id: item.id,
-                        description: item.description,
-                        quantity: parseFloat(item.quantity) || 1,
-                        unitPrice: parseFloat(item.unitPrice) || 0,
-                        total: parseFloat(item.totalPrice || item.total || "0"),
-                        unit: item.unit || "ea",
-                        category: item.category,
-                      })),
-                    );
-
-                    // Extract photos from all proposal sections
-                    photos = proposal.sections.flatMap(
-                      (section: any) => section.photos || [],
-                    );
-                  } else {
-                    // Fallback to job line items
-                    lineItems = editingJob?.lineItems || [];
-                    photos = [];
-                  }
-
-                  console.log(
-                    "📋 Invoice will have",
-                    lineItems.length,
-                    "line items, data:",
-                    lineItems,
-                  );
-
-                  // Always use job description (from job details)
-                  const description =
-                    editingJob?.description || editingJob?.title || "";
-
-                  // Calculate subtotal (ex-GST) from line items
-                  const subtotal =
-                    lineItems.reduce(
-                      (sum: number, item: any) =>
-                        sum + (parseFloat(item.total) || 0),
-                      0,
-                    ) || 0;
-
-                  // Calculate GST (15%) and total amount (inc-GST)
-                  const taxRate = parseFloat(editingJob?.taxRate || "15");
-                  const gstAmount = subtotal * (taxRate / 100);
-                  const totalAmount = subtotal + gstAmount;
-
-                  console.log("📋 Invoice amounts:", {
-                    subtotal,
-                    taxRate,
-                    gstAmount,
-                    totalAmount,
-                  });
-
-                  return {
-                    id: editingJob?.id,
-                    jobId: editingJob?.id,
-                    invoiceNumber: `${editingJob?.jobNumber || "0000"}`,
-                    customerId: editingJob?.customerId || "",
-                    amount: subtotal,
-                    totalAmount,
-                    status: "draft",
-                    issueDate: new Date().toISOString(),
-                    dueDate: new Date(
-                      Date.now() + 7 * 24 * 60 * 60 * 1000,
-                    ).toISOString(),
-                    paymentTerms:
-                      invoiceTemplate?.paymentTerms ||
-                      "Payment due within 7 days",
-                    lineItems,
-                    description,
-                    photos,
-                    createdAt: new Date().toISOString(),
-                  };
-                })()
-              : undefined
-          }
-          proposalData={
-            emailContext === "proposal" &&
-            jobProposalResponse?.success &&
-            jobProposalResponse.data.length > 0
-              ? {
-                  id: jobProposalResponse.data[0].id,
-                  proposalNumber: jobProposalResponse.data[0].proposalNumber,
-                  title: jobProposalResponse.data[0].title,
-                  totalAmount: jobProposalResponse.data[0].totalAmount,
-                  subtotal: jobProposalResponse.data[0].subtotal,
-                  validUntil: jobProposalResponse.data[0].validUntil,
-                  status: jobProposalResponse.data[0].status,
-                  lineItems: form.getValues("lineItems") || [],
-                }
-              : undefined
-          }
-          templateType={emailContext}
+          customer={selectedCustomer}
         />
       )}
 
