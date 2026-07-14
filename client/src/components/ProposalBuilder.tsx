@@ -81,6 +81,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { insertProposalSchema } from "@shared/schema";
+import { proposalAcceptLink } from "@shared/customerLinks";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { useProposalSections } from "@/hooks/proposal/useProposalSections";
 import { useProposalMutations } from "@/hooks/proposal/useProposalMutations";
@@ -1337,10 +1338,8 @@ export function ProposalBuilder({
     const totalAmount = grandTotal.toFixed(2);
 
     // Create short proposal link if we have a proposal ID (include https:// for clickability).
-    // Use the public accept page — the bare /proposal/:id viewer needs a session, so
-    // customers opening it from an SMS hit a "not found" page under RLS.
     const shortLink = proposalId
-      ? `https://${window.location.host}/proposal/${proposalId}/accept`
+      ? proposalAcceptLink(proposalId, { base: window.location.origin })
       : "";
 
     setSmsForm({

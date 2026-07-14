@@ -28,6 +28,7 @@ import { invalidRecipientMessage } from "@/lib/emailValidation";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
 import type { DocumentTemplate, Customer, Proposal, DocumentBlock } from "@shared/schema";
 import { DEFAULT_PROPOSAL_BLOCKS } from "@shared/schema";
+import { proposalAcceptLink } from "@shared/customerLinks";
 
 // Minimal typed interfaces for browser SpeechRecognition (not in TypeScript lib by default)
 interface SpeechRecognitionAlternative { readonly transcript: string; }
@@ -1983,7 +1984,7 @@ export function ProposalBuilderV2({
     const docLabel = isQuote ? "quote" : "proposal";
     const linkId = overrideId || draftId;
     const link = linkId
-      ? `${window.location.origin}/proposal/${linkId}/accept${isQuote ? "?type=quote" : ""}`
+      ? proposalAcceptLink(linkId, { base: window.location.origin, quote: isQuote })
       : "";
     setSmsForm({
       to: phone,
@@ -2022,7 +2023,7 @@ export function ProposalBuilderV2({
     // link — append it rather than sending the customer a dead-end text.
     let message = smsForm.message;
     if (effectiveDraftId && !message.includes("/proposal/")) {
-      const link = `${window.location.origin}/proposal/${effectiveDraftId}/accept${isQuote ? "?type=quote" : ""}`;
+      const link = proposalAcceptLink(effectiveDraftId, { base: window.location.origin, quote: isQuote });
       message = `${message.trimEnd()}\nView: ${link}`;
     }
     await sendSmsMutation.mutateAsync({

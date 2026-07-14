@@ -9,6 +9,7 @@ import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { DocumentBlock, DocumentTemplate } from "@shared/schema";
+import { proposalAcceptLink } from "@shared/customerLinks";
 
 interface ProposalViewerProps {}
 
@@ -206,7 +207,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     // a session) only reach this branch when the proposal is genuinely gone,
     // and the accept page shows its own not-found card for that case.
     if (proposalId && !isPreviewMode) {
-      window.location.replace(`/proposal/${proposalId}/accept`);
+      window.location.replace(proposalAcceptLink(proposalId));
       return null;
     }
     return (
