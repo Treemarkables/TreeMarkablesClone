@@ -2016,9 +2016,18 @@ export function ProposalBuilderV2({
     // Ensure draft is persisted before sending (same pattern as email) so proposalId/link is valid
     const effectiveDraftId = await ensureDraftSaved();
     const resolvedCustomerId = (customer as { id?: string } | null)?.id || customerId;
+    // Never let a proposal SMS go out without a view link. The message is
+    // composed at dialog-open; if the draft only came into existence just now
+    // (compose-time save failed or hadn't happened), the composed text has no
+    // link — append it rather than sending the customer a dead-end text.
+    let message = smsForm.message;
+    if (effectiveDraftId && !message.includes("/proposal/")) {
+      const link = `${window.location.origin}/proposal/${effectiveDraftId}/accept${isQuote ? "?type=quote" : ""}`;
+      message = `${message.trimEnd()}\nView: ${link}`;
+    }
     await sendSmsMutation.mutateAsync({
       to: smsForm.to,
-      message: smsForm.message,
+      message,
       jobId,
       customerId: resolvedCustomerId,
       proposalId: effectiveDraftId || undefined,
