@@ -17,6 +17,7 @@ declare module 'express-session' {
 }
 import { storage, invoiceRevenueExGst } from "./storage";
 import { APP_URL } from "./config/appUrl";
+import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
@@ -1398,7 +1399,7 @@ async function generateProposalPDFBuffer(
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text('Acceptance', { width: pageW });
     doc.moveDown(0.4);
     if (isQuote) {
-      const acceptUrl = `${APP_URL}/proposal/${proposalId}/accept?type=quote`;
+      const acceptUrl = proposalAcceptLink(proposalId, { base: APP_URL, quote: true });
       doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
         .text('To accept this quote, open the link below and tap "Accept Quote". No signature required.', 50, doc.y, { width: pageW });
       doc.moveDown(0.3);
@@ -10622,7 +10623,7 @@ Draft the reply now.`;
       const customerPhone = customer?.phone || job?.jobContactPhone || '';
       
       // Generate proposal acceptance URL - goes directly to acceptance page
-      const proposalAcceptUrl = `${baseUrl}/proposal/${proposalId}/accept`;
+      const proposalAcceptUrl = proposalAcceptLink(proposalId, { base: baseUrl });
       
       const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const htmlContent = renderBrandedEmail({
@@ -10856,7 +10857,7 @@ Draft the reply now.`;
       // ?type=quote hint labels it as a quote before data loads). Replies still
       // land in the job inbox via emailService's reply-to, so the
       // "I accept quote Q-*" webhook fallback keeps working.
-      const quoteAcceptUrl = `${APP_URL}/proposal/${proposalId}/accept?type=quote`;
+      const quoteAcceptUrl = proposalAcceptLink(proposalId, { base: APP_URL, quote: true });
 
       const customerName = customer?.name || 'Valued Customer';
       const bodyLead = message && message.trim().length > 0
@@ -11218,7 +11219,7 @@ Draft the reply now.`;
 
         // Customer-facing link is always the app domain (CLAUDE.md), regardless of tenant.
         const onlineInvoiceUrl = invoiceDetails?.id
-          ? `${APP_URL}/invoice/${invoiceDetails.id}/view`
+          ? invoiceViewLink(invoiceDetails.id, { base: APP_URL })
           : APP_URL;
 
         // Per-invoice billing-name override (saved on the invoice) beats the job-level
@@ -13820,8 +13821,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         process.env.NODE_ENV === 'production'
           ? APP_URL
           : `${req.protocol}://${req.get('host')}`;
-      const successUrl = `${origin}/invoice/${invoice.id}/view?payment=success&session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${origin}/invoice/${invoice.id}/view?payment=cancelled`;
+      const successUrl = invoiceViewLink(invoice.id, { base: origin, query: 'payment=success&session_id={CHECKOUT_SESSION_ID}' });
+      const cancelUrl = invoiceViewLink(invoice.id, { base: origin, query: 'payment=cancelled' });
 
       const session = await createInvoiceCheckoutSession({
         invoiceId: invoice.id,
@@ -13867,7 +13868,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       const baseUrl = APP_URL;
       const customerName = customer?.name || 'Valued Customer';
-      const invoiceViewUrl = `${baseUrl}/invoice/${invoiceId}/view`;
+      const invoiceViewUrl = invoiceViewLink(invoiceId, { base: baseUrl });
 
       // Calculate total from line items table or fall back to invoice.amount
       const dbLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoiceId));
@@ -26612,8 +26613,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         process.env.NODE_ENV === 'production'
           ? APP_URL
           : `${req.protocol}://${req.get('host')}`;
-      const successUrl = `${origin}/proposal/${proposal.id}/accept?deposit=success&session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${origin}/proposal/${proposal.id}/accept?deposit=cancelled`;
+      const successUrl = proposalAcceptLink(proposal.id, { base: origin, query: 'deposit=success&session_id={CHECKOUT_SESSION_ID}' });
+      const cancelUrl = proposalAcceptLink(proposal.id, { base: origin, query: 'deposit=cancelled' });
 
       const session = await createDepositCheckoutSession({
         proposalId: proposal.id,

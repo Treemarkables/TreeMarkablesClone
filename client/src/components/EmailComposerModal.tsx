@@ -58,6 +58,7 @@ import { toZonedTime } from "date-fns-tz";
 import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
 import { ProposalTemplate } from "./ProposalTemplate";
+import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 
 interface EmailComposerModalProps {
   isOpen: boolean;
@@ -469,7 +470,7 @@ export function EmailComposerModal({
         .replace(
           /{invoiceLink}/g,
           invoiceData?.id
-            ? `${baseUrl}/invoice/${invoiceData.id}/view`
+            ? invoiceViewLink(invoiceData.id, { base: baseUrl })
             : "View invoice in your customer portal",
         )
         .replace(
@@ -481,7 +482,7 @@ export function EmailComposerModal({
         .replace(
           /{proposalLink}/g,
           proposalData?.id
-            ? `${baseUrl}/proposal/${proposalData.id}`
+            ? proposalAcceptLink(proposalData.id, { base: baseUrl })
             : "View proposal in your customer portal",
         )
         .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")
@@ -854,7 +855,7 @@ export function EmailComposerModal({
       .replace(
         /{invoiceLink}/g,
         invoiceData?.id
-          ? `${baseUrl}/invoice/${invoiceData.id}/view`
+          ? invoiceViewLink(invoiceData.id, { base: baseUrl })
           : "View invoice in your customer portal",
       )
       .replace(
@@ -866,7 +867,7 @@ export function EmailComposerModal({
       .replace(
         /{proposalLink}/g,
         proposalData?.id
-          ? `${baseUrl}/proposal/${proposalData.id}`
+          ? proposalAcceptLink(proposalData.id, { base: baseUrl })
           : "View proposal in your customer portal",
       )
       .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")

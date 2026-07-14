@@ -2,6 +2,7 @@ import { sendSMSEveryoneMessage, getSMSEveryoneSenderId } from './smsEveryoneCli
 import * as usageMeter from './usageMeter';
 import { currentBusinessId } from '../tenancy/tenantStore';
 import { storage } from '../storage';
+import { proposalLinkPattern } from '@shared/customerLinks';
 
 interface SMSParams {
   to: string;
@@ -23,8 +24,6 @@ interface SMSParams {
 //    (grep DO logs for SMS_LINK_AUDIT).
 // 3. Any localhost link in a customer SMS is always a bug (a template once
 //    shipped `localhost:5000/customer-portal`) — block it.
-const PROPOSAL_LINK_RE = /\/proposal\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(\/accept)?/gi;
-
 async function guardCustomerLinks(
   message: string,
 ): Promise<{ message: string; ok: boolean; reason?: string }> {
@@ -33,7 +32,7 @@ async function guardCustomerLinks(
   }
 
   const proposalIds = new Set<string>();
-  const rewritten = message.replace(PROPOSAL_LINK_RE, (_m, id: string, accept?: string) => {
+  const rewritten = message.replace(proposalLinkPattern(), (_m, id: string, accept?: string) => {
     proposalIds.add(id);
     return `/proposal/${id}${accept ?? '/accept'}`;
   });
