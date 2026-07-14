@@ -473,10 +473,15 @@ export function EmailComposerModal({
             ? invoiceViewLink(invoiceData.id, { base: baseUrl })
             : "View invoice in your customer portal",
         )
+        // {quoteLink} resolves to the quote-styled proposal accept page — in the
+        // current product a customer-facing "quote" IS a proposal row, and the
+        // quotes-table viewer /quote/:id is session-authed staff-only (an
+        // anonymous customer would see "not found"). quoteData (quotes table)
+        // deliberately does not produce a link: those rows have no public page.
         .replace(
           /{quoteLink}/g,
-          quoteData?.id
-            ? `${baseUrl}/quote/${quoteData.id}`
+          proposalData?.id
+            ? proposalAcceptLink(proposalData.id, { base: baseUrl, quote: true })
             : "View quote in your customer portal",
         )
         .replace(
@@ -858,10 +863,12 @@ export function EmailComposerModal({
           ? invoiceViewLink(invoiceData.id, { base: baseUrl })
           : "View invoice in your customer portal",
       )
+      // See the init effect above — {quoteLink} maps to the public quote-styled
+      // accept page, never the staff-only /quote/:id viewer.
       .replace(
         /{quoteLink}/g,
-        quoteData?.id
-          ? `${baseUrl}/quote/${quoteData.id}`
+        proposalData?.id
+          ? proposalAcceptLink(proposalData.id, { base: baseUrl, quote: true })
           : "View quote in your customer portal",
       )
       .replace(
