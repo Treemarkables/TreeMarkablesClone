@@ -114,13 +114,15 @@ export function useOnlyUnconfirmed(): [boolean, (v: boolean) => void] {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 // Note: `"scheduled"` here is a FILTER value, not a job status. The job
-// status `'scheduled'` was retired 2026-05 — the "Scheduled" chip now
-// filters for work_orders that have a scheduledDate set on the calendar.
+// status `'scheduled'` was retired 2026-05 — the "Scheduled" chip filters
+// for work_orders with a current-or-future booking, and "Unscheduled"
+// (value kept as `work_order`) is its complement: work_orders that still
+// need a calendar slot, including ones whose booking is entirely past.
 export const DISPATCH_STATUS_FILTERS = [
   { value: "lead",       label: "Lead" },
   { value: "queue",      label: "Queue" },
   { value: "quote",      label: "Quote" },
   { value: "mulch",      label: "Mulch" },
-  { value: "work_order", label: "W/O" },
+  { value: "work_order", label: "Unscheduled" },
   { value: "scheduled",  label: "Scheduled" },
 ] as const;

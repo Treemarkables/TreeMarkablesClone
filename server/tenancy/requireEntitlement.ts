@@ -25,6 +25,7 @@ export const FEATURE_GATES_ENFORCE = process.env.FEATURE_GATES_ENFORCE === "true
 const UPSELL: Record<string, string> = {
   "plan:crew": "This feature is on the Crew plan and above — upgrade to unlock it.",
   "plan:business": "This feature is on the Business plan — upgrade to unlock it.",
+  "addon:call_recording": "Call recording is a paid add-on — add it to your plan to unlock it.",
 };
 
 /** Express middleware factory. `feature` is just a label for the structured log line. */

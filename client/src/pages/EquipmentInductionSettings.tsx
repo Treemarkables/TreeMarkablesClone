@@ -7,13 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -557,28 +550,28 @@ export default function EquipmentInductionSettings() {
             </div>
             <div>
               <Label htmlFor="equipmentType">Equipment Type</Label>
-              <Select
+              {/* Free text with suggestions — any equipment the business runs,
+                  stored as a snake_case slug so grouping stays consistent. */}
+              <Input
+                id="equipmentType"
                 value={editingTemplate.equipmentType || ""}
-                onValueChange={(value) =>
+                onChange={(e) =>
                   setEditingTemplate({
                     ...editingTemplate,
-                    equipmentType: value,
+                    equipmentType: e.target.value
+                      .toLowerCase()
+                      .replace(/\s+/g, "_"),
                   })
                 }
-              >
-                <SelectTrigger data-testid="select-induction-equipment-type">
-                  <SelectValue placeholder="Select equipment type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EQUIPMENT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      <span className="capitalize">
-                        {type.replace(/_/g, " ")}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                list="induction-equipment-type-suggestions"
+                placeholder="e.g. chainsaw, excavator"
+                data-testid="select-induction-equipment-type"
+              />
+              <datalist id="induction-equipment-type-suggestions">
+                {EQUIPMENT_TYPES.map((type) => (
+                  <option key={type} value={type} />
+                ))}
+              </datalist>
             </div>
             <div>
               <Label htmlFor="description">Description (optional)</Label>

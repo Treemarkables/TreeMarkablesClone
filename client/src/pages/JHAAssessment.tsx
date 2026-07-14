@@ -49,7 +49,6 @@ import {
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { compressImage } from "@/lib/imageCompression";
-const jhaHeaderImage = "/treemarkables-logo-header.png";
 
 // ThinkSafe-style JHA form schema
 const jhaFormSchema = z.object({
@@ -88,6 +87,16 @@ const PPE_OPTIONS = [
 export default function JHAAssessment() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+
+  // Tenant branding for the printable header (was a hardcoded Treemarkables banner).
+  const { data: brandTemplateRes } = useQuery<{
+    success: boolean;
+    data: { logoUrl?: string | null; companyName?: string | null };
+  }>({
+    queryKey: ["/api/templates/default/invoice"],
+  });
+  const brandLogoUrl = brandTemplateRes?.data?.logoUrl ?? "";
+  const brandCompanyName = brandTemplateRes?.data?.companyName ?? "";
   const [searchTerm, setSearchTerm] = useState("");
   const [sharedSignature, setSharedSignature] = useState<string>("");
   const [photos, setPhotos] = useState<string[]>([]);
@@ -584,13 +593,23 @@ export default function JHAAssessment() {
         </Button>
       </div>
 
-      {/* JHA Risk Assessment Header */}
-      <div className="mb-4 overflow-hidden rounded-lg shadow-md w-full h-[120px] md:h-[160px]">
-        <img
-          src={jhaHeaderImage}
-          alt="Job Hazard Analysis Risk Assessment"
-          className="w-full h-full object-cover object-center block"
-        />
+      {/* JHA Risk Assessment Header — branded with the business's own logo */}
+      <div className="mb-4 rounded-lg shadow-md w-full bg-card border border-border p-4 flex items-center gap-4">
+        {brandLogoUrl && (
+          <img
+            src={brandLogoUrl}
+            alt={brandCompanyName ? `${brandCompanyName} logo` : "Company logo"}
+            className="h-14 md:h-20 w-auto max-w-[40%] object-contain"
+          />
+        )}
+        <div className="min-w-0">
+          <h1 className="text-lg md:text-2xl font-bold leading-tight">
+            Job Hazard Analysis Risk Assessment
+          </h1>
+          {brandCompanyName && (
+            <p className="text-sm text-muted-foreground truncate">{brandCompanyName}</p>
+          )}
+        </div>
       </div>
 
       <Form {...form}>
