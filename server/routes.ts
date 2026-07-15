@@ -234,12 +234,26 @@ const videoUpload = multer({
   }
 });
 
-// Near miss attachment upload — disk storage so files survive server restarts
+// Near miss attachment upload — disk storage so files survive server restarts.
+// The destination folds req.params.id into the path BEFORE the route handler
+// runs, so it must not trust it: a crafted id like `..%2f..%2fdist%2fpublic`
+// would write attacker files outside uploads/ (e.g. into the web root). Report
+// ids are UUIDs — anything else is rejected here, and the resolved directory is
+// asserted to stay under uploads/near-miss as a backstop.
+const NEAR_MISS_UPLOAD_ROOT = path.resolve('uploads', 'near-miss');
 const nearMissUpload = multer({
   storage: multer.diskStorage({
     destination: (req, _file, cb) => {
-      const reportId = (req.params as Record<string, string>).id || 'unknown';
-      const dir = path.join('uploads', 'near-miss', reportId);
+      const reportId = (req.params as Record<string, string>).id || '';
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reportId)) {
+        cb(new Error('Invalid report id'), '');
+        return;
+      }
+      const dir = path.resolve(NEAR_MISS_UPLOAD_ROOT, reportId);
+      if (dir !== path.join(NEAR_MISS_UPLOAD_ROOT, reportId) || !dir.startsWith(NEAR_MISS_UPLOAD_ROOT + path.sep)) {
+        cb(new Error('Invalid upload path'), '');
+        return;
+      }
       fs.mkdirSync(dir, { recursive: true });
       cb(null, dir);
     },
@@ -966,6 +980,27 @@ async function requirePlatformAdmin(req: Request, res: Response, next: express.N
     console.error('Error in requirePlatformAdmin middleware:', error);
     res.status(403).json({ success: false, message: 'Platform administrator access required' });
   }
+}
+
+// Session gate for reads any logged-in staff member legitimately needs (employee
+// lists feed dispatch, timers and scheduling UIs for every tier, so a
+// staff.view permission check would break crew features) — but they must never
+// be anonymous: within a tenant RLS doesn't separate staff from the public.
+function requireSession(req: Request, res: Response, next: express.NextFunction): void {
+  if (!req.session.employeeId) {
+    res.status(401).json({ success: false, message: 'Authentication required' });
+    return;
+  }
+  next();
+}
+
+// Employees carry their bcrypt hash in the `password` column; it must never
+// leave the server (offline crack of an admin hash = tenant takeover). Every
+// employee row sent to a client goes through this. (/api/auth/me already
+// whitelists its fields separately.)
+function sanitizeEmployee<T extends Record<string, any>>(employee: T): Omit<T, 'password'> {
+  const { password: _password, ...safe } = employee;
+  return safe;
 }
 
 // Staff-write gate (capabilities.ts: staff.manage = Crew) with a self-exemption:
@@ -2176,10 +2211,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/auth/login - Create server-side session with employee ID or email+password
+  // Login throttle (2026-07-14 audit L3). In-memory sliding window — no store
+  // dependency; the app runs 2 instances so the effective ceiling is up to 2×
+  // per limit, which still reduces an unthrottled bcrypt oracle to a useless
+  // guessing rate. Per-IP catches spray-across-accounts; per-identifier catches
+  // a distributed attack on one account. A successful login clears its
+  // identifier key so a user who finally remembers their password isn't locked.
+  const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+  const LOGIN_MAX_PER_IP = 30;
+  const LOGIN_MAX_PER_IDENTIFIER = 10;
+  const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+  const bumpLoginKey = (key: string, max: number): boolean => {
+    const now = Date.now();
+    // Lazy prune so the map can't grow unbounded across the window
+    if (loginAttempts.size > 10_000) {
+      for (const [k, v] of loginAttempts) if (v.resetAt <= now) loginAttempts.delete(k);
+    }
+    const entry = loginAttempts.get(key);
+    if (!entry || entry.resetAt <= now) {
+      loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+      return true;
+    }
+    entry.count += 1;
+    return entry.count <= max;
+  };
+
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
       const { employeeId, email, password } = req.body;
       let employee;
+
+      const ip = req.ip || req.socket.remoteAddress || 'unknown';
+      const identifier = (typeof email === 'string' && email.trim().toLowerCase())
+        || (typeof employeeId === 'string' && employeeId)
+        || '';
+      const ipOk = bumpLoginKey(`ip:${ip}`, LOGIN_MAX_PER_IP);
+      const idOk = !identifier || bumpLoginKey(`id:${identifier}`, LOGIN_MAX_PER_IDENTIFIER);
+      if (!ipOk || !idOk) {
+        console.warn(`[SECURITY] Login throttled (ip: ${ip})`);
+        return res.status(429).json({
+          success: false,
+          message: 'Too many login attempts. Try again in a few minutes.'
+        });
+      }
 
       // Email+password authentication
       if (email && password) {
@@ -2272,6 +2346,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           loginEntitlements = Array.from(ent.entitlements);
         } catch { /* fail-open: empty entitlements */ }
       }
+
+      // Successful login: reset this identifier's throttle window.
+      if (identifier) loginAttempts.delete(`id:${identifier}`);
 
       // Regenerate session ID on login so any stale cookie in the browser
       // is always replaced by a fresh Set-Cookie. Also defends against
@@ -11894,16 +11971,30 @@ Draft the reply now.`;
   // Configure in Twilio console: "A CALL COMES IN" → Webhook → /api/webhooks/twilio-answer
   // ----------------------------------------
 
-  // Serve recordings from persistent Object Storage
-  app.get('/api/recordings/:filename', async (req: Request, res: Response) => {
+  // Serve recordings from persistent Object Storage. Session + tenant-ownership
+  // gated: the GCS download bypasses the DB entirely, so RLS can't protect it —
+  // without this check any leaked/shared link replays customer call audio
+  // forever. Ownership = an RLS-scoped row in calls/call_records pointing at
+  // this file, so a tenant can only stream recordings its own call rows reference.
+  app.get('/api/recordings/:filename', requireSession, async (req: Request, res: Response) => {
     try {
       const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
       if (!privateDir) {
         return res.status(500).json({ error: 'Object storage not configured' });
       }
       const filename = req.params.filename;
-      if (!filename || filename.includes('..')) {
+      if (!filename || filename.includes('..') || filename.includes('/')) {
         return res.status(400).json({ error: 'Invalid filename' });
+      }
+      const servingUrl = `/api/recordings/${filename}`;
+      const [ownedCall] = await db.select({ id: schema.calls.id })
+        .from(schema.calls).where(eq(schema.calls.recordingUrl, servingUrl)).limit(1);
+      if (!ownedCall) {
+        const [ownedRecord] = await db.select({ id: schema.callRecords.id })
+          .from(schema.callRecords).where(eq(schema.callRecords.recordingUrl, servingUrl)).limit(1);
+        if (!ownedRecord) {
+          return res.status(404).json({ error: 'Recording not found' });
+        }
       }
       const objectPath = `${privateDir}/recordings/${filename}`;
       const parts = objectPath.replace(/^\//, '').split('/');
@@ -17617,12 +17708,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // ========================================
 
   // Get all employees
-  app.get('/api/employees', async (req: Request, res: Response) => {
+  app.get('/api/employees', requireSession, async (req: Request, res: Response) => {
     try {
       const employees = await storage.getAllEmployees();
       res.json({
         success: true,
-        data: employees
+        data: employees.map(sanitizeEmployee)
       });
     } catch (error) {
       console.error('Error fetching employees:', error);
@@ -17635,12 +17726,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Get active employees only
-  app.get('/api/employees/active', async (req: Request, res: Response) => {
+  app.get('/api/employees/active', requireSession, async (req: Request, res: Response) => {
     try {
       const employees = await storage.getActiveEmployees();
       res.json({
         success: true,
-        data: employees
+        data: employees.map(sanitizeEmployee)
       });
     } catch (error) {
       console.error('Error fetching active employees:', error);
@@ -17653,7 +17744,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Get single employee
-  app.get('/api/employees/:id', async (req: Request, res: Response) => {
+  app.get('/api/employees/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const employee = await storage.getEmployee(req.params.id);
       if (!employee) {
@@ -17664,7 +17755,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
       res.json({
         success: true,
-        data: employee
+        data: sanitizeEmployee(employee)
       });
     } catch (error) {
       console.error('Error fetching employee:', error);
@@ -17710,7 +17801,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const employee = await storage.createEmployee(validatedData);
       res.json({
         success: true,
-        data: employee,
+        data: sanitizeEmployee(employee),
         message: 'Employee created successfully'
       });
     } catch (error) {
@@ -17780,7 +17871,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const employee = await storage.updateEmployee(req.params.id, dataToUpdate);
       res.json({
         success: true,
-        data: employee,
+        data: sanitizeEmployee(employee),
         message: 'Employee updated successfully'
       });
     } catch (error) {
@@ -22664,7 +22755,28 @@ Transcription: ${transcriptText}`;
           });
         }
       } else {
-        // SendGrid multipart/form-data webhook - apply multer middleware.
+        // SendGrid Inbound Parse (multipart/form-data) — and, implicitly, ANY
+        // request that isn't the verified Resend JSON shape. Parse posts carry
+        // no signature, so authenticate with a shared-secret URL token instead
+        // (?token= on the Parse destination URL, INBOUND_EMAIL_PARSE_TOKEN in
+        // the env). Without this gate a forged multipart POST injects supplier
+        // bills, flips proposals via "ACCEPT QUOTE", and writes diary entries.
+        // Fail closed in production: the inbound MX for jobs.* is Cloudflare
+        // Email Routing (→ Gmail poll) and Resend inbound is the JSON branch
+        // above, so no legitimate traffic reaches this branch until SendGrid
+        // Parse is deliberately configured with the token.
+        const parseToken = process.env.INBOUND_EMAIL_PARSE_TOKEN;
+        if (parseToken) {
+          if (req.query.token !== parseToken) {
+            console.error(`🔐 Inbound email webhook: bad Parse token — rejecting`);
+            return res.status(401).json({ success: false, message: 'Invalid webhook token' });
+          }
+        } else if (process.env.NODE_ENV === 'production') {
+          console.error(`⚠️ Non-Resend inbound email POST with no INBOUND_EMAIL_PARSE_TOKEN configured — rejecting`);
+          return res.status(401).json({ success: false, message: 'Webhook verification not configured' });
+        } else {
+          console.warn(`⚠️ INBOUND_EMAIL_PARSE_TOKEN not set - inbound Parse POST not verified (dev only)`);
+        }
         // .any() (rather than .none()) so file attachments land in req.files.
         // SendGrid posts attachments as fields named attachment1, attachment2, ...
         // with dynamic names, which is exactly what .any() handles.
@@ -28439,7 +28551,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // POST /api/jobs/import-servicem8 - Import jobs from ServiceM8 CSV file
-  app.post('/api/jobs/import-servicem8', async (req: Request, res: Response) => {
+  // Admin-gated like its import siblings — bulk job creation must not depend
+  // on RLS alone to stop an anonymous caller.
+  app.post('/api/jobs/import-servicem8', requireAdmin, async (req: Request, res: Response) => {
     try {
       const { jobs } = req.body;
       
@@ -33674,7 +33788,7 @@ If you cannot find a value, use null. Do not guess.`
   const nearMissReportUpdate = nearMissReportInsert.partial();
 
   // GET /api/near-miss-reports
-  app.get('/api/near-miss-reports', async (req: Request, res: Response) => {
+  app.get('/api/near-miss-reports', requireSession, async (req: Request, res: Response) => {
     try {
       const { status, severity, category, dateFrom, dateTo, reporterUserId } = req.query;
       const conditions = [];
@@ -33696,7 +33810,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // GET /api/near-miss-reports/:id
-  app.get('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+  app.get('/api/near-miss-reports/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33720,7 +33834,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-reports
-  app.post('/api/near-miss-reports', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-reports', requireSession, async (req: Request, res: Response) => {
     try {
       const reportNumber = await generateNearMissReportNumber();
       const parsed = nearMissReportInsert.parse(req.body);
@@ -33733,7 +33847,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // PUT /api/near-miss-reports/:id
-  app.put('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+  app.put('/api/near-miss-reports/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33748,7 +33862,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-reports/:id/submit
-  app.post('/api/near-miss-reports/:id/submit', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-reports/:id/submit', requireSession, async (req: Request, res: Response) => {
     try {
       const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33767,7 +33881,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // DELETE /api/near-miss-reports/:id
-  app.delete('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+  app.delete('/api/near-miss-reports/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33783,7 +33897,7 @@ If you cannot find a value, use null. Do not guess.`
   // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
   // the report read rides the owner connection (hence the ownership check) and the
   // attachment insert is stamped from the parent report via runWithBusiness.
-  app.post('/api/near-miss-reports/:id/attachments', nearMissUpload.single('file'), async (req: Request, res: Response) => {
+  app.post('/api/near-miss-reports/:id/attachments', requireSession, nearMissUpload.single('file'), async (req: Request, res: Response) => {
     try {
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -33810,7 +33924,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // DELETE /api/near-miss-attachments/:id
-  app.delete('/api/near-miss-attachments/:id', async (req: Request, res: Response) => {
+  app.delete('/api/near-miss-attachments/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [attachment] = await db.select().from(schema.nearMissAttachments).where(eq(schema.nearMissAttachments.id, req.params.id));
       if (!attachment) return res.status(404).json({ success: false, message: 'Attachment not found' });
@@ -33823,7 +33937,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-reports/:id/witnesses
-  app.post('/api/near-miss-reports/:id/witnesses', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-reports/:id/witnesses', requireSession, async (req: Request, res: Response) => {
     try {
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33849,7 +33963,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-witnesses/:id/sign
-  app.post('/api/near-miss-witnesses/:id/sign', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-witnesses/:id/sign', requireSession, async (req: Request, res: Response) => {
     try {
       const [witness] = await db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.id, req.params.id));
       if (!witness) return res.status(404).json({ success: false, message: 'Witness record not found' });
@@ -33889,7 +34003,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-witnesses/:id/decline
-  app.post('/api/near-miss-witnesses/:id/decline', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-witnesses/:id/decline', requireSession, async (req: Request, res: Response) => {
     try {
       const [witness] = await db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.id, req.params.id));
       if (!witness) return res.status(404).json({ success: false, message: 'Witness record not found' });
@@ -33901,7 +34015,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-reports/:id/actions
-  app.post('/api/near-miss-reports/:id/actions', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-reports/:id/actions', requireSession, async (req: Request, res: Response) => {
     try {
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33915,7 +34029,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // PUT /api/near-miss-actions/:id
-  app.put('/api/near-miss-actions/:id', async (req: Request, res: Response) => {
+  app.put('/api/near-miss-actions/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [existing] = await db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Action not found' });
@@ -33939,7 +34053,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // DELETE /api/near-miss-actions/:id
-  app.delete('/api/near-miss-actions/:id', async (req: Request, res: Response) => {
+  app.delete('/api/near-miss-actions/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [existing] = await db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Action not found' });
@@ -33951,7 +34065,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // GET /api/near-miss-reports/:id/pdf
-  app.get('/api/near-miss-reports/:id/pdf', async (req: Request, res: Response) => {
+  app.get('/api/near-miss-reports/:id/pdf', requireSession, async (req: Request, res: Response) => {
     try {
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!report) return res.status(404).json({ success: false, message: 'Report not found' });

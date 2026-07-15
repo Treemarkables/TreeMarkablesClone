@@ -293,6 +293,59 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Safety-module tenant isolation (2026-07-14 audit H3). These tables hold
+    // SWMS docs, worker signatures, licence PII and notifiable-injury records;
+    // under the blanket app_tenant GRANT a missing policy means cross-tenant
+    // read/write. Their policies today exist only as live DB state (applied by
+    // hand in the Neon console) — nothing in the repo recreates them, so a
+    // fresh or lagging database boots wide open. This converges any DB to
+    // covered: ENABLE RLS + create the standard tenant_isolation policy where
+    // missing. Deliberately create-if-absent (no DROP/replace) so tables with
+    // a deliberately different policy shape (e.g. the built-in-library
+    // read/write split from #405) are left untouched. Rows with NULL
+    // business_id become invisible to tenants under a newly created policy —
+    // fail-closed is the intent. The four *library* tables
+    // (swms_templates/toolbox_talk_topics/prestart_checklist_templates/
+    // competency_types) are excluded: index.ts owns their split policies.
+    name: "safety-tables-tenant-isolation",
+    statements: [],
+    postChecks: async (client) => {
+      const tables = [
+        "safety_incidents",
+        "induction_templates", "induction_checklist_items",
+        "equipment_inductions", "induction_responses",
+        "near_miss_reports", "near_miss_attachments",
+        "near_miss_witnesses", "near_miss_actions",
+        "toolbox_talks", "toolbox_talk_attendees",
+        "prestart_checklists",
+        "safety_assets", "asset_inspections",
+        "swms_documents", "swms_steps", "swms_signatures",
+        "notifiable_events",
+      ];
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      for (const t of tables) {
+        const exists = await client.query(`SELECT to_regclass($1) AS oid`, [`public.${t}`]);
+        if (!exists.rows[0]?.oid) continue;
+        await client.query(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
+        const pol = await client.query(
+          `SELECT 1 FROM pg_policy WHERE polrelid = $1::regclass LIMIT 1`,
+          [t],
+        );
+        if (pol.rowCount === 0) {
+          await client.query(
+            `CREATE POLICY tenant_isolation ON ${t}
+               USING (business_id = nullif(current_setting('app.current_business', true), ''))
+               WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+          );
+          console.log(`[schema] created tenant_isolation policy on ${t}`);
+        }
+        if (hasRole.rowCount && hasRole.rowCount > 0) {
+          await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${t} TO app_tenant`);
+        }
+      }
+    },
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;
