@@ -2399,6 +2399,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               role: employee.role,
               phone: employee.phone,
               status: employee.status,
+              // Tenant discriminator — client-side tenant gating (e.g. the
+              // platform-operator Settings tiles) keys off this.
+              businessId: employee.businessId ?? null,
               permissions: Array.from(loginPermsSet),
               planKey: loginPlanKey,
               entitlements: loginEntitlements,
@@ -2466,6 +2469,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: employee.role,
           phone: employee.phone,
           status: employee.status,
+          // Tenant discriminator — client-side tenant gating (e.g. the
+          // platform-operator Settings tiles) keys off this.
+          businessId: employee.businessId ?? null,
           roleTierId: employee.roleTierId ?? null,
           roleTier: tier
             ? { id: tier.id, key: tier.key, name: tier.name, description: tier.description }
