@@ -891,6 +891,13 @@ The {businessName} Team';
             GRANT SELECT, INSERT, UPDATE, DELETE ON active_timers TO app_tenant;
           END IF;
         END $$;
+        -- Clock-in GPS stamp for live crew tracking. New columns on an
+        -- existing RLS table inherit the tenant_isolation policy. Mirrors
+        -- migrations/manual/20260716_timer_clock_in_location.sql.
+        ALTER TABLE active_timers ADD COLUMN IF NOT EXISTS clock_in_lat REAL;
+        ALTER TABLE active_timers ADD COLUMN IF NOT EXISTS clock_in_lng REAL;
+        ALTER TABLE active_timers ADD COLUMN IF NOT EXISTS clock_in_accuracy_m REAL;
+        ALTER TABLE active_timers ADD COLUMN IF NOT EXISTS clock_in_distance_km REAL;
         -- Heal job-child rows created behind multer with the wrong tenant stamp:
         -- busboy's stream callbacks run in the socket's async context, so those
         -- upload handlers lost the ALS tenant context — withTenant() stamped

@@ -14225,7 +14225,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
   // Stop a running timer: write the time entry, recompute labour + margin,
   // diary-log, delete the timer row. Shared by /timer/stop and start-with-switch.
-  async function finalizeTimer(timer: { id: string; jobId: string; employeeId: string; startedAt: Date | string }) {
+  async function finalizeTimer(timer: {
+    id: string; jobId: string; employeeId: string; startedAt: Date | string;
+    clockInDistanceKm?: number | null;
+  }) {
     const elapsedMs = Date.now() - new Date(timer.startedAt).getTime();
     // Round to 2dp hours, minimum 1 minute so an accidental tap-tap still
     // produces a visible, deletable entry rather than a silent no-op.
@@ -14241,6 +14244,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       rate: chargeRate,
       costRate,
       date: new Date().toISOString().split('T')[0],
+      // Distance from site at clock-in (km) — persists after the timer row dies
+      clockInDistanceKm: timer.clockInDistanceKm ?? null,
     });
 
     // Recalculate labour cost from cost rates (same maths as the manual flow)
@@ -14336,6 +14341,32 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // De-dupe, cap defensively
       const employeeIds = Array.from(new Set(requested)).slice(0, 50);
 
+      // One-shot clock-in GPS stamp. One device location for possibly many
+      // employeeIds — the person tapping Start is normally standing with the
+      // crew, so we stamp every timer started in this request (stamping only
+      // the session user would leave foreman-clocked crews statusless).
+      // geocodeNZAddressCached/haversineKm are declared later in this file
+      // but in the same registerRoutes scope — only referenced at request time.
+      const rawLoc = req.body?.location;
+      const clockInLat = Number(rawLoc?.lat);
+      const clockInLng = Number(rawLoc?.lng);
+      let location: { lat: number; lng: number; accuracyM: number | null; distanceKm: number | null } | undefined;
+      if (Number.isFinite(clockInLat) && Number.isFinite(clockInLng)) {
+        const accuracyM = Number.isFinite(Number(rawLoc?.accuracy)) ? Number(rawLoc.accuracy) : null;
+        // Geocode the job address once per request, capped at 3s so a slow
+        // Nominatim can never hang clock-in. Miss => distance stays null.
+        const siteCoords = job.address
+          ? await Promise.race([
+              geocodeNZAddressCached(job.address),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+            ])
+          : null;
+        const distanceKm = siteCoords
+          ? Math.round(haversineKm(clockInLat, clockInLng, siteCoords.lat, siteCoords.lng) * 10) / 10
+          : null;
+        location = { lat: clockInLat, lng: clockInLng, accuracyM, distanceKm };
+      }
+
       const started: any[] = [];
       const switchedJobIds = new Set<string>();
       for (const employeeId of employeeIds) {
@@ -14347,7 +14378,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           await finalizeTimer(running);          // stop-and-switch
           switchedJobIds.add(running.jobId);
         }
-        started.push(await storage.startTimer(jobId, employeeId));
+        started.push(await storage.startTimer(jobId, employeeId, location));
       }
 
       res.json({
@@ -19889,16 +19920,19 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       // Live clock-ins on today's jobs — drives the "on site now" badges.
+      // distanceKm was computed once at clock-in; no geocoding happens here.
+      const allTimers = await storage.getAllActiveTimers();
       const jobIdSet = new Set(jobIds);
-      const runningTimers = (await storage.getAllActiveTimers()).filter(t => jobIdSet.has(t.jobId));
+      const runningTimers = allTimers.filter(t => jobIdSet.has(t.jobId));
       const enrichedTimers = await enrichTimers(runningTimers);
-      const timersByJob = new Map<string, Array<{ employeeId: string; employeeName: string; startedAt: string }>>();
+      const timersByJob = new Map<string, Array<{ employeeId: string; employeeName: string; startedAt: string; distanceKm: number | null }>>();
       for (const t of enrichedTimers) {
         const list = timersByJob.get(t.jobId) ?? [];
         list.push({
           employeeId: t.employeeId,
           employeeName: t.employeeName,
           startedAt: t.startedAt instanceof Date ? t.startedAt.toISOString() : String(t.startedAt),
+          distanceKm: t.clockInDistanceKm ?? null,
         });
         timersByJob.set(t.jobId, list);
       }
@@ -19909,12 +19943,54 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         liveTimers: timersByJob.get(j.id) ?? [],
       }));
 
+      // Crew strip — every active employee with today's assignment(s) and
+      // their running timer (any job, not just today's schedule). The client
+      // derives on-site / far-from-site / assigned / idle from this.
+      const allEmployees = await storage.getAllEmployees();
+      const jobById = new Map(jobs.map((j: any) => [j.id, j]));
+      const timerByEmployee = new Map(allTimers.map(t => [t.employeeId, t]));
+      const assignmentsToday = (await storage.getAllJobStaffAssignments())
+        .filter(a => a.status !== 'cancelled' && a.startTime && getNZDateString(a.startTime) === todayStr);
+      const assignmentsByEmployee = new Map<string, typeof assignmentsToday>();
+      for (const a of assignmentsToday) {
+        const list = assignmentsByEmployee.get(a.employeeId) ?? [];
+        list.push(a);
+        assignmentsByEmployee.set(a.employeeId, list);
+      }
+      const jobRef = (refJobId: string) => {
+        const j: any = jobById.get(refJobId);
+        return {
+          jobId: refJobId,
+          jobNumber: j?.jobNumber ?? null,
+          jobTitle: j?.title || j?.jobNumber || 'Job',
+        };
+      };
+      const crew = allEmployees
+        .filter(e => e.isActive !== false)
+        .map(e => {
+          const t = timerByEmployee.get(e.id);
+          return {
+            employeeId: e.id,
+            name: `${e.firstName} ${e.lastName}`,
+            position: e.position ?? null,
+            timer: t ? {
+              ...jobRef(t.jobId),
+              startedAt: t.startedAt instanceof Date ? t.startedAt.toISOString() : String(t.startedAt),
+              distanceKm: t.clockInDistanceKm ?? null,
+              hasLocation: t.clockInLat != null,
+            } : null,
+            assignments: (assignmentsByEmployee.get(e.id) ?? []).map(a => jobRef(a.jobId)),
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+
       res.json({
         success: true,
         data: {
           date: todayStr,
           fleet,
           jobsToday: jobsTodayWithActivity,
+          crew,
           counts: {
             needsAttention: fleet.filter(f => f.severity === 'overdue' || f.severity === 'critical').length,
             dueSoon: fleet.filter(f => f.severity === 'warning' || f.severity === 'info').length,

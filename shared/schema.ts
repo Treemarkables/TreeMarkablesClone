@@ -4595,6 +4595,13 @@ export const activeTimers = pgTable("active_timers", {
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   employeeId: varchar("employee_id").notNull().unique(),
   startedAt: timestamp("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  // One-shot clock-in GPS stamp from the device that tapped Start (null when
+  // the browser had no permission). distanceKm = km to the geocoded job
+  // address, computed once at clock-in; null when geocoding failed.
+  clockInLat: real("clock_in_lat"),
+  clockInLng: real("clock_in_lng"),
+  clockInAccuracyM: real("clock_in_accuracy_m"),
+  clockInDistanceKm: real("clock_in_distance_km"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
