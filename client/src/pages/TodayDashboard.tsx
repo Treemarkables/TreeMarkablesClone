@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { GlobalJobCard } from "@/components/GlobalJobCard";
 import {
   Truck,
   Wrench,
@@ -14,6 +15,15 @@ import {
   RefreshCw,
   LocateFixed,
   Loader2,
+  StickyNote,
+  TrendingUp,
+  Flag,
+  Cloud,
+  ShieldCheck,
+  CheckCircle2,
+  Mail,
+  Circle,
+  Clock,
 } from "lucide-react";
 
 interface FleetItem {
@@ -28,6 +38,23 @@ interface FleetItem {
   severity: "overdue" | "critical" | "warning" | "info";
 }
 
+interface ActivityItem {
+  id: string;
+  type: string;
+  timestamp: string;
+  actorName: string;
+  title: string;
+  summary: string | null;
+  photos: string[];
+  timeSpent: number | null;
+}
+
+interface LiveTimer {
+  employeeId: string;
+  employeeName: string;
+  startedAt: string;
+}
+
 interface JobToday {
   id: string;
   title: string;
@@ -35,6 +62,8 @@ interface JobToday {
   scheduledStartTime: string | null;
   customerName: string | null;
   address: string | null;
+  activity: ActivityItem[];
+  liveTimers: LiveTimer[];
 }
 
 interface TodayOverview {
@@ -68,9 +97,167 @@ function fleetIcon(kind: FleetItem["kind"]) {
   );
 }
 
+// Diary entryType → timeline icon.
+function ActivityIcon({ type }: { type: string }) {
+  const cls = "h-4 w-4 text-muted-foreground shrink-0 mt-0.5";
+  switch (type) {
+    case "note": return <StickyNote className={cls} />;
+    case "progress": return <TrendingUp className={cls} />;
+    case "issue": return <AlertTriangle className={cls} />;
+    case "milestone": return <Flag className={cls} />;
+    case "weather": return <Cloud className={cls} />;
+    case "equipment": return <Wrench className={cls} />;
+    case "safety": return <ShieldCheck className={cls} />;
+    case "completion": return <CheckCircle2 className={cls} />;
+    case "email": return <Mail className={cls} />;
+    default: return <Circle className={cls} />;
+  }
+}
+
+// ISO timestamp → "9:14 am" in NZ time.
+function nzTime(iso: string): string {
+  return new Date(iso)
+    .toLocaleTimeString("en-NZ", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "Pacific/Auckland",
+    })
+    .toLowerCase();
+}
+
+function statusVariant(status: string): "default" | "secondary" | "outline" {
+  if (status === "in_progress") return "default";
+  if (status === "completed" || status === "invoice" || status === "invoiced") return "secondary";
+  return "outline";
+}
+
+function statusLabel(status: string): string {
+  return status
+    .split("_")
+    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+const MAX_TIMELINE_ITEMS = 6;
+const MAX_PHOTO_THUMBS = 8;
+
+function TodayJobCard({
+  job,
+  onOpen,
+  distanceKm,
+  nearest,
+}: {
+  job: JobToday;
+  onOpen: (jobId: string) => void;
+  distanceKm?: number;
+  nearest?: boolean;
+}) {
+  const photos = Array.from(new Set(job.activity.flatMap((a) => a.photos)));
+  const timeline = job.activity.slice(0, MAX_TIMELINE_ITEMS);
+  const hiddenCount = job.activity.length - timeline.length;
+
+  return (
+    <li>
+      <div
+        role="button"
+        tabIndex={0}
+        data-testid={`today-job-${job.id}`}
+        onClick={() => onOpen(job.id)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen(job.id);
+          }
+        }}
+        className="px-6 py-4 cursor-pointer hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-medium text-muted-foreground w-16 shrink-0">
+            {job.scheduledStartTime || "—"}
+          </span>
+          <p className="text-sm font-medium truncate flex-1 min-w-0">{job.title}</p>
+          {distanceKm !== undefined && (
+            <Badge variant={nearest ? "default" : "outline"} className="shrink-0">
+              {distanceKm < 0.15 ? "You're here" : `${distanceKm} km`}
+            </Badge>
+          )}
+          <Badge variant={statusVariant(job.status)}>{statusLabel(job.status)}</Badge>
+          {job.liveTimers.map((t) => (
+            <Badge
+              key={t.employeeId}
+              variant="outline"
+              className="text-green-700 dark:text-green-400 border-green-600/40 gap-1"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+              </span>
+              {t.employeeName} on site — since {nzTime(t.startedAt)}
+            </Badge>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground truncate mt-0.5 pl-[4.75rem]">
+          {[job.customerName, job.address].filter(Boolean).join(" · ")}
+        </p>
+
+        {photos.length > 0 && (
+          <div className="flex gap-2 mt-3 pl-[4.75rem] flex-wrap">
+            {photos.slice(0, MAX_PHOTO_THUMBS).map((url) => (
+              <img
+                key={url}
+                src={url}
+                alt="Job photo from today"
+                loading="lazy"
+                className="h-14 w-14 rounded-md object-cover border"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            ))}
+            {photos.length > MAX_PHOTO_THUMBS && (
+              <div className="h-14 w-14 rounded-md border flex items-center justify-center text-xs text-muted-foreground">
+                +{photos.length - MAX_PHOTO_THUMBS}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-3 pl-[4.75rem] space-y-2">
+          {timeline.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No activity yet today.</p>
+          ) : (
+            timeline.map((item) => (
+              <div key={item.id} className="flex items-start gap-2">
+                <ActivityIcon type={item.type} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs">
+                    <span className="font-medium">{item.actorName}</span>{" "}
+                    <span className="text-muted-foreground">
+                      — {item.title}
+                      {item.timeSpent ? ` (${item.timeSpent} min)` : ""}
+                    </span>{" "}
+                    <span className="text-muted-foreground/70">· {nzTime(item.timestamp)}</span>
+                  </p>
+                  {item.summary && (
+                    <p className="text-xs text-muted-foreground truncate">{item.summary}</p>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+          {hiddenCount > 0 && (
+            <p className="text-xs text-muted-foreground">+{hiddenCount} more today</p>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
 export default function TodayDashboard() {
   const { data, isLoading } = useQuery<{ success: boolean; data: TodayOverview }>({
     queryKey: ["/api/today-overview"],
+    refetchInterval: 60_000,
   });
   const { toast } = useToast();
 
@@ -122,6 +309,14 @@ export default function TodayDashboard() {
       { enableHighAccuracy: true, timeout: 15000 },
     );
   };
+
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [isJobCardOpen, setIsJobCardOpen] = useState(false);
+  const handleJobClick = (jobId: string) => {
+    setSelectedJobId(jobId);
+    setIsJobCardOpen(true);
+  };
+  const handleCloseJobCard = () => setIsJobCardOpen(false);
 
   const overview = data?.data;
   const fleet = overview?.fleet ?? [];
@@ -267,30 +462,29 @@ export default function TodayDashboard() {
                 : jobsToday
               ).map((job, index) => {
                 const km = distances?.get(job.id);
-                const nearest = !!distances && index === 0 && km !== undefined;
                 return (
-                  <li key={job.id} className="flex items-center gap-3 px-6 py-3">
-                    <span className="text-sm font-medium text-muted-foreground w-16 shrink-0">
-                      {job.scheduledStartTime || "—"}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{job.title}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {[job.customerName, job.address].filter(Boolean).join(" · ")}
-                      </p>
-                    </div>
-                    {km !== undefined && (
-                      <Badge variant={nearest ? "default" : "outline"} className="shrink-0">
-                        {km < 0.15 ? "You're here" : `${km} km`}
-                      </Badge>
-                    )}
-                  </li>
+                  <TodayJobCard
+                    key={job.id}
+                    job={job}
+                    onOpen={handleJobClick}
+                    distanceKm={km}
+                    nearest={!!distances && index === 0 && km !== undefined}
+                  />
                 );
               })}
             </ul>
           )}
         </CardContent>
       </Card>
+
+      {selectedJobId && (
+        <GlobalJobCard
+          isOpen={isJobCardOpen}
+          onClose={handleCloseJobCard}
+          mode="edit"
+          jobId={selectedJobId}
+        />
+      )}
     </div>
   );
 }
