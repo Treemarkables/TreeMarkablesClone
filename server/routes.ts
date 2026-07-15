@@ -145,7 +145,7 @@ if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic as unknown as string);
 }
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
-import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString } from "@shared/dateUtils";
+import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString, nzTimeToUTC } from "@shared/dateUtils";
 import { composeCustomerAddress } from "@shared/customerAddress";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
@@ -19624,6 +19624,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // ========================================
   app.get('/api/today-overview', async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
       // Use the real current instant; getNZDateString converts it to the NZ
       // calendar day exactly once. (Do NOT use getNZNow() here — it returns a
       // tz-shifted Date, and converting that to NZ again double-shifts and rolls
@@ -19692,12 +19695,62 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           (a.scheduledStartTime || '99:99').localeCompare(b.scheduledStartTime || '99:99')
         );
 
+      // Everything diaried on today's jobs since NZ midnight, in one query.
+      // Diary rows are the de-facto activity log (photo uploads, notes, timer
+      // stops, milestones all write one) with a denormalized authorName.
+      const jobIds = jobsToday.map(j => j.id);
+      const nzMidnightUtc = nzTimeToUTC(todayStr, '00:00');
+      const diaryToday = (await storage.getJobDiaryEntriesForJobsSince(jobIds, nzMidnightUtc))
+        .filter(e => e.createdAt && getNZDateString(e.createdAt) === todayStr);
+
+      const activityByJob = new Map<string, Array<{
+        id: string; type: string; timestamp: string; actorName: string;
+        title: string; summary: string | null; photos: string[]; timeSpent: number | null;
+      }>>();
+      for (const e of diaryToday) {
+        const photos = [...(e.photos ?? [])];
+        if (e.photoUrl && !photos.includes(e.photoUrl)) photos.push(e.photoUrl);
+        const list = activityByJob.get(e.jobId) ?? [];
+        list.push({
+          id: e.id,
+          type: e.entryType,
+          timestamp: e.createdAt!.toISOString(),
+          actorName: e.authorName,
+          title: e.title,
+          summary: e.description ? e.description.slice(0, 140) : null,
+          photos,
+          timeSpent: e.timeSpent ?? null,
+        });
+        activityByJob.set(e.jobId, list);
+      }
+
+      // Live clock-ins on today's jobs — drives the "on site now" badges.
+      const jobIdSet = new Set(jobIds);
+      const runningTimers = (await storage.getAllActiveTimers()).filter(t => jobIdSet.has(t.jobId));
+      const enrichedTimers = await enrichTimers(runningTimers);
+      const timersByJob = new Map<string, Array<{ employeeId: string; employeeName: string; startedAt: string }>>();
+      for (const t of enrichedTimers) {
+        const list = timersByJob.get(t.jobId) ?? [];
+        list.push({
+          employeeId: t.employeeId,
+          employeeName: t.employeeName,
+          startedAt: t.startedAt instanceof Date ? t.startedAt.toISOString() : String(t.startedAt),
+        });
+        timersByJob.set(t.jobId, list);
+      }
+
+      const jobsTodayWithActivity = jobsToday.map(j => ({
+        ...j,
+        activity: (activityByJob.get(j.id) ?? []).slice(0, 30),
+        liveTimers: timersByJob.get(j.id) ?? [],
+      }));
+
       res.json({
         success: true,
         data: {
           date: todayStr,
           fleet,
-          jobsToday,
+          jobsToday: jobsTodayWithActivity,
           counts: {
             needsAttention: fleet.filter(f => f.severity === 'overdue' || f.severity === 'critical').length,
             dueSoon: fleet.filter(f => f.severity === 'warning' || f.severity === 'info').length,
