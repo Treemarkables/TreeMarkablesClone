@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import {
   Truck,
@@ -11,6 +13,8 @@ import {
   AlertTriangle,
   ClipboardCheck,
   RefreshCw,
+  LocateFixed,
+  Loader2,
   StickyNote,
   TrendingUp,
   Flag,
@@ -137,7 +141,17 @@ function statusLabel(status: string): string {
 const MAX_TIMELINE_ITEMS = 6;
 const MAX_PHOTO_THUMBS = 8;
 
-function TodayJobCard({ job, onOpen }: { job: JobToday; onOpen: (jobId: string) => void }) {
+function TodayJobCard({
+  job,
+  onOpen,
+  distanceKm,
+  nearest,
+}: {
+  job: JobToday;
+  onOpen: (jobId: string) => void;
+  distanceKm?: number;
+  nearest?: boolean;
+}) {
   const photos = Array.from(new Set(job.activity.flatMap((a) => a.photos)));
   const timeline = job.activity.slice(0, MAX_TIMELINE_ITEMS);
   const hiddenCount = job.activity.length - timeline.length;
@@ -162,6 +176,11 @@ function TodayJobCard({ job, onOpen }: { job: JobToday; onOpen: (jobId: string) 
             {job.scheduledStartTime || "—"}
           </span>
           <p className="text-sm font-medium truncate flex-1 min-w-0">{job.title}</p>
+          {distanceKm !== undefined && (
+            <Badge variant={nearest ? "default" : "outline"} className="shrink-0">
+              {distanceKm < 0.15 ? "You're here" : `${distanceKm} km`}
+            </Badge>
+          )}
           <Badge variant={statusVariant(job.status)}>{statusLabel(job.status)}</Badge>
           {job.liveTimers.map((t) => (
             <Badge
@@ -240,6 +259,56 @@ export default function TodayDashboard() {
     queryKey: ["/api/today-overview"],
     refetchInterval: 60_000,
   });
+  const { toast } = useToast();
+
+  // "Near me" — geolocate, then sort today's schedule by distance. Distances
+  // come from /api/near-me/jobs (server geocodes today's job addresses).
+  const [distances, setDistances] = useState<Map<string, number> | null>(null);
+  const [locating, setLocating] = useState(false);
+
+  const handleNearMe = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Location unavailable",
+        description: "This device doesn't support location.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await fetch(
+            `/api/near-me/jobs?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`,
+            { credentials: "include" },
+          );
+          if (!res.ok) throw new Error("near-me failed");
+          const body = await res.json();
+          const map = new Map<string, number>();
+          for (const j of body?.data ?? []) map.set(j.id, j.distanceKm);
+          setDistances(map);
+        } catch {
+          toast({
+            title: "Couldn't sort by distance",
+            description: "Please try again.",
+            variant: "destructive",
+          });
+        } finally {
+          setLocating(false);
+        }
+      },
+      () => {
+        setLocating(false);
+        toast({
+          title: "Location permission needed",
+          description: "Allow location access to sort jobs by distance.",
+          variant: "destructive",
+        });
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
 
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isJobCardOpen, setIsJobCardOpen] = useState(false);
@@ -350,9 +419,29 @@ export default function TodayDashboard() {
       {/* Today's schedule */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Calendar className="h-4 w-4" />
-            Today's schedule
+          <CardTitle className="flex items-center justify-between gap-2 text-base">
+            <span className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Today's schedule
+            </span>
+            {jobsToday.length > 1 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNearMe}
+                disabled={locating}
+                data-testid="button-near-me"
+              >
+                {locating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <LocateFixed className="h-4 w-4 mr-1.5" />
+                    {distances ? "Re-sort" : "Near me"}
+                  </>
+                )}
+              </Button>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -365,9 +454,24 @@ export default function TodayDashboard() {
             </p>
           ) : (
             <ul className="divide-y">
-              {jobsToday.map((job) => (
-                <TodayJobCard key={job.id} job={job} onOpen={handleJobClick} />
-              ))}
+              {(distances
+                ? [...jobsToday].sort(
+                    (a, b) =>
+                      (distances.get(a.id) ?? Infinity) - (distances.get(b.id) ?? Infinity),
+                  )
+                : jobsToday
+              ).map((job, index) => {
+                const km = distances?.get(job.id);
+                return (
+                  <TodayJobCard
+                    key={job.id}
+                    job={job}
+                    onOpen={handleJobClick}
+                    distanceKm={km}
+                    nearest={!!distances && index === 0 && km !== undefined}
+                  />
+                );
+              })}
             </ul>
           )}
         </CardContent>

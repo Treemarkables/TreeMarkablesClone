@@ -19622,6 +19622,79 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // jobs scheduled for the NZ calendar day. Read-only; computed from existing
   // storage, business-scoped via the same RLS connection as every other route.
   // ========================================
+
+  // ── Jobs near me (GPS-suggested job) ───────────────────────────────────────
+  // Crew geolocates from the Today page; we geocode today's scheduled jobs
+  // (Nominatim, NZ-scoped, cached per address for the process lifetime — the
+  // same service the site-map uses) and return them sorted by distance.
+  const nearMeGeocodeCache = new Map<string, { lat: number; lng: number } | null>();
+  async function geocodeNZAddressCached(address: string): Promise<{ lat: number; lng: number } | null> {
+    const key = address.trim().toLowerCase();
+    if (nearMeGeocodeCache.has(key)) return nearMeGeocodeCache.get(key)!;
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=nz&q=${encodeURIComponent(address)}`;
+      const resp = await fetch(url, { headers: { 'User-Agent': 'InflowApp/1.0 (job distance sort)' } });
+      const results = resp.ok ? await resp.json() : [];
+      const hit = Array.isArray(results) && results[0]
+        ? { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) }
+        : null;
+      const value = hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lng) ? hit : null;
+      nearMeGeocodeCache.set(key, value);
+      return value;
+    } catch (err) {
+      console.warn('near-me geocode failed:', address, err);
+      return null; // transient — deliberately NOT cached
+    }
+  }
+  const haversineKm = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+    const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(bLat - aLat), dLng = toRad(bLng - aLng);
+    const h = Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+
+  // NOTE: path deliberately NOT under /api/jobs/* — GET /api/jobs/:id is
+  // registered earlier and would swallow "near-me" as an :id.
+  app.get('/api/near-me/jobs', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const lat = parseFloat(String(req.query.lat));
+      const lng = parseFloat(String(req.query.lng));
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return res.status(400).json({ success: false, message: 'lat and lng are required' });
+      }
+
+      const todayStr = getNZDateString(new Date());
+      const { jobs } = await storage.getAllJobs({ limit: 100000, excludeArchived: true });
+      const candidates = jobs
+        .filter((j: any) => jobRunsOnNZDate(j, todayStr) && j.address)
+        .slice(0, 25); // Nominatim courtesy cap — today's list is short in practice
+
+      const out: any[] = [];
+      for (const j of candidates) {
+        const coords = await geocodeNZAddressCached(j.address);
+        if (!coords) continue;
+        out.push({
+          id: j.id,
+          jobNumber: j.jobNumber ?? null,
+          title: j.title || j.jobNumber || 'Job',
+          address: j.address,
+          scheduledStartTime: j.scheduledStartTime ?? null,
+          distanceKm: Math.round(haversineKm(lat, lng, coords.lat, coords.lng) * 10) / 10,
+        });
+      }
+      out.sort((a, b) => a.distanceKm - b.distanceKm);
+
+      res.json({ success: true, data: out });
+    } catch (error) {
+      console.error('Error computing jobs near me:', error);
+      res.status(500).json({ success: false, message: 'Error computing jobs near me' });
+    }
+  });
+
   app.get('/api/today-overview', async (req: Request, res: Response) => {
     try {
       if (!req.session.employeeId) {
