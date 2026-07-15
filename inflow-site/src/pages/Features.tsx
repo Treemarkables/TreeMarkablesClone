@@ -1,184 +1,531 @@
-import { Fragment } from "react";
 import { Section, Container } from "@/components/Container";
 import { LinkButton } from "@/components/Button";
 
-type Feature = {
-  eyebrow: string;
+type Tier = "All plans" | "Crew & up" | "Business" | "Add-on";
+
+type FeatureCard = {
   title: string;
   body: string;
-  bullets: string[];
-  visual: "jobs" | "quote" | "crew" | "safety" | "crm" | "help";
-  tier: "All plans" | "Crew & up" | "Business";
+  tier: Tier;
 };
 
-const features: Feature[] = [
+type Category = {
+  id: string;
+  name: string;
+  blurb: string;
+  features: FeatureCard[];
+};
+
+// Every feature below is shipped in the app today — descriptions are grounded
+// in what the product actually does, not roadmap.
+const categories: Category[] = [
   {
-    eyebrow: "Jobs & Dispatch",
-    title: "From quote on a driveway to invoice in the bank — in one app.",
-    body: "Walk the site, build the quote, schedule the crew, dispatch the work, and close out — all without leaving the job. The whole lifecycle is one connected workflow.",
-    bullets: [
-      "On-site quote builder with photos, materials and labour lines",
-      "Live job board across crews, with drag-to-reschedule",
-      "Crew dispatch with route, contact, safety and brief attached",
-      "Time tracking on the job, not after-hours guessing",
+    id: "jobs",
+    name: "Jobs & scheduling",
+    blurb: "The day-to-day core: every job in one card, on a schedule the whole team can see.",
+    features: [
+      {
+        title: "Job cards",
+        body: "Everything about a job in one card — quote, schedule, photos, diary, checklists and billing — with desktop and mobile layouts built for the field.",
+        tier: "All plans",
+      },
+      {
+        title: "Calendar & scheduling",
+        body: "Book jobs and site visits on a shared team calendar, so everyone sees what's on and when.",
+        tier: "All plans",
+      },
+      {
+        title: "Dispatch board",
+        body: "A drag-and-drop board to assign work across crews and reschedule on the fly.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Staff schedule",
+        body: "A multi-week grid of who's on which job, day by day, with per-job staff assignments.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Custom job lanes",
+        body: "Organise jobs into your own pipeline buckets, with automation rules that fire when a job enters a lane or sits too long.",
+        tier: "All plans",
+      },
+      {
+        title: "Today dashboard",
+        body: "A daily command centre: today's jobs, fleet compliance and what needs attention — one screen to start the day.",
+        tier: "All plans",
+      },
+      {
+        title: "Job diary",
+        body: "A timestamped diary on every job — notes, updates and photos from whoever's on site.",
+        tier: "All plans",
+      },
+      {
+        title: "Time tracking",
+        body: "Start a timer on the job; recorded time rolls up into timesheets and lands against the job for costing.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Tasks board",
+        body: "A kanban board for office work and follow-ups that aren't jobs, so they don't live in someone's head.",
+        tier: "All plans",
+      },
+      {
+        title: "Job templates",
+        body: "Preset your repeat job types so common work is set up in seconds.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Google Calendar sync",
+        body: "Two-way sync — your jobs push to Google Calendar, and existing Google events block out busy time so you're never double-booked.",
+        tier: "Crew & up",
+      },
     ],
-    visual: "jobs",
-    tier: "All plans",
   },
   {
-    eyebrow: "Quotes, proposals & invoicing",
-    title: "Quotes that win. Proposals that close. Invoices that send themselves.",
-    body: "Build a quick quote or a detailed multi-item proposal, send it branded, and let the customer accept, sign and pay online. When the job's done, the invoice is already drafted from the quote, the materials used and the time logged.",
-    bullets: [
-      "Quote templates with margin, GST and acceptance built in",
-      "Multi-item proposals with optional add-ons — accepted & paid online",
-      "Customer portal for accept / pay / sign",
-      "Auto-drafted invoices from completed jobs",
-      "Quote & proposal follow-ups so nothing goes cold",
+    id: "quoting",
+    name: "Quoting & proposals",
+    blurb: "Win the work: quotes and proposals customers accept, sign and pay online.",
+    features: [
+      {
+        title: "Quote builder",
+        body: "Build and send branded quotes with materials, labour and GST — customers view and accept them online.",
+        tier: "All plans",
+      },
+      {
+        title: "Proposal builder",
+        body: "Multi-section proposals with line-item options the customer can pick from, accepted and signed online.",
+        tier: "All plans",
+      },
+      {
+        title: "Deposits on acceptance",
+        body: "Ask for a deposit when a customer accepts a proposal — collected by card through your connected Stripe account.",
+        tier: "All plans",
+      },
+      {
+        title: "Speech-to-quote",
+        body: "Talk through the job on site — Inflow transcribes what you said and drafts the quote for you.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Screenshot to quote",
+        body: "Paste a screenshot of a text or message thread — AI reads it, fills in the customer and job details, and you quote from there.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Quote follow-ups",
+        body: "A follow-up queue with AI-drafted chasers, so sent quotes don't quietly go cold.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Materials & services catalog",
+        body: "Your priced materials and services in one catalog, reused across every quote and invoice.",
+        tier: "Crew & up",
+      },
     ],
-    visual: "quote",
-    tier: "All plans",
   },
   {
-    eyebrow: "Customers & CRM",
-    title: "Every conversation, quote and job in one timeline.",
-    body: "Calls, emails, SMS, site visits, photos, quotes, invoices, payments — every touchpoint with a customer in one place. New person picks up a job and is up to speed in 30 seconds.",
-    bullets: [
-      "Inbox + SMS + calls captured against the customer",
-      "Pipeline view for opportunities and follow-ups",
-      "Property history — what we did and when",
+    id: "money",
+    name: "Invoicing & money",
+    blurb: "Get paid: invoices from job data, payments in, costs matched against the quote.",
+    features: [
+      {
+        title: "Invoicing",
+        body: "Sectioned invoices built from the job's quote, time and materials — sent with an online viewer.",
+        tier: "All plans",
+      },
+      {
+        title: "Card & bank payments",
+        body: "Take card payments online through your connected Stripe account — and your bank details render on every invoice for direct transfer.",
+        tier: "All plans",
+      },
+      {
+        title: "Xero sync",
+        body: "Push invoices through to Xero so the books stay right without double entry.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Supplier invoice import",
+        body: "Snap a photo or drop in a PDF of a supplier bill — the line items are read automatically and costed to the right job.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Job costing & back-costing",
+        body: "Compare quoted vs actual labour, materials and supplier costs on every job, so you know what actually made money.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Reconciliation",
+        body: "Match payments against invoices in one view, so nothing slips through unpaid.",
+        tier: "Crew & up",
+      },
     ],
-    visual: "crm",
-    tier: "Crew & up",
   },
   {
-    eyebrow: "Staff & Permissions",
-    title: "One platform for the whole crew — without giving everyone the keys.",
-    body: "Unlimited users on every paid plan. Granular per-role and per-staff permissions so the office sees one thing, the foreman sees another, and the casual sees only what they need.",
-    bullets: [
-      "Roles and per-staff overrides",
-      "Schedule + leave + availability in one calendar",
-      "Pay rates and time tracking",
-      "Competency register — who's qualified for what",
+    id: "customers",
+    name: "Customers & CRM",
+    blurb: "One record per customer — every contact, property, quote and job against it.",
+    features: [
+      {
+        title: "Customer records",
+        body: "Customers with multiple contacts, communication preferences and the full history of quotes, jobs and properties.",
+        tier: "All plans",
+      },
+      {
+        title: "Leads & pipeline",
+        body: "Capture and track leads from first contact through to booked job.",
+        tier: "All plans",
+      },
+      {
+        title: "AI lead capture",
+        body: "Inbound emails and messages are parsed automatically into contact details and a job request — no re-typing.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Import & migration",
+        body: "Bring your customer list in by CSV, with a built-in ServiceM8 import for customers, jobs and quotes — and we help with the rest during onboarding.",
+        tier: "All plans",
+      },
     ],
-    visual: "crew",
-    tier: "Crew & up",
   },
   {
-    eyebrow: "Safety",
-    title: "Audit-ready safety, built into the flow of work.",
-    body: "JHAs, SWMS, prestart checklists, toolbox talks, equipment inductions, vehicle inspections, near-miss and notifiable event reporting. Tied to the jobs, vehicles and people they belong to.",
-    bullets: [
-      "JHA + SWMS builders with template libraries",
-      "Daily prestart + vehicle inspection on mobile",
-      "Equipment inductions with sign-off and renewal alerts",
-      "Toolbox talks and notifiable event registers",
+    id: "comms",
+    name: "Communication",
+    blurb: "Email and SMS from the app, threaded per customer, with the routine ones automated.",
+    features: [
+      {
+        title: "Unified inbox",
+        body: "Email and SMS conversations threaded per customer in one inbox, so any team member can pick up the thread.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Two-way SMS",
+        body: "Send and receive texts from your business number, with a monthly SMS bundle included on paid plans.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Message templates",
+        body: "Reusable SMS and email templates for the messages you send every day.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Booking reminders",
+        body: "Automatic reminders to customers ahead of booked work, so fewer no-shows.",
+        tier: "Crew & up",
+      },
+      {
+        title: "“On my way” texts",
+        body: "One tap texts the customer you're en route with an ETA — and logs it to the job.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Inquiry auto-reply",
+        body: "New inquiries get an instant acknowledgement while the lead lands in your pipeline.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Gmail & Mailchimp",
+        body: "Email replies flow into the inbox through your Gmail, and your customer list syncs to Mailchimp audiences for campaigns.",
+        tier: "Crew & up",
+      },
     ],
-    visual: "safety",
-    tier: "Crew & up",
   },
   {
-    eyebrow: "Help & Training",
-    title: "Every staff member knows how to use it on day one.",
-    body: "Built-in SOPs and how-to videos cover every workflow. New hires get up to speed without a week of shadowing.",
-    bullets: [
-      "Sequenced onboarding for new subscribers",
-      "How-to videos for every core workflow",
-      "Searchable SOP library tied to your processes",
-      "Owner-editable so it stays current with your business",
+    id: "calls",
+    name: "Phone & voice",
+    blurb: "Your business line, in the app — with an AI backstop for the calls you can't take.",
+    features: [
+      {
+        title: "Business phone & call recording",
+        body: "Take business calls on the iOS app or in your browser — calls are recorded and linked to the customer and job.",
+        tier: "Add-on",
+      },
+      {
+        title: "AI receptionist",
+        body: "When you can't pick up, an AI voice agent answers, triages the job and captures the lead — with your greeting and rules.",
+        tier: "Add-on",
+      },
     ],
-    visual: "help",
-    tier: "All plans",
+  },
+  {
+    id: "photos",
+    name: "Photos, video & site",
+    blurb: "Proof of work: capture it on site, find it later, share it with the customer.",
+    features: [
+      {
+        title: "Photo capture & annotation",
+        body: "Capture site photos and draw straight on them — arrows, circles, notes — from any phone.",
+        tier: "All plans",
+      },
+      {
+        title: "Before & after generator",
+        body: "Paired before / after capture, with a branded composite generated automatically — ready to share on social.",
+        tier: "All plans",
+      },
+      {
+        title: "Voice photo captions",
+        body: "Speak the caption as you shoot — it's transcribed onto the photo in the job diary.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Public photo timeline",
+        body: "A shareable link where your customer watches job progress photo by photo, without logging in.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Photo report PDF",
+        body: "One tap compiles a job's photos into a branded, timestamped PDF report you can send on.",
+        tier: "All plans",
+      },
+      {
+        title: "Job site map",
+        body: "A satellite map on the job card with placeable markers — pin the trees, hazards or work areas on the property, or mark up your own uploaded site plan for council work.",
+        tier: "All plans",
+      },
+      {
+        title: "Job videos",
+        body: "Upload walkthrough videos against the job, transcribed automatically so they're searchable.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Media library",
+        body: "Search every photo and video across all your jobs in one library, with a map view.",
+        tier: "All plans",
+      },
+    ],
+  },
+  {
+    id: "documents",
+    name: "Documents",
+    blurb: "Branded paperwork generated from job data, signed on the spot.",
+    features: [
+      {
+        title: "Document builder",
+        body: "Build branded document templates — certificates, handover packs, custom forms — and generate them straight from job data.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Signature capture",
+        body: "Capture signatures on proposals and documents, on a phone or tablet, on the spot.",
+        tier: "All plans",
+      },
+    ],
+  },
+  {
+    id: "safety",
+    name: "Safety & compliance",
+    blurb: "Audit-ready safety records, tied to the jobs, vehicles and people they belong to.",
+    features: [
+      {
+        title: "SWMS builder",
+        body: "Safe Work Method Statements built from templates, with steps and sign-on signatures.",
+        tier: "Crew & up",
+      },
+      {
+        title: "JHA assessments",
+        body: "Job hazard analysis with hazard and control libraries, completed and signed on site.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Toolbox talks",
+        body: "Run and record toolbox talks with attendee tracking, so there's a register when you need one.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Pre-start checklists",
+        body: "Configurable daily pre-start checks completed on mobile before work begins.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Incident reporting",
+        body: "Near-miss reports with photos, witnesses and corrective actions, plus a notifiable events register.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Training & competency register",
+        body: "Track who's qualified for what, with competency types per employee.",
+        tier: "Crew & up",
+      },
+    ],
+  },
+  {
+    id: "equipment",
+    name: "Equipment & fleet",
+    blurb: "Every machine, vehicle and tool accounted for — maintained, inspected, inducted.",
+    features: [
+      {
+        title: "Equipment register & maintenance",
+        body: "Register plant and tools with maintenance schedules and service history.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Check-in / check-out",
+        body: "Know who has what — equipment checked out to people and back in again.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Vehicle inspections & compliance",
+        body: "Vehicle inspection checklists with history, plus rego, CoF and service reminders before they lapse.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Equipment inductions",
+        body: "Induction templates with sign-off, so only inducted staff run the gear.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Inventory",
+        body: "Track stock levels and movements with an inventory transaction history.",
+        tier: "Crew & up",
+      },
+    ],
+  },
+  {
+    id: "team",
+    name: "Team & permissions",
+    blurb: "The whole crew on one platform — each person seeing exactly what they should.",
+    features: [
+      {
+        title: "Staff management",
+        body: "Add your team with their details, pay rates and availability — up to 3 users free, unlimited on paid plans.",
+        tier: "All plans",
+      },
+      {
+        title: "Roles & permissions",
+        body: "Role-based access with per-person overrides — the office sees one thing, the apprentice another.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Staff inductions",
+        body: "Structured induction flows for new starters, tracked to completion.",
+        tier: "Crew & up",
+      },
+    ],
+  },
+  {
+    id: "insights",
+    name: "Insights & automation",
+    blurb: "See how the business is really doing — and put the routine on rails.",
+    features: [
+      {
+        title: "Dashboards & metrics",
+        body: "Business dashboards covering jobs, revenue and performance at a glance.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Advanced analytics",
+        body: "Deeper performance and financial analytics for multi-crew operations.",
+        tier: "Business",
+      },
+      {
+        title: "Workflow automation",
+        body: "Trigger-based rules that move jobs, send comms and assign work without anyone lifting a finger.",
+        tier: "Business",
+      },
+    ],
+  },
+  {
+    id: "platform",
+    name: "Platform",
+    blurb: "Everywhere your team is — phone, browser, and the help to learn it all.",
+    features: [
+      {
+        title: "Mobile app",
+        body: "A native iOS app plus an installable web app on any phone — the field runs Inflow from a pocket.",
+        tier: "All plans",
+      },
+      {
+        title: "Push notifications",
+        body: "Job, message and assignment notifications to the right person's phone, with per-user preferences.",
+        tier: "All plans",
+      },
+      {
+        title: "Global search",
+        body: "One search across jobs, customers, quotes and more.",
+        tier: "All plans",
+      },
+      {
+        title: "Help centre & how-to videos",
+        body: "Built-in SOPs and how-to videos for every core workflow, so new staff get up to speed on day one.",
+        tier: "All plans",
+      },
+      {
+        title: "AI assistant",
+        body: "An in-app assistant you can ask questions about your business data and how to get things done.",
+        tier: "Crew & up",
+      },
+      {
+        title: "Weather",
+        body: "A weather view built in, for planning outdoor work around the forecast.",
+        tier: "All plans",
+      },
+    ],
   },
 ];
 
-// Shorter detail cards — the rest of the toolkit, each with its plan tag.
-const detailFeatures: { title: string; body: string; tier: Feature["tier"] }[] = [
+// Plan inclusions — matched to entitlements, not aspirations.
+const plans: {
+  name: string;
+  tagline: string;
+  meta: string[];
+  leadIn?: string;
+  includes: string[];
+  highlight?: boolean;
+}[] = [
   {
-    title: "Supplier invoice importing",
-    body: "Snap a photo or drop in a PDF of a supplier bill — Inflow reads the line items and lands the costs straight on the right job. No manual entry.",
-    tier: "Crew & up",
+    name: "Freemium",
+    tagline: "Solo operators and small teams getting started.",
+    meta: ["Up to 15 jobs / month", "Up to 3 users"],
+    includes: [
+      "Jobs, calendar & scheduling",
+      "Quotes, proposals & invoicing",
+      "Customers & leads",
+      "Photos (10 per job), site map & job diary",
+      "Tasks board & custom job lanes",
+      "Mobile app, help hub & data import",
+    ],
   },
   {
-    title: "Asset & equipment management",
-    body: "Register plant, vehicles and tools with maintenance schedules, inductions, vehicle inspections and check-in / check-out.",
-    tier: "Crew & up",
+    name: "Crew",
+    tagline: "Growing crews running a real book of work.",
+    meta: ["Up to 150 jobs / month", "Unlimited users & photos"],
+    leadIn: "Everything in Freemium, plus:",
+    includes: [
+      "Dispatch board & staff schedule",
+      "Safety & compliance suite",
+      "Equipment, fleet & inventory",
+      "Roles, permissions & time tracking",
+      "Inbox, SMS bundle & message templates",
+      "AI assist — speech-to-quote, follow-ups & lead capture",
+      "Job costing, dashboards & document builder",
+      "Xero, Google Calendar, Gmail & Mailchimp",
+    ],
+    highlight: true,
   },
   {
-    title: "Job costing & back-costing",
-    body: "Compare quoted vs actual labour, materials and supplier costs on every job — so you know exactly what made money.",
-    tier: "Crew & up",
-  },
-  {
-    title: "Scheduling & dispatch",
-    body: "Calendar and staff scheduling on every plan; a drag-to-reschedule dispatch board across crews from Crew up.",
-    tier: "All plans",
-  },
-  {
-    title: "Photos & media",
-    body: "Annotated site photos, before / after and voice captions, with public timeline links to share progress with customers.",
-    tier: "All plans",
-  },
-  {
-    title: "Document builder",
-    body: "Generate branded documents and templates — SWMS, certificates, handover packs — straight from job data.",
-    tier: "Crew & up",
-  },
-  {
-    title: "AI assist",
-    body: "Smart dispatch, speech-to-quote, and lead capture from photos and messages — bundled on every paid plan.",
-    tier: "Crew & up",
-  },
-  {
-    title: "Workflow automation",
-    body: "Trigger-based rules that move jobs, send comms and assign work without anyone lifting a finger.",
-    tier: "Business",
+    name: "Business",
+    tagline: "Multi-crew operations running at scale.",
+    meta: ["Unlimited jobs", "Bigger SMS bundle"],
+    leadIn: "Everything in Crew, plus:",
+    includes: [
+      "Workflow automation",
+      "Advanced analytics",
+      "Priority onboarding & support",
+    ],
   },
 ];
 
-// Consolidated plan comparison — feature groups mapped to the three tiers.
-const planCols = ["Freemium", "Crew", "Business"] as const;
-type Cell = boolean | string;
-const comparison: { group: string; rows: { label: string; values: [Cell, Cell, Cell] }[] }[] = [
+const addOns: { title: string; body: string }[] = [
   {
-    group: "Core — every plan",
-    rows: [
-      { label: "Active jobs / month", values: ["15", "150", "Unlimited"] },
-      { label: "Users", values: ["3", "Unlimited", "Unlimited"] },
-      { label: "Jobs, scheduling & dispatch", values: [true, true, true] },
-      { label: "Quoting, proposals & invoicing", values: [true, true, true] },
-      { label: "Customers & customer portal", values: [true, true, true] },
-      { label: "Photos / job", values: ["10", "Unlimited", "Unlimited"] },
-      { label: "Mobile app & help hub", values: [true, true, true] },
-    ],
+    title: "Business phone & call recording",
+    body: "Take and record business calls in the app, linked to customers and jobs.",
   },
   {
-    group: "Crew & up",
-    rows: [
-      { label: "Safety & compliance suite", values: [false, true, true] },
-      { label: "Equipment & fleet management", values: [false, true, true] },
-      { label: "Roles, permissions & time tracking", values: [false, true, true] },
-      { label: "Communications, inbox & templates", values: [false, true, true] },
-      { label: "AI assist — dispatch & speech-to-quote", values: [false, true, true] },
-      { label: "Advanced analytics & job costing", values: [false, true, true] },
-      { label: "SMS / month included", values: ["—", "200", "800"] },
-      { label: "Document builder", values: [false, true, true] },
-      { label: "Xero, Google Calendar, Gmail & Mailchimp", values: [false, true, true] },
-    ],
+    title: "AI receptionist",
+    body: "An AI voice agent answers and triages inbound calls when you can't.",
   },
   {
-    group: "Business",
-    rows: [
-      { label: "Workflow automation", values: [false, false, true] },
-      { label: "Priority onboarding & support", values: [false, false, true] },
-    ],
-  },
-  {
-    group: "Add-ons (any paid plan)",
-    rows: [
-      { label: "Call recording — $55/mo + usage", values: ["—", "Add-on", "Add-on"] },
-      { label: "Extra SMS top-up", values: ["—", "Add-on", "Add-on"] },
-    ],
+    title: "Extra SMS",
+    body: "Top up beyond your plan's monthly SMS bundle.",
   },
 ];
 
@@ -190,52 +537,50 @@ export default function Features() {
         <div className="max-w-3xl mx-auto text-center">
           <span className="eyebrow">Features</span>
           <h1 className="heading-display text-5xl md:text-6xl mt-5">
-            Every workflow a trades business runs on. In one place.
+            Everything in Inflow.
           </h1>
           <p className="mt-6 text-lg text-ink-500 leading-relaxed max-w-prose mx-auto">
-            Inflow replaces the patchwork most trades businesses run on — a job book, a quoting tool, an invoicing tool, a CRM, a safety binder, three group chats and a spreadsheet.
+            The full feature set — what each tool does and which plan it lands on. Built for NZ trades businesses: jobs, quoting, invoicing, safety, fleet and the crew, in one app.
           </p>
+          <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
+            <TierTag tier="All plans" />
+            <TierTag tier="Crew & up" />
+            <TierTag tier="Business" />
+            <TierTag tier="Add-on" />
+          </div>
         </div>
       </Section>
 
-      {/* Feature blocks */}
+      {/* Feature grid, grouped by category */}
       <div className="border-t border-ink-100">
-        {features.map((f) => (
-          <FeatureBlock key={f.title} feature={f} />
+        {categories.map((cat) => (
+          <section key={cat.id} className="border-b border-ink-100 last:border-b-0">
+            <Container className="py-14 md:py-16">
+              <div className="max-w-2xl">
+                <h2 className="heading-section text-2xl md:text-3xl">{cat.name}</h2>
+                <p className="mt-2 text-ink-500 leading-relaxed">{cat.blurb}</p>
+              </div>
+              <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {cat.features.map((f) => (
+                  <div key={f.title} className="rounded-2xl border border-ink-100 bg-paper p-6 flex flex-col">
+                    <div>
+                      <TierTag tier={f.tier} />
+                    </div>
+                    <h3 className="heading-section text-lg mt-4">{f.title}</h3>
+                    <p className="mt-2 text-sm text-ink-500 leading-relaxed">{f.body}</p>
+                  </div>
+                ))}
+              </div>
+            </Container>
+          </section>
         ))}
       </div>
 
-      {/* More in the box — detail cards */}
-      <section className="border-t border-ink-100">
-        <Container className="py-20 md:py-24">
-          <div className="max-w-2xl mx-auto text-center">
-            <span className="eyebrow">More in the box</span>
-            <h2 className="heading-section text-3xl md:text-4xl mt-3">
-              Everything else you run on.
-            </h2>
-            <p className="mt-5 text-ink-500 leading-relaxed">
-              From supplier bills to back-costing — the rest of the toolkit, and which plan each lands on.
-            </p>
-          </div>
-          <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {detailFeatures.map((d) => (
-              <div key={d.title} className="rounded-2xl border border-ink-100 bg-paper p-6 text-center">
-                <div className="flex justify-center">
-                  <TierTag tier={d.tier} />
-                </div>
-                <h3 className="heading-section text-lg mt-4">{d.title}</h3>
-                <p className="mt-2 text-sm text-ink-500 leading-relaxed">{d.body}</p>
-              </div>
-            ))}
-          </div>
-        </Container>
-      </section>
-
-      {/* Plan comparison */}
+      {/* What's in each plan — directly after the grid */}
       <section className="bg-ink-50 border-t border-ink-100">
         <Container className="py-20 md:py-24">
           <div className="max-w-2xl mx-auto text-center">
-            <span className="eyebrow">Compare plans</span>
+            <span className="eyebrow">Plans</span>
             <h2 className="heading-section text-3xl md:text-4xl mt-3">
               What's in each plan.
             </h2>
@@ -243,7 +588,60 @@ export default function Features() {
               Every plan runs the core of your business. Crew adds the suite a working team needs; Business adds the tools to grow it. Pay by jobs per month, not per seat.
             </p>
           </div>
-          <ComparisonTable />
+
+          <div className="mt-12 grid md:grid-cols-3 gap-5 items-start">
+            {plans.map((p) => (
+              <div
+                key={p.name}
+                className={`rounded-2xl border bg-paper p-7 ${
+                  p.highlight ? "border-ink-900 shadow-lift relative" : "border-ink-100"
+                }`}
+              >
+                {p.highlight && (
+                  <span className="absolute -top-3 left-7 px-2.5 py-1 rounded-full bg-lime text-ink-900 text-[11px] font-semibold tracking-snug">
+                    Most popular
+                  </span>
+                )}
+                <h3 className="heading-section text-xl">{p.name}</h3>
+                <p className="mt-1.5 text-sm text-ink-500">{p.tagline}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {p.meta.map((m) => (
+                    <span key={m} className="px-2.5 py-1 rounded-full bg-ink-100 text-ink-600 text-[11px] font-semibold tracking-snug">
+                      {m}
+                    </span>
+                  ))}
+                </div>
+                {p.leadIn && (
+                  <p className="mt-5 text-[13px] font-semibold text-ink-700">{p.leadIn}</p>
+                )}
+                <ul className={`${p.leadIn ? "mt-3" : "mt-5"} space-y-2.5`}>
+                  {p.includes.map((line) => (
+                    <li key={line} className="flex items-start gap-2.5 text-sm text-ink-700">
+                      <CheckMark />
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          {/* Add-ons */}
+          <div className="mt-10 rounded-2xl border border-ink-100 bg-paper p-7">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h3 className="heading-section text-lg">Add-ons</h3>
+              <span className="text-sm text-ink-500">Available on any paid plan.</span>
+            </div>
+            <div className="mt-5 grid sm:grid-cols-3 gap-5">
+              {addOns.map((a) => (
+                <div key={a.title}>
+                  <div className="text-sm font-semibold text-ink-900">{a.title}</div>
+                  <p className="mt-1 text-sm text-ink-500 leading-relaxed">{a.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="mt-8 text-center">
             <LinkButton href="/pricing" variant="primary" size="md">
               See pricing
@@ -275,307 +673,26 @@ export default function Features() {
   );
 }
 
-function TierTag({ tier }: { tier: Feature["tier"] }) {
-  const styles: Record<Feature["tier"], string> = {
+function TierTag({ tier }: { tier: Tier }) {
+  const styles: Record<Tier, string> = {
     "All plans": "bg-ink-100 text-ink-600",
     "Crew & up": "bg-lime text-ink-900",
     Business: "bg-ink-900 text-paper",
+    "Add-on": "bg-paper text-ink-700 border border-ink-200",
   };
   return (
-    <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-snug ${styles[tier]}`}>
-      {tier === "Business" ? "Business" : tier === "Crew & up" ? "Crew & up" : "All plans"}
+    <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-snug ${styles[tier]}`}>
+      {tier}
     </span>
-  );
-}
-
-function ComparisonTable() {
-  return (
-    <div className="mt-10 rounded-2xl border border-ink-100 bg-paper overflow-x-auto">
-      <table className="w-full text-sm border-collapse min-w-[640px]">
-        <thead>
-          <tr className="border-b border-ink-100">
-            <th className="text-left font-medium text-ink-500 p-4 min-w-[260px]">Feature</th>
-            {planCols.map((c) => (
-              <th
-                key={c}
-                className={`p-4 text-center font-semibold min-w-[110px] ${c === "Crew" ? "text-ink-900 bg-lime/10" : "text-ink-900"}`}
-              >
-                {c}
-                {c === "Crew" && (
-                  <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-lime-deep">Popular</span>
-                )}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {comparison.map((sec) => (
-            <Fragment key={sec.group}>
-              <tr className="bg-ink-50/60 border-b border-ink-100">
-                <td colSpan={4} className="px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">
-                  {sec.group}
-                </td>
-              </tr>
-              {sec.rows.map((row) => (
-                <tr key={row.label} className="border-b border-ink-100/70 last:border-b-0">
-                  <td className="p-4 text-ink-700">{row.label}</td>
-                  {row.values.map((v, i) => (
-                    <td key={i} className={`p-4 text-center ${planCols[i] === "Crew" ? "bg-lime/5" : ""}`}>
-                      {typeof v === "boolean" ? (
-                        v ? <CheckMark /> : <span className="text-ink-300">—</span>
-                      ) : (
-                        <span className="text-ink-700 font-medium tabular-nums">{v}</span>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }
 
 function CheckMark() {
   return (
-    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-ink-900 text-paper">
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <span className="mt-0.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-ink-900 text-paper shrink-0">
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="20 6 9 17 4 12" />
       </svg>
     </span>
-  );
-}
-
-function FeatureBlock({ feature }: { feature: Feature }) {
-  return (
-    <section className="border-b border-ink-100 last:border-b-0">
-      <Container className="py-20 md:py-28">
-        <div className="flex flex-col items-center text-center">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-3 flex-wrap justify-center">
-              <span className="eyebrow">{feature.eyebrow}</span>
-              <TierTag tier={feature.tier} />
-            </div>
-            <h2 className="heading-section text-3xl md:text-4xl mt-4">{feature.title}</h2>
-            <p className="mt-5 text-ink-500 leading-relaxed">{feature.body}</p>
-            <ul className="mt-7 space-y-3 inline-block text-left">
-              {feature.bullets.map((b) => (
-                <li key={b} className="flex items-start gap-3 text-[15px]">
-                  <span className="mt-2 h-1.5 w-1.5 rounded-full bg-lime-deep shrink-0" />
-                  <span className="text-ink-700">{b}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="mt-12 w-full max-w-xl">
-            <FeatureVisual kind={feature.visual} />
-          </div>
-        </div>
-      </Container>
-    </section>
-  );
-}
-
-function FeatureVisual({ kind }: { kind: Feature["visual"] }) {
-  switch (kind) {
-    case "jobs":
-      return <JobsVisual />;
-    case "quote":
-      return <QuoteVisual />;
-    case "crew":
-      return <CrewVisual />;
-    case "safety":
-      return <SafetyVisual />;
-    case "crm":
-      return <CrmVisual />;
-    case "help":
-      return <HelpVisual />;
-  }
-}
-
-function CardFrame({ children, label }: { children: React.ReactNode; label: string }) {
-  return (
-    <div className="relative">
-      <div className="absolute -inset-4 -z-10 bg-gradient-to-br from-lime/15 to-transparent rounded-2xl blur-xl" />
-      <div className="rounded-2xl bg-paper border border-ink-100 shadow-soft overflow-hidden">
-        <div className="px-5 py-3 border-b border-ink-100 flex items-center justify-between">
-          <span className="text-[11px] uppercase tracking-[0.18em] text-ink-400">{label}</span>
-          <div className="flex gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-ink-200" />
-            <span className="h-1.5 w-1.5 rounded-full bg-ink-200" />
-            <span className="h-1.5 w-1.5 rounded-full bg-ink-200" />
-          </div>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function JobsVisual() {
-  const cols = ["Today", "Tomorrow", "Friday"];
-  const jobs = [
-    [{ t: "Switchboard upgrade", c: "Crew A", pill: "bg-lime" }, { t: "Blocked drain callout", c: "Crew B", pill: "bg-ink-100" }],
-    [{ t: "Storm damage repair", c: "Crew A", pill: "bg-ink-100" }, { t: "Bathroom re-fit", c: "Crew C", pill: "bg-ink-100" }, { t: "Hedge & tree trim", c: "Crew B", pill: "bg-ink-100" }],
-    [{ t: "Retaining wall repair", c: "Crew A", pill: "bg-ink-100" }],
-  ];
-  return (
-    <CardFrame label="Schedule">
-      <div className="grid grid-cols-3 gap-3">
-        {cols.map((col, i) => (
-          <div key={col}>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-ink-400 mb-2">{col}</div>
-            <div className="space-y-2">
-              {jobs[i].map((j, k) => (
-                <div key={k} className="rounded-lg border border-ink-100 p-3">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${j.pill}`} />
-                    <span className="text-xs text-ink-500">{j.c}</span>
-                  </div>
-                  <div className="mt-1 text-sm font-medium">{j.t}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </CardFrame>
-  );
-}
-
-function QuoteVisual() {
-  const lines = [
-    { l: "Switchboard upgrade — 12 circuits", q: "1", p: "$1,840" },
-    { l: "Rewire garage sub-board", q: "1", p: "$420" },
-    { l: "Certificate of Compliance", q: "1", p: "$580" },
-  ];
-  return (
-    <CardFrame label="Quote · #Q-2046">
-      <div className="space-y-2">
-        {lines.map((line) => (
-          <div key={line.l} className="grid grid-cols-[1fr_60px_80px] gap-3 py-2 border-b border-ink-100 last:border-b-0 text-sm">
-            <span className="text-ink-700">{line.l}</span>
-            <span className="text-ink-500">{line.q}</span>
-            <span className="text-right font-medium tabular-nums">{line.p}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 pt-3 border-t border-ink-200 flex items-center justify-between">
-        <span className="text-xs text-ink-500">Total incl. GST</span>
-        <span className="text-lg font-semibold tabular-nums">$3,266.00</span>
-      </div>
-      <div className="mt-4 flex gap-2">
-        <span className="flex-1 text-center h-9 leading-9 rounded-full bg-ink-900 text-paper text-xs font-medium">
-          Send to customer
-        </span>
-        <span className="flex-1 text-center h-9 leading-9 rounded-full border border-ink-200 text-xs font-medium">
-          Save draft
-        </span>
-      </div>
-    </CardFrame>
-  );
-}
-
-function CrewVisual() {
-  const people = [
-    { n: "Sam", r: "Foreman", a: "On site" },
-    { n: "Jess", r: "Operator", a: "On site" },
-    { n: "Mark", r: "Carpenter", a: "Leave" },
-    { n: "Pri", r: "Apprentice", a: "Training" },
-  ];
-  return (
-    <CardFrame label="Crew · This week">
-      <div className="space-y-2.5">
-        {people.map((p) => (
-          <div key={p.n} className="flex items-center gap-3 p-2 rounded-lg hover:bg-ink-50">
-            <div className="h-9 w-9 rounded-full bg-ink-100 flex items-center justify-center text-sm font-medium">
-              {p.n[0]}
-            </div>
-            <div className="flex-1">
-              <div className="text-sm font-medium">{p.n}</div>
-              <div className="text-xs text-ink-500">{p.r}</div>
-            </div>
-            <span className={`text-[11px] px-2 py-1 rounded-full ${p.a === "On site" ? "bg-lime text-ink-900" : "bg-ink-100 text-ink-700"}`}>
-              {p.a}
-            </span>
-          </div>
-        ))}
-      </div>
-    </CardFrame>
-  );
-}
-
-function SafetyVisual() {
-  const items = [
-    { t: "Prestart — Truck 02", s: "Complete", ok: true },
-    { t: "JHA — Roof edge work", s: "Signed off", ok: true },
-    { t: "Toolbox talk — Manual handling", s: "Due Friday", ok: false },
-    { t: "Equipment induction — Scissor lift", s: "Renew 14 days", ok: false },
-  ];
-  return (
-    <CardFrame label="Safety · Today">
-      <div className="space-y-2">
-        {items.map((i) => (
-          <div key={i.t} className="flex items-center justify-between p-3 rounded-lg border border-ink-100">
-            <div className="flex items-center gap-3">
-              <span className={`h-2 w-2 rounded-full ${i.ok ? "bg-lime-deep" : "bg-ink-300"}`} />
-              <span className="text-sm">{i.t}</span>
-            </div>
-            <span className={`text-xs ${i.ok ? "text-ink-500" : "text-ink-700 font-medium"}`}>
-              {i.s}
-            </span>
-          </div>
-        ))}
-      </div>
-    </CardFrame>
-  );
-}
-
-function CrmVisual() {
-  const events = [
-    { t: "Quote accepted", s: "$3,266 · Q-2046", w: "2h ago" },
-    { t: "Inbound call", s: "Booked site visit", w: "Yesterday" },
-    { t: "Email", s: "Re: storm damage", w: "2 days" },
-    { t: "Site visit", s: "Photos uploaded ×6", w: "5 days" },
-  ];
-  return (
-    <CardFrame label="Harper · Ormond Rd">
-      <div className="space-y-3 border-l-2 border-ink-100 pl-5 ml-2">
-        {events.map((e, i) => (
-          <div key={i} className="relative">
-            <span className="absolute -left-[26px] top-1 h-3 w-3 rounded-full bg-ink-900 border-2 border-paper" />
-            <div className="text-sm font-medium">{e.t}</div>
-            <div className="text-xs text-ink-500 mt-0.5">{e.s} · <span className="text-ink-400">{e.w}</span></div>
-          </div>
-        ))}
-      </div>
-    </CardFrame>
-  );
-}
-
-function HelpVisual() {
-  const items = [
-    { i: "1.", t: "Welcome to Inflow", k: "Video · 2 min" },
-    { i: "2.", t: "Set up your business details", k: "Article + video" },
-    { i: "3.", t: "Upload your logo & brand", k: "Article" },
-    { i: "4.", t: "Default pricing & GST", k: "Article" },
-  ];
-  return (
-    <CardFrame label="Help · Getting started">
-      <div className="space-y-2">
-        {items.map((i) => (
-          <div key={i.t} className="flex items-center gap-3 p-3 rounded-lg hover:bg-ink-50">
-            <span className="text-xs font-medium text-ink-400 w-5">{i.i}</span>
-            <div className="flex-1">
-              <div className="text-sm font-medium">{i.t}</div>
-              <div className="text-xs text-ink-500">{i.k}</div>
-            </div>
-            <span className="text-ink-400">→</span>
-          </div>
-        ))}
-      </div>
-    </CardFrame>
   );
 }
