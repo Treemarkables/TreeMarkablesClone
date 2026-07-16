@@ -104,7 +104,7 @@ export default function Home() {
             Built on a real job book, not a whiteboard.
           </h2>
           <p className="mt-5 text-ink-500 text-lg leading-relaxed">
-            Everything you're about to see, I use every day to run and grow my own arb business. I built Inflow around the way trades actually work — so whether you're a plumber, sparky, drainlayer or builder, or anywhere in the home-service game, it should feel like it was made for you. Because it was.
+            Everything you're about to see, I use every day to run and grow my own tree-care business. I built Inflow around the way trades actually work — so whether you're a plumber, sparky, drainlayer or builder, or anywhere in the home-service game, it should feel like it was made for you. Because it was.
           </p>
         </div>
       </Section>
