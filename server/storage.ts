@@ -5741,7 +5741,13 @@ class DatabaseStorage implements IStorage {
     offset?: number;
   }): Promise<Conversation[]> {
     const conditions: any[] = [];
-    
+
+    // Session-less callers (webhooks under runWithBusiness) ride the owner
+    // connection where RLS can't scope this — filter explicitly, like
+    // getAllEmployees. No context → unchanged (all rows).
+    const bid = currentBusinessId();
+    if (bid) conditions.push(eq(schema.conversations.businessId, bid));
+
     if (filters) {
       if (filters.status) conditions.push(eq(schema.conversations.status, filters.status));
       if (filters.priority) conditions.push(eq(schema.conversations.priority, filters.priority));

@@ -23330,10 +23330,31 @@ Transcription: ${transcriptText}`;
       // If no job found, create/update conversation (original behavior)
       if (!jobFound) {
         console.log(`💬 No job reference found - checking for existing conversation`);
+
+        // Reference-less email: nothing above resolved a tenant, so without a
+        // context these writes take the business_id column DEFAULT (the legacy
+        // tenant) and the conversation match + admin push run cross-tenant.
+        // Resolve the owning tenant from the recipient address(es) via
+        // tenant_channels (same as the Gmail-poller fallback). Unresolved →
+        // undefined → behaviour identical to before.
+        const recipientAddresses: string[] =
+          (typeof to === 'string' ? to.match(/[\w.+'-]+@[\w.-]+\.\w+/g) : null) ?? [];
+        let channelBusinessId: string | undefined;
+        for (const addr of recipientAddresses) {
+          channelBusinessId = await resolveBusinessIdByChannel('email', addr);
+          if (channelBusinessId) break;
+        }
+        if (channelBusinessId) {
+          console.log(`📧 Reference-less email scoped to tenant ${channelBusinessId} via recipient channel`);
+        } else if (recipientAddresses.length > 0) {
+          console.warn(`📧 Reference-less email recipient(s) not in tenant_channels (${recipientAddresses.join(', ')}) — falling back to default-tenant behaviour`);
+        }
+
+        await runWithBusiness(channelBusinessId, async () => {
         // Check if conversation exists for this email contact
         let conversation = await notificationHelper.findExistingOpenConversation(actualFromEmail);
         const isNewConversation = !conversation;
-        
+
         if (!conversation) {
           // Create new conversation
           conversation = await storage.createConversation({
@@ -23344,7 +23365,7 @@ Transcription: ${transcriptText}`;
             lastMessageBy: 'customer',
             lastMessageAt: new Date()
           });
-          
+
           // Create notification bell entry for new email conversation
           await notificationHelper.createConversationNotification(conversation);
           console.log(`✅ Created new conversation for email from ${actualFromEmail}: ${conversation.id}`);
@@ -23356,7 +23377,7 @@ Transcription: ${transcriptText}`;
             inboundMessageId || undefined,
           );
         }
-        
+
         // Create message in conversation
         await storage.createConversationMessage({
           conversationId: conversation.id,
@@ -23369,7 +23390,7 @@ Transcription: ${transcriptText}`;
           platform: 'email',
           isRead: false
         });
-        
+
         // Update conversation
         await storage.updateConversation(conversation.id, {
           lastMessageAt: new Date(),
@@ -23389,6 +23410,7 @@ Transcription: ${transcriptText}`;
         };
         await storage.createNotification(notificationData);
         console.log(`🔔 Notification created for conversation ${conversation.id}`);
+        }); // runWithBusiness(channelBusinessId) — scope reference-less email writes + push targeting
       }
       
       res.json({ success: true, message: 'Email received and processed' });
