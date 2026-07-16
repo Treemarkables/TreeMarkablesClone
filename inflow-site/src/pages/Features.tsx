@@ -48,6 +48,7 @@ const categories: Category[] = [
         title: "Calendar & scheduling",
         body: "Book jobs and site visits on a shared team calendar, so everyone sees what's on and when.",
         tier: "All plans",
+        image: "/screenshots/calendar-scheduling.png",
         detail:
           "Book jobs and site visits onto a shared calendar the whole team can see, so nothing gets double-booked and everyone knows what's on.",
         points: [
@@ -61,6 +62,7 @@ const categories: Category[] = [
         title: "Dispatch board",
         body: "A drag-and-drop board to assign work across crews and reschedule on the fly.",
         tier: "Crew & up",
+        image: "/screenshots/dispatch-board.png",
         detail:
           "A drag-and-drop board for assigning and moving work across crews. Reshuffle the day in seconds when a job runs over or a callout comes in.",
         points: [
@@ -525,6 +527,7 @@ const categories: Category[] = [
         title: "Business phone & call recording",
         body: "Take business calls on the iOS app or in your browser — calls are recorded and linked to the customer and job.",
         tier: "Add-on",
+        image: "/screenshots/call-recording.png",
         detail:
           "Take and make business calls on the iOS app or in your browser. Calls are recorded and linked to the customer and job, so there's a record of what was agreed.",
         points: [
@@ -636,6 +639,7 @@ const categories: Category[] = [
         title: "Job videos",
         body: "Upload walkthrough videos against the job, transcribed automatically so they're searchable.",
         tier: "Crew & up",
+        image: "/screenshots/job-videos.jpg",
         detail:
           "Upload walkthrough videos against the job. They're transcribed automatically, so you can search what was said.",
         points: [
@@ -715,6 +719,7 @@ const categories: Category[] = [
         title: "JHA assessments",
         body: "Job hazard analysis with hazard and control libraries, completed and signed on site.",
         tier: "Crew & up",
+        image: "/screenshots/jha.png",
         detail:
           "Job Hazard Analysis with hazard and control libraries, completed and signed on site.",
         points: [
@@ -813,6 +818,7 @@ const categories: Category[] = [
         title: "Vehicle inspections & compliance",
         body: "Vehicle inspection checklists with history, plus rego, CoF and service reminders before they lapse.",
         tier: "Crew & up",
+        image: "/screenshots/vehicle-inspections.png",
         detail:
           "Vehicle inspection checklists with history, plus rego, CoF and service reminders before they lapse.",
         points: [
@@ -905,6 +911,7 @@ const categories: Category[] = [
         title: "Dashboards & metrics",
         body: "Business dashboards covering jobs, revenue and performance at a glance.",
         tier: "Crew & up",
+        image: "/screenshots/dashboards-metrics.png",
         detail:
           "Business dashboards covering jobs, revenue and performance at a glance.",
         points: [
@@ -918,6 +925,7 @@ const categories: Category[] = [
         title: "Advanced analytics",
         body: "Deeper performance and financial analytics for multi-crew operations.",
         tier: "Business",
+        image: "/screenshots/advanced-analytics.png",
         detail:
           "Deeper performance and financial analytics for multi-crew operations that need to see beyond the basics.",
         points: [
