@@ -41,6 +41,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { invoiceViewLink } from "@shared/customerLinks";
 import { MicrophoneButton } from "@/components/MicrophoneButton";
 
 const smsFormSchema = z.object({
@@ -152,7 +153,7 @@ export function SMSComposerModal({
         customer.firstName ||
         customer.name?.split(" ")[0] ||
         "there";
-      const defaultMessage = `Hi ${recipientFirstName}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${window.location.origin}/invoice/${invoiceData.id || "preview"}/view`;
+      const defaultMessage = `Hi ${recipientFirstName}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${invoiceViewLink(invoiceData.id || "preview", { base: window.location.origin })}`;
       form.setValue("message", defaultMessage);
       setCharacterCount(defaultMessage.length);
     }

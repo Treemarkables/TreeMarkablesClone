@@ -174,7 +174,12 @@ if (!isDevelopment && !process.env.SESSION_SECRET) {
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
-    resave: true,
+    // resave:false — connect-pg-simple implements `touch`, so express-session
+    // keeps the session fresh (and rolling expiry works) without rewriting the
+    // whole row when nothing changed. resave:true forced a session-table WRITE to
+    // Sydney on every request even for pure reads — a wasted cross-region round
+    // trip on the busiest path in the app.
+    resave: false,
     saveUninitialized: false,
     rolling: true,
     name: 'treemarkables.sid',
@@ -839,6 +844,25 @@ The {businessName} Team';
             GRANT SELECT, INSERT, UPDATE, DELETE ON job_site_maps TO app_tenant;
           END IF;
         END $$;
+        -- Public job photo timeline links (token-gated customer feed). Mirrors
+        -- migrations/manual/20260711_job_timeline_links.sql.
+        CREATE TABLE IF NOT EXISTS job_timeline_links (
+          business_id VARCHAR,
+          job_id VARCHAR PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+          token VARCHAR(64) NOT NULL UNIQUE,
+          is_enabled BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        ALTER TABLE job_timeline_links ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON job_timeline_links;
+        CREATE POLICY tenant_isolation ON job_timeline_links
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON job_timeline_links TO app_tenant;
+          END IF;
+        END $$;
         -- Heal rows inserted before 2026-07-10 with business_id NULL: the multer
         -- upload route lost the ALS tenant context (busboy callbacks run in the
         -- socket's async scope), so withTenant() never stamped them and they were
@@ -883,6 +907,15 @@ The {businessName} Team';
           FROM jobs j WHERE n.job_id = j.id AND n.business_id IS DISTINCT FROM j.business_id;
         UPDATE job_quoting_process_completions q SET business_id = j.business_id
           FROM jobs j WHERE q.job_id = j.id AND q.business_id IS DISTINCT FROM j.business_id;
+        -- Round 2: the remaining multer instances (video/audio/csv/logo/near-miss
+        -- uploads) shared the same ALS loss. Job-linked videos take their job's
+        -- tenant (knowledge videos are business_id NULL by design and have no
+        -- job_id, so the join skips them); near-miss attachments take their parent
+        -- report's. Mirrors migrations/manual/20260710_multer_child_rows_backfill.sql.
+        UPDATE videos v SET business_id = j.business_id
+          FROM jobs j WHERE v.job_id = j.id AND v.business_id IS DISTINCT FROM j.business_id;
+        UPDATE near_miss_attachments a SET business_id = r.business_id
+          FROM near_miss_reports r WHERE a.report_id = r.id AND a.business_id IS DISTINCT FROM r.business_id;
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           role_key VARCHAR NOT NULL,
@@ -1172,6 +1205,39 @@ The {businessName} Team';
           ('powerline', 'Powerline-adjacent tree work', 'Environmental', 'Tree work near overhead electrical conductors', '{"Helmet","Eye protection","Hearing protection","Hi-vis","Insulated where required","Safety boots","Gloves"}',
             '[{"stepNumber":1,"taskStep":"Confirm voltage & permits","hazards":["Electrocution"],"controls":["Treat all lines as live","Confirm voltage & NZECP 34 distance","Obtain network operator permit if inside zone"],"riskRating":5},{"stepNumber":2,"taskStep":"Work to safe distances","hazards":["Contact with conductor","Conductive limbs/tools"],"controls":["Maintain minimum approach distance","No metal tools or wet ropes in the zone","Stop work if distances cannot be kept"],"riskRating":5}]', true, 5)
         ON CONFLICT (key) DO NOTHING;
+      `);
+
+      // Safety library tables: tenants can now add their own rows alongside the
+      // built-in seeds, so RLS needs a split policy — everyone reads the built-ins
+      // (is_built_in, business_id NULL), writes touch only your own rows. A plain
+      // tenant_isolation policy hides the seed rows from every tenant (NULL never
+      // equals current_setting). These tables also carried the legacy TM-id column
+      // DEFAULT (two of them NOT NULL), which mis-stamps every seed and every
+      // context-less insert as Treemarkables — same class as the multer/ALS bug —
+      // so the default/NOT NULL go, and seeds get un-stamped back to global.
+      // Mirrors migrations/manual/20260712_safety_library_rls.sql.
+      await pool.query(`
+        DO $$
+        DECLARE t TEXT;
+        BEGIN
+          FOREACH t IN ARRAY ARRAY['swms_templates','toolbox_talk_topics','prestart_checklist_templates','competency_types'] LOOP
+            EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS business_id VARCHAR', t);
+            EXECUTE format('ALTER TABLE %I ALTER COLUMN business_id DROP DEFAULT', t);
+            EXECUTE format('ALTER TABLE %I ALTER COLUMN business_id DROP NOT NULL', t);
+            EXECUTE format('UPDATE %I SET business_id = NULL WHERE is_built_in = true AND business_id IS NOT NULL', t);
+            EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_read ON %I', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_write ON %I', t);
+            EXECUTE format(
+              'CREATE POLICY tenant_read ON %I FOR SELECT USING (is_built_in = true OR business_id = nullif(current_setting(''app.current_business'', true), ''''))', t);
+            EXECUTE format(
+              'CREATE POLICY tenant_write ON %I USING (business_id = nullif(current_setting(''app.current_business'', true), '''')) WITH CHECK (business_id = nullif(current_setting(''app.current_business'', true), ''''))', t);
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+              EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO app_tenant', t);
+            END IF;
+          END LOOP;
+        END $$;
       `);
 
       // --- Per-business GST number (trade-gen Phase A) ---

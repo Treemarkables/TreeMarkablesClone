@@ -33,24 +33,11 @@ interface CallInfo {
 }
 
 /// Ground truth from the native side about where iOS is actually playing call
-/// audio. Displayed on the call screen because device logs are unreadable on
-/// the owner's setup — this is the only way to see whether a speaker toggle
-/// actually moved the route.
+/// audio — drives the "Audio: Speaker/Receiver" line on the call screen. The
+/// full native payload (errors, session config, emitting event) still lands in
+/// the console via handleAudioRoute for Web-Inspector debugging.
 interface AudioRouteInfo {
   outputs: string;
-  onSpeaker: boolean;
-  /** Error text from the last native route attempt (setCategory/override
-   *  failures) — empty when the calls succeeded. */
-  error: string;
-  /** Live session config as the system holds it (category/mode/options) plus
-   *  which native event emitted it — build 34 showed the route calls
-   *  succeeding with no effect, so whether OUR config is actually live is
-   *  now the question. */
-  category: string;
-  mode: string;
-  options: string;
-  context: string;
-  nativeBuild: string;
 }
 
 export function TwilioCallProvider({ children }: { children: ReactNode }) {
@@ -61,17 +48,6 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
   const [audioRoute, setAudioRoute] = useState<AudioRouteInfo | null>(null);
-  // Rolling log of route events AND user taps, rendered on the call screen.
-  // A single "latest event" line kept missing the moment that mattered (a
-  // screenshot seconds later only showed the resting state); the sequence is
-  // the diagnostic: tap → setSpeaker:received → setSpeaker(true) result →
-  // routeChange… — wherever the chain stops is the bug.
-  const [routeLog, setRouteLog] = useState<string[]>([]);
-
-  const pushRouteLog = useCallback((line: string) => {
-    const t = new Date().toLocaleTimeString("en-NZ", { hour12: false });
-    setRouteLog((log) => [...log, `${t} ${line}`].slice(-6));
-  }, []);
 
   const refreshCallHistory = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
@@ -83,7 +59,6 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setIsMuted(false);
     setIsSpeaker(false);
     setAudioRoute(null);
-    setRouteLog([]);
   }, []);
 
   const handleIncomingCall = useCallback((data: CallEvent) => {
@@ -106,11 +81,25 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const handleCallAnswered = useCallback(() => setCallState("connecting"), []);
   const handleCallConnected = useCallback(() => setCallState("active"), []);
 
-  const handleCallEnded = useCallback(() => {
-    setCallState("ended");
-    refreshCallHistory();
-    setTimeout(reset, 800);
-  }, [refreshCallHistory, reset]);
+  const handleCallEnded = useCallback(
+    (data?: CallEvent) => {
+      // A call that ends WITH an error is the SDK dropping it (media error,
+      // signaling failure) — not the user or the far end hanging up. Owner
+      // hit exactly this on build 37 ("answered then hung itself up") with
+      // no visible reason anywhere. Put the reason in their face.
+      if (data?.error) {
+        toast({
+          variant: "destructive",
+          title: "Call dropped",
+          description: data.error,
+        });
+      }
+      setCallState("ended");
+      refreshCallHistory();
+      setTimeout(reset, 800);
+    },
+    [refreshCallHistory, reset, toast],
+  );
 
   // Registration is the make-or-break for inbound ringing: if this device
   // isn't bound to the Twilio identity, calls go straight to voicemail with
@@ -138,29 +127,13 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
 
   // The native side emits "audioRoute" on every route event (setSpeaker,
   // didActivate, routeChange, callDidConnect) with what iOS ACTUALLY routed
-  // to. Mirror it into state so the call screen can display it — the console
-  // line doubles as the Web-Inspector trace of the whole route history.
-  const handleAudioRoute = useCallback(
-    (data: CallEvent) => {
-      console.log("[TwilioCall] audioRoute", data);
-      setAudioRoute({
-        outputs: data.outputs || "",
-        onSpeaker: data.onSpeaker === "true",
-        error: data.error || "",
-        category: data.category || "",
-        mode: data.mode || "",
-        options: data.options || "",
-        context: data.context || "",
-        nativeBuild: data.nativeBuild || "",
-      });
-      pushRouteLog(
-        `${data.context}: ${data.outputs || "?"} ${data.mode || ""}${
-          data.options ? `+${data.options}` : ""
-        }${data.error ? ` ERR ${data.error}` : ""}`,
-      );
-    },
-    [pushRouteLog],
-  );
+  // to. Mirror the output into state so the call screen can display it — the
+  // console line is the Web-Inspector trace of the whole route history
+  // (errors, session config, emitting event) and the permanent safety net.
+  const handleAudioRoute = useCallback((data: CallEvent) => {
+    console.log("[TwilioCall] audioRoute", data);
+    setAudioRoute({ outputs: data.outputs || "" });
+  }, []);
 
   const { isNative, hangup, mute, setSpeaker, sendDigits, showAudioRoutePicker } = useTwilioVoice({
     onIncomingCall: handleIncomingCall,
@@ -169,7 +142,8 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     onCallEnded: handleCallEnded,
     onCallDisconnected: handleCallEnded,
     onCallCancelled: reset,
-    onCallFailed: reset,
+    // Failed-to-connect carries an error too — same visibility treatment.
+    onCallFailed: handleCallEnded,
     onRegistered: handleRegistered,
     onRegistrationError: handleRegistrationError,
     onAudioRoute: handleAudioRoute,
@@ -188,43 +162,27 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     });
   }, [mute]);
 
+  // The hook methods rethrow after console.warn-ing (the permanent trace for
+  // bridge-level failures like the stale .m method list) — catch here so a
+  // rejection doesn't become an unhandled-promise error.
   const onToggleSpeaker = useCallback(() => {
     setIsSpeaker((s) => {
       const next = !s;
-      pushRouteLog(`tap:Speaker -> ${next ? "on" : "off"}`);
-      // Surface bridge failures ON SCREEN: for months the bridge rejected
-      // setSpeaker as not-implemented (stale .m method list) and the only
-      // trace was an unreadable console.warn. The no-reply timer catches the
-      // remaining failure shape: a call that neither resolves nor rejects.
-      const timer = window.setTimeout(
-        () => pushRouteLog("setSpeaker: no native reply in 1.5s"),
-        1500,
-      );
-      setSpeaker(next)
-        .then(() => window.clearTimeout(timer))
-        .catch((e: Error) => {
-          window.clearTimeout(timer);
-          pushRouteLog(`JSERR setSpeaker: ${e.message}`);
-        });
+      setSpeaker(next).catch(() => {});
       return next;
     });
-  }, [setSpeaker, pushRouteLog]);
+  }, [setSpeaker]);
 
   const onSendDigit = useCallback(
     (digit: string) => {
-      sendDigits(digit).catch((e: Error) =>
-        pushRouteLog(`JSERR sendDigits: ${e.message}`),
-      );
+      sendDigits(digit).catch(() => {});
     },
-    [sendDigits, pushRouteLog],
+    [sendDigits],
   );
 
   const onShowRoutePicker = useCallback(() => {
-    pushRouteLog("tap:AudioOutput");
-    showAudioRoutePicker().catch((e: Error) =>
-      pushRouteLog(`JSERR routePicker: ${e.message}`),
-    );
-  }, [showAudioRoutePicker, pushRouteLog]);
+    showAudioRoutePicker().catch(() => {});
+  }, [showAudioRoutePicker]);
 
   // Render the overlay for the entire connecting/active window — no foreground
   // or visibility gating (see the header comment for why those signals failed).
@@ -261,7 +219,6 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
           onToggleSpeaker={onToggleSpeaker}
           onSendDigit={onSendDigit}
           onShowRoutePicker={onShowRoutePicker}
-          routeLog={routeLog}
         />
       )}
     </>
@@ -295,7 +252,6 @@ function CallScreen({
   onToggleSpeaker,
   onSendDigit,
   onShowRoutePicker,
-  routeLog,
 }: {
   callState: CallState;
   callInfo: CallInfo;
@@ -307,7 +263,6 @@ function CallScreen({
   onToggleSpeaker: () => void;
   onSendDigit: (digit: string) => void;
   onShowRoutePicker: () => void;
-  routeLog: string[];
 }) {
   const [seconds, setSeconds] = useState(0);
   const [showKeypad, setShowKeypad] = useState(false);
@@ -360,34 +315,14 @@ function CallScreen({
           <p className="text-white/60 text-lg mt-3 tabular-nums">{status}</p>
           {/* Ground truth from AVAudioSession: what iOS is ACTUALLY playing
               through. When the speaker button is lit but this still says
-              "Receiver", the override isn't holding — that's the diagnostic
-              we can't get any other way (device logs are unreadable). */}
+              "Receiver", the override isn't holding. */}
           {audioRoute && (
-            <>
-              <p
-                className="text-white/40 text-xs mt-2 max-w-[85vw] break-words"
-                data-testid="call-audio-route"
-              >
-                Audio: {audioRoute.outputs || "unknown"}
-                {audioRoute.error && ` — ${audioRoute.error}`}
-                {audioRoute.nativeBuild && ` · native ${audioRoute.nativeBuild}`}
-              </p>
-              {/* Rolling event log: taps + native route events in order. The
-                  sequence is the diagnostic — a tap with no following
-                  setSpeaker:received is a bridge failure; received with no
-                  route change is iOS refusing the config. Any screenshot
-                  captures the story. */}
-              <div className="mt-1 max-w-[85vw] text-left">
-                {routeLog.map((line, i) => (
-                  <p
-                    key={i}
-                    className="text-white/30 text-[9px] leading-tight break-words font-mono"
-                  >
-                    {line}
-                  </p>
-                ))}
-              </div>
-            </>
+            <p
+              className="text-white/40 text-xs mt-2 max-w-[85vw] break-words"
+              data-testid="call-audio-route"
+            >
+              Audio: {audioRoute.outputs || "unknown"}
+            </p>
           )}
         </div>
       )}

@@ -231,11 +231,13 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
         case "job_assignment", "schedule_change":
             return jobId.isEmpty ? "/dispatch" : "/dispatch?job=\(jobId)"
         case "new_conversation", "conversation_reply":
-            if !jobId.isEmpty { return "/dispatch?job=\(jobId)&tab=diary" }
+            // Conversation notifications open the conversation. (The server sets
+            // clickAction for these, so this fallback rarely runs — but the real
+            // list route is /inbox, not the non-existent /conversations.)
             if !conversationId.isEmpty { return "/conversation/\(conversationId)" }
-            return "/conversations"
+            return "/inbox"
         case "new_lead":
-            return jobId.isEmpty ? "/conversations" : "/dispatch?job=\(jobId)&tab=diary"
+            return jobId.isEmpty ? "/inbox" : "/dispatch?job=\(jobId)&tab=diary"
         case "invoice_payment":
             return "/invoices"
         case "quote_accepted":

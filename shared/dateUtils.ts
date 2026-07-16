@@ -281,3 +281,19 @@ export function jobRunsOnNZDate(job: JobScheduleLike, date: Date | string): bool
       : getNZDateString(date);
   return getJobScheduledNZDates(job).includes(nzDateStr);
 }
+
+/**
+ * Whether the job has a booking on today or a future NZ date. A booking that
+ * lies entirely in the past (e.g. rained off last week and never completed)
+ * returns false, so dispatch views can surface the job for rebooking.
+ *
+ * `todayNZ` is injectable so callers iterating many jobs compute it once.
+ */
+export function hasUpcomingBookingNZ(
+  job: JobScheduleLike,
+  todayNZ: string = getNZDateString(new Date()),
+): boolean {
+  const dates = getJobScheduledNZDates(job);
+  // Dates are sorted ascending, so the last entry is the booking's final day.
+  return dates.length > 0 && dates[dates.length - 1] >= todayNZ;
+}

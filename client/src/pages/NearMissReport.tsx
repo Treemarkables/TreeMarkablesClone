@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import DOMPurify from "dompurify";
 import { useLocation, useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -744,9 +745,16 @@ export default function NearMissReportPage() {
             <CardContent className="space-y-3">
               {reporterSigSvg ? (
                 <div className="space-y-2">
+                  {/* Stored SVG round-trips through the API — sanitize on render
+                      (svg profile keeps the drawing, strips script/event handlers)
+                      or a poisoned signature runs in whoever opens the report. */}
                   <div
                     className="border rounded-md bg-white p-2 max-w-sm"
-                    dangerouslySetInnerHTML={{ __html: reporterSigSvg }}
+                    dangerouslySetInnerHTML={{
+                      __html: DOMPurify.sanitize(reporterSigSvg, {
+                        USE_PROFILES: { svg: true, svgFilters: true },
+                      }),
+                    }}
                   />
                   {reporterSignedAt && (
                     <p className="text-xs text-muted-foreground">

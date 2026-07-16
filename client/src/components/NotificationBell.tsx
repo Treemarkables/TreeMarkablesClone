@@ -180,7 +180,11 @@ export function NotificationBell() {
   // still surfaces the count on return.
   const { data: summaryData } = useQuery({
     queryKey: ["/api/notifications/summary"],
-    refetchInterval: 20000,
+    // 60s backstop — SSE invalidations + refetch-on-focus already push fresh
+    // counts in near-real-time, so this only covers the no-SSE gap. The bell is
+    // mounted in the header on every page for every admin, so two paired polls
+    // every 20s was a constant app-wide network + re-render tax for little gain.
+    refetchInterval: 60000,
     refetchOnWindowFocus: true,
   });
 
@@ -189,7 +193,7 @@ export function NotificationBell() {
   const { data: notificationsData, isLoading: isLoadingNotifications } =
     useQuery({
       queryKey: ["/api/notifications"],
-      refetchInterval: 20000,
+      refetchInterval: 60000,
       refetchOnWindowFocus: true,
     });
 

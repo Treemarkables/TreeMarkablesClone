@@ -35,3 +35,19 @@ UPDATE notifications n SET business_id = j.business_id
 
 UPDATE job_quoting_process_completions q SET business_id = j.business_id
   FROM jobs j WHERE q.job_id = j.id AND q.business_id IS DISTINCT FROM j.business_id;
+
+-- Round 2 (fix/multer-tenant-context-2): the remaining multer instances
+-- (videoUpload / audioUpload / csvUpload / logoUpload / nearMissUpload) shared
+-- the same ALS loss. Job-linked videos belong to their job's tenant; knowledge
+-- videos are deliberately business_id NULL (global content, job_id NULL) and
+-- are untouched by the job_id join. Near-miss attachments belong to their
+-- parent report's tenant. CSV-imported customers/jobs and mobile-app call
+-- recordings have no parent row to heal from — those routes now stamp at
+-- insert, but pre-fix rows are indistinguishable from genuine TM data (today
+-- only TM uses those features, so the default stamp was correct by accident).
+
+UPDATE videos v SET business_id = j.business_id
+  FROM jobs j WHERE v.job_id = j.id AND v.business_id IS DISTINCT FROM j.business_id;
+
+UPDATE near_miss_attachments a SET business_id = r.business_id
+  FROM near_miss_reports r WHERE a.report_id = r.id AND a.business_id IS DISTINCT FROM r.business_id;

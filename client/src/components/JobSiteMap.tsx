@@ -554,14 +554,21 @@ export function JobSiteMap({
 
       <div className="relative">
         <div className="absolute top-2 right-2 z-[1000] flex gap-2">
+          {/* Floats over photo/satellite imagery, so it needs a solid fill —
+              the theme's outline variant is transparent and primary is near
+              black, both of which vanish against dark trees. */}
           <Button
             size="sm"
-            variant={isAddingMarker ? "default" : "outline"}
+            variant={isAddingMarker ? "destructive" : "outline"}
             onClick={() => {
               setIsAddingMarker(!isAddingMarker);
               setNewMarkerPosition(null);
             }}
-            className="shadow-lg"
+            className={
+              isAddingMarker
+                ? "shadow-lg"
+                : "shadow-lg bg-white text-gray-900 border-gray-300"
+            }
           >
             {isAddingMarker ? (
               <>
@@ -578,7 +585,7 @@ export function JobSiteMap({
         </div>
 
         {isAddingMarker && (
-          <div className="absolute top-2 left-2 z-[1000] bg-card border border-border px-3 py-2 rounded-lg shadow-lg text-sm">
+          <div className="absolute top-2 left-2 z-[1000] bg-white/95 border border-gray-200 px-3 py-2 rounded-lg shadow-lg text-sm text-gray-900">
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-green-600" />
               <span>Click on the {view === "photo" ? "photo" : "map"} to place a marker</span>
