@@ -9,6 +9,7 @@ import About from "@/pages/About";
 import Contact from "@/pages/Contact";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
+import Security from "@/pages/Security";
 import Support from "@/pages/Support";
 import NotFound from "@/pages/NotFound";
 
@@ -49,6 +50,7 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
   },
   "/privacy": { title: "Privacy Policy — Inflow", description: "How Inflow collects, uses and protects your data, under the New Zealand Privacy Act 2020." },
   "/terms": { title: "Terms of Service — Inflow", description: "The terms that govern your use of Inflow." },
+  "/security": { title: "Security — Inflow", description: "How Inflow protects your business's data: tenant isolation, encryption, Australian hosting, backups and NZ Privacy Act compliance." },
 };
 
 function setMetaTag(key: string, content: string, asProperty = false) {
@@ -100,6 +102,7 @@ export default function App() {
           <Route path="/support" component={Support} />
           <Route path="/privacy" component={Privacy} />
           <Route path="/terms" component={Terms} />
+          <Route path="/security" component={Security} />
           <Route component={NotFound} />
         </Switch>
       </main>
