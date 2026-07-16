@@ -1,6 +1,5 @@
 import { Section, Container } from "@/components/Container";
 import { LinkButton } from "@/components/Button";
-import Mockup from "@/components/Mockup";
 
 const featureHighlights = [
   {
@@ -18,6 +17,24 @@ const featureHighlights = [
     title: "JHAs, SWMS and toolbox talks — built in.",
     body: "Daily prestarts, hazard assessments, near-miss reporting, equipment inductions. Audit-ready, not after-thought.",
   },
+  {
+    eyebrow: "AI",
+    title: "AI that handles the busywork.",
+    body: "Speak or paste a message and get a draft quote. AI-drafted quote follow-ups. An in-app assistant for your business data — with an AI phone receptionist coming soon.",
+  },
+];
+
+// Real screenshots from the app — shown right up front so visitors see the
+// product, not a mockup.
+const galleryShots: { src: string; label: string }[] = [
+  { src: "/screenshots/dashboards-metrics.png", label: "Business dashboards" },
+  { src: "/screenshots/dispatch-board.png", label: "Dispatch board" },
+  { src: "/screenshots/call-recording.png", label: "Call history & recording" },
+  { src: "/screenshots/job-videos.jpg", label: "Job walkthrough videos" },
+  { src: "/screenshots/jha.png", label: "Safety — job hazard analysis" },
+  { src: "/screenshots/vehicle-inspections.png", label: "Vehicle & plant inspections" },
+  { src: "/screenshots/advanced-analytics.png", label: "Lead-source analytics" },
+  { src: "/screenshots/calendar-scheduling.png", label: "Scheduling calendar" },
 ];
 
 const metrics = [
@@ -60,8 +77,20 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mt-14 w-full max-w-3xl">
-              <Mockup />
+            <div className="mt-14 w-full max-w-4xl relative">
+              <div className="absolute -inset-6 -z-10 bg-gradient-to-br from-lime/25 to-transparent rounded-3xl blur-2xl" />
+              <div className="rounded-2xl border border-ink-200 bg-paper shadow-lift overflow-hidden">
+                <div className="h-9 border-b border-ink-100 bg-ink-50 flex items-center gap-1.5 px-4">
+                  <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
+                </div>
+                <img
+                  src="/screenshots/dashboards-metrics.png"
+                  alt="Inflow business dashboard — revenue, jobs, quote win rate and margins at a glance"
+                  className="w-full h-auto block"
+                />
+              </div>
             </div>
           </div>
         </Container>
@@ -81,6 +110,40 @@ export default function Home() {
         </Container>
       </section>
 
+      {/* Screenshot showcase */}
+      <Section className="pt-16 md:pt-24">
+        <div className="max-w-2xl mx-auto text-center">
+          <span className="eyebrow">See it in action</span>
+          <h2 className="heading-section text-4xl md:text-5xl mt-4">
+            The real app, not a mockup.
+          </h2>
+          <p className="mt-5 text-ink-500 text-lg leading-relaxed">
+            Actual screens from Inflow — the dashboard, the dispatch board, safety, calls and more.
+          </p>
+        </div>
+
+        <div className="mt-14 [column-gap:1.25rem] columns-1 sm:columns-2 lg:columns-3">
+          {galleryShots.map((s) => (
+            <figure
+              key={s.src}
+              className="mb-5 break-inside-avoid rounded-2xl border border-ink-100 bg-paper shadow-soft overflow-hidden"
+            >
+              <img src={s.src} alt={s.label} className="w-full h-auto block" loading="lazy" />
+              <figcaption className="px-4 py-3 text-sm font-medium text-ink-600 border-t border-ink-100">
+                {s.label}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+
+        <div className="mt-10 text-center">
+          <LinkButton href="/features" variant="ghost" className="border border-ink-200">
+            Explore all features
+            <span aria-hidden>→</span>
+          </LinkButton>
+        </div>
+      </Section>
+
       {/* Feature highlights */}
       <Section>
         <div className="max-w-2xl mx-auto text-center">
@@ -93,7 +156,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="mt-16 grid md:grid-cols-3 gap-6">
+        <div className="mt-16 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {featureHighlights.map((f) => (
             <div
               key={f.title}

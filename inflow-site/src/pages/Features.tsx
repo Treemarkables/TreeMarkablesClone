@@ -13,6 +13,8 @@ type FeatureCard = {
   points: string[];
   // Screenshot from the real app — slots into the modal when available.
   image?: string;
+  // Not shipped yet — renders a "Coming soon" badge.
+  comingSoon?: boolean;
 };
 
 type Category = {
@@ -541,8 +543,9 @@ const categories: Category[] = [
         title: "AI receptionist",
         body: "When you can't pick up, an AI voice agent answers, triages the job and captures the lead — with your greeting and rules.",
         tier: "Add-on",
+        comingSoon: true,
         detail:
-          "When you can't pick up, an AI voice agent answers, triages the job and captures the lead — using your greeting, your voice and your rules.",
+          "When you can't pick up, an AI voice agent answers, triages the job and captures the lead — using your greeting, your voice and your rules. In development — coming soon.",
         points: [
           "Answers when you can't",
           "Triages the caller's job",
@@ -841,19 +844,6 @@ const categories: Category[] = [
           "Reduces risk and liability",
         ],
       },
-      {
-        title: "Inventory",
-        body: "Track stock levels and movements with an inventory transaction history.",
-        tier: "Crew & up",
-        detail:
-          "Track stock levels and movements with a full inventory transaction history.",
-        points: [
-          "Stock levels tracked",
-          "Movement history",
-          "Know what's on hand",
-          "Fewer supply surprises",
-        ],
-      },
     ],
   },
   {
@@ -1089,7 +1079,7 @@ const plans: {
   },
 ];
 
-const addOns: { title: string; body: string }[] = [
+const addOns: { title: string; body: string; comingSoon?: boolean }[] = [
   {
     title: "Business phone & call recording",
     body: "Take and record business calls in the app, linked to customers and jobs.",
@@ -1097,6 +1087,7 @@ const addOns: { title: string; body: string }[] = [
   {
     title: "AI receptionist",
     body: "An AI voice agent answers and triages inbound calls when you can't.",
+    comingSoon: true,
   },
   {
     title: "Extra SMS",
@@ -1163,7 +1154,10 @@ export default function Features() {
                     onClick={() => setActive({ cat: cat.name, feature: f })}
                     className="group flex flex-col items-center text-center basis-[320px] grow max-w-[380px] rounded-2xl border border-ink-100 bg-paper p-6 transition hover:border-ink-300 hover:shadow-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-deep focus-visible:ring-offset-2"
                   >
-                    <TierTag tier={f.tier} />
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                      <TierTag tier={f.tier} />
+                      {f.comingSoon && <ComingSoonTag />}
+                    </div>
                     <h3 className="heading-section text-lg mt-4">{f.title}</h3>
                     <p className="mt-2 text-sm text-ink-500 leading-relaxed">{f.body}</p>
                     <span className="mt-auto pt-5 inline-flex items-center gap-1 text-[13px] font-semibold text-ink-700 group-hover:text-ink-900">
@@ -1237,7 +1231,10 @@ export default function Features() {
             <div className="mt-5 grid sm:grid-cols-3 gap-5">
               {addOns.map((a) => (
                 <div key={a.title}>
-                  <div className="text-sm font-semibold text-ink-900">{a.title}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-ink-900">{a.title}</span>
+                    {a.comingSoon && <ComingSoonTag />}
+                  </div>
                   <p className="mt-1 text-sm text-ink-500 leading-relaxed">{a.body}</p>
                 </div>
               ))}
@@ -1324,6 +1321,7 @@ function FeatureModal({ active, onClose }: { active: Active; onClose: () => void
           <div className="mt-3 flex items-center gap-3 flex-wrap">
             <h2 className="heading-section text-2xl">{feature.title}</h2>
             <TierTag tier={feature.tier} />
+            {feature.comingSoon && <ComingSoonTag />}
           </div>
 
           <p className="mt-4 text-ink-600 leading-relaxed">{feature.detail}</p>
@@ -1380,6 +1378,14 @@ function TierTag({ tier }: { tier: Tier }) {
   return (
     <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-snug ${styles[tier]}`}>
       {tier}
+    </span>
+  );
+}
+
+function ComingSoonTag() {
+  return (
+    <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-snug bg-amber-100 text-amber-800 border border-amber-200">
+      Coming soon
     </span>
   );
 }
