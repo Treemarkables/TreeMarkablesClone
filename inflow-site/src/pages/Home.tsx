@@ -96,6 +96,19 @@ export default function Home() {
         </Container>
       </section>
 
+      {/* Founder note — who it's for */}
+      <Section className="pt-4 md:pt-8 pb-2 md:pb-4">
+        <div className="max-w-2xl mx-auto text-center">
+          <span className="eyebrow">From one trade to another</span>
+          <h2 className="heading-section text-3xl md:text-4xl mt-4">
+            Built on a real job book, not a whiteboard.
+          </h2>
+          <p className="mt-5 text-ink-500 text-lg leading-relaxed">
+            Everything you're about to see, I use every day to run and grow my own arb business. I built Inflow around the way trades actually work — so whether you're a plumber, sparky, drainlayer or builder, or anywhere in the home-service game, it should feel like it was made for you. Because it was.
+          </p>
+        </div>
+      </Section>
+
       {/* Metrics strip */}
       <section className="border-y border-ink-100 bg-paper">
         <Container className="py-10 md:py-14">
