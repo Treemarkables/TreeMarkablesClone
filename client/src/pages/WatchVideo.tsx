@@ -4,6 +4,8 @@
 // hand out instead of the raw object-stream URL.
 import { useQuery } from "@tanstack/react-query";
 import { useRoute } from "wouter";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface PublicVideo {
   id: string;
@@ -17,6 +19,17 @@ interface PublicVideo {
 export default function WatchVideo() {
   const [, params] = useRoute("/watch/:videoId");
   const videoId = params?.videoId;
+
+  // Staff reach this page from inside the app (Library links here with a full
+  // page load), which strands them with no way back. Customers arrive from a
+  // shared link (external or empty referrer) and should keep the clean page.
+  const cameFromApp = (() => {
+    try {
+      return !!document.referrer && new URL(document.referrer).origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  })();
 
   const { data, isLoading, isError } = useQuery<{ success: boolean; data: PublicVideo }>({
     queryKey: ["/api/videos", videoId, "public"],
@@ -33,12 +46,23 @@ export default function WatchVideo() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Brand header */}
-      <header className="bg-black h-20 flex items-center px-4 sm:px-6 shrink-0">
+      <header className="bg-black h-20 flex items-center justify-between px-4 sm:px-6 shrink-0">
         <img
           src="/treemarkables-logo.png"
           alt="Treemarkables"
           className="h-12 w-auto"
         />
+        {cameFromApp && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-white"
+            onClick={() => window.history.back()}
+            data-testid="button-watch-back"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back
+          </Button>
+        )}
       </header>
 
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
