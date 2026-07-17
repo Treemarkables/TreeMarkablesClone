@@ -474,6 +474,20 @@ function KnowledgeVideoPanel({
     onChange();
   }
 
+  async function setVideoTitle(id: string, newTitle: string) {
+    const r = await fetch(`/api/videos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ title: newTitle }),
+    });
+    if (!r.ok) {
+      toast({ title: "Couldn't rename video", variant: "destructive" });
+      return;
+    }
+    onChange();
+  }
+
   async function deleteVideo(id: string) {
     const r = await fetch(`/api/videos/${id}`, { method: "DELETE", credentials: "include" });
     if (!r.ok) {
@@ -529,7 +543,23 @@ function KnowledgeVideoPanel({
             {videos.map((v) => (
               <div key={v.id} className="space-y-1" data-testid={`admin-knowledge-video-${v.id}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm truncate">{v.title || v.filename}</span>
+                  {/* Rename in place — saved on blur / Enter. Untitled uploads
+                      otherwise show their raw GCS filename here and appear as
+                      just "Video" on the subscriber Help page. */}
+                  <Input
+                    key={v.title ?? ""}
+                    defaultValue={v.title ?? ""}
+                    placeholder={v.filename}
+                    className="h-8 text-sm"
+                    onBlur={(e) => {
+                      const next = e.target.value.trim();
+                      if (next !== (v.title ?? "")) setVideoTitle(v.id, next);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    }}
+                    data-testid={`input-video-title-${v.id}`}
+                  />
                   <Button
                     variant="ghost"
                     size="icon"
