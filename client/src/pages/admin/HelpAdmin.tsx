@@ -453,6 +453,13 @@ function KnowledgeVideoPanel({
       setTitle("");
       if (fileRef.current) fileRef.current.value = "";
       onChange();
+      // Success feedback is deliberate on this panel (owner request) — the
+      // list refresh alone is too subtle to confirm a publish that every
+      // subscriber sees instantly.
+      toast({
+        title: "Video published",
+        description: `"${title.trim() || file.name}" is live in ${category} on every subscriber's Help page.`,
+      });
     } catch (e: any) {
       toast({ title: "Video upload failed", description: e?.message, variant: "destructive" });
     } finally {
@@ -472,6 +479,25 @@ function KnowledgeVideoPanel({
       return;
     }
     onChange();
+    toast({ title: "Section updated", description: `Moved to ${newCategory}.` });
+  }
+
+  async function setVideoTitle(id: string, newTitle: string) {
+    const r = await fetch(`/api/videos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ title: newTitle }),
+    });
+    if (!r.ok) {
+      toast({ title: "Couldn't rename video", variant: "destructive" });
+      return;
+    }
+    onChange();
+    toast({
+      title: "Video renamed",
+      description: newTitle ? `Now showing as "${newTitle}".` : "Title cleared.",
+    });
   }
 
   async function deleteVideo(id: string) {
@@ -481,6 +507,7 @@ function KnowledgeVideoPanel({
       return;
     }
     onChange();
+    toast({ title: "Video deleted", description: "Removed from every subscriber's Help page." });
   }
 
   return (
@@ -529,7 +556,23 @@ function KnowledgeVideoPanel({
             {videos.map((v) => (
               <div key={v.id} className="space-y-1" data-testid={`admin-knowledge-video-${v.id}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm truncate">{v.title || v.filename}</span>
+                  {/* Rename in place — saved on blur / Enter. Untitled uploads
+                      otherwise show their raw GCS filename here and appear as
+                      just "Video" on the subscriber Help page. */}
+                  <Input
+                    key={v.title ?? ""}
+                    defaultValue={v.title ?? ""}
+                    placeholder={v.filename}
+                    className="h-8 text-sm"
+                    onBlur={(e) => {
+                      const next = e.target.value.trim();
+                      if (next !== (v.title ?? "")) setVideoTitle(v.id, next);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    }}
+                    data-testid={`input-video-title-${v.id}`}
+                  />
                   <Button
                     variant="ghost"
                     size="icon"
