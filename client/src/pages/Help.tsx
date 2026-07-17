@@ -204,7 +204,10 @@ function VideoCard({ video }: { video: KnowledgeVideo }) {
           <span className="font-medium truncate">{video.title || "Video"}</span>
         </div>
         {/* preload="none": the library can hold many videos — the poster frame
-            is enough until the user presses play. */}
+            is enough until the user presses play. No captions track here
+            (owner call): the auto-generated cues render as one huge block
+            covering the video on how-to content, where the narration is the
+            point anyway. Job-video players keep theirs. */}
         <video
           src={video.url}
           poster={video.thumbnailUrl ?? undefined}
@@ -212,17 +215,7 @@ function VideoCard({ video }: { video: KnowledgeVideo }) {
           preload="none"
           playsInline
           className="w-full rounded bg-black aspect-video object-contain"
-        >
-          {video.captionsStatus === "ready" && (
-            <track
-              kind="captions"
-              srcLang="en"
-              label="English"
-              src={`/api/videos/${video.id}/captions.vtt`}
-              default
-            />
-          )}
-        </video>
+        />
         {video.description && (
           <p className="text-sm text-muted-foreground mt-2">{video.description}</p>
         )}
