@@ -8445,33 +8445,110 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   }
 
   // ---- Loom-style auto-captions -------------------------------------------
+  // Readability guardrails. Whisper segments continuous speech poorly — with
+  // no pauses to break on it can return the ENTIRE transcript as one segment,
+  // which (pre-guard) became a single cue blanketing the whole video. Any
+  // segment over these limits gets re-chunked before rendering.
+  const MAX_CUE_SECONDS = 10;
+  const MAX_CUE_CHARS = 200;
+  const TARGET_CUE_CHARS = 84; // ~two 42-char caption lines
+
+  type CaptionCue = { start: number; end: number; text: string };
+
   // Format a seconds value as a WebVTT timestamp: HH:MM:SS.mmm.
   function secondsToVttTimestamp(totalSeconds: number): string {
     const safe = Number.isFinite(totalSeconds) && totalSeconds > 0 ? totalSeconds : 0;
-    const hours = Math.floor(safe / 3600);
-    const minutes = Math.floor((safe % 3600) / 60);
-    const seconds = Math.floor(safe % 60);
-    const millis = Math.round((safe - Math.floor(safe)) * 1000);
+    // Work in whole ms so 1.9996s carries to 00:00:02.000, not the invalid .1000.
+    const totalMs = Math.round(safe * 1000);
+    const hours = Math.floor(totalMs / 3600000);
+    const minutes = Math.floor((totalMs % 3600000) / 60000);
+    const seconds = Math.floor((totalMs % 60000) / 1000);
+    const millis = totalMs % 1000;
     const pad = (n: number, width = 2) => String(n).padStart(width, '0');
     return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(millis, 3)}`;
   }
 
-  // Build a WebVTT document from Whisper verbose_json segments. Each segment
-  // becomes one cue; we drop empty/whitespace-only text and clamp end>start so
-  // the browser's <track> parser never rejects the file.
-  function segmentsToVtt(segments: Array<{ start: number; end: number; text: string }>): string {
-    const cues: string[] = ['WEBVTT', ''];
-    for (const seg of segments) {
-      const text = (seg.text || '').trim();
+  // Regroup Whisper word timestamps into readable cues: break when a cue
+  // would overflow the length/duration caps, on a silence gap, or after a
+  // sentence once the cue is long enough to be worth its own screen time.
+  function buildCuesFromWords(
+    words: Array<{ start?: number; end?: number; word?: string }>,
+  ): CaptionCue[] {
+    const cues: CaptionCue[] = [];
+    let current: { start: number; end: number; parts: string[]; chars: number } | null = null;
+    const flush = () => {
+      if (current && current.parts.length) {
+        cues.push({ start: current.start, end: current.end, text: current.parts.join(' ') });
+      }
+      current = null;
+    };
+    for (const w of words) {
+      const text = (w.word || '').trim();
       if (!text) continue;
-      const start = seg.start ?? 0;
-      let end = seg.end ?? start;
-      if (end <= start) end = start + 0.5; // guard against zero/negative-length cues
-      cues.push(`${secondsToVttTimestamp(start)} --> ${secondsToVttTimestamp(end)}`);
-      cues.push(text);
-      cues.push('');
+      const start = typeof w.start === 'number' ? w.start : current?.end ?? 0;
+      const end = typeof w.end === 'number' && w.end > start ? w.end : start;
+      if (current) {
+        const wouldOverflow =
+          current.chars + 1 + text.length > TARGET_CUE_CHARS ||
+          end - current.start > MAX_CUE_SECONDS;
+        const silenceGap = start - current.end > 2;
+        const sentenceDone =
+          /[.!?]$/.test(current.parts[current.parts.length - 1] || '') && current.chars >= 40;
+        if (wouldOverflow || silenceGap || sentenceDone) flush();
+      }
+      if (!current) current = { start, end, parts: [], chars: 0 };
+      current.parts.push(text);
+      current.chars += (current.parts.length > 1 ? 1 : 0) + text.length;
+      current.end = Math.max(current.end, end);
     }
-    return cues.join('\n');
+    flush();
+    return cues;
+  }
+
+  // Fallback when word timestamps are unavailable: cut the oversized segment's
+  // text on word boundaries and spread its time span across the chunks
+  // proportional to their length. Approximate timing, but readable.
+  function splitSegmentIntoCues(seg: CaptionCue): CaptionCue[] {
+    const duration = Math.max(seg.end - seg.start, 0);
+    const chunks: string[] = [];
+    let buf = '';
+    for (const word of seg.text.split(/\s+/).filter(Boolean)) {
+      const candidate = buf ? `${buf} ${word}` : word;
+      if (buf && (candidate.length > TARGET_CUE_CHARS || (/[.!?]$/.test(buf) && buf.length >= 40))) {
+        chunks.push(buf);
+        buf = word;
+      } else {
+        buf = candidate;
+      }
+    }
+    if (buf) chunks.push(buf);
+    const totalChars = chunks.reduce((n, c) => n + c.length, 0) || 1;
+    let cursor = seg.start;
+    return chunks.map((text, i) => {
+      const start = cursor;
+      const end = i === chunks.length - 1 ? seg.end : cursor + duration * (text.length / totalChars);
+      cursor = end;
+      return { start, end, text };
+    });
+  }
+
+  // Build a WebVTT document from caption cues. Drops empty/whitespace-only
+  // text, clamps end>start so the browser's <track> parser never rejects the
+  // file, and caps on-screen time per cue so no single cue blankets playback.
+  function cuesToVtt(cueList: CaptionCue[]): string {
+    const lines: string[] = ['WEBVTT', ''];
+    for (const cue of cueList) {
+      const text = (cue.text || '').trim();
+      if (!text) continue;
+      const start = cue.start ?? 0;
+      let end = cue.end ?? start;
+      if (end <= start) end = start + 0.5; // guard against zero/negative-length cues
+      if (end - start > MAX_CUE_SECONDS) end = start + MAX_CUE_SECONDS;
+      lines.push(`${secondsToVttTimestamp(start)} --> ${secondsToVttTimestamp(end)}`);
+      lines.push(text);
+      lines.push('');
+    }
+    return lines.join('\n');
   }
 
   // Fire-and-forget caption generation, mirroring generateVideoThumbnail:
@@ -8506,19 +8583,23 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       await extractAudio(videoTmpPath, audioTmpPath);
 
       // verbose_json + segment granularity gives us timed cues (plain 'text'
-      // would lose the timestamps captions need). Same domain bias prompt as
-      // the quote-gen pass so NZ species aren't mangled in the captions.
+      // would lose the timestamps captions need). Word granularity is the
+      // repair kit: when Whisper collapses continuous speech into one giant
+      // segment, word timestamps let us re-cut it accurately. Same domain
+      // bias prompt as the quote-gen pass so NZ species aren't mangled.
       const transcription: any = await openai.audio.transcriptions.create({
         file: fs.createReadStream(audioTmpPath),
         model: 'whisper-1',
         language: 'en',
         prompt: buildWhisperBias((await storage.getBusinessSettingsForBusiness(video.businessId))?.tradeVocabulary),
         response_format: 'verbose_json',
-        timestamp_granularities: ['segment'],
+        timestamp_granularities: ['segment', 'word'],
       });
 
       const segments: Array<{ start: number; end: number; text: string }> =
         Array.isArray(transcription?.segments) ? transcription.segments : [];
+      const words: Array<{ start?: number; end?: number; word?: string }> =
+        Array.isArray(transcription?.words) ? transcription.words : [];
       if (segments.length === 0) {
         await storage.updateVideo(videoId, {
           captionsStatus: 'error',
@@ -8527,13 +8608,51 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         return;
       }
 
-      const vtt = segmentsToVtt(segments);
+      // Normal segments pass through untouched; oversized ones get re-cut
+      // from their word timestamps (or split proportionally without them).
+      const cues: CaptionCue[] = [];
+      for (const seg of segments) {
+        const text = (seg.text || '').trim();
+        if (!text) continue;
+        const start = seg.start ?? 0;
+        const end = Math.max(seg.end ?? start, start);
+        if (end - start <= MAX_CUE_SECONDS && text.length <= MAX_CUE_CHARS) {
+          cues.push({ start, end, text });
+          continue;
+        }
+        const segWords = words.filter(
+          (w) => typeof w.start === 'number' && w.start >= start - 0.1 && w.start <= end + 0.1,
+        );
+        cues.push(
+          ...(segWords.length > 1 ? buildCuesFromWords(segWords) : splitSegmentIntoCues({ start, end, text })),
+        );
+      }
+
+      if (cues.length === 0) {
+        await storage.updateVideo(videoId, {
+          captionsStatus: 'error',
+          captionsError: 'No speech detected in video',
+        });
+        return;
+      }
+      // Still over the char cap after splitting means an unsplittable blob
+      // (no spaces or usable timestamps) — record an error rather than
+      // storing a wall of text the players would pin over the whole video.
+      if (cues.some((c) => c.text.length > MAX_CUE_CHARS)) {
+        await storage.updateVideo(videoId, {
+          captionsStatus: 'error',
+          captionsError: 'Transcript could not be split into readable captions',
+        });
+        return;
+      }
+
+      const vtt = cuesToVtt(cues);
       await storage.updateVideo(videoId, {
         captionsVtt: vtt,
         captionsStatus: 'ready',
         captionsError: null,
       });
-      console.log(`💬 Video captions generated: ${videoId} (${segments.length} cues)`);
+      console.log(`💬 Video captions generated: ${videoId} (${cues.length} cues)`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Caption generation failed';
       console.warn(`Could not generate captions for video ${videoId}:`, err);
