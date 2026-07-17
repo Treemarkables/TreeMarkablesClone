@@ -453,6 +453,13 @@ function KnowledgeVideoPanel({
       setTitle("");
       if (fileRef.current) fileRef.current.value = "";
       onChange();
+      // Success feedback is deliberate on this panel (owner request) — the
+      // list refresh alone is too subtle to confirm a publish that every
+      // subscriber sees instantly.
+      toast({
+        title: "Video published",
+        description: `"${title.trim() || file.name}" is live in ${category} on every subscriber's Help page.`,
+      });
     } catch (e: any) {
       toast({ title: "Video upload failed", description: e?.message, variant: "destructive" });
     } finally {
@@ -472,6 +479,7 @@ function KnowledgeVideoPanel({
       return;
     }
     onChange();
+    toast({ title: "Section updated", description: `Moved to ${newCategory}.` });
   }
 
   async function setVideoTitle(id: string, newTitle: string) {
@@ -486,6 +494,10 @@ function KnowledgeVideoPanel({
       return;
     }
     onChange();
+    toast({
+      title: "Video renamed",
+      description: newTitle ? `Now showing as "${newTitle}".` : "Title cleared.",
+    });
   }
 
   async function deleteVideo(id: string) {
@@ -495,6 +507,7 @@ function KnowledgeVideoPanel({
       return;
     }
     onChange();
+    toast({ title: "Video deleted", description: "Removed from every subscriber's Help page." });
   }
 
   return (
