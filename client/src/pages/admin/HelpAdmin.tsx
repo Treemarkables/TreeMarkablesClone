@@ -26,16 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Bold, Italic, Heading2, List, ListOrdered, Link as LinkIcon, Trash2, Upload, Plus } from "lucide-react";
-
-const CATEGORIES = [
-  "Getting started",
-  "Jobs",
-  "Quotes & Invoicing",
-  "Customers & CRM",
-  "Staff & Permissions",
-  "Safety",
-  "Settings & Billing",
-];
+import { HELP_CATEGORIES as CATEGORIES } from "@/lib/helpCategories";
 
 type HelpArticle = {
   id: string;
@@ -442,6 +433,7 @@ function KnowledgeVideoPanel({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
+  const [category, setCategory] = useState(CATEGORIES[0]);
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
 
@@ -450,6 +442,7 @@ function KnowledgeVideoPanel({
     try {
       const form = new FormData();
       form.append("kind", "knowledge");
+      form.append("category", category);
       if (title.trim()) form.append("title", title.trim());
       form.append("video", file);
       const r = await fetch("/api/videos", { method: "POST", body: form, credentials: "include" });
@@ -467,22 +460,56 @@ function KnowledgeVideoPanel({
     }
   }
 
+  async function setVideoCategory(id: string, newCategory: string) {
+    const r = await fetch(`/api/videos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ category: newCategory }),
+    });
+    if (!r.ok) {
+      toast({ title: "Couldn't update category", variant: "destructive" });
+      return;
+    }
+    onChange();
+  }
+
+  async function deleteVideo(id: string) {
+    const r = await fetch(`/api/videos/${id}`, { method: "DELETE", credentials: "include" });
+    if (!r.ok) {
+      toast({ title: "Couldn't delete video", variant: "destructive" });
+      return;
+    }
+    onChange();
+  }
+
   return (
     <Card>
       <CardContent className="p-3 space-y-3">
         <div>
-          <h3 className="text-sm font-semibold mb-1">Knowledge videos</h3>
+          <h3 className="text-sm font-semibold mb-1">How-to videos</h3>
           <p className="text-xs text-muted-foreground">
-            Upload how-to videos to embed in articles.
+            Shown to every subscriber on the Help page, grouped by section.
+            Videos can also be embedded in articles.
           </p>
         </div>
         <div className="space-y-2">
           <Input
-            placeholder="Title (optional)"
+            placeholder="Title (e.g. Send a quote)"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             data-testid="input-knowledge-video-title"
           />
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger data-testid="select-knowledge-video-category">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORIES.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input
             ref={fileRef}
             type="file"
@@ -496,9 +523,42 @@ function KnowledgeVideoPanel({
           />
           {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
         </div>
-        <div className="text-xs text-muted-foreground">
-          {videos.length} video{videos.length === 1 ? "" : "s"} uploaded
-        </div>
+
+        {videos.length > 0 && (
+          <div className="space-y-2 max-h-72 overflow-y-auto border-t border-border pt-2">
+            {videos.map((v) => (
+              <div key={v.id} className="space-y-1" data-testid={`admin-knowledge-video-${v.id}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm truncate">{v.title || v.filename}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 flex-shrink-0"
+                    onClick={() => {
+                      if (confirm("Delete this video for all subscribers?")) deleteVideo(v.id);
+                    }}
+                    data-testid={`button-delete-video-${v.id}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <Select
+                  value={v.category ?? ""}
+                  onValueChange={(c) => setVideoCategory(v.id, c)}
+                >
+                  <SelectTrigger className="h-8 text-xs" data-testid={`select-video-category-${v.id}`}>
+                    <SelectValue placeholder="No section — pick one" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
