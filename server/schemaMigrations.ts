@@ -346,6 +346,26 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Global knowledge (how-to) videos are written business_id = NULL by design
+    // (#233: one shared library every tenant sees, read via the owner client).
+    // But the legacy tenancy migration left videos.business_id with NOT NULL +
+    // a Treemarkables-id DEFAULT (live DB state only — schema.ts has the column
+    // nullable, no default), so the very first knowledge-video upload failed
+    // with a not-null violation. Relax the column to match the code: drop the
+    // default (every code path stamps business_id explicitly — withTenant for
+    // job videos, explicit NULL for knowledge) and drop NOT NULL. Both are
+    // constraint relaxations, not data changes, and are no-ops on re-run. The
+    // UPDATE un-stamps any knowledge row that got mis-stamped (e.g. a job video
+    // re-tagged into the library keeps its old stamp) back to global — same
+    // treatment the safety-library built-ins got.
+    name: "videos-business-id-global-knowledge",
+    statements: [
+      `ALTER TABLE videos ALTER COLUMN business_id DROP DEFAULT`,
+      `ALTER TABLE videos ALTER COLUMN business_id DROP NOT NULL`,
+      `UPDATE videos SET business_id = NULL WHERE kind = 'knowledge' AND business_id IS NOT NULL`,
+    ],
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;
