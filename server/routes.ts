@@ -8596,6 +8596,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       if (!video) {
         return res.status(404).json({ success: false, message: 'Video not found' });
       }
+      // Regenerating captions on a global knowledge video rewrites shared
+      // platform content (and bills Whisper) — gate to publishers, same as
+      // PATCH/DELETE /api/videos/:id.
+      if (video.kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
+      }
       // Clear so generateVideoCaptions doesn't short-circuit on a ready/cached row.
       await storage.updateVideo(req.params.id, {
         captionsStatus: 'processing',
@@ -9015,6 +9021,13 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         return res.status(404).json({ success: false, message: 'Video not found' });
       }
 
+      // Transcribing a global knowledge video persists transcript/description
+      // onto shared platform content — gate to publishers, same as
+      // PATCH/DELETE /api/videos/:id.
+      if (video.kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
+      }
+
       // Idempotent fast-path: if we've already transcribed this video, return the
       // cached result instead of re-billing OpenAI on every retry/refresh.
       // Skipped when ?force=1.
@@ -9183,7 +9196,9 @@ Return only the cleaned job description.`;
 
   // Help articles (subscriber-facing /help page). See INFLOW_HELP_PLAN.md.
   // GET routes are subscriber-readable (no auth gate here, matching the videos
-  // pattern); POST/PATCH/DELETE are owner-only via requireAdmin.
+  // pattern). Articles are GLOBAL platform content shown to every subscriber,
+  // so writes need more than requireAdmin (that's any tenant's admin) — they
+  // are also gated to the content-publisher allowlist, same as knowledge videos.
 
   // List articles, grouped by category. Subscribers see published only;
   // admins (via ?includeUnpublished=true) can see drafts for the authoring UI.
@@ -9235,6 +9250,9 @@ Return only the cleaned job description.`;
 
   app.post('/api/help/articles', requireAdmin, async (req: Request, res: Response) => {
     try {
+      if (!isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage help articles.' });
+      }
       const parsed = schema.insertHelpArticleSchema.parse(req.body);
       const article = await storage.createHelpArticle(parsed);
       res.json({ success: true, data: article });
@@ -9246,6 +9264,9 @@ Return only the cleaned job description.`;
 
   app.patch('/api/help/articles/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
+      if (!isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage help articles.' });
+      }
       const parsed = schema.updateHelpArticleSchema.parse(req.body);
       const article = await storage.updateHelpArticle(req.params.id, parsed);
       res.json({ success: true, data: article });
@@ -9257,6 +9278,9 @@ Return only the cleaned job description.`;
 
   app.delete('/api/help/articles/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
+      if (!isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage help articles.' });
+      }
       await storage.deleteHelpArticle(req.params.id);
       res.json({ success: true });
     } catch (error) {
