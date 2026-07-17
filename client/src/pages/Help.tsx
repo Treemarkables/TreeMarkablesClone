@@ -1,7 +1,9 @@
 // Subscriber-facing help & training hub. Shows a sequenced "Getting started"
-// path at the top, then a reference library grouped by category. Clicking an
+// path at the top, then the how-to video library grouped into category
+// sections, then a reference article library grouped the same way. Clicking an
 // article opens it in-place — body HTML is sanitized with DOMPurify, related
 // videos render with the same player markup used on the Videos page.
+// Knowledge videos are global platform content (one library, every tenant).
 // See INFLOW_HELP_PLAN.md for the design.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BookOpen, ChevronRight, ArrowLeft, PlayCircle } from "lucide-react";
+import { helpCategoryRank } from "@/lib/helpCategories";
 
 type HelpArticleSummary = {
   id: string;
@@ -27,12 +30,21 @@ type HelpVideo = {
   thumbnailUrl: string | null;
 };
 
+type KnowledgeVideo = HelpVideo & {
+  description: string | null;
+  category: string | null;
+  captionsStatus: string | null;
+  sequenceOrder: number | null;
+  createdAt: string | null;
+};
+
 type HelpArticleDetail = HelpArticleSummary & {
   bodyHtml: string;
   relatedVideos?: HelpVideo[];
 };
 
 const GETTING_STARTED = "Getting started";
+const UNCATEGORISED = "More videos";
 
 export default function Help() {
   const [openSlug, setOpenSlug] = useState<string | null>(null);
@@ -58,7 +70,42 @@ export default function Help() {
   });
   const detail: HelpArticleDetail | null = detailQuery.data?.data ?? null;
 
-  // Group by category. 'Getting started' first (sequenced), then alpha.
+  // Global how-to video library (videos.kind='knowledge', same set for every
+  // tenant), grouped into category sections below.
+  const videosQuery = useQuery({
+    queryKey: ["/api/videos", { kind: "knowledge" }],
+    queryFn: async () => {
+      const r = await fetch("/api/videos?kind=knowledge", { credentials: "include" });
+      if (!r.ok) return { success: false, data: [] };
+      return r.json();
+    },
+  });
+  const videos: KnowledgeVideo[] = Array.isArray(videosQuery.data?.data)
+    ? videosQuery.data.data
+    : [];
+
+  // Group videos by category, sections in HELP_CATEGORIES order (unknown
+  // categories after, uncategorised last). Within a section: explicit
+  // sequenceOrder first, then upload order — so a numbered series plays in
+  // the order it was recorded.
+  const videosByCategory = videos.reduce<Record<string, KnowledgeVideo[]>>((acc, v) => {
+    (acc[v.category || UNCATEGORISED] ??= []).push(v);
+    return acc;
+  }, {});
+  const videoCategories = Object.keys(videosByCategory).sort((a, b) => {
+    const rank = helpCategoryRank(a === UNCATEGORISED ? null : a)
+      - helpCategoryRank(b === UNCATEGORISED ? null : b);
+    return rank !== 0 ? rank : a.localeCompare(b);
+  });
+  for (const cat of videoCategories) {
+    videosByCategory[cat].sort(
+      (a, b) =>
+        (a.sequenceOrder ?? 0) - (b.sequenceOrder ?? 0) ||
+        (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
+    );
+  }
+
+  // Group articles by category. 'Getting started' first (sequenced), then alpha.
   const byCategory = articles.reduce<Record<string, HelpArticleSummary[]>>((acc, a) => {
     (acc[a.category] ??= []).push(a);
     return acc;
@@ -78,17 +125,20 @@ export default function Help() {
         <h1 className="text-2xl font-semibold">Help &amp; Training</h1>
       </div>
 
-      {listQuery.isLoading && (
+      {(listQuery.isLoading || videosQuery.isLoading) && (
         <p className="text-muted-foreground">Loading…</p>
       )}
 
-      {!listQuery.isLoading && articles.length === 0 && (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            No help content has been published yet.
-          </CardContent>
-        </Card>
-      )}
+      {!listQuery.isLoading &&
+        !videosQuery.isLoading &&
+        articles.length === 0 &&
+        videos.length === 0 && (
+          <Card>
+            <CardContent className="py-10 text-center text-muted-foreground">
+              No help content has been published yet.
+            </CardContent>
+          </Card>
+        )}
 
       {byCategory[GETTING_STARTED]?.length > 0 && (
         <section className="mb-8">
@@ -105,6 +155,22 @@ export default function Help() {
               ))}
             </CardContent>
           </Card>
+        </section>
+      )}
+
+      {videoCategories.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">How-to videos</h2>
+          {videoCategories.map((cat) => (
+            <div key={cat} className="mb-6">
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">{cat}</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {videosByCategory[cat].map((v) => (
+                  <VideoCard key={v.id} video={v} />
+                ))}
+              </div>
+            </div>
+          ))}
         </section>
       )}
 
@@ -126,6 +192,42 @@ export default function Help() {
         </section>
       )}
     </div>
+  );
+}
+
+function VideoCard({ video }: { video: KnowledgeVideo }) {
+  return (
+    <Card data-testid={`help-video-${video.id}`}>
+      <CardContent className="p-3">
+        <div className="flex items-center gap-2 mb-2 text-sm">
+          <PlayCircle className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <span className="font-medium truncate">{video.title || "Video"}</span>
+        </div>
+        {/* preload="none": the library can hold many videos — the poster frame
+            is enough until the user presses play. */}
+        <video
+          src={video.url}
+          poster={video.thumbnailUrl ?? undefined}
+          controls
+          preload="none"
+          playsInline
+          className="w-full rounded bg-black aspect-video object-contain"
+        >
+          {video.captionsStatus === "ready" && (
+            <track
+              kind="captions"
+              srcLang="en"
+              label="English"
+              src={`/api/videos/${video.id}/captions.vtt`}
+              default
+            />
+          )}
+        </video>
+        {video.description && (
+          <p className="text-sm text-muted-foreground mt-2">{video.description}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
