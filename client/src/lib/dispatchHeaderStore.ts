@@ -118,9 +118,11 @@ export function useOnlyUnconfirmed(): [boolean, (v: boolean) => void] {
 // for work_orders with a current-or-future booking, and "Unscheduled"
 // (value kept as `work_order`) is its complement: work_orders that still
 // need a calendar slot, including ones whose booking is entirely past.
+// The Dispatch Queue "Queue" chip was removed 2026-07 — queue-style holds are
+// modelled as Lanes now (e.g. a "Queue work order" lane via the Lanes filter),
+// and queued jobs must stay visible under All / Unscheduled / Scheduled.
 export const DISPATCH_STATUS_FILTERS = [
   { value: "lead",       label: "Lead" },
-  { value: "queue",      label: "Queue" },
   { value: "quote",      label: "Quote" },
   { value: "mulch",      label: "Mulch" },
   { value: "work_order", label: "Unscheduled" },
