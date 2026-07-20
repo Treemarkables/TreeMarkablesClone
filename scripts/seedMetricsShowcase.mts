@@ -169,7 +169,10 @@ try {
     await del("proposals", `DELETE FROM proposals WHERE business_id = $1 AND template_used = '${TAG}'`);
     await del("jobs", `DELETE FROM jobs WHERE business_id = $1 AND import_source = '${TAG}'`);
     await del("leads", `DELETE FROM leads WHERE business_id = $1 AND notes = '${INVOICE_TAG}'`);
-    await del("customers", `DELETE FROM customers WHERE business_id = $1 AND import_source = '${TAG}'`);
+    // Match by notes tag OR the legacy import_source tag (pre-onboarding-reset
+    // seeds used import_source='demo_seed'; resetTenantOnboarding flips that to
+    // 'manual' but stamps the notes tag).
+    await del("customers", `DELETE FROM customers WHERE business_id = $1 AND (import_source = '${TAG}' OR notes = '${INVOICE_TAG}')`);
   }
 
   // Job numbers: continue from the tenant's highest numeric job number, or 1001.
@@ -184,9 +187,12 @@ try {
   const customerIds: string[] = [];
   for (const [i, cust] of CUSTOMERS.entries()) {
     const slug = cust.name.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "");
+    // import_source stays 'manual' so seeded customers don't mark the setup
+    // checklist's "Import your data" item done; the notes tag is what
+    // SEED_WIPE matches on.
     const r = await c.query(
-      `INSERT INTO customers (business_id, name, email, phone, address, source, import_source, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, '${TAG}', $7, $7) RETURNING id`,
+      `INSERT INTO customers (business_id, name, email, phone, address, source, import_source, notes, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'manual', '${INVOICE_TAG}', $7, $7) RETURNING id`,
       [
         bizId,
         cust.name,
