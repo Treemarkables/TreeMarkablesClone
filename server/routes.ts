@@ -3488,6 +3488,123 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
   const CONTACT_FORM_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
   // Contact form submission endpoint
+  // Public mulch ordering — the /mulch marketing page is public, so its order
+  // submission can't ride the session-authed POST /api/jobs. This endpoint
+  // validates a strict order shape, applies the same anti-spam guards as the
+  // contact form, recomputes all pricing server-side (client totals are never
+  // trusted), resolves the owning tenant, and delegates to the shared
+  // createJobHandler so mulch orders keep the full flow: customer dedupe, job
+  // numbering, the 'mulch' dispatch bucket, confirmation email, broadcast.
+  const MULCH_PRICE_PER_M3 = 35;
+  const MULCH_MIN_QTY = 4;
+  const MULCH_MAX_QTY = 50;
+  const MULCH_COVERAGE_M2_PER_M3 = 12.5;
+  const MULCH_COVERAGE_DEPTH_MM = 80;
+  app.post('/api/mulch-orders', async (req: Request, res: Response) => {
+    try {
+      const { name, email, phone, address, qty, accessNotes, website } = req.body || {};
+      const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+
+      // Honeypot: hidden "website" field real users never see — fake success
+      // so bots don't learn to adapt (same strategy as /api/contact).
+      if (typeof website === 'string' && website.trim() !== '') {
+        console.log(`[mulch-spam] Honeypot tripped by ${clientIp}`);
+        return res.json({ success: true, data: {} });
+      }
+
+      // Per-IP rate limit, shared window with the contact form.
+      const rlNow = Date.now();
+      const rlEntry = contactFormRateLimit.get(clientIp);
+      if (rlEntry && rlNow < rlEntry.resetTime) {
+        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
+          console.log(`[mulch-spam] Rate limit hit by ${clientIp}`);
+          return res.status(429).json({
+            success: false,
+            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
+          });
+        }
+        rlEntry.count++;
+      } else {
+        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
+      }
+
+      const trimmedName = typeof name === 'string' ? name.trim() : '';
+      const trimmedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      const trimmedPhone = typeof phone === 'string' ? phone.trim() : '';
+      const trimmedAddress = typeof address === 'string' ? address.trim() : '';
+      const trimmedNotes = typeof accessNotes === 'string' ? accessNotes.trim().slice(0, 1000) : '';
+
+      if (!trimmedName || !trimmedAddress || (!trimmedPhone && !trimmedEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide your name, a delivery address, and a phone or email.'
+        });
+      }
+      if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        return res.status(400).json({ success: false, message: 'Please provide a valid email address.' });
+      }
+      const quantity = Math.round(Number(qty));
+      if (!Number.isFinite(quantity) || quantity < MULCH_MIN_QTY || quantity > MULCH_MAX_QTY) {
+        return res.status(400).json({
+          success: false,
+          message: `Quantity must be between ${MULCH_MIN_QTY} and ${MULCH_MAX_QTY} m³.`
+        });
+      }
+
+      const subtotal = quantity * MULCH_PRICE_PER_M3;
+      const orderGst = subtotal * 0.15;
+      const orderTotal = subtotal + orderGst;
+      const coverage = Math.round(quantity * MULCH_COVERAGE_M2_PER_M3);
+      const money = (n: number) => `$${n.toFixed(2)}`;
+
+      // Field order matters: the mulch confirmation email parses these lines
+      // back out of the description (see the status==='mulch' block in
+      // createJobHandler).
+      const description = [
+        'Mulch order via website',
+        '',
+        `Quantity: ${quantity} m³ — Aged Mulch @ $${MULCH_PRICE_PER_M3}/m³`,
+        `Subtotal: ${money(subtotal)}`,
+        `GST (15%): ${money(orderGst)}`,
+        `Total (incl. GST): ${money(orderTotal)}`,
+        'Delivery: FREE',
+        `Coverage estimate: ~${coverage} m² at ${MULCH_COVERAGE_DEPTH_MM} mm depth`,
+        ...(trimmedNotes ? ['', `Access notes: ${trimmedNotes}`] : []),
+      ].join('\n');
+
+      // Resolve the owning tenant for this session-less public write (same
+      // pattern as /api/contact) so every row is tenant-stamped under RLS.
+      let mulchBusinessId: string | undefined;
+      try {
+        mulchBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+      } catch (bizErr) {
+        console.error('[mulch] Failed to resolve business for tenant stamping:', bizErr);
+      }
+
+      req.body = {
+        status: 'mulch',
+        leadSource: 'website',
+        title: `Mulch order: ${quantity} m³ Aged Mulch`,
+        description,
+        address: trimmedAddress,
+        totalAmount: orderTotal.toFixed(2),
+        isNewCustomer: true,
+        newCustomerName: trimmedName,
+        newCustomerEmail: trimmedEmail || undefined,
+        newCustomerPhone: trimmedPhone || undefined,
+        newCustomerAddress: trimmedAddress,
+      };
+      await runWithBusiness(mulchBusinessId, async () => {
+        await createJobHandler(req, res);
+      });
+    } catch (error) {
+      console.error('Error creating mulch order:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Error creating mulch order' });
+      }
+    }
+  });
+
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
       const { name, email, phone, hearAbout, message, captchaToken, leadSource, website } = req.body;
@@ -5457,7 +5574,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   // JOB MANAGEMENT API ROUTES
   // ========================================
 
-  app.post('/api/jobs', async (req: Request, res: Response) => {
+  // Named so the public mulch-order endpoint can delegate to it with a
+  // server-constructed body (see POST /api/mulch-orders).
+  const createJobHandler = async (req: Request, res: Response) => {
     try {
       // Preprocess date fields - convert strings to Date objects
       const processedBody = { ...req.body };
@@ -5889,7 +6008,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       console.error('Error creating job:', error);
       res.status(500).json({ success: false, message: 'Error creating job' });
     }
-  });
+  };
+  app.post('/api/jobs', createJobHandler);
 
   // Fix fake job descriptions with real ServiceM8 data
   app.post('/api/jobs/fix-fake-descriptions', async (req: Request, res: Response) => {

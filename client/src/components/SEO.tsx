@@ -9,6 +9,7 @@ interface SEOProps {
   ogImage?: string;
   canonicalUrl?: string;
   structuredData?: object;
+  noindex?: boolean;
 }
 
 export default function SEO({ 
@@ -19,7 +20,8 @@ export default function SEO({
   ogDescription, 
   ogImage,
   canonicalUrl,
-  structuredData 
+  structuredData,
+  noindex
 }: SEOProps) {
   useEffect(() => {
     // Update document title
@@ -92,8 +94,9 @@ export default function SEO({
       document.head.appendChild(viewportTag);
     }
 
-    // Add robots meta tag
-    updateMetaTag('robots', 'index, follow');
+    // Add robots meta tag — noindex for pages that shouldn't appear in search
+    // (e.g. post-order confirmation pages)
+    updateMetaTag('robots', noindex ? 'noindex, follow' : 'index, follow');
 
     // Add author meta tag
     updateMetaTag('author', 'Treemarkables');
@@ -110,7 +113,7 @@ export default function SEO({
       script.textContent = JSON.stringify(structuredData);
     }
 
-  }, [title, description, keywords, ogTitle, ogDescription, ogImage, canonicalUrl, structuredData]);
+  }, [title, description, keywords, ogTitle, ogDescription, ogImage, canonicalUrl, structuredData, noindex]);
 
   return null;
 }
