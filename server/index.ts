@@ -113,6 +113,28 @@ app.get('/health', (_req, res) => {
 // still falls back to the old host.
 const LEGACY_APP_HOST = 'app.treemarkables.co.nz';
 const REDIRECT_PATH_PREFIXES = ['/proposal', '/invoice', '/quote', '/watch', '/review', '/customer-portal'];
+
+// Treemarkables marketing pages canonicalize to www.treemarkables.co.nz —
+// customers should never see the "app." host. 301 marketing paths off the app
+// host (old Google results, shared links). Root `/` is deliberately excluded:
+// staff bookmark the app host's root to log in, and sessions are per-host.
+// Registered BEFORE the legacy-host middleware below so marketing paths go to
+// www even once LEGACY_HOST_REDIRECT_ALL sends everything else to APP_URL.
+const MARKETING_HOST = 'https://www.treemarkables.co.nz';
+const MARKETING_PATH_PREFIXES = [
+  '/home', '/tree-removal', '/tree-pruning', '/stump-grinding', '/hedge-trimming',
+  '/mulch', '/blog', '/summer-offer', '/contact', '/privacy-policy',
+];
+app.use((req, res, next) => {
+  if (
+    req.hostname === LEGACY_APP_HOST &&
+    (req.method === 'GET' || req.method === 'HEAD') &&
+    MARKETING_PATH_PREFIXES.some((p) => req.path === p || req.path.startsWith(p + '/'))
+  ) {
+    return res.redirect(301, `${MARKETING_HOST}${req.originalUrl}`);
+  }
+  next();
+});
 const APP_HOST = (() => { try { return new URL(APP_URL).host; } catch { return ''; } })();
 // Full cutover switch: when LEGACY_HOST_REDIRECT_ALL=true (set in DO once the
 // owner is ready), EVERY browser page-load on the legacy app host 301s to

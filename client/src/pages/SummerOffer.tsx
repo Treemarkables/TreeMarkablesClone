@@ -102,7 +102,7 @@ export default function SummerOffer() {
         keywords="tree removal offer, Gisborne tree care discount, win money back tree service, summer tree removal special, $1000 tree care rebate"
         ogTitle="Win $1000 Back on Tree Care - Summer Offer"
         ogDescription="Book any tree service this summer for your chance to win $1000 back! Professional arborists serving Gisborne and surrounding areas."
-        canonicalUrl="https://app.treemarkables.co.nz/summer-offer"
+        canonicalUrl="https://www.treemarkables.co.nz/summer-offer"
       />
       <Header />
       

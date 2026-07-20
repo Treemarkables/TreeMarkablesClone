@@ -1,5 +1,5 @@
 # Robots.txt for Treemarkables - Professional Tree Removal Services Gisborne
-# Website: https://app.treemarkables.co.nz
+# Website: https://www.treemarkables.co.nz
 
 User-agent: *
 
@@ -10,6 +10,7 @@ Allow: /tree-removal$
 Allow: /tree-pruning$
 Allow: /stump-grinding$
 Allow: /hedge-trimming$
+Allow: /mulch$
 Allow: /blog$
 Allow: /blog/
 Allow: /summer-offer$
@@ -40,6 +41,7 @@ Disallow: /equipment
 Disallow: /calendar
 Disallow: /staff-schedule
 Disallow: /workflows
+Disallow: /mulch/thanks
 Disallow: /mulch-drops
 Disallow: /history
 Disallow: /clients
@@ -56,4 +58,4 @@ Disallow: /diary
 Disallow: /api/
 
 # XML Sitemap location for search engines
-Sitemap: https://app.treemarkables.co.nz/sitemap.xml
+Sitemap: https://www.treemarkables.co.nz/sitemap.xml

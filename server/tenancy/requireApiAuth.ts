@@ -24,14 +24,16 @@ import { isOwnerPath } from "./tenantMiddleware";
 const ENFORCED = process.env.API_AUTH_ENFORCED === "true";
 
 // Session-less public API endpoints that are NOT owner-path allowlisted:
-// customer portal login, the public marketing contact form, and two anonymous
-// config reads — /api/payments/config (public invoice page decides whether to
+// customer portal login, the public marketing contact form, the public mulch
+// order form (validates + rate-limits + tenant-stamps internally), and two
+// anonymous config reads — /api/payments/config (public invoice page decides whether to
 // show "Pay now") and /api/captcha/config (marketing contact form decides
 // whether to render Turnstile). Both return env-derived booleans/site keys
 // only — no tenant data — so exempting them from auth is safe.
 const PUBLIC_API_PATHS = [
   "/api/customer-auth",
   "/api/contact",
+  "/api/mulch-orders",
   "/api/payments/config",
   "/api/captcha/config",
 ];

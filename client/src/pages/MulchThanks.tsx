@@ -76,6 +76,7 @@ export default function MulchThanks() {
       <SEO
         title="Mulch order received — Treemarkables"
         description="Thanks for your mulch order. We'll be in touch to confirm delivery."
+        noindex
       />
       <Header />
 

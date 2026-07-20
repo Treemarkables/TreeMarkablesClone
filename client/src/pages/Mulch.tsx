@@ -82,6 +82,9 @@ export default function Mulch() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  // Honeypot — hidden field real users never see; bots that fill it get a
+  // fake success server-side (same anti-spam strategy as the contact form).
+  const [website, setWebsite] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const mulchCost = qty * PRODUCT.price;
@@ -105,41 +108,21 @@ export default function Mulch() {
       return;
     }
 
-    const fullAddress = trimmedAddress;
-
-    const description = [
-      `Mulch order via website`,
-      ``,
-      `Quantity: ${qty} m³ — ${PRODUCT.name} @ $${PRODUCT.price}/m³`,
-      `Subtotal: ${formatPrice(mulchCost)}`,
-      `GST (15%): ${formatPrice(gst)}`,
-      `Total (incl. GST): ${formatPrice(total)}`,
-      `Delivery: FREE`,
-      `Coverage estimate: ~${coverage} m² at ${COVERAGE_DEPTH_MM} mm depth`,
-      accessNotes.trim() ? `` : null,
-      accessNotes.trim() ? `Access notes: ${accessNotes.trim()}` : null,
-    ]
-      .filter((line) => line !== null)
-      .join("\n");
-
     setSubmitting(true);
     try {
-      const res = await fetch("/api/jobs", {
+      // Public order endpoint — the server validates, recomputes pricing, and
+      // creates the job (this page has no session, so /api/jobs is off-limits).
+      const res = await fetch("/api/mulch-orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
-          status: "mulch",
-          leadSource: "website",
-          title: `Mulch order: ${qty} m³ ${PRODUCT.name}`,
-          description,
-          address: fullAddress || trimmedAddress,
-          totalAmount: total.toFixed(2),
-          isNewCustomer: true,
-          newCustomerName: trimmedName,
-          newCustomerEmail: trimmedEmail || undefined,
-          newCustomerPhone: trimmedPhone || undefined,
-          newCustomerAddress: fullAddress || trimmedAddress,
+          name: trimmedName,
+          email: trimmedEmail,
+          phone: trimmedPhone,
+          address: trimmedAddress,
+          qty,
+          accessNotes: accessNotes.trim(),
+          website,
         }),
       });
 
@@ -182,6 +165,8 @@ export default function Mulch() {
       <SEO
         title="Order Mulch — Treemarkables"
         description="Aged arborist mulch delivered across Gisborne. $35/m³ + GST with free delivery, minimum 4 m³."
+        keywords="mulch delivery Gisborne, arborist mulch, garden mulch Gisborne, buy mulch Gisborne"
+        canonicalUrl="https://www.treemarkables.co.nz/mulch"
       />
       <Header />
 
@@ -391,6 +376,17 @@ export default function Mulch() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+              />
+              {/* Honeypot — off-screen, skipped by real users */}
+              <input
+                type="text"
+                name="website"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                className="absolute -left-[9999px] h-0 w-0 overflow-hidden"
               />
             </div>
           </div>
