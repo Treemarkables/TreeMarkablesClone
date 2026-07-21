@@ -23046,6 +23046,7 @@ Transcription: ${transcriptText}`;
                 title: `Email Reply — ${actualFromName || actualFromEmail}`,
                 body: previewText,
                 clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
+                collapseId: `email-reply-${diaryEntry?.id || job.id}`,
                 data: { type: 'email_reply', jobId: job.id, jobNumber: String(job.jobNumber) },
               });
             } catch (pushErr) {
@@ -23164,6 +23165,7 @@ Transcription: ${transcriptText}`;
                   title: `Email Reply — ${actualFromName || actualFromEmail}`,
                   body: previewText,
                   clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
+                  collapseId: `email-reply-${diaryEntry?.id || job.id}`,
                   data: { type: 'email_reply', jobId: job.id, jobNumber: String(job.jobNumber) },
                 });
               } catch (pushErr) {
@@ -31594,6 +31596,11 @@ Transcription: ${transcriptText}`;
       if (!token) {
         return res.status(400).json({ success: false, message: 'Token is required' });
       }
+      // deviceInfo arrives as a string from the Capacitor bridge ('iOS
+      // Capacitor') but as a {userAgent, platform} object from the browser
+      // preferences page — normalize before storing in the text column.
+      const deviceInfoStr: string | null =
+        typeof deviceInfo === 'string' ? deviceInfo : deviceInfo ? JSON.stringify(deviceInfo) : null;
 
       // Check if token already exists
       const existingToken = await storage.getFcmTokenByToken(token);
@@ -31612,6 +31619,9 @@ Transcription: ${transcriptText}`;
             await storage.updateFcmToken(existingToken.id, { isActive: true });
           }
         }
+        if ((deviceInfoStr || '').startsWith('iOS')) {
+          await deactivateOlderIosAppTokens(employeeId, token, existingToken.createdAt ? new Date(existingToken.createdAt) : null);
+        }
         return res.json({ success: true, message: 'Token registered' });
       }
 
@@ -31619,9 +31629,16 @@ Transcription: ${transcriptText}`;
       await storage.createFcmToken({
         employeeId,
         token,
-        deviceInfo: deviceInfo || null,
+        deviceInfo: deviceInfoStr,
         isActive: true
       });
+      // The bridged-native path registers here with deviceInfo 'iOS Capacitor'
+      // — apply the same one-device-one-token retirement the native endpoint
+      // does, or every reinstall leaves another live token behind (seen in
+      // prod: one employee at 8 tokens, 5 of them dead-but-erroring).
+      if ((deviceInfoStr || '').startsWith('iOS')) {
+        await deactivateOlderIosAppTokens(employeeId, token, null);
+      }
 
       // Create default notification preferences if they don't exist
       const existingPrefs = await storage.getNotificationPreferences(employeeId);
@@ -31643,22 +31660,23 @@ Transcription: ${transcriptText}`;
   // the old ones keep delivering through APNs until Apple notices the
   // uninstall, so an employee accumulates active tokens and every push fans
   // out N times to the same phone (seen as triple "rescheduled" alerts after
-  // the June-11 delete-and-reinstall cycle). Whenever a native token checks
-  // in, retire any OLDER active native tokens for that employee — the app
-  // re-registers its current token on every launch, so a genuinely live
-  // second device reactivates itself the next time it's opened.
-  async function deactivateOlderNativeTokens(employeeId: string, currentToken: string, currentCreatedAt: Date | null) {
+  // the June-11 delete-and-reinstall cycle). Whenever an iOS app token checks
+  // in — via the native Swift endpoint ('iOS Native …') OR the web bridge
+  // path ('iOS Capacitor') — retire any OLDER active iOS tokens for that
+  // employee. The app re-registers its current token on every launch, so a
+  // genuinely live second device reactivates itself the next time it's opened.
+  async function deactivateOlderIosAppTokens(employeeId: string, currentToken: string, currentCreatedAt: Date | null) {
     try {
       const activeTokens = await storage.getActiveFcmTokens(employeeId);
       for (const t of activeTokens) {
         if (t.token === currentToken) continue;
-        if (!(t.deviceInfo || '').startsWith('iOS Native')) continue;
+        if (!(t.deviceInfo || '').startsWith('iOS')) continue;
         if (currentCreatedAt && t.createdAt && new Date(t.createdAt) >= currentCreatedAt) continue;
         await storage.updateFcmToken(t.id, { isActive: false });
-        console.log(`🧹 Deactivated older native FCM token ${t.token.substring(0, 12)}… for employee ${employeeId}`);
+        console.log(`🧹 Deactivated older iOS FCM token ${t.token.substring(0, 12)}… for employee ${employeeId}`);
       }
     } catch (err) {
-      console.error('Error deactivating older native FCM tokens:', err);
+      console.error('Error deactivating older iOS FCM tokens:', err);
     }
   }
 
@@ -31690,7 +31708,7 @@ Transcription: ${transcriptText}`;
         if (!existingToken.isActive) {
           await storage.updateFcmToken(existingToken.id, { isActive: true });
         }
-        await deactivateOlderNativeTokens(employeeId, token, existingToken.createdAt ? new Date(existingToken.createdAt) : null);
+        await deactivateOlderIosAppTokens(employeeId, token, existingToken.createdAt ? new Date(existingToken.createdAt) : null);
         console.log(`✅ Native FCM token already registered for employee ${employeeId}`);
         return res.json({ success: true, message: 'Token already registered' });
       }
@@ -31704,7 +31722,7 @@ Transcription: ${transcriptText}`;
       });
       // A brand-new token means this device just (re)installed — every other
       // active native token for this employee predates it.
-      await deactivateOlderNativeTokens(employeeId, token, null);
+      await deactivateOlderIosAppTokens(employeeId, token, null);
 
       // Create default notification preferences if they don't exist
       const existingPrefs = await storage.getNotificationPreferences(employeeId);
