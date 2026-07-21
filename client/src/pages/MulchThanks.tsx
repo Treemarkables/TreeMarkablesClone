@@ -20,6 +20,7 @@ type OrderSummary = {
   qty: number;
   productName: string;
   pricePerM3: number;
+  deliveryFee?: number;
   total: number;
   coverage: number;
   customerName?: string;
@@ -124,18 +125,19 @@ export default function MulchThanks() {
               </span>
             </div>
             <div className="flex justify-between py-2.5 border-b text-sm">
-              <span className="text-muted-foreground">Delivery</span>
-              <span
-                className="font-extrabold text-[11px] text-black px-2 py-0.5 rounded"
-                style={{ background: NEON }}
-              >
-                FREE
+              <span className="text-muted-foreground">Delivery (ex GST)</span>
+              <span className="font-semibold">
+                {formatPrice(summary.deliveryFee ?? 0)}
               </span>
             </div>
             <div className="flex justify-between py-2.5 border-b text-sm">
               <span className="text-muted-foreground">GST (15%)</span>
               <span className="font-semibold">
-                {formatPrice(summary.qty * summary.pricePerM3 * 0.15)}
+                {formatPrice(
+                  (summary.qty * summary.pricePerM3 +
+                    (summary.deliveryFee ?? 0)) *
+                    0.15,
+                )}
               </span>
             </div>
             <div className="flex justify-between py-2.5 border-b text-sm">

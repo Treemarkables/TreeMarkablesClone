@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 const AGED_PRICE = 35;
+const DELIVERY_FEE = 80;
 const MIN_QTY = 4;
 const GST_RATE = 0.15;
 const COVERAGE_M2_PER_M3 = 12.5;
@@ -85,8 +86,8 @@ export default function Mulch() {
   const [submitting, setSubmitting] = useState(false);
 
   const mulchCost = qty * PRODUCT.price;
-  const gst = mulchCost * GST_RATE;
-  const total = mulchCost + gst;
+  const gst = (mulchCost + DELIVERY_FEE) * GST_RATE;
+  const total = mulchCost + DELIVERY_FEE + gst;
   const coverage = Math.round(qty * COVERAGE_M2_PER_M3);
 
   const handleSubmit = async () => {
@@ -112,9 +113,9 @@ export default function Mulch() {
       ``,
       `Quantity: ${qty} m³ — ${PRODUCT.name} @ $${PRODUCT.price}/m³`,
       `Subtotal: ${formatPrice(mulchCost)}`,
+      `Delivery: ${formatPrice(DELIVERY_FEE)}`,
       `GST (15%): ${formatPrice(gst)}`,
       `Total (incl. GST): ${formatPrice(total)}`,
-      `Delivery: FREE`,
       `Coverage estimate: ~${coverage} m² at ${COVERAGE_DEPTH_MM} mm depth`,
       accessNotes.trim() ? `` : null,
       accessNotes.trim() ? `Access notes: ${accessNotes.trim()}` : null,
@@ -154,6 +155,7 @@ export default function Mulch() {
           qty,
           productName: PRODUCT.name,
           pricePerM3: PRODUCT.price,
+          deliveryFee: DELIVERY_FEE,
           total,
           coverage,
           customerName: trimmedName,
@@ -181,7 +183,7 @@ export default function Mulch() {
     <div className="min-h-screen bg-background pt-20">
       <SEO
         title="Order Mulch — Treemarkables"
-        description="Aged arborist mulch delivered across Gisborne. $35/m³ + GST with free delivery, minimum 4 m³."
+        description="Aged arborist mulch delivered across Gisborne. $35/m³ + GST plus $80 delivery, minimum 4 m³."
       />
       <Header />
 
@@ -439,13 +441,8 @@ export default function Mulch() {
             <span className="font-semibold">{formatPrice(mulchCost)}</span>
           </div>
           <div className="flex justify-between py-2.5 border-b text-sm">
-            <span className="text-muted-foreground">Delivery</span>
-            <span
-              className="font-extrabold text-[11px] text-black px-2 py-0.5 rounded"
-              style={{ background: NEON }}
-            >
-              FREE
-            </span>
+            <span className="text-muted-foreground">Delivery (ex GST)</span>
+            <span className="font-semibold">{formatPrice(DELIVERY_FEE)}</span>
           </div>
           <div className="flex justify-between py-2.5 border-b text-sm">
             <span className="text-muted-foreground">GST (15%)</span>
