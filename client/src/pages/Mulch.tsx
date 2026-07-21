@@ -83,6 +83,7 @@ export default function Mulch() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [website, setWebsite] = useState(""); // honeypot — hidden field bots fill in
   const [submitting, setSubmitting] = useState(false);
 
   const mulchCost = qty * PRODUCT.price;
@@ -106,41 +107,21 @@ export default function Mulch() {
       return;
     }
 
-    const fullAddress = trimmedAddress;
-
-    const description = [
-      `Mulch order via website`,
-      ``,
-      `Quantity: ${qty} m³ — ${PRODUCT.name} @ $${PRODUCT.price}/m³`,
-      `Subtotal: ${formatPrice(mulchCost)}`,
-      `Delivery: ${formatPrice(DELIVERY_FEE)}`,
-      `GST (15%): ${formatPrice(gst)}`,
-      `Total (incl. GST): ${formatPrice(total)}`,
-      `Coverage estimate: ~${coverage} m² at ${COVERAGE_DEPTH_MM} mm depth`,
-      accessNotes.trim() ? `` : null,
-      accessNotes.trim() ? `Access notes: ${accessNotes.trim()}` : null,
-    ]
-      .filter((line) => line !== null)
-      .join("\n");
-
     setSubmitting(true);
     try {
-      const res = await fetch("/api/jobs", {
+      // Public session-less endpoint — the order lands in the Inbox as a
+      // conversation the operator converts via "Create Job from Lead".
+      const res = await fetch("/api/public/mulch-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
-          status: "mulch",
-          leadSource: "website",
-          title: `Mulch order: ${qty} m³ ${PRODUCT.name}`,
-          description,
-          address: fullAddress || trimmedAddress,
-          totalAmount: total.toFixed(2),
-          isNewCustomer: true,
-          newCustomerName: trimmedName,
-          newCustomerEmail: trimmedEmail || undefined,
-          newCustomerPhone: trimmedPhone || undefined,
-          newCustomerAddress: fullAddress || trimmedAddress,
+          name: trimmedName,
+          phone: trimmedPhone || undefined,
+          email: trimmedEmail || undefined,
+          address: trimmedAddress,
+          accessNotes: accessNotes.trim() || undefined,
+          qty,
+          website,
         }),
       });
 
@@ -159,7 +140,6 @@ export default function Mulch() {
           total,
           coverage,
           customerName: trimmedName,
-          jobNumber: data.data?.jobNumber,
         }),
       );
 
@@ -393,6 +373,17 @@ export default function Mulch() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+              />
+              {/* Honeypot — real users never see or fill this */}
+              <input
+                type="text"
+                name="website"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                className="absolute -left-[9999px] h-0 w-0 opacity-0"
               />
             </div>
           </div>
