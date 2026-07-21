@@ -3934,6 +3934,140 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // Public mulch order (session-less, /mulch marketing page). Same conversation-first
+  // anti-spam posture as /api/contact (#317): the order lands in the Inbox as an open
+  // conversation — NO auto-created job card or customer record — and the operator
+  // converts it via "Create Job from Lead". Mounted under /api/public so the anonymous
+  // POST runs as owner, then self-scopes every write via runWithBusiness (same class
+  // as /api/invoices/:id/request-service).
+  app.post('/api/public/mulch-order', async (req: Request, res: Response) => {
+    try {
+      const { name, phone, email, address, accessNotes, qty, website } = req.body ?? {};
+
+      const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+
+      // Honeypot: hidden "website" field real users never see — fake success for bots.
+      if (typeof website === 'string' && website.trim() !== '') {
+        console.log(`[mulch-spam] Honeypot tripped by ${clientIp}`);
+        return res.json({ success: true });
+      }
+
+      // Shares the contact form's per-IP budget — same anonymous-visitor class.
+      const rlNow = Date.now();
+      const rlEntry = contactFormRateLimit.get(clientIp);
+      if (rlEntry && rlNow < rlEntry.resetTime) {
+        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
+          console.log(`[mulch-spam] Rate limit hit by ${clientIp}`);
+          return res.status(429).json({
+            success: false,
+            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
+          });
+        }
+        rlEntry.count++;
+      } else {
+        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
+      }
+
+      const trimmedName = typeof name === 'string' ? name.trim() : '';
+      const trimmedAddress = typeof address === 'string' ? address.trim() : '';
+      const cleanPhone = (typeof phone === 'string' ? phone : '').trim().replace(/[-\s]/g, '');
+      const lowerEmail = (typeof email === 'string' ? email : '').trim().toLowerCase();
+      const quantity = Math.round(Number(qty));
+
+      if (!trimmedName || !trimmedAddress || (!cleanPhone && !lowerEmail)
+          || !Number.isFinite(quantity) || quantity < 4 || quantity > 50) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide your name, delivery address, a phone or email, and a quantity between 4 and 50 m³.'
+        });
+      }
+
+      // Server-side pricing — never trust client-computed totals.
+      const MULCH_PRICE_PER_M3 = 35;
+      const MULCH_DELIVERY_FEE = 80;
+      const mulchCost = quantity * MULCH_PRICE_PER_M3;
+      const orderGst = (mulchCost + MULCH_DELIVERY_FEE) * 0.15;
+      const orderTotal = mulchCost + MULCH_DELIVERY_FEE + orderGst;
+      const fmtNzd = (n: number) => `$${n.toFixed(2)}`;
+
+      // Resolve the owning tenant the same way /api/contact does: the canonical
+      // settings row (the marketing site's tenant).
+      let mulchBusinessId: string | undefined;
+      try {
+        mulchBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+      } catch (bizErr) {
+        console.error('[mulch-order] Failed to resolve business for tenant stamping:', bizErr);
+      }
+
+      let conversationId: string | undefined;
+      await runWithBusiness(mulchBusinessId, async () => {
+        // Link a matching existing customer, but only when the submitted name
+        // plausibly matches the record — shared/imported numbers must not file a
+        // new order under someone else's name (same guard as /api/contact).
+        let customer: any;
+        try {
+          let matched: any;
+          if (cleanPhone) matched = await storage.findCustomerByPhone(cleanPhone);
+          if (!matched && lowerEmail) matched = await storage.findCustomerByEmail(lowerEmail);
+          const na = trimmedName.toLowerCase().replace(/\s+/g, ' ');
+          const nb = (matched?.name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+          if (matched && na && nb && (na === nb || na.includes(nb) || nb.includes(na))) {
+            customer = matched;
+          }
+        } catch (custErr) {
+          console.error('[mulch-order] Customer match failed:', custErr);
+        }
+
+        const conversation = await storage.createConversation({
+          customerId: customer?.id,
+          title: `Mulch order: ${quantity} m³ Aged Mulch — ${trimmedName}`,
+          status: 'open',
+          priority: 'high',
+          source: 'web_form',
+          tags: ['mulch-order', 'website'],
+        });
+        conversationId = conversation.id;
+
+        const orderMessage = [
+          'Mulch order via website',
+          '',
+          `Name: ${trimmedName}`,
+          `Phone: ${cleanPhone || 'Not provided'}`,
+          `Email: ${lowerEmail || 'Not provided'}`,
+          `Delivery address: ${trimmedAddress}`,
+          typeof accessNotes === 'string' && accessNotes.trim() ? `Access notes: ${accessNotes.trim()}` : null,
+          '',
+          `Quantity: ${quantity} m³ Aged Mulch @ $${MULCH_PRICE_PER_M3}/m³ ex GST`,
+          `Mulch: ${fmtNzd(mulchCost)}`,
+          `Delivery: ${fmtNzd(MULCH_DELIVERY_FEE)}`,
+          `GST (15%): ${fmtNzd(orderGst)}`,
+          `Total (incl. GST): ${fmtNzd(orderTotal)}`,
+        ].filter((line) => line !== null).join('\n');
+
+        await storage.createConversationMessage({
+          conversationId: conversation.id,
+          type: 'message',
+          content: orderMessage,
+          direction: 'inbound',
+          fromName: trimmedName,
+          fromContact: lowerEmail || cleanPhone,
+          platform: 'web_form',
+        });
+
+        await notificationHelper.createConversationNotification(conversation);
+      });
+
+      console.log(`[mulch-order] Order received: ${quantity} m³ from ${trimmedName} → conversation ${conversationId}`);
+      res.json({ success: true, conversationId });
+    } catch (error) {
+      console.error('[mulch-order] Error processing mulch order:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Sorry, something went wrong. Please try again or call us.'
+      });
+    }
+  });
+
   // Lead reporting endpoints
   app.get('/api/leads/by-page', async (req: Request, res: Response) => {
     try {

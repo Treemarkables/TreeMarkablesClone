@@ -1140,16 +1140,8 @@ function Router() {
       <Route path="/tree-pruning" component={TreePruning}/>
       <Route path="/stump-grinding" component={StumpGrinding}/>
       <Route path="/hedge-trimming" component={HedgeTrimming}/>
-      <Route path="/mulch">
-        <AuthenticatedRoute>
-          <Mulch />
-        </AuthenticatedRoute>
-      </Route>
-      <Route path="/mulch/thanks">
-        <AuthenticatedRoute>
-          <MulchThanks />
-        </AuthenticatedRoute>
-      </Route>
+      <Route path="/mulch" component={Mulch}/>
+      <Route path="/mulch/thanks" component={MulchThanks}/>
       <Route path="/blog" component={Blog}/>
       <Route path="/blog/:slug" component={BlogPost}/>
       <Route path="/summer-offer" component={SummerOffer}/>
