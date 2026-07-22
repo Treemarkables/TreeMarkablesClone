@@ -343,6 +343,7 @@ export interface IStorage {
     rate: number;
     costRate?: number;
     date?: string;
+    clockInDistanceKm?: number | null;
   }): Promise<Job>;
   removeStaffTimeEntry(jobId: string, employeeId: string, date?: string): Promise<Job>;
   calculateLaborCostFromStaffTime(jobId: string): Promise<number>;
@@ -1069,7 +1070,12 @@ export interface IStorage {
   getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null>;
   getActiveTimersForJob(jobId: string): Promise<schema.ActiveTimer[]>;
   getAllActiveTimers(): Promise<schema.ActiveTimer[]>;
-  startTimer(jobId: string, employeeId: string, startedAt?: Date): Promise<schema.ActiveTimer>;
+  startTimer(
+    jobId: string,
+    employeeId: string,
+    startedAt?: Date,
+    location?: { lat: number; lng: number; accuracyM: number | null; distanceKm: number | null },
+  ): Promise<schema.ActiveTimer>;
   deleteTimer(id: string): Promise<boolean>;
 
   // Public job photo timeline links
@@ -2164,6 +2170,7 @@ class DatabaseStorage implements IStorage {
     rate: number;
     costRate?: number;
     date?: string;
+    clockInDistanceKm?: number | null;
   }): Promise<Job> {
     const job = await this.getJob(jobId);
     if (!job) throw new Error('Job not found');
@@ -7727,9 +7734,22 @@ class DatabaseStorage implements IStorage {
     return await db.select().from(schema.activeTimers);
   }
 
-  async startTimer(jobId: string, employeeId: string, startedAt?: Date): Promise<schema.ActiveTimer> {
+  async startTimer(
+    jobId: string,
+    employeeId: string,
+    startedAt?: Date,
+    location?: { lat: number; lng: number; accuracyM: number | null; distanceKm: number | null },
+  ): Promise<schema.ActiveTimer> {
     const [timer] = await db.insert(schema.activeTimers)
-      .values(withTenant(startedAt ? { jobId, employeeId, startedAt } : { jobId, employeeId }))
+      .values(withTenant({
+        jobId,
+        employeeId,
+        ...(startedAt ? { startedAt } : {}),
+        clockInLat: location?.lat ?? null,
+        clockInLng: location?.lng ?? null,
+        clockInAccuracyM: location?.accuracyM ?? null,
+        clockInDistanceKm: location?.distanceKm ?? null,
+      }))
       .returning();
     return timer;
   }

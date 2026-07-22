@@ -46,6 +46,25 @@ interface EmployeeRow {
   isActive?: boolean;
 }
 
+// One-shot clock-in location for the crew-tracking stamp. Resolves null on
+// denial, timeout, or missing API (e.g. the iOS webview before the location
+// permission plist lands) — clock-in must never block on GPS.
+function getClockInLocation(): Promise<{ lat: number; lng: number; accuracy: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    // Belt-and-braces: some webviews fire neither callback.
+    const fallback = setTimeout(() => resolve(null), 6000);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(fallback);
+        resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+      },
+      () => { clearTimeout(fallback); resolve(null); },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 60_000 },
+    );
+  });
+}
+
 function formatElapsed(startedAt: string): string {
   const totalSec = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
   const h = Math.floor(totalSec / 3600);
@@ -161,7 +180,9 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
 
   const startMutation = useMutation({
     mutationFn: async (payload: { employeeIds: string[]; startedAt?: string }) => {
-      const res = await apiRequest("POST", `/api/jobs/${jobId}/timer/start`, payload);
+      const location = await getClockInLocation();
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/timer/start`,
+        location ? { ...payload, location } : payload);
       return (await res.json()) as { data?: { switchedJobIds?: string[] } };
     },
     onSuccess: (result) => {
