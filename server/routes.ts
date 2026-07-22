@@ -10983,14 +10983,9 @@ Draft the reply now.`;
         validationErrors.push('proposal has no description text — the customer would see an empty job description');
       }
 
-      const selectedLineItems = lineItems.filter(li => li.selected);
-      if (selectedLineItems.length === 0) {
-        validationErrors.push('proposal has no selected line items');
-      }
-
-      if (subtotal <= 0) {
-        validationErrors.push('proposal total is $0');
-      }
+      // No line-item / $0-total check here: pricing is sometimes written in the
+      // description text instead of line items (e.g. day-rate quotes), so a
+      // priceless proposal is a legitimate send.
 
       if (validationErrors.length > 0) {
         console.warn(`⚠️  Blocked send for proposal ${proposalId}: ${validationErrors.join('; ')}`);
@@ -11235,14 +11230,9 @@ Draft the reply now.`;
         validationErrors.push('quote has no description text — the PDF would have an empty job description');
       }
 
-      const selectedLineItems = lineItems.filter(li => li.selected !== false);
-      if (selectedLineItems.length === 0) {
-        validationErrors.push('quote has no selected line items');
-      }
-
-      if (subtotal <= 0) {
-        validationErrors.push('quote total is $0');
-      }
+      // No line-item / $0-total check here: pricing is sometimes written in the
+      // description text instead of line items (e.g. day-rate quotes), so a
+      // priceless quote is a legitimate send.
 
       if (validationErrors.length > 0) {
         console.warn(`⚠️  Blocked send for quote ${proposalId}: ${validationErrors.join('; ')}`);
