@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, MapPin, User } from "lucide-react";
+import { Link } from "wouter";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  formatTime12Hour,
+  nzTimeToUTC,
+  utcToNZTime,
+} from "@shared/dateUtils";
 
 interface Employee {
   id: string;
@@ -22,20 +28,36 @@ interface Employee {
   isActive: boolean;
 }
 
+// Existing assignments used for the advisory busy-highlight (same
+// non-blocking rule as GlobalJobCard's scheduling modal).
+interface AdvisoryAssignment {
+  jobId?: string | null;
+  employeeId: string;
+  startTime: string;
+  endTime: string;
+}
+
 export interface QuickAssignResult {
   employeeIds: string[];
   durationHours: number;
   durationMinutes: number;
+  sendClientNotification: boolean;
+  sendProposalEmail: boolean;
+  scheduleBookingReminders: boolean;
 }
 
 interface QuickAssignDialogProps {
   open: boolean;
+  jobId: string;
   jobLabel: string;
   customerName?: string;
   address?: string;
+  /** NZ calendar date (YYYY-MM-DD) of the drop target cell. */
+  dateNZ: string;
   droppedHour: number;
   droppedEmployeeId: string;
   employees: Employee[];
+  staffAssignments: AdvisoryAssignment[];
   defaultDurationHours: number;
   isSubmitting: boolean;
   onCancel: () => void;
@@ -46,12 +68,15 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 
 export function QuickAssignDialog({
   open,
+  jobId,
   jobLabel,
   customerName,
   address,
+  dateNZ,
   droppedHour,
   droppedEmployeeId,
   employees,
+  staffAssignments,
   defaultDurationHours,
   isSubmitting,
   onCancel,
@@ -67,6 +92,10 @@ export function QuickAssignDialog({
   );
   const [hours, setHours] = useState<number>(initialHours);
   const [minutes, setMinutes] = useState<number>(initialMinutes);
+  const [sendClientNotification, setSendClientNotification] = useState(false);
+  const [sendProposalEmail, setSendProposalEmail] = useState(false);
+  const [scheduleBookingReminders, setScheduleBookingReminders] =
+    useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -75,6 +104,9 @@ export function QuickAssignDialog({
     const m = Math.round(Math.max(0, defaultDurationHours - h) * 60);
     setHours(h);
     setMinutes(m);
+    setSendClientNotification(false);
+    setSendProposalEmail(false);
+    setScheduleBookingReminders(false);
   }, [open, droppedEmployeeId, defaultDurationHours]);
 
   const activeEmployees = useMemo(
@@ -86,6 +118,33 @@ export function QuickAssignDialog({
   const endTotalMinutes = Math.min(droppedHour * 60 + totalMinutes, 23 * 60 + 59);
   const endH = Math.floor(endTotalMinutes / 60);
   const endM = endTotalMinutes % 60;
+
+  // Advisory busy map: which employees already have an overlapping assignment
+  // on another job during the dropped window. Doesn't block selection — just
+  // highlights the row, mirroring the job-card scheduling modal.
+  const busyEmployees = useMemo(() => {
+    const map = new Map<string, { startTime: Date; endTime: Date }[]>();
+    if (!dateNZ || totalMinutes <= 0 || staffAssignments.length === 0)
+      return map;
+    let windowStart: number;
+    try {
+      windowStart = nzTimeToUTC(dateNZ, `${pad2(droppedHour)}:00`).getTime();
+    } catch {
+      return map;
+    }
+    const windowEnd = windowStart + totalMinutes * 60_000;
+    for (const a of staffAssignments) {
+      if (a.jobId && a.jobId === jobId) continue;
+      const aStart = new Date(a.startTime).getTime();
+      const aEnd = new Date(a.endTime).getTime();
+      if (Number.isNaN(aStart) || Number.isNaN(aEnd)) continue;
+      if (!(aStart < windowEnd && aEnd > windowStart)) continue;
+      const list = map.get(a.employeeId) ?? [];
+      list.push({ startTime: new Date(aStart), endTime: new Date(aEnd) });
+      map.set(a.employeeId, list);
+    }
+    return map;
+  }, [dateNZ, droppedHour, totalMinutes, staffAssignments, jobId]);
 
   const toggle = (id: string) => {
     setSelectedIds((prev) => {
@@ -105,6 +164,9 @@ export function QuickAssignDialog({
       employeeIds: Array.from(selectedIds),
       durationHours: hours,
       durationMinutes: minutes,
+      sendClientNotification,
+      sendProposalEmail,
+      scheduleBookingReminders,
     });
   };
 
@@ -115,7 +177,7 @@ export function QuickAssignDialog({
         if (!o && !isSubmitting) onCancel();
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Quick Assign</DialogTitle>
           {jobLabel ? (
@@ -152,10 +214,25 @@ export function QuickAssignDialog({
                 ) : (
                   activeEmployees.map((e) => {
                     const checked = selectedIds.has(e.id);
+                    const conflicts = busyEmployees.get(e.id);
+                    const isBusy = !!conflicts && conflicts.length > 0;
+                    const busyTooltip = isBusy
+                      ? `Already booked: ${conflicts
+                          .map((c) => {
+                            const s = utcToNZTime(c.startTime).time;
+                            const en = utcToNZTime(c.endTime).time;
+                            return `${formatTime12Hour(s)}–${formatTime12Hour(en)}`;
+                          })
+                          .join(", ")}`
+                      : undefined;
                     return (
                       <label
                         key={e.id}
-                        className="flex items-center gap-2 p-2 rounded-sm cursor-pointer"
+                        className={`flex items-center gap-2 p-2 rounded-sm cursor-pointer ${
+                          isBusy
+                            ? "bg-amber-50 border border-amber-200 dark:bg-amber-950 dark:border-amber-800"
+                            : ""
+                        }`}
                       >
                         <Checkbox
                           checked={checked}
@@ -163,6 +240,15 @@ export function QuickAssignDialog({
                         />
                         <span className="text-sm flex-1">
                           {e.firstName} {e.lastName}
+                          {isBusy && (
+                            <span
+                              className="ml-2 inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-300"
+                              title={busyTooltip}
+                              data-testid={`badge-qa-staff-busy-${e.id}`}
+                            >
+                              Busy
+                            </span>
+                          )}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {e.position}
@@ -217,6 +303,91 @@ export function QuickAssignDialog({
             <p className="text-xs text-muted-foreground mt-2">
               Starts {pad2(droppedHour)}:00 → ends {pad2(endH)}:{pad2(endM)}
             </p>
+          </div>
+
+          {/* Automation options — same set as the job-card Schedule modal. */}
+          <div className="flex items-center space-x-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md border border-blue-200 dark:border-blue-800">
+            <Checkbox
+              id="qa-client-notification"
+              checked={sendClientNotification}
+              onCheckedChange={(checked) =>
+                setSendClientNotification(checked === true)
+              }
+              data-testid="checkbox-qa-send-client-notification"
+            />
+            <label
+              htmlFor="qa-client-notification"
+              className="text-sm font-medium leading-none cursor-pointer select-none"
+            >
+              Send booking confirmation email to client with date and time
+            </label>
+          </div>
+
+          {/* Proposal Email Option — asks the customer to confirm the proposed date/time.
+              Uses the "Proposed Booking" template from Settings → Communication Templates
+              when present; falls back to a built-in message otherwise. */}
+          <div className="flex items-start space-x-2 p-3 bg-amber-50 dark:bg-amber-950 rounded-md border border-amber-200 dark:border-amber-800">
+            <Checkbox
+              id="qa-proposal-email"
+              checked={sendProposalEmail}
+              onCheckedChange={(checked) =>
+                setSendProposalEmail(checked === true)
+              }
+              data-testid="checkbox-qa-send-proposal-email"
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <label
+                htmlFor="qa-proposal-email"
+                className="text-sm font-medium leading-none cursor-pointer select-none"
+              >
+                Send proposal email asking client to confirm this date and time
+              </label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Uses the "Proposed Booking" template from{" "}
+                <Link
+                  href="/settings/templates"
+                  className="underline hover:text-foreground"
+                >
+                  Communication Templates
+                </Link>
+                . Variables: {"{firstName}"}, {"{scheduledDate}"},{" "}
+                {"{scheduledTime}"}, {"{jobAddress}"}, {"{jobNumber}"}.
+              </p>
+            </div>
+          </div>
+
+          {/* Booking reminders toggle — opts the job into the configured
+              reminder schedule (e.g. 24h before). Cadence and channel are
+              set in Settings → Booking Reminders. */}
+          <div className="flex items-start space-x-2 p-3 bg-emerald-50 dark:bg-emerald-950 rounded-md border border-emerald-200 dark:border-emerald-800">
+            <Checkbox
+              id="qa-schedule-booking-reminders"
+              checked={scheduleBookingReminders}
+              onCheckedChange={(checked) =>
+                setScheduleBookingReminders(checked === true)
+              }
+              data-testid="checkbox-qa-schedule-booking-reminders"
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <label
+                htmlFor="qa-schedule-booking-reminders"
+                className="text-sm font-medium leading-none cursor-pointer select-none"
+              >
+                Schedule automatic booking reminders for this job
+              </label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Sends email/SMS reminders at the offsets configured in{" "}
+                <Link
+                  href="/settings/booking-reminders"
+                  className="underline hover:text-foreground"
+                >
+                  Booking Reminder Settings
+                </Link>
+                . Reschedules automatically if the job date changes.
+              </p>
+            </div>
           </div>
         </div>
 
