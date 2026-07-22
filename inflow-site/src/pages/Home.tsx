@@ -1,6 +1,6 @@
+import { useState, useEffect } from "react";
 import { Section, Container } from "@/components/Container";
 import { LinkButton } from "@/components/Button";
-import Mockup from "@/components/Mockup";
 
 const featureHighlights = [
   {
@@ -18,6 +18,24 @@ const featureHighlights = [
     title: "JHAs, SWMS and toolbox talks — built in.",
     body: "Daily prestarts, hazard assessments, near-miss reporting, equipment inductions. Audit-ready, not after-thought.",
   },
+  {
+    eyebrow: "AI",
+    title: "AI that handles the busywork.",
+    body: "Speak or paste a message and get a draft quote. AI-drafted quote follow-ups. An in-app assistant for your business data — with an AI phone receptionist coming soon.",
+  },
+];
+
+// Real screenshots from the app — shown right up front so visitors see the
+// product, not a mockup.
+const galleryShots: { src: string; label: string }[] = [
+  { src: "/screenshots/dashboards-metrics.png", label: "Business dashboards" },
+  { src: "/screenshots/dispatch-board.png", label: "Dispatch board" },
+  { src: "/screenshots/call-recording.png", label: "Call history & recording" },
+  { src: "/screenshots/job-videos.jpg", label: "Job walkthrough videos" },
+  { src: "/screenshots/jha.png", label: "Safety — job hazard analysis" },
+  { src: "/screenshots/vehicle-inspections.png", label: "Vehicle & plant inspections" },
+  { src: "/screenshots/advanced-analytics.png", label: "Lead-source analytics" },
+  { src: "/screenshots/calendar-scheduling.png", label: "Scheduling calendar" },
 ];
 
 const metrics = [
@@ -27,6 +45,22 @@ const metrics = [
 ];
 
 export default function Home() {
+  const [lightbox, setLightbox] = useState<{ src: string; label: string } | null>(null);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(null);
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [lightbox]);
+
   return (
     <>
       {/* Hero */}
@@ -60,12 +94,37 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mt-14 w-full max-w-3xl">
-              <Mockup />
+            <div className="mt-14 w-full max-w-4xl relative">
+              <div className="absolute -inset-6 -z-10 bg-gradient-to-br from-lime/25 to-transparent rounded-3xl blur-2xl" />
+              <div className="rounded-2xl border border-ink-200 bg-paper shadow-lift overflow-hidden">
+                <div className="h-9 border-b border-ink-100 bg-ink-50 flex items-center gap-1.5 px-4">
+                  <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
+                </div>
+                <img
+                  src="/screenshots/dashboards-metrics.png"
+                  alt="Inflow business dashboard — revenue, jobs, quote win rate and margins at a glance"
+                  className="w-full h-auto block"
+                />
+              </div>
             </div>
           </div>
         </Container>
       </section>
+
+      {/* Founder note — who it's for */}
+      <Section className="pt-4 md:pt-8 pb-2 md:pb-4">
+        <div className="max-w-2xl mx-auto text-center">
+          <span className="eyebrow">From one trade to another</span>
+          <h2 className="heading-section text-3xl md:text-4xl mt-4">
+            Built on a real job book, not a whiteboard.
+          </h2>
+          <p className="mt-5 text-ink-500 text-lg leading-relaxed">
+            Everything you're about to see, I use every day to run and grow my own tree-care business. I built Inflow around the way trades actually work — so whether you're a plumber, sparky, drainlayer or builder, or anywhere in the home-service game, it should feel like it was made for you. Because it was.
+          </p>
+        </div>
+      </Section>
 
       {/* Metrics strip */}
       <section className="border-y border-ink-100 bg-paper">
@@ -81,6 +140,48 @@ export default function Home() {
         </Container>
       </section>
 
+      {/* Screenshot showcase */}
+      <Section className="pt-16 md:pt-24">
+        <div className="max-w-2xl mx-auto text-center">
+          <span className="eyebrow">See it in action</span>
+          <h2 className="heading-section text-4xl md:text-5xl mt-4">
+            The real app, not a mockup.
+          </h2>
+          <p className="mt-5 text-ink-500 text-lg leading-relaxed">
+            Actual screens from Inflow — the dashboard, the dispatch board, safety, calls and more.
+          </p>
+        </div>
+
+        <div className="mt-14 [column-gap:1.25rem] columns-1 sm:columns-2 lg:columns-3">
+          {galleryShots.map((s) => (
+            <button
+              key={s.src}
+              type="button"
+              onClick={() => setLightbox(s)}
+              className="group mb-5 block w-full break-inside-avoid text-left rounded-2xl border border-ink-100 bg-paper shadow-soft overflow-hidden transition hover:shadow-lift hover:border-ink-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-deep focus-visible:ring-offset-2"
+            >
+              <span className="relative block">
+                <img src={s.src} alt={s.label} className="w-full h-auto block" loading="lazy" />
+                <span className="absolute top-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink-900/70 text-paper opacity-0 group-hover:opacity-100 transition">
+                  <ExpandIcon />
+                </span>
+              </span>
+              <span className="flex items-center justify-between px-4 py-3 text-sm font-medium text-ink-600 border-t border-ink-100">
+                {s.label}
+                <span className="text-ink-400 group-hover:text-ink-700 transition-colors">Expand →</span>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-10 text-center">
+          <LinkButton href="/features" variant="ghost" className="border border-ink-200">
+            Explore all features
+            <span aria-hidden>→</span>
+          </LinkButton>
+        </div>
+      </Section>
+
       {/* Feature highlights */}
       <Section>
         <div className="max-w-2xl mx-auto text-center">
@@ -93,7 +194,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="mt-16 grid md:grid-cols-3 gap-6">
+        <div className="mt-16 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {featureHighlights.map((f) => (
             <div
               key={f.title}
@@ -185,6 +286,53 @@ export default function Home() {
           </div>
         </Container>
       </section>
+
+      {/* Screenshot lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={lightbox.label}
+        >
+          <div
+            className="absolute inset-0 bg-ink-900/75 backdrop-blur-sm"
+            onClick={() => setLightbox(null)}
+          />
+          <div className="relative w-full max-w-5xl">
+            <div className="flex items-center justify-between gap-4 mb-3">
+              <span className="text-paper text-sm font-medium">{lightbox.label}</span>
+              <button
+                type="button"
+                onClick={() => setLightbox(null)}
+                aria-label="Close"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-paper/10 text-paper hover:bg-paper/20 transition"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <img
+              src={lightbox.src}
+              alt={lightbox.label}
+              className="w-full h-auto max-h-[82vh] object-contain rounded-xl border border-ink-700 shadow-lift bg-paper"
+            />
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+function ExpandIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 3 21 3 21 9" />
+      <polyline points="9 21 3 21 3 15" />
+      <line x1="21" y1="3" x2="14" y2="10" />
+      <line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
   );
 }

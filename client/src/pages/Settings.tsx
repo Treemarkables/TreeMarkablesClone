@@ -394,6 +394,13 @@ const settingsSections: SettingSection[] = [
         description: "Set up and review any subscriber's account during onboarding",
         icon: Users,
         path: "/admin/subscribers"
+      },
+      {
+        id: "help-content",
+        title: "Help Content",
+        description: "Publish how-to videos and articles shown to every subscriber",
+        icon: BookOpen,
+        path: "/admin/help"
       }
     ]
   }
@@ -402,6 +409,7 @@ const settingsSections: SettingSection[] = [
 // Maps each setting to its 3D illustration in client/public/settings-icons/.
 // Kept separate from the option id so several settings can share an illustration.
 const SETTING_IMAGES: Record<string, string> = {
+  "help-content": "doc-templates",
   "voice-agent": "calls",
   "ai-knowledge": "preferences",
   company: "company",
@@ -452,6 +460,10 @@ export default function Settings() {
           if (option.id === "role-checklist-tasks" && !roleChecklistEnabled) return false;
           // Concierge subscriber management is platform-operator only (same allowlist).
           if (option.id === "subscribers" && !roleChecklistEnabled) return false;
+          // Global help-content authoring (/admin/help) — same operator gate. The
+          // server separately allowlists publishers (INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS),
+          // so other publisher tenants (e.g. the demo tenant) reach it by URL.
+          if (option.id === "help-content" && !roleChecklistEnabled) return false;
           if (!q) return true;
           return (
             option.title.toLowerCase().includes(q) ||

@@ -52,7 +52,7 @@ import {
   insertCommunicationSchema, updateCommunicationSchema,
   insertConversationSchema, updateConversationSchema,
   insertConversationMessageSchema, updateConversationMessageSchema,
-  insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, videoSearchSchema, gpsLocationSchema,
+  photoSearchSchema, videoSearchSchema, gpsLocationSchema,
   insertInvoiceSchema, insertInvoiceSectionSchema, updateInvoiceSectionSchema,
   insertServiceRequestSchema, insertCustomerAuthSchema,
   insertCommunicationPreferencesSchema,
@@ -2399,6 +2399,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               role: employee.role,
               phone: employee.phone,
               status: employee.status,
+              // Tenant discriminator — client-side tenant gating (e.g. the
+              // platform-operator Settings tiles) keys off this.
+              businessId: employee.businessId ?? null,
               permissions: Array.from(loginPermsSet),
               planKey: loginPlanKey,
               entitlements: loginEntitlements,
@@ -2466,6 +2469,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: employee.role,
           phone: employee.phone,
           status: employee.status,
+          // Tenant discriminator — client-side tenant gating (e.g. the
+          // platform-operator Settings tiles) keys off this.
+          businessId: employee.businessId ?? null,
           roleTierId: employee.roleTierId ?? null,
           roleTier: tier
             ? { id: tier.id, key: tier.key, name: tier.name, description: tier.description }
@@ -3924,6 +3930,140 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({ 
         success: false, 
         message: 'Sorry, there was an error processing your request. Please try again.' 
+      });
+    }
+  });
+
+  // Public mulch order (session-less, /mulch marketing page). Same conversation-first
+  // anti-spam posture as /api/contact (#317): the order lands in the Inbox as an open
+  // conversation — NO auto-created job card or customer record — and the operator
+  // converts it via "Create Job from Lead". Mounted under /api/public so the anonymous
+  // POST runs as owner, then self-scopes every write via runWithBusiness (same class
+  // as /api/invoices/:id/request-service).
+  app.post('/api/public/mulch-order', async (req: Request, res: Response) => {
+    try {
+      const { name, phone, email, address, accessNotes, qty, website } = req.body ?? {};
+
+      const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+
+      // Honeypot: hidden "website" field real users never see — fake success for bots.
+      if (typeof website === 'string' && website.trim() !== '') {
+        console.log(`[mulch-spam] Honeypot tripped by ${clientIp}`);
+        return res.json({ success: true });
+      }
+
+      // Shares the contact form's per-IP budget — same anonymous-visitor class.
+      const rlNow = Date.now();
+      const rlEntry = contactFormRateLimit.get(clientIp);
+      if (rlEntry && rlNow < rlEntry.resetTime) {
+        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
+          console.log(`[mulch-spam] Rate limit hit by ${clientIp}`);
+          return res.status(429).json({
+            success: false,
+            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
+          });
+        }
+        rlEntry.count++;
+      } else {
+        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
+      }
+
+      const trimmedName = typeof name === 'string' ? name.trim() : '';
+      const trimmedAddress = typeof address === 'string' ? address.trim() : '';
+      const cleanPhone = (typeof phone === 'string' ? phone : '').trim().replace(/[-\s]/g, '');
+      const lowerEmail = (typeof email === 'string' ? email : '').trim().toLowerCase();
+      const quantity = Math.round(Number(qty));
+
+      if (!trimmedName || !trimmedAddress || (!cleanPhone && !lowerEmail)
+          || !Number.isFinite(quantity) || quantity < 4 || quantity > 50) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide your name, delivery address, a phone or email, and a quantity between 4 and 50 m³.'
+        });
+      }
+
+      // Server-side pricing — never trust client-computed totals.
+      const MULCH_PRICE_PER_M3 = 35;
+      const MULCH_DELIVERY_FEE = 80;
+      const mulchCost = quantity * MULCH_PRICE_PER_M3;
+      const orderGst = (mulchCost + MULCH_DELIVERY_FEE) * 0.15;
+      const orderTotal = mulchCost + MULCH_DELIVERY_FEE + orderGst;
+      const fmtNzd = (n: number) => `$${n.toFixed(2)}`;
+
+      // Resolve the owning tenant the same way /api/contact does: the canonical
+      // settings row (the marketing site's tenant).
+      let mulchBusinessId: string | undefined;
+      try {
+        mulchBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+      } catch (bizErr) {
+        console.error('[mulch-order] Failed to resolve business for tenant stamping:', bizErr);
+      }
+
+      let conversationId: string | undefined;
+      await runWithBusiness(mulchBusinessId, async () => {
+        // Link a matching existing customer, but only when the submitted name
+        // plausibly matches the record — shared/imported numbers must not file a
+        // new order under someone else's name (same guard as /api/contact).
+        let customer: any;
+        try {
+          let matched: any;
+          if (cleanPhone) matched = await storage.findCustomerByPhone(cleanPhone);
+          if (!matched && lowerEmail) matched = await storage.findCustomerByEmail(lowerEmail);
+          const na = trimmedName.toLowerCase().replace(/\s+/g, ' ');
+          const nb = (matched?.name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+          if (matched && na && nb && (na === nb || na.includes(nb) || nb.includes(na))) {
+            customer = matched;
+          }
+        } catch (custErr) {
+          console.error('[mulch-order] Customer match failed:', custErr);
+        }
+
+        const conversation = await storage.createConversation({
+          customerId: customer?.id,
+          title: `Mulch order: ${quantity} m³ Aged Mulch — ${trimmedName}`,
+          status: 'open',
+          priority: 'high',
+          source: 'web_form',
+          tags: ['mulch-order', 'website'],
+        });
+        conversationId = conversation.id;
+
+        const orderMessage = [
+          'Mulch order via website',
+          '',
+          `Name: ${trimmedName}`,
+          `Phone: ${cleanPhone || 'Not provided'}`,
+          `Email: ${lowerEmail || 'Not provided'}`,
+          `Delivery address: ${trimmedAddress}`,
+          typeof accessNotes === 'string' && accessNotes.trim() ? `Access notes: ${accessNotes.trim()}` : null,
+          '',
+          `Quantity: ${quantity} m³ Aged Mulch @ $${MULCH_PRICE_PER_M3}/m³ ex GST`,
+          `Mulch: ${fmtNzd(mulchCost)}`,
+          `Delivery: ${fmtNzd(MULCH_DELIVERY_FEE)}`,
+          `GST (15%): ${fmtNzd(orderGst)}`,
+          `Total (incl. GST): ${fmtNzd(orderTotal)}`,
+        ].filter((line) => line !== null).join('\n');
+
+        await storage.createConversationMessage({
+          conversationId: conversation.id,
+          type: 'message',
+          content: orderMessage,
+          direction: 'inbound',
+          fromName: trimmedName,
+          fromContact: lowerEmail || cleanPhone,
+          platform: 'web_form',
+        });
+
+        await notificationHelper.createConversationNotification(conversation);
+      });
+
+      console.log(`[mulch-order] Order received: ${quantity} m³ from ${trimmedName} → conversation ${conversationId}`);
+      res.json({ success: true, conversationId });
+    } catch (error) {
+      console.error('[mulch-order] Error processing mulch order:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Sorry, something went wrong. Please try again or call us.'
       });
     }
   });
@@ -8439,33 +8579,110 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   }
 
   // ---- Loom-style auto-captions -------------------------------------------
+  // Readability guardrails. Whisper segments continuous speech poorly — with
+  // no pauses to break on it can return the ENTIRE transcript as one segment,
+  // which (pre-guard) became a single cue blanketing the whole video. Any
+  // segment over these limits gets re-chunked before rendering.
+  const MAX_CUE_SECONDS = 10;
+  const MAX_CUE_CHARS = 200;
+  const TARGET_CUE_CHARS = 84; // ~two 42-char caption lines
+
+  type CaptionCue = { start: number; end: number; text: string };
+
   // Format a seconds value as a WebVTT timestamp: HH:MM:SS.mmm.
   function secondsToVttTimestamp(totalSeconds: number): string {
     const safe = Number.isFinite(totalSeconds) && totalSeconds > 0 ? totalSeconds : 0;
-    const hours = Math.floor(safe / 3600);
-    const minutes = Math.floor((safe % 3600) / 60);
-    const seconds = Math.floor(safe % 60);
-    const millis = Math.round((safe - Math.floor(safe)) * 1000);
+    // Work in whole ms so 1.9996s carries to 00:00:02.000, not the invalid .1000.
+    const totalMs = Math.round(safe * 1000);
+    const hours = Math.floor(totalMs / 3600000);
+    const minutes = Math.floor((totalMs % 3600000) / 60000);
+    const seconds = Math.floor((totalMs % 60000) / 1000);
+    const millis = totalMs % 1000;
     const pad = (n: number, width = 2) => String(n).padStart(width, '0');
     return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(millis, 3)}`;
   }
 
-  // Build a WebVTT document from Whisper verbose_json segments. Each segment
-  // becomes one cue; we drop empty/whitespace-only text and clamp end>start so
-  // the browser's <track> parser never rejects the file.
-  function segmentsToVtt(segments: Array<{ start: number; end: number; text: string }>): string {
-    const cues: string[] = ['WEBVTT', ''];
-    for (const seg of segments) {
-      const text = (seg.text || '').trim();
+  // Regroup Whisper word timestamps into readable cues: break when a cue
+  // would overflow the length/duration caps, on a silence gap, or after a
+  // sentence once the cue is long enough to be worth its own screen time.
+  function buildCuesFromWords(
+    words: Array<{ start?: number; end?: number; word?: string }>,
+  ): CaptionCue[] {
+    const cues: CaptionCue[] = [];
+    let current: { start: number; end: number; parts: string[]; chars: number } | null = null;
+    const flush = () => {
+      if (current && current.parts.length) {
+        cues.push({ start: current.start, end: current.end, text: current.parts.join(' ') });
+      }
+      current = null;
+    };
+    for (const w of words) {
+      const text = (w.word || '').trim();
       if (!text) continue;
-      const start = seg.start ?? 0;
-      let end = seg.end ?? start;
-      if (end <= start) end = start + 0.5; // guard against zero/negative-length cues
-      cues.push(`${secondsToVttTimestamp(start)} --> ${secondsToVttTimestamp(end)}`);
-      cues.push(text);
-      cues.push('');
+      const start = typeof w.start === 'number' ? w.start : current?.end ?? 0;
+      const end = typeof w.end === 'number' && w.end > start ? w.end : start;
+      if (current) {
+        const wouldOverflow =
+          current.chars + 1 + text.length > TARGET_CUE_CHARS ||
+          end - current.start > MAX_CUE_SECONDS;
+        const silenceGap = start - current.end > 2;
+        const sentenceDone =
+          /[.!?]$/.test(current.parts[current.parts.length - 1] || '') && current.chars >= 40;
+        if (wouldOverflow || silenceGap || sentenceDone) flush();
+      }
+      if (!current) current = { start, end, parts: [], chars: 0 };
+      current.parts.push(text);
+      current.chars += (current.parts.length > 1 ? 1 : 0) + text.length;
+      current.end = Math.max(current.end, end);
     }
-    return cues.join('\n');
+    flush();
+    return cues;
+  }
+
+  // Fallback when word timestamps are unavailable: cut the oversized segment's
+  // text on word boundaries and spread its time span across the chunks
+  // proportional to their length. Approximate timing, but readable.
+  function splitSegmentIntoCues(seg: CaptionCue): CaptionCue[] {
+    const duration = Math.max(seg.end - seg.start, 0);
+    const chunks: string[] = [];
+    let buf = '';
+    for (const word of seg.text.split(/\s+/).filter(Boolean)) {
+      const candidate = buf ? `${buf} ${word}` : word;
+      if (buf && (candidate.length > TARGET_CUE_CHARS || (/[.!?]$/.test(buf) && buf.length >= 40))) {
+        chunks.push(buf);
+        buf = word;
+      } else {
+        buf = candidate;
+      }
+    }
+    if (buf) chunks.push(buf);
+    const totalChars = chunks.reduce((n, c) => n + c.length, 0) || 1;
+    let cursor = seg.start;
+    return chunks.map((text, i) => {
+      const start = cursor;
+      const end = i === chunks.length - 1 ? seg.end : cursor + duration * (text.length / totalChars);
+      cursor = end;
+      return { start, end, text };
+    });
+  }
+
+  // Build a WebVTT document from caption cues. Drops empty/whitespace-only
+  // text, clamps end>start so the browser's <track> parser never rejects the
+  // file, and caps on-screen time per cue so no single cue blankets playback.
+  function cuesToVtt(cueList: CaptionCue[]): string {
+    const lines: string[] = ['WEBVTT', ''];
+    for (const cue of cueList) {
+      const text = (cue.text || '').trim();
+      if (!text) continue;
+      const start = cue.start ?? 0;
+      let end = cue.end ?? start;
+      if (end <= start) end = start + 0.5; // guard against zero/negative-length cues
+      if (end - start > MAX_CUE_SECONDS) end = start + MAX_CUE_SECONDS;
+      lines.push(`${secondsToVttTimestamp(start)} --> ${secondsToVttTimestamp(end)}`);
+      lines.push(text);
+      lines.push('');
+    }
+    return lines.join('\n');
   }
 
   // Fire-and-forget caption generation, mirroring generateVideoThumbnail:
@@ -8500,19 +8717,23 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       await extractAudio(videoTmpPath, audioTmpPath);
 
       // verbose_json + segment granularity gives us timed cues (plain 'text'
-      // would lose the timestamps captions need). Same domain bias prompt as
-      // the quote-gen pass so NZ species aren't mangled in the captions.
+      // would lose the timestamps captions need). Word granularity is the
+      // repair kit: when Whisper collapses continuous speech into one giant
+      // segment, word timestamps let us re-cut it accurately. Same domain
+      // bias prompt as the quote-gen pass so NZ species aren't mangled.
       const transcription: any = await openai.audio.transcriptions.create({
         file: fs.createReadStream(audioTmpPath),
         model: 'whisper-1',
         language: 'en',
         prompt: buildWhisperBias((await storage.getBusinessSettingsForBusiness(video.businessId))?.tradeVocabulary),
         response_format: 'verbose_json',
-        timestamp_granularities: ['segment'],
+        timestamp_granularities: ['segment', 'word'],
       });
 
       const segments: Array<{ start: number; end: number; text: string }> =
         Array.isArray(transcription?.segments) ? transcription.segments : [];
+      const words: Array<{ start?: number; end?: number; word?: string }> =
+        Array.isArray(transcription?.words) ? transcription.words : [];
       if (segments.length === 0) {
         await storage.updateVideo(videoId, {
           captionsStatus: 'error',
@@ -8521,13 +8742,51 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         return;
       }
 
-      const vtt = segmentsToVtt(segments);
+      // Normal segments pass through untouched; oversized ones get re-cut
+      // from their word timestamps (or split proportionally without them).
+      const cues: CaptionCue[] = [];
+      for (const seg of segments) {
+        const text = (seg.text || '').trim();
+        if (!text) continue;
+        const start = seg.start ?? 0;
+        const end = Math.max(seg.end ?? start, start);
+        if (end - start <= MAX_CUE_SECONDS && text.length <= MAX_CUE_CHARS) {
+          cues.push({ start, end, text });
+          continue;
+        }
+        const segWords = words.filter(
+          (w) => typeof w.start === 'number' && w.start >= start - 0.1 && w.start <= end + 0.1,
+        );
+        cues.push(
+          ...(segWords.length > 1 ? buildCuesFromWords(segWords) : splitSegmentIntoCues({ start, end, text })),
+        );
+      }
+
+      if (cues.length === 0) {
+        await storage.updateVideo(videoId, {
+          captionsStatus: 'error',
+          captionsError: 'No speech detected in video',
+        });
+        return;
+      }
+      // Still over the char cap after splitting means an unsplittable blob
+      // (no spaces or usable timestamps) — record an error rather than
+      // storing a wall of text the players would pin over the whole video.
+      if (cues.some((c) => c.text.length > MAX_CUE_CHARS)) {
+        await storage.updateVideo(videoId, {
+          captionsStatus: 'error',
+          captionsError: 'Transcript could not be split into readable captions',
+        });
+        return;
+      }
+
+      const vtt = cuesToVtt(cues);
       await storage.updateVideo(videoId, {
         captionsVtt: vtt,
         captionsStatus: 'ready',
         captionsError: null,
       });
-      console.log(`💬 Video captions generated: ${videoId} (${segments.length} cues)`);
+      console.log(`💬 Video captions generated: ${videoId} (${cues.length} cues)`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Caption generation failed';
       console.warn(`Could not generate captions for video ${videoId}:`, err);
@@ -8589,6 +8848,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       const video = await storage.getVideo(req.params.id);
       if (!video) {
         return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      // Regenerating captions on a global knowledge video rewrites shared
+      // platform content (and bills Whisper) — gate to publishers, same as
+      // PATCH/DELETE /api/videos/:id.
+      if (video.kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
       }
       // Clear so generateVideoCaptions doesn't short-circuit on a ready/cached row.
       await storage.updateVideo(req.params.id, {
@@ -9009,6 +9274,13 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         return res.status(404).json({ success: false, message: 'Video not found' });
       }
 
+      // Transcribing a global knowledge video persists transcript/description
+      // onto shared platform content — gate to publishers, same as
+      // PATCH/DELETE /api/videos/:id.
+      if (video.kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
+      }
+
       // Idempotent fast-path: if we've already transcribed this video, return the
       // cached result instead of re-billing OpenAI on every retry/refresh.
       // Skipped when ?force=1.
@@ -9177,7 +9449,9 @@ Return only the cleaned job description.`;
 
   // Help articles (subscriber-facing /help page). See INFLOW_HELP_PLAN.md.
   // GET routes are subscriber-readable (no auth gate here, matching the videos
-  // pattern); POST/PATCH/DELETE are owner-only via requireAdmin.
+  // pattern). Articles are GLOBAL platform content shown to every subscriber,
+  // so writes need more than requireAdmin (that's any tenant's admin) — they
+  // are also gated to the content-publisher allowlist, same as knowledge videos.
 
   // List articles, grouped by category. Subscribers see published only;
   // admins (via ?includeUnpublished=true) can see drafts for the authoring UI.
@@ -9229,6 +9503,9 @@ Return only the cleaned job description.`;
 
   app.post('/api/help/articles', requireAdmin, async (req: Request, res: Response) => {
     try {
+      if (!isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage help articles.' });
+      }
       const parsed = schema.insertHelpArticleSchema.parse(req.body);
       const article = await storage.createHelpArticle(parsed);
       res.json({ success: true, data: article });
@@ -9240,6 +9517,9 @@ Return only the cleaned job description.`;
 
   app.patch('/api/help/articles/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
+      if (!isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage help articles.' });
+      }
       const parsed = schema.updateHelpArticleSchema.parse(req.body);
       const article = await storage.updateHelpArticle(req.params.id, parsed);
       res.json({ success: true, data: article });
@@ -9251,6 +9531,9 @@ Return only the cleaned job description.`;
 
   app.delete('/api/help/articles/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
+      if (!isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage help articles.' });
+      }
       await storage.deleteHelpArticle(req.params.id);
       res.json({ success: true });
     } catch (error) {
@@ -17028,148 +17311,6 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // ENHANCED PHOTO MANAGEMENT API ENDPOINTS
   // ========================================
 
-  // Enhanced photo upload with metadata and GPS
-  app.post('/api/photos/upload', imageUpload.array('photos', 10), async (req: Request, res: Response) => {
-    try {
-      const uploadData = photoUploadSchema.parse(req.body);
-      
-      if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
-        return res.status(400).json({ success: false, message: 'No photos provided' });
-      }
-
-      const uploadedPhotos = [];
-      const timestamp = Date.now();
-
-      for (let i = 0; i < req.files.length; i++) {
-        const file = req.files[i] as Express.Multer.File;
-        const fileExtension = path.extname(file.originalname);
-        const newFileName = `${uploadData.jobId || uploadData.customerId || 'general'}_${uploadData.type}_${timestamp}_${i}${fileExtension}`;
-        const newPath = path.join(photosDir, newFileName);
-        
-        // Move file to permanent location
-        fs.renameSync(file.path, newPath);
-        
-        // Create photo record in database
-        const photoData = {
-          ...uploadData,
-          url: `/photos/${newFileName}`,
-          filename: newFileName,
-          originalName: file.originalname,
-          mimeType: file.mimetype,
-          fileSize: file.size,
-          capturedAt: new Date(),
-          sequenceOrder: i,
-          isPublic: true,  // Make photos public by default so they appear in listings
-          isFeatured: false,  // Can be updated later
-        };
-
-        // Add GPS data if provided
-        if (req.body.gpsLatitude && req.body.gpsLongitude) {
-          photoData.gpsLatitude = parseFloat(req.body.gpsLatitude);
-          photoData.gpsLongitude = parseFloat(req.body.gpsLongitude);
-          photoData.gpsAccuracy = req.body.gpsAccuracy ? parseFloat(req.body.gpsAccuracy) : null;
-          photoData.gpsAddress = req.body.gpsAddress || null;
-        }
-
-        const photo = await storage.createPhoto(photoData);
-        uploadedPhotos.push(photo);
-        console.log(`Created photo with ID: ${photo.id}, isPublic: ${photo.isPublic}, jobId: ${photo.jobId}`);
-      }
-
-      res.json({
-        success: true,
-        message: `Successfully uploaded ${uploadedPhotos.length} photos`,
-        photos: uploadedPhotos
-      });
-    } catch (error) {
-      // Clean up uploaded files on error
-      if (req.files && Array.isArray(req.files)) {
-        req.files.forEach((file: any) => {
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-          }
-        });
-      }
-      
-      console.error('Error uploading photos:', error);
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : 'Error uploading photos',
-      });
-    }
-  });
-
-  // Get public/featured photos (MUST come before :photoId route)
-  app.get('/api/photos/public', async (req: Request, res: Response) => {
-    try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
-      const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
-      
-      const photos = await storage.getPublicPhotos(limit, offset);
-      console.log(`Retrieved ${photos.length} public photos`);
-      res.json({ success: true, photos });
-    } catch (error) {
-      console.error('Error retrieving public photos:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving public photos',
-      });
-    }
-  });
-
-  // Get featured photos
-  app.get('/api/photos/featured', async (req: Request, res: Response) => {
-    try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-      const photos = await storage.getFeaturedPhotos(limit);
-      console.log(`Retrieved ${photos.length} featured photos`);
-      res.json({ success: true, photos });
-    } catch (error) {
-      console.error('Error retrieving featured photos:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving featured photos',
-      });
-    }
-  });
-
-  // Get photo by ID (MUST come after specific routes)
-  app.get('/api/photos/:photoId', async (req: Request, res: Response) => {
-    try {
-      const { photoId } = req.params;
-      const photo = await storage.getPhoto(photoId);
-      
-      if (!photo) {
-        return res.status(404).json({ success: false, message: 'Photo not found' });
-      }
-
-      res.json({ success: true, photo });
-    } catch (error) {
-      console.error('Error retrieving photo:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving photo',
-      });
-    }
-  });
-
-  // Update photo metadata
-  app.patch('/api/photos/:photoId', async (req: Request, res: Response) => {
-    try {
-      const { photoId } = req.params;
-      const updates = updatePhotoSchema.parse(req.body);
-
-      const photo = await storage.updatePhoto(photoId, updates);
-      res.json({ success: true, photo });
-    } catch (error) {
-      console.error('Error updating photo:', error);
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : 'Error updating photo',
-      });
-    }
-  });
-
   // ── Photo annotations (CompanyCam-style markup) ─────────────────────────
   // Keyed by the served photo URL, not photos.id — most photos in this app
   // live as URL strings on jobs.beforePhotos / jobDiaryEntries.photos[] /
@@ -17374,86 +17515,6 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       });
     }
   });
-
-  // Delete photo
-  app.delete('/api/photos/:photoId', async (req: Request, res: Response) => {
-    try {
-      const { photoId } = req.params;
-      const photo = await storage.getPhoto(photoId);
-      
-      if (!photo) {
-        return res.status(404).json({ success: false, message: 'Photo not found' });
-      }
-
-      // Delete physical file
-      try {
-        const fileName = path.basename(photo.url);
-        const filePath = path.join(photosDir, fileName);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      } catch (fileError) {
-        console.warn('Could not delete physical file:', fileError);
-      }
-
-      await storage.deletePhoto(photoId);
-      res.json({ success: true, message: 'Photo deleted successfully' });
-    } catch (error) {
-      console.error('Error deleting photo:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error deleting photo',
-      });
-    }
-  });
-
-  // Get photos by job with filters
-  app.get('/api/jobs/:jobId/photos/enhanced', async (req: Request, res: Response) => {
-    try {
-      const { jobId } = req.params;
-      const { type, category } = req.query as { type?: string; category?: string };
-      
-      const photos = await storage.getPhotosByJob(jobId, { type, category });
-      res.json({ success: true, photos });
-    } catch (error) {
-      console.error('Error retrieving job photos:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving job photos',
-      });
-    }
-  });
-
-  // Get customer photos
-  app.get('/api/customers/:customerId/photos', async (req: Request, res: Response) => {
-    try {
-      const { customerId } = req.params;
-      const photos = await storage.getPhotosByCustomer(customerId);
-      res.json({ success: true, photos });
-    } catch (error) {
-      console.error('Error retrieving customer photos:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving customer photos',
-      });
-    }
-  });
-
-  // Get before/after photo pairs
-  app.get('/api/jobs/:jobId/before-after-pairs', async (req: Request, res: Response) => {
-    try {
-      const { jobId } = req.params;
-      const pairs = await storage.getBeforeAfterPairs(jobId);
-      res.json({ success: true, pairs });
-    } catch (error) {
-      console.error('Error retrieving before/after pairs:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving before/after pairs',
-      });
-    }
-  });
-
 
   // Search photos with advanced filters
   app.post('/api/photos/search', async (req: Request, res: Response) => {
@@ -23195,6 +23256,7 @@ Transcription: ${transcriptText}`;
                 title: `Email Reply — ${actualFromName || actualFromEmail}`,
                 body: previewText,
                 clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
+                collapseId: `email-reply-${diaryEntry?.id || job.id}`,
                 data: { type: 'email_reply', jobId: job.id, jobNumber: String(job.jobNumber) },
               });
             } catch (pushErr) {
@@ -23313,6 +23375,7 @@ Transcription: ${transcriptText}`;
                   title: `Email Reply — ${actualFromName || actualFromEmail}`,
                   body: previewText,
                   clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
+                  collapseId: `email-reply-${diaryEntry?.id || job.id}`,
                   data: { type: 'email_reply', jobId: job.id, jobNumber: String(job.jobNumber) },
                 });
               } catch (pushErr) {
@@ -23622,10 +23685,31 @@ Transcription: ${transcriptText}`;
       // If no job found, create/update conversation (original behavior)
       if (!jobFound) {
         console.log(`💬 No job reference found - checking for existing conversation`);
+
+        // Reference-less email: nothing above resolved a tenant, so without a
+        // context these writes take the business_id column DEFAULT (the legacy
+        // tenant) and the conversation match + admin push run cross-tenant.
+        // Resolve the owning tenant from the recipient address(es) via
+        // tenant_channels (same as the Gmail-poller fallback). Unresolved →
+        // undefined → behaviour identical to before.
+        const recipientAddresses: string[] =
+          (typeof to === 'string' ? to.match(/[\w.+'-]+@[\w.-]+\.\w+/g) : null) ?? [];
+        let channelBusinessId: string | undefined;
+        for (const addr of recipientAddresses) {
+          channelBusinessId = await resolveBusinessIdByChannel('email', addr);
+          if (channelBusinessId) break;
+        }
+        if (channelBusinessId) {
+          console.log(`📧 Reference-less email scoped to tenant ${channelBusinessId} via recipient channel`);
+        } else if (recipientAddresses.length > 0) {
+          console.warn(`📧 Reference-less email recipient(s) not in tenant_channels (${recipientAddresses.join(', ')}) — falling back to default-tenant behaviour`);
+        }
+
+        await runWithBusiness(channelBusinessId, async () => {
         // Check if conversation exists for this email contact
         let conversation = await notificationHelper.findExistingOpenConversation(actualFromEmail);
         const isNewConversation = !conversation;
-        
+
         if (!conversation) {
           // Create new conversation
           conversation = await storage.createConversation({
@@ -23636,7 +23720,7 @@ Transcription: ${transcriptText}`;
             lastMessageBy: 'customer',
             lastMessageAt: new Date()
           });
-          
+
           // Create notification bell entry for new email conversation
           await notificationHelper.createConversationNotification(conversation);
           console.log(`✅ Created new conversation for email from ${actualFromEmail}: ${conversation.id}`);
@@ -23648,7 +23732,7 @@ Transcription: ${transcriptText}`;
             inboundMessageId || undefined,
           );
         }
-        
+
         // Create message in conversation
         await storage.createConversationMessage({
           conversationId: conversation.id,
@@ -23661,7 +23745,7 @@ Transcription: ${transcriptText}`;
           platform: 'email',
           isRead: false
         });
-        
+
         // Update conversation
         await storage.updateConversation(conversation.id, {
           lastMessageAt: new Date(),
@@ -23681,6 +23765,7 @@ Transcription: ${transcriptText}`;
         };
         await storage.createNotification(notificationData);
         console.log(`🔔 Notification created for conversation ${conversation.id}`);
+        }); // runWithBusiness(channelBusinessId) — scope reference-less email writes + push targeting
       }
       
       res.json({ success: true, message: 'Email received and processed' });
@@ -31721,6 +31806,11 @@ Transcription: ${transcriptText}`;
       if (!token) {
         return res.status(400).json({ success: false, message: 'Token is required' });
       }
+      // deviceInfo arrives as a string from the Capacitor bridge ('iOS
+      // Capacitor') but as a {userAgent, platform} object from the browser
+      // preferences page — normalize before storing in the text column.
+      const deviceInfoStr: string | null =
+        typeof deviceInfo === 'string' ? deviceInfo : deviceInfo ? JSON.stringify(deviceInfo) : null;
 
       // Check if token already exists
       const existingToken = await storage.getFcmTokenByToken(token);
@@ -31739,6 +31829,9 @@ Transcription: ${transcriptText}`;
             await storage.updateFcmToken(existingToken.id, { isActive: true });
           }
         }
+        if ((deviceInfoStr || '').startsWith('iOS')) {
+          await deactivateOlderIosAppTokens(employeeId, token, existingToken.createdAt ? new Date(existingToken.createdAt) : null);
+        }
         return res.json({ success: true, message: 'Token registered' });
       }
 
@@ -31746,9 +31839,16 @@ Transcription: ${transcriptText}`;
       await storage.createFcmToken({
         employeeId,
         token,
-        deviceInfo: deviceInfo || null,
+        deviceInfo: deviceInfoStr,
         isActive: true
       });
+      // The bridged-native path registers here with deviceInfo 'iOS Capacitor'
+      // — apply the same one-device-one-token retirement the native endpoint
+      // does, or every reinstall leaves another live token behind (seen in
+      // prod: one employee at 8 tokens, 5 of them dead-but-erroring).
+      if ((deviceInfoStr || '').startsWith('iOS')) {
+        await deactivateOlderIosAppTokens(employeeId, token, null);
+      }
 
       // Create default notification preferences if they don't exist
       const existingPrefs = await storage.getNotificationPreferences(employeeId);
@@ -31770,22 +31870,23 @@ Transcription: ${transcriptText}`;
   // the old ones keep delivering through APNs until Apple notices the
   // uninstall, so an employee accumulates active tokens and every push fans
   // out N times to the same phone (seen as triple "rescheduled" alerts after
-  // the June-11 delete-and-reinstall cycle). Whenever a native token checks
-  // in, retire any OLDER active native tokens for that employee — the app
-  // re-registers its current token on every launch, so a genuinely live
-  // second device reactivates itself the next time it's opened.
-  async function deactivateOlderNativeTokens(employeeId: string, currentToken: string, currentCreatedAt: Date | null) {
+  // the June-11 delete-and-reinstall cycle). Whenever an iOS app token checks
+  // in — via the native Swift endpoint ('iOS Native …') OR the web bridge
+  // path ('iOS Capacitor') — retire any OLDER active iOS tokens for that
+  // employee. The app re-registers its current token on every launch, so a
+  // genuinely live second device reactivates itself the next time it's opened.
+  async function deactivateOlderIosAppTokens(employeeId: string, currentToken: string, currentCreatedAt: Date | null) {
     try {
       const activeTokens = await storage.getActiveFcmTokens(employeeId);
       for (const t of activeTokens) {
         if (t.token === currentToken) continue;
-        if (!(t.deviceInfo || '').startsWith('iOS Native')) continue;
+        if (!(t.deviceInfo || '').startsWith('iOS')) continue;
         if (currentCreatedAt && t.createdAt && new Date(t.createdAt) >= currentCreatedAt) continue;
         await storage.updateFcmToken(t.id, { isActive: false });
-        console.log(`🧹 Deactivated older native FCM token ${t.token.substring(0, 12)}… for employee ${employeeId}`);
+        console.log(`🧹 Deactivated older iOS FCM token ${t.token.substring(0, 12)}… for employee ${employeeId}`);
       }
     } catch (err) {
-      console.error('Error deactivating older native FCM tokens:', err);
+      console.error('Error deactivating older iOS FCM tokens:', err);
     }
   }
 
@@ -31817,7 +31918,7 @@ Transcription: ${transcriptText}`;
         if (!existingToken.isActive) {
           await storage.updateFcmToken(existingToken.id, { isActive: true });
         }
-        await deactivateOlderNativeTokens(employeeId, token, existingToken.createdAt ? new Date(existingToken.createdAt) : null);
+        await deactivateOlderIosAppTokens(employeeId, token, existingToken.createdAt ? new Date(existingToken.createdAt) : null);
         console.log(`✅ Native FCM token already registered for employee ${employeeId}`);
         return res.json({ success: true, message: 'Token already registered' });
       }
@@ -31831,7 +31932,7 @@ Transcription: ${transcriptText}`;
       });
       // A brand-new token means this device just (re)installed — every other
       // active native token for this employee predates it.
-      await deactivateOlderNativeTokens(employeeId, token, null);
+      await deactivateOlderIosAppTokens(employeeId, token, null);
 
       // Create default notification preferences if they don't exist
       const existingPrefs = await storage.getNotificationPreferences(employeeId);

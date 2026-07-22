@@ -8,4 +8,5 @@
   <url><loc>https://inflowapp.co.nz/support</loc><priority>0.5</priority></url>
   <url><loc>https://inflowapp.co.nz/privacy</loc><priority>0.3</priority></url>
   <url><loc>https://inflowapp.co.nz/terms</loc><priority>0.3</priority></url>
+  <url><loc>https://inflowapp.co.nz/security</loc><priority>0.4</priority></url>
 </urlset>

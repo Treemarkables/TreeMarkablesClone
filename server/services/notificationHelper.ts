@@ -34,15 +34,38 @@ export async function notifyEmployee(employeeId: string, options: NotificationOp
     
     // Send to all active devices
     let successCount = 0;
+    const outcomes: { record: (typeof tokens)[number]; ok: boolean; errorCode?: string }[] = [];
     for (const tokenRecord of tokens) {
-      const sent = await firebaseMessagingService.sendToDevice(tokenRecord.token, options, tokenRecord.deviceInfo || undefined);
-      if (sent) {
+      const result = await firebaseMessagingService.sendToDeviceDetailed(tokenRecord.token, options, tokenRecord.deviceInfo || undefined);
+      outcomes.push({ record: tokenRecord, ok: result.ok, errorCode: result.errorCode });
+      if (result.ok) {
         successCount++;
         // Mark token as recently used
         await storage.markFcmTokenAsUsed(tokenRecord.token);
       }
     }
-    
+
+    // third-party-auth-error normally means a broken push-gateway credential
+    // (APNs key / Web Push cert), so sendToDevice never deactivates on it. But
+    // when a SIBLING token of the same platform class delivered in this very
+    // batch, the credential is provably fine — the failing token is a zombie
+    // from an old install that will reject on every future push (seen in prod:
+    // 5 of one employee's 8 iOS tokens erroring on every send, forever).
+    // Retire those so the noise and wasted sends stop.
+    const platformClass = (deviceInfo: string | null | undefined) =>
+      (deviceInfo || '').startsWith('iOS') ? 'apns' : 'web';
+    const okClasses = new Set(outcomes.filter(o => o.ok).map(o => platformClass(o.record.deviceInfo)));
+    for (const o of outcomes) {
+      if (o.ok || o.errorCode !== 'messaging/third-party-auth-error') continue;
+      if (!okClasses.has(platformClass(o.record.deviceInfo))) continue;
+      try {
+        await storage.updateFcmToken(o.record.id, { isActive: false });
+        console.log(`🧹 Deactivated zombie FCM token …${o.record.token.slice(-8)} (auth-error while sibling ${platformClass(o.record.deviceInfo)} token delivered) for employee ${employeeId}`);
+      } catch (cleanupErr) {
+        console.error('Error deactivating zombie FCM token:', cleanupErr);
+      }
+    }
+
     console.log(`✅ Notification sent to ${successCount}/${tokens.length} devices for employee ${employeeId}`);
     return successCount > 0;
   } catch (error) {
@@ -301,6 +324,7 @@ export async function notifyCustomerSmsReply(customerName: string, messageBody: 
       title,
       body,
       clickAction: '/inbox',
+      collapseId: `sms-reply-${jobNumber || customerName}`,
       data: { type: 'sms_reply', customerName, jobNumber: jobNumber || '' },
     });
   } catch (error) {
@@ -372,6 +396,7 @@ export async function createConversationNotification(conversation: {
       title: `New ${sourceLabel} Inquiry`,
       body: conversation.title || 'New customer inquiry received',
       clickAction,
+      collapseId: `new-conv-${conversation.id}`,
       data: {
         type: 'new_conversation',
         conversationId: conversation.id,
@@ -439,6 +464,7 @@ export async function createNewLeadNotification(params: {
       title: `New ${params.sourceLabel} lead`,
       body: pushBody,
       clickAction,
+      collapseId: `new-lead-${params.jobId}`,
       data: {
         type: 'new_lead',
         jobId: params.jobId,
@@ -584,6 +610,7 @@ export async function notifyConversationReply(conversation: {
       title: `${sourceLabel} Reply — ${senderName}`,
       body: bodyText,
       clickAction,
+      collapseId: messageId ? `conv-reply-${messageId}` : `conv-reply-${conversation.id}`,
       data: {
         type: 'conversation_reply',
         conversationId: conversation.id,

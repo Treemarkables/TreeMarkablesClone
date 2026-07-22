@@ -72,10 +72,6 @@ import {
   ChevronDown,
   UserPlus,
   Bell,
-  UserCog,
-  CircleDollarSign,
-  Wrench,
-  CalendarCheck,
   CalendarX,
   Reply,
 } from "lucide-react";
@@ -653,18 +649,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       (j) => j.status === "work_order" && !j.customerConfirmed,
     ).length;
 
-  const STATUS_TAB_FILTERS = [
-    { value: "lead",       label: "Lead",      Icon: UserCog,         pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-    { value: "queue",      label: "Queue",     Icon: Inbox,           pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-    { value: "quote",      label: "Quote",     Icon: CircleDollarSign,pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-    { value: "work_order", label: "Unscheduled", Icon: CalendarX,     pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-    { value: "scheduled",  label: "Scheduled", Icon: CalendarCheck,   pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-  ];
-
   const filterMeta: Record<string, { title: string; subtitle: string }> = {
     all: { title: "Active Jobs", subtitle: "All upcoming jobs" },
     lead: { title: "Leads", subtitle: "Enquiries & unqualified leads" },
-    queue: { title: "Dispatch Queue", subtitle: "Jobs parked and waiting" },
     quote: { title: "Quotes", subtitle: "Quote status" },
     mulch: { title: "Mulch", subtitle: "Mulch status" },
     work_order: { title: "Unscheduled", subtitle: "Work orders awaiting a booking" },
@@ -1681,11 +1668,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // booking, so every work_order matches exactly one of the two. A booking
         // entirely in the past (e.g. rained off) returns to Unscheduled so it
         // can be rebooked instead of hiding under Scheduled forever.
+        // Queue holds (inQueue) are ignored here on purpose: queue-style parking is
+        // modelled as Lanes, so a queued work_order still shows under its status.
         if (jobFilters.length > 0) {
           return jobFilters.some((f) => {
-            // Queued jobs belong exclusively to the Queue filter
-            if (f === "queue") return job.inQueue === true;
-            if (job.inQueue) return false;
             if (f === "lead") return job.status === "lead";
             if (f === "quote") return job.status === "quote";
             if (f === "mulch") return job.status === "mulch";
@@ -1695,8 +1681,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           });
         }
 
-        // No filter ("All"), no search: only the three most actionable statuses
-        if (job.inQueue) return false;
+        // No filter ("All"), no search: only the three most actionable statuses.
+        // Queued (inQueue) jobs are NOT excluded — hiding them from All made
+        // work orders "disappear" whenever a job was parked in a queue.
         return (
           job.status === "lead" ||
           job.status === "quote" ||
