@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import {
   X, Plus, Upload, Trash2, Mail, MessageSquare, Check, Crown,
   GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye, ArrowLeft, Save,
-  SlidersHorizontal, Map as MapIcon,
+  SlidersHorizontal, Map as MapIcon, Download,
 } from "lucide-react";
 import { BuilderToolbarButton } from "@/components/BuilderToolbarButton";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
@@ -1384,6 +1384,7 @@ export function ProposalBuilderV2({
   const [proposalTitle, setProposalTitle] = useState("Treemarkables Quote");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [previewSelectedChoices, setPreviewSelectedChoices] = useState<Record<string, string>>({});
@@ -1968,6 +1969,35 @@ export function ProposalBuilderV2({
     return draftId;
   }, [draftId, ensureJobSaved, buildPayload, saveDraftMutation, onRequestJobSave, toast, jobId]);
 
+  const handleDownloadPdf = useCallback(async () => {
+    setDownloadingPdf(true);
+    try {
+      // Flush the latest edits first so the PDF matches what's on screen —
+      // same reason ensureDraftSaved exists for the email/SMS sends.
+      const id = await ensureDraftSaved();
+      if (!id) return; // save failure already surfaced its own toast
+      const res = await fetch(`/api/proposals/${id}/pdf`);
+      if (!res.ok) throw new Error("PDF failed");
+      const blob = await res.blob();
+      // Reuse the server's filename (Quote-/Proposal-<number>.pdf) so the
+      // download matches the emailed attachment.
+      const cd = res.headers.get("Content-Disposition") || "";
+      const filename = cd.match(/filename="([^"]+)"/)?.[1] || `${isQuote ? "Quote" : "Proposal"}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Download failed", description: "Could not generate the PDF.", variant: "destructive" });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }, [ensureDraftSaved, isQuote, toast]);
+
   const initEmailForm = useCallback(() => {
     const email = customEmail || (job as { jobContactEmail?: string } | null)?.jobContactEmail || (customer as { email?: string } | null)?.email || "";
     setEmailForm({ to: email, cc: "", subject: "Treemarkables Quote", message: "Thank you for your inquiry, we are pleased to provide you with the following proposal." });
@@ -2151,7 +2181,9 @@ export function ProposalBuilderV2({
             <>
             {/* sm:flex-initial on both groups so the row can shrink (labels
                 truncate) instead of clipping the Close button at tablet widths */}
-            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-initial">
+            {/* flex-[5]/flex-[2] mirrors the 5-vs-2 button split so all seven
+                stacked mobile buttons come out equal width */}
+            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[5] sm:flex-initial">
               <BuilderToolbarButton
                 icon={ArrowLeft}
                 label="Back"
@@ -2198,6 +2230,14 @@ export function ProposalBuilderV2({
                 }}
                 aria-label={isQuote ? "Save quote" : "Save proposal"}
                 className="bg-indigo-600 hover:bg-indigo-700"
+              />
+              <BuilderToolbarButton
+                icon={Download}
+                label="PDF"
+                loading={downloadingPdf}
+                onClick={handleDownloadPdf}
+                aria-label={isQuote ? "Download quote PDF" : "Download proposal PDF"}
+                className="bg-teal-600 hover:bg-teal-700"
               />
               {/* Preview button removed — the customer view now lives inline
                   below the editor (scroll down to see it), matching the
