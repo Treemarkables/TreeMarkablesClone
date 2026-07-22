@@ -14624,6 +14624,25 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // De-dupe, cap defensively
       const employeeIds = Array.from(new Set(requested)).slice(0, 50);
 
+      // Optional backdated clock-in — the crew arrived earlier and forgot to
+      // press the button. Bounded to today-ish so a typo can't create a
+      // multi-day timer that lands as a huge labour entry on stop.
+      let startedAt: Date | undefined;
+      if (req.body?.startedAt) {
+        const parsed = new Date(req.body.startedAt);
+        if (isNaN(parsed.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid start time' });
+        }
+        const ageMs = Date.now() - parsed.getTime();
+        if (ageMs < -2 * 60_000) {
+          return res.status(400).json({ success: false, message: 'Start time cannot be in the future' });
+        }
+        if (ageMs > 20 * 3_600_000) {
+          return res.status(400).json({ success: false, message: 'Start time is too far in the past' });
+        }
+        startedAt = parsed;
+      }
+
       // One-shot clock-in GPS stamp. One device location for possibly many
       // employeeIds — the person tapping Start is normally standing with the
       // crew, so we stamp every timer started in this request (stamping only
@@ -14661,7 +14680,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           await finalizeTimer(running);          // stop-and-switch
           switchedJobIds.add(running.jobId);
         }
-        started.push(await storage.startTimer(jobId, employeeId, location));
+        started.push(await storage.startTimer(jobId, employeeId, startedAt, location));
       }
 
       res.json({

@@ -1073,6 +1073,7 @@ export interface IStorage {
   startTimer(
     jobId: string,
     employeeId: string,
+    startedAt?: Date,
     location?: { lat: number; lng: number; accuracyM: number | null; distanceKm: number | null },
   ): Promise<schema.ActiveTimer>;
   deleteTimer(id: string): Promise<boolean>;
@@ -7736,12 +7737,14 @@ class DatabaseStorage implements IStorage {
   async startTimer(
     jobId: string,
     employeeId: string,
+    startedAt?: Date,
     location?: { lat: number; lng: number; accuracyM: number | null; distanceKm: number | null },
   ): Promise<schema.ActiveTimer> {
     const [timer] = await db.insert(schema.activeTimers)
       .values(withTenant({
         jobId,
         employeeId,
+        ...(startedAt ? { startedAt } : {}),
         clockInLat: location?.lat ?? null,
         clockInLng: location?.lng ?? null,
         clockInAccuracyM: location?.accuracyM ?? null,
