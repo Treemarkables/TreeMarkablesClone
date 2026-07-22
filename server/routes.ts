@@ -1160,6 +1160,49 @@ async function requireApiKey(req: Request, res: Response, next: express.NextFunc
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// WinAnsi text sanitizing for PDFKit's built-in fonts (Helvetica etc.).
+// Those fonts write text into the content stream as UNPADDED hex byte strings:
+// a TAB (0x09 → "9") is a single hex digit, which nibble-shifts every byte
+// after it and renders the rest of the line as mojibake ("%Ï6V7Föæ…" — seen
+// on proposals with bullet lists pasted from Notes/Word, whose lines are
+// "●<TAB>text"). Non-WinAnsi chars (●, ✔, macron vowels in Māori place names)
+// also come out as junk glyphs. Every string is routed through here via
+// installPdfTextSanitizer below.
+// ---------------------------------------------------------------------------
+const WINANSI_EXTRA_CHARS = new Set(
+  '€‚ƒ„…†‡ˆ‰Š‹ŒŽ' +
+  '‘’“”•–—˜™š›œžŸ'
+);
+function toPdfSafeText(input: unknown): string {
+  const text = input == null ? '' : String(input);
+  if (!text) return '';
+  // Common non-WinAnsi bullet/checkbox glyphs → the WinAnsi bullet (U+2022)
+  const pre = text.replace(
+    /[●○▪■◦‣⁃∙・✓✔✅☑☒]/g,
+    '•'
+  );
+  let out = '';
+  for (const ch of pre) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (ch === '\n' || ch === '\r') { out += ch; continue; }
+    if (code < 0x20) { out += '  '; continue; } // tabs + stray control chars
+    if (code <= 0xff || WINANSI_EXTRA_CHARS.has(ch)) { out += ch; continue; }
+    // Accented letters outside Latin-1 (ā, Ō, …) keep the base letter;
+    // anything still unmappable (emoji, dingbats) is dropped.
+    const base = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (base && (base.codePointAt(0) ?? 0x100) <= 0xff) out += base;
+  }
+  return out;
+}
+// Wraps doc.text once per document so every draw call in a generator is
+// sanitized — routes.ts has ~100 call sites across 4 PDF generators, so the
+// choke point beats decorating each one.
+function installPdfTextSanitizer(doc: { text: (...args: unknown[]) => unknown }): void {
+  const rawText = doc.text.bind(doc);
+  doc.text = (text: unknown, ...rest: unknown[]) => rawText(toPdfSafeText(text), ...rest);
+}
+
 // Shared proposal/quote PDF generation helper — used by the GET /pdf route
 // and the send-quote-email handler. When proposal.templateUsed === 'quote',
 // the rendered document uses "QUOTE" header and email-reply acceptance copy.
@@ -1257,6 +1300,7 @@ async function generateProposalPDFBuffer(
   const __pdfLogo = await getCompanyLogoBytes(proposal.businessId);
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDoc({ size: 'A4', margin: 50 });
+    installPdfTextSanitizer(doc);
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(Buffer.from(c)));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -1641,6 +1685,7 @@ async function generateInvoicePDFBuffer(
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
+    installPdfTextSanitizer(doc);
     const chunks: Buffer[] = [];
 
     doc.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
@@ -17114,6 +17159,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      installPdfTextSanitizer(doc);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="photo-report-job-${job.jobNumber ?? job.id}.pdf"`);
       doc.pipe(res);
@@ -34200,6 +34246,7 @@ If you cannot find a value, use null. Do not guess.`
       } catch { /* fallback to userId */ }
 
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      installPdfTextSanitizer(doc);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="near-miss-${report.reportNumber}.pdf"`);
       doc.pipe(res);
