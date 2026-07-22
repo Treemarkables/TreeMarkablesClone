@@ -1069,7 +1069,7 @@ export interface IStorage {
   getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null>;
   getActiveTimersForJob(jobId: string): Promise<schema.ActiveTimer[]>;
   getAllActiveTimers(): Promise<schema.ActiveTimer[]>;
-  startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer>;
+  startTimer(jobId: string, employeeId: string, startedAt?: Date): Promise<schema.ActiveTimer>;
   deleteTimer(id: string): Promise<boolean>;
 
   // Public job photo timeline links
@@ -7727,9 +7727,9 @@ class DatabaseStorage implements IStorage {
     return await db.select().from(schema.activeTimers);
   }
 
-  async startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer> {
+  async startTimer(jobId: string, employeeId: string, startedAt?: Date): Promise<schema.ActiveTimer> {
     const [timer] = await db.insert(schema.activeTimers)
-      .values(withTenant({ jobId, employeeId }))
+      .values(withTenant(startedAt ? { jobId, employeeId, startedAt } : { jobId, employeeId }))
       .returning();
     return timer;
   }
