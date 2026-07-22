@@ -9,12 +9,14 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
+import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BookOpen, ChevronRight, ArrowLeft, PlayCircle, Search } from "lucide-react";
+import { BookOpen, ChevronRight, ArrowLeft, PlayCircle, Search, Pencil } from "lucide-react";
 import { helpCategoryRank } from "@/lib/helpCategories";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 
 type HelpArticleSummary = {
   id: string;
@@ -51,6 +53,10 @@ const UNCATEGORISED = "More videos";
 export default function Help() {
   const [openSlug, setOpenSlug] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  // Platform-operator gate (same allowlist Settings uses for the Platform
+  // section) — shows a shortcut to the /admin/help authoring page, where
+  // videos can be renamed, re-filed, and deleted.
+  const isOperator = useRoleChecklistFeature();
 
   const listQuery = useQuery({
     queryKey: ["/api/help/articles"],
@@ -147,7 +153,14 @@ export default function Help() {
     <div className="container mx-auto px-4 py-6 max-w-4xl">
       <div className="flex items-center gap-3 mb-6">
         <BookOpen className="h-7 w-7 text-foreground" />
-        <h1 className="text-2xl font-semibold">Help &amp; Training</h1>
+        <h1 className="text-2xl font-semibold flex-1">Help &amp; Training</h1>
+        {isOperator && (
+          <Button variant="outline" size="sm" asChild data-testid="button-manage-help">
+            <Link href="/admin/help">
+              <Pencil className="h-4 w-4 mr-2" /> Manage content
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="relative mb-6">
