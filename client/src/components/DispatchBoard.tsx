@@ -93,6 +93,7 @@ import {
   getJobScheduledNZDates,
   getNZDateString,
   hasUpcomingBookingNZ,
+  formatTime12Hour,
 } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { useToast } from "@/hooks/use-toast";
@@ -1041,6 +1042,26 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Fetch staff assignments for dispatch board
   const { data: staffAssignmentsData } = useQuery({
     queryKey: ["/api/staff-assignments"],
+  });
+
+  // Email templates — feed the Quick Assign dialog's proposal-email option so
+  // drop-scheduling sends the same "Proposed Booking" template as the job-card
+  // Schedule modal. Only fetched while the dialog is open.
+  const { data: emailTemplatesData } = useQuery<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      name: string;
+      category: string;
+      subject: string;
+      htmlContent: string;
+      isActive: boolean;
+      isDefault: boolean;
+    }>;
+  }>({
+    queryKey: ["/api/email-templates"],
+    enabled: !!pendingDrop,
+    staleTime: 60_000,
   });
 
   // Create customer lookup map
@@ -2195,7 +2216,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           body: JSON.stringify(updates),
         });
 
-        await fetch(`/api/jobs/${jobId}/staff-assignments`, {
+        // Same flags as GlobalJobCard.saveSchedule — the dialog's automation
+        // checkboxes drive the booking-confirmation email and reminders;
+        // staff notifications always send, matching the job-card path.
+        const assignRes = await fetch(`/api/jobs/${jobId}/staff-assignments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2205,11 +2229,142 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               endTime: endDateTime.toISOString(),
               notes: "",
             })),
-            sendNotifications: false,
-            sendClientNotification: false,
+            sendNotifications: true,
+            sendClientNotification: result.sendClientNotification,
+            scheduleBookingReminders: result.scheduleBookingReminders,
             addOnly: true,
           }),
         });
+        const assignData = await assignRes.json().catch(() => ({}));
+
+        if (result.sendClientNotification && assignData.clientEmailMissing) {
+          toast({
+            title: "No email address on file",
+            description:
+              "The confirmation email wasn't sent because this job has no client email address. Add one in the Contact Details section and try again.",
+            variant: "destructive",
+          });
+        } else if (
+          result.sendClientNotification &&
+          assignData.clientEmailFailed
+        ) {
+          toast({
+            title: "Email failed to send",
+            description:
+              "The job was scheduled but the confirmation email couldn't be delivered. Please check your email settings or send it manually.",
+            variant: "destructive",
+          });
+        }
+
+        // Fire the proposal email ("Can we schedule your job in for...") if
+        // requested — independent of sendClientNotification, same as the
+        // job-card Schedule modal.
+        if (result.sendProposalEmail) {
+          const customer = (customersData as any)?.data?.find(
+            (c: any) => c.id === (job as any).customerId,
+          );
+          const proposalFirstName =
+            (job as any).jobContactFirstName ||
+            customer?.name?.split(" ")[0] ||
+            "there";
+          const proposalCustomerName =
+            customer?.name ||
+            [(job as any).jobContactFirstName, (job as any).jobContactLastName]
+              .filter(Boolean)
+              .join(" ") ||
+            proposalFirstName;
+          const proposalEmail =
+            (job as any).jobContactEmail ||
+            (job as any).billingContactEmail ||
+            customer?.email ||
+            "";
+          // nzDateStr is the drop day as a YYYY-MM-DD NZ calendar date. Parse
+          // the parts directly so format() prints that same day — appending
+          // "T...Z" treats it as UTC and rolls forward a day once rendered in NZ.
+          const [dateY, dateM, dateD] = nzDateStr.split("-").map(Number);
+          const dateDisplay = format(
+            new Date(dateY, dateM - 1, dateD),
+            "EEEE d MMMM yyyy",
+          );
+          const timeDisplay = formatTime12Hour(startTimeStr);
+
+          // Look up a user-editable "Proposed Booking" template. Matched by
+          // name (case-insensitive, substring) so the user can name theirs
+          // anything containing "proposed booking" without further config.
+          const templates = emailTemplatesData?.data ?? [];
+          const proposalTemplate =
+            templates.find(
+              (t) => t.isActive && /proposed\s*booking/i.test(t.name),
+            ) || null;
+
+          const substitute = (text: string) =>
+            (text || "")
+              .replace(/\{firstName\}/g, proposalFirstName)
+              .replace(/\{customerName\}/g, proposalCustomerName)
+              .replace(/\{scheduledDate\}/g, dateDisplay)
+              .replace(/\{scheduledTime\}/g, timeDisplay)
+              .replace(/\{jobAddress\}/g, (job as any).address || "")
+              .replace(/\{jobNumber\}/g, (job as any).jobNumber || "")
+              .replace(
+                /\{customerPhone\}/g,
+                (job as any).jobContactPhone || customer?.phone || "",
+              )
+              .replace(/\{email\}/g, proposalEmail);
+
+          const fallbackBody = `<p>Hi ${proposalFirstName},</p>
+<p>Can we schedule your job in for <strong>${dateDisplay}</strong> at <strong>${timeDisplay}</strong>?</p>
+<p>Please note this start time is approximate and may vary slightly on the day.</p>
+<p>Let us know if that works for you.</p>`;
+
+          const proposalSubject = proposalTemplate
+            ? substitute(proposalTemplate.subject) ||
+              `Proposed booking: ${dateDisplay} at ${timeDisplay}`
+            : `Proposed booking: ${dateDisplay} at ${timeDisplay}`;
+          const proposalBody = proposalTemplate
+            ? substitute(proposalTemplate.htmlContent) || fallbackBody
+            : fallbackBody;
+
+          if (!proposalEmail) {
+            toast({
+              title: "No email address on file",
+              description:
+                "The proposal email wasn't sent because this job has no client email address.",
+              variant: "destructive",
+            });
+          } else {
+            try {
+              const proposalRes = await fetch("/api/emails/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  to: proposalEmail,
+                  subject: proposalSubject,
+                  body: proposalBody,
+                  jobId,
+                  customerId: (job as any).customerId || undefined,
+                }),
+              });
+              const proposalJson = await proposalRes.json().catch(() => ({}));
+              if (!proposalRes.ok || proposalJson?.success === false) {
+                toast({
+                  title: "Proposal email failed",
+                  description:
+                    proposalJson?.message ||
+                    "The job was scheduled but the proposal email couldn't be sent.",
+                  variant: "destructive",
+                });
+              }
+            } catch (emailErr) {
+              console.error("Proposal email error:", emailErr);
+              toast({
+                title: "Proposal email failed",
+                description:
+                  "The job was scheduled but the proposal email couldn't be sent.",
+                variant: "destructive",
+              });
+            }
+          }
+        }
 
         queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
         queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
@@ -3679,12 +3834,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       {pendingDrop && (
         <QuickAssignDialog
           open
+          jobId={pendingDrop.jobId}
           jobLabel={pendingDrop.jobLabel}
           customerName={pendingDrop.customerName}
           address={pendingDrop.address}
+          dateNZ={pendingDrop.date.toLocaleDateString("en-CA", {
+            timeZone: "Pacific/Auckland",
+          })}
           droppedHour={pendingDrop.hour}
           droppedEmployeeId={pendingDrop.employeeId}
           employees={employees}
+          staffAssignments={(staffAssignmentsData as any)?.data ?? []}
           defaultDurationHours={pendingDrop.defaultDurationHours}
           isSubmitting={isConfirmingDrop}
           onCancel={() => {
