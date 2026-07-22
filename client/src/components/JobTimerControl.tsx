@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Play, Square, Timer, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -61,6 +62,9 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Backdated clock-in — "we started at 7:30 but forgot to press the button".
+  const [useCustomTime, setUseCustomTime] = useState(false);
+  const [customTime, setCustomTime] = useState("");
 
   // Timers running on THIS job — the card's main state.
   const { data: timersResp } = useQuery<{ data: RunningTimer[] }>({
@@ -122,7 +126,16 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
       preset.add(currentUser.id);
     }
     setSelectedIds(preset);
+    setUseCustomTime(false);
+    setCustomTime("");
     setPickerOpen(true);
+  };
+
+  // Current local time as HH:MM for the time input's default.
+  const nowHHMM = () => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
   const toggleSelected = (id: string) => {
@@ -147,8 +160,8 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   };
 
   const startMutation = useMutation({
-    mutationFn: async (employeeIds: string[]) => {
-      const res = await apiRequest("POST", `/api/jobs/${jobId}/timer/start`, { employeeIds });
+    mutationFn: async (payload: { employeeIds: string[]; startedAt?: string }) => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/timer/start`, payload);
       return (await res.json()) as { data?: { switchedJobIds?: string[] } };
     },
     onSuccess: (result) => {
@@ -337,6 +350,37 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
             </ul>
           </div>
 
+          {/* Backdated start — pressed the button late? Set the real time. */}
+          <div className="border-t border-border pt-3 space-y-2">
+            <label
+              className="flex items-center gap-3 cursor-pointer"
+              data-testid="toggle-custom-start-time"
+            >
+              <Checkbox
+                checked={useCustomTime}
+                onCheckedChange={(checked) => {
+                  const on = checked === true;
+                  setUseCustomTime(on);
+                  if (on && !customTime) setCustomTime(nowHHMM());
+                }}
+              />
+              <span className="text-sm">Started earlier — set the actual start time</span>
+            </label>
+            {useCustomTime && (
+              <div className="flex items-center gap-2 pl-7">
+                <Input
+                  type="time"
+                  value={customTime}
+                  onChange={(e) => setCustomTime(e.target.value)}
+                  className="w-32"
+                  aria-label="Custom start time"
+                  data-testid="input-custom-start-time"
+                />
+                <span className="text-xs text-muted-foreground">today</span>
+              </div>
+            )}
+          </div>
+
           <DialogFooter>
             <Button
               variant="outline"
@@ -347,7 +391,24 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
               Cancel
             </Button>
             <Button
-              onClick={() => startMutation.mutate(Array.from(selectedIds))}
+              onClick={() => {
+                let startedAt: string | undefined;
+                if (useCustomTime && customTime) {
+                  const [h, m] = customTime.split(":").map(Number);
+                  const d = new Date();
+                  d.setHours(h, m, 0, 0);
+                  if (d.getTime() > Date.now()) {
+                    toast({
+                      title: "Start time is in the future",
+                      description: "Pick a time earlier than now, or untick the custom start time.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  startedAt = d.toISOString();
+                }
+                startMutation.mutate({ employeeIds: Array.from(selectedIds), startedAt });
+              }}
               disabled={selectedIds.size === 0 || startMutation.isPending}
               data-testid="button-picker-start"
             >
