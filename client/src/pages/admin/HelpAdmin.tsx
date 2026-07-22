@@ -25,8 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Bold, Italic, Heading2, List, ListOrdered, Link as LinkIcon, Trash2, Upload, Plus } from "lucide-react";
-import { HELP_CATEGORIES as CATEGORIES } from "@/lib/helpCategories";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Bold, Italic, Heading2, List, ListOrdered, Link as LinkIcon, Trash2, Upload, Plus, Pencil } from "lucide-react";
+import { HELP_CATEGORIES as CATEGORIES, helpCategoryRank } from "@/lib/helpCategories";
 
 type HelpArticle = {
   id: string;
@@ -45,6 +46,9 @@ type KnowledgeVideo = {
   url: string;
   filename: string;
   category: string | null;
+  thumbnailUrl: string | null;
+  sequenceOrder: number | null;
+  createdAt: string | null;
 };
 
 function slugify(s: string) {
@@ -92,86 +96,101 @@ function HelpAdminInner() {
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Help authoring</h1>
-        <Button
-          onClick={() => setSelectedId("__new__")}
-          data-testid="button-new-article"
-        >
-          <Plus className="h-4 w-4 mr-2" /> New article
-        </Button>
-      </div>
+      <Tabs defaultValue="articles">
+        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+          <h1 className="text-2xl font-semibold">Help authoring</h1>
+          <TabsList data-testid="tabs-help-admin">
+            <TabsTrigger value="articles">Articles</TabsTrigger>
+            <TabsTrigger value="videos">
+              How-to videos{knowledgeVideos.length > 0 ? ` (${knowledgeVideos.length})` : ""}
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
-        {/* Article list */}
-        <div>
-          <Card>
-            <CardContent className="p-0">
-              {articlesQuery.isLoading && (
-                <div className="p-4 text-sm text-muted-foreground">Loading…</div>
-              )}
-              {!articlesQuery.isLoading && articles.length === 0 && (
-                <div className="p-4 text-sm text-muted-foreground">
-                  No articles yet — click "New article" to start.
-                </div>
-              )}
-              {articles.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => setSelectedId(a.id)}
-                  className={`w-full text-left px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted/40 ${
-                    selectedId === a.id ? "bg-muted/60" : ""
-                  }`}
-                  data-testid={`admin-help-row-${a.slug}`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium truncate">{a.title}</span>
-                    {!a.published && (
-                      <Badge variant="outline" className="text-xs">Draft</Badge>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">{a.category}</div>
-                </button>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Knowledge video upload panel — reuses POST /api/videos */}
-          <div className="mt-4">
-            <KnowledgeVideoPanel videos={knowledgeVideos} onChange={() => qc.invalidateQueries({ queryKey: ["/api/videos", { kind: "knowledge" }] })} />
+        <TabsContent value="articles">
+          <div className="flex justify-end mb-4">
+            <Button
+              onClick={() => setSelectedId("__new__")}
+              data-testid="button-new-article"
+            >
+              <Plus className="h-4 w-4 mr-2" /> New article
+            </Button>
           </div>
-        </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+            {/* Article list */}
+            <div>
+              <Card>
+                <CardContent className="p-0">
+                  {articlesQuery.isLoading && (
+                    <div className="p-4 text-sm text-muted-foreground">Loading…</div>
+                  )}
+                  {!articlesQuery.isLoading && articles.length === 0 && (
+                    <div className="p-4 text-sm text-muted-foreground">
+                      No articles yet — click "New article" to start.
+                    </div>
+                  )}
+                  {articles.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => setSelectedId(a.id)}
+                      className={`w-full text-left px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted/40 ${
+                        selectedId === a.id ? "bg-muted/60" : ""
+                      }`}
+                      data-testid={`admin-help-row-${a.slug}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium truncate">{a.title}</span>
+                        {!a.published && (
+                          <Badge variant="outline" className="text-xs">Draft</Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{a.category}</div>
+                    </button>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
 
-        {/* Editor */}
-        <div>
-          {!selected && selectedId !== "__new__" && (
-            <Card>
-              <CardContent className="py-10 text-center text-muted-foreground">
-                Select an article on the left, or click "New article".
-              </CardContent>
-            </Card>
-          )}
-          {(selected || selectedId === "__new__") && (
-            <ArticleEditor
-              key={selected?.id ?? "__new__"}
-              article={selected}
-              knowledgeVideos={knowledgeVideos}
-              onSaved={(saved) => {
-                qc.invalidateQueries({ queryKey: ["/api/help/articles"] });
-                setSelectedId(saved.id);
-              }}
-              onDeleted={() => {
-                qc.invalidateQueries({ queryKey: ["/api/help/articles"] });
-                setSelectedId(null);
-              }}
-              onError={(msg) =>
-                toast({ title: "Save failed", description: msg, variant: "destructive" })
-              }
-            />
-          )}
-        </div>
-      </div>
+            {/* Editor */}
+            <div>
+              {!selected && selectedId !== "__new__" && (
+                <Card>
+                  <CardContent className="py-10 text-center text-muted-foreground">
+                    Select an article on the left, or click "New article".
+                  </CardContent>
+                </Card>
+              )}
+              {(selected || selectedId === "__new__") && (
+                <ArticleEditor
+                  key={selected?.id ?? "__new__"}
+                  article={selected}
+                  knowledgeVideos={knowledgeVideos}
+                  onSaved={(saved) => {
+                    qc.invalidateQueries({ queryKey: ["/api/help/articles"] });
+                    setSelectedId(saved.id);
+                  }}
+                  onDeleted={() => {
+                    qc.invalidateQueries({ queryKey: ["/api/help/articles"] });
+                    setSelectedId(null);
+                  }}
+                  onError={(msg) =>
+                    toast({ title: "Save failed", description: msg, variant: "destructive" })
+                  }
+                />
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="videos">
+          <VideoLibrary
+            videos={knowledgeVideos}
+            loading={videosQuery.isLoading}
+            onChange={() => qc.invalidateQueries({ queryKey: ["/api/videos", { kind: "knowledge" }] })}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -424,11 +443,18 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   );
 }
 
-function KnowledgeVideoPanel({
+const UNCATEGORISED = "No section yet";
+
+// Full-width how-to video library: an upload row on top, then the published
+// videos as thumbnail cards grouped into the same sections subscribers see
+// on /help. Rename, re-file, and delete happen on the card.
+function VideoLibrary({
   videos,
+  loading,
   onChange,
 }: {
   videos: KnowledgeVideo[];
+  loading: boolean;
   onChange: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -451,7 +477,6 @@ function KnowledgeVideoPanel({
         throw new Error(body.message || "Upload failed");
       }
       setTitle("");
-      if (fileRef.current) fileRef.current.value = "";
       onChange();
       // Success feedback is deliberate on this panel (owner request) — the
       // list refresh alone is too subtle to confirm a publish that every
@@ -464,18 +489,23 @@ function KnowledgeVideoPanel({
       toast({ title: "Video upload failed", description: e?.message, variant: "destructive" });
     } finally {
       setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
-  async function setVideoCategory(id: string, newCategory: string) {
+  async function patchVideo(id: string, body: Record<string, unknown>): Promise<boolean> {
     const r = await fetch(`/api/videos/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ category: newCategory }),
+      body: JSON.stringify(body),
     });
-    if (!r.ok) {
-      toast({ title: "Couldn't update category", variant: "destructive" });
+    return r.ok;
+  }
+
+  async function setVideoCategory(id: string, newCategory: string) {
+    if (!(await patchVideo(id, { category: newCategory }))) {
+      toast({ title: "Couldn't update section", variant: "destructive" });
       return;
     }
     onChange();
@@ -483,13 +513,7 @@ function KnowledgeVideoPanel({
   }
 
   async function setVideoTitle(id: string, newTitle: string) {
-    const r = await fetch(`/api/videos/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ title: newTitle }),
-    });
-    if (!r.ok) {
+    if (!(await patchVideo(id, { title: newTitle }))) {
       toast({ title: "Couldn't rename video", variant: "destructive" });
       return;
     }
@@ -510,26 +534,178 @@ function KnowledgeVideoPanel({
     toast({ title: "Video deleted", description: "Removed from every subscriber's Help page." });
   }
 
+  // Same grouping/order the subscriber /help page uses, so the admin view
+  // mirrors what subscribers actually see: sections in HELP_CATEGORIES order,
+  // uncategorised last; within a section sequenceOrder then upload order.
+  const byCategory = videos.reduce<Record<string, KnowledgeVideo[]>>((acc, v) => {
+    (acc[v.category || UNCATEGORISED] ??= []).push(v);
+    return acc;
+  }, {});
+  const sections = Object.keys(byCategory).sort((a, b) => {
+    const rank = helpCategoryRank(a === UNCATEGORISED ? null : a)
+      - helpCategoryRank(b === UNCATEGORISED ? null : b);
+    return rank !== 0 ? rank : a.localeCompare(b);
+  });
+  for (const cat of sections) {
+    byCategory[cat].sort(
+      (a, b) =>
+        (a.sequenceOrder ?? 0) - (b.sequenceOrder ?? 0) ||
+        (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
+    );
+  }
+
   return (
-    <Card>
-      <CardContent className="p-3 space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold mb-1">How-to videos</h3>
+    <div className="space-y-6">
+      {/* Upload row */}
+      <div className="border border-dashed border-border rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <Upload className="h-5 w-5 text-muted-foreground flex-shrink-0 hidden sm:block" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">Upload a video</p>
           <p className="text-xs text-muted-foreground">
-            Shown to every subscriber on the Help page, grouped by section.
-            Videos can also be embedded in articles.
+            Give it a title and section first — it goes live for every subscriber the moment it uploads.
           </p>
         </div>
-        <div className="space-y-2">
+        <Input
+          placeholder="Send a quote"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="sm:w-48"
+          data-testid="input-knowledge-video-title"
+        />
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger className="sm:w-48" data-testid="select-knowledge-video-category">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CATEGORIES.map((c) => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) upload(f);
+          }}
+          data-testid="input-knowledge-video-file"
+        />
+        <Button
+          variant="outline"
+          disabled={uploading}
+          onClick={() => fileRef.current?.click()}
+          data-testid="button-choose-video-file"
+        >
+          {uploading ? "Uploading…" : "Choose file"}
+        </Button>
+      </div>
+
+      {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+
+      {!loading && videos.length === 0 && (
+        <Card>
+          <CardContent className="py-10 text-center text-muted-foreground">
+            No how-to videos yet — upload the first one above.
+          </CardContent>
+        </Card>
+      )}
+
+      {sections.map((cat) => (
+        <div key={cat}>
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">{cat}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {byCategory[cat].map((v) => (
+              <AdminVideoCard
+                key={v.id}
+                video={v}
+                onRename={(t) => setVideoTitle(v.id, t)}
+                onRecategorise={(c) => setVideoCategory(v.id, c)}
+                onDelete={() => {
+                  if (confirm("Delete this video for all subscribers?")) deleteVideo(v.id);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AdminVideoCard({
+  video,
+  onRename,
+  onRecategorise,
+  onDelete,
+}: {
+  video: KnowledgeVideo;
+  onRename: (title: string) => void;
+  onRecategorise: (category: string) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <Card className="overflow-hidden" data-testid={`admin-knowledge-video-${video.id}`}>
+      {/* Playable preview — same markup as the subscriber page, so you can
+          watch a video to tell duplicates apart before deleting one. */}
+      <video
+        src={video.url}
+        poster={video.thumbnailUrl ?? undefined}
+        controls
+        preload="none"
+        playsInline
+        className="w-full bg-black aspect-video object-contain"
+      />
+      <CardContent className="p-3 space-y-2">
+        {editing ? (
           <Input
-            placeholder="Title (e.g. Send a quote)"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            data-testid="input-knowledge-video-title"
+            autoFocus
+            defaultValue={video.title ?? ""}
+            placeholder="Video title"
+            className="h-8 text-sm"
+            onBlur={(e) => {
+              setEditing(false);
+              const next = e.target.value.trim();
+              if (next !== (video.title ?? "")) onRename(next);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") {
+                (e.target as HTMLInputElement).value = video.title ?? "";
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            data-testid={`input-video-title-${video.id}`}
           />
-          <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger data-testid="select-knowledge-video-category">
-              <SelectValue />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="w-full flex items-center gap-2 text-left group min-w-0"
+            data-testid={`button-edit-video-title-${video.id}`}
+          >
+            {video.title ? (
+              <span className="text-sm font-medium truncate flex-1">{video.title}</span>
+            ) : (
+              <span className="flex items-center gap-2 flex-1 min-w-0">
+                <Badge variant="outline" className="text-xs flex-shrink-0">Untitled</Badge>
+                <span className="text-xs text-muted-foreground truncate">
+                  shows as "Video" to subscribers
+                </span>
+              </span>
+            )}
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 opacity-0 group-hover:opacity-100" />
+          </button>
+        )}
+
+        <div className="flex items-center gap-2">
+          <Select value={video.category ?? ""} onValueChange={onRecategorise}>
+            <SelectTrigger className="h-8 text-xs flex-1" data-testid={`select-video-category-${video.id}`}>
+              <SelectValue placeholder="No section — pick one" />
             </SelectTrigger>
             <SelectContent>
               {CATEGORIES.map((c) => (
@@ -537,71 +713,16 @@ function KnowledgeVideoPanel({
               ))}
             </SelectContent>
           </Select>
-          <Input
-            ref={fileRef}
-            type="file"
-            accept="video/*"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) upload(f);
-            }}
-            disabled={uploading}
-            data-testid="input-knowledge-video-file"
-          />
-          {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 flex-shrink-0 text-muted-foreground"
+            onClick={onDelete}
+            data-testid={`button-delete-video-${video.id}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
-
-        {videos.length > 0 && (
-          <div className="space-y-2 max-h-72 overflow-y-auto border-t border-border pt-2">
-            {videos.map((v) => (
-              <div key={v.id} className="space-y-1" data-testid={`admin-knowledge-video-${v.id}`}>
-                <div className="flex items-center justify-between gap-2">
-                  {/* Rename in place — saved on blur / Enter. Untitled uploads
-                      otherwise show their raw GCS filename here and appear as
-                      just "Video" on the subscriber Help page. */}
-                  <Input
-                    key={v.title ?? ""}
-                    defaultValue={v.title ?? ""}
-                    placeholder={v.filename}
-                    className="h-8 text-sm"
-                    onBlur={(e) => {
-                      const next = e.target.value.trim();
-                      if (next !== (v.title ?? "")) setVideoTitle(v.id, next);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                    }}
-                    data-testid={`input-video-title-${v.id}`}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 flex-shrink-0"
-                    onClick={() => {
-                      if (confirm("Delete this video for all subscribers?")) deleteVideo(v.id);
-                    }}
-                    data-testid={`button-delete-video-${v.id}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <Select
-                  value={v.category ?? ""}
-                  onValueChange={(c) => setVideoCategory(v.id, c)}
-                >
-                  <SelectTrigger className="h-8 text-xs" data-testid={`select-video-category-${v.id}`}>
-                    <SelectValue placeholder="No section — pick one" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
-          </div>
-        )}
       </CardContent>
     </Card>
   );
