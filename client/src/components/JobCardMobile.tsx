@@ -16,6 +16,7 @@ import { useLocation } from "wouter";
 import { useJobActions } from "@/hooks/useJobActions";
 import { useToast } from "@/hooks/use-toast";
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
+import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
 import {
   X as XIcon,
   Camera,
@@ -230,12 +231,32 @@ export function JobCardMobile({
   // priceIncludesTax: false default — see GlobalJobCard line 4583).
   // Desktop header displays the ex-GST total, so we do too.
   //
-  // Fallback chain: line items → job.subtotal (already ex-GST) →
-  // job.totalIncludingGst / 1.15 → job.totalAmount / 1.15 (both stored inc-GST).
-  // The totalIncludingGst step matters: jobs whose value lives only in
-  // total_including_gst otherwise render as $0.00 here while the roster
-  // (StaffSchedule.getJobPrice) shows the real figure.
+  // Fallback chain: counted invoices (see invoicedJobValueExGst) → line
+  // items → job.subtotal (already ex-GST) → job.totalIncludingGst / 1.15 →
+  // job.totalAmount / 1.15 (both stored inc-GST). The totalIncludingGst step
+  // matters: jobs whose value lives only in total_including_gst otherwise
+  // render as $0.00 here while the roster (StaffSchedule.getJobPrice) shows
+  // the real figure.
+  //
+  // The invoice step (ex-GST, like the rest of the header) makes
+  // invoicing-time adjustments — e.g. a discount applied in the invoice
+  // builder before sending — show on the job card. Same query key +
+  // envelope shape as GlobalJobCard so the cache is shared and
+  // InvoiceBuilder's ["/api/invoices"] invalidations refresh this too.
+  const { data: jobInvoicesResp } = useQuery<{ success?: boolean; data?: Array<Record<string, unknown>> }>({
+    queryKey: ["/api/invoices", jobId],
+    queryFn: async () => {
+      const response = await fetch(`/api/invoices?jobId=${jobId}`);
+      if (!response.ok) throw new Error("Failed to fetch invoices");
+      return response.json();
+    },
+    enabled: !!jobId,
+    staleTime: 30_000,
+  });
+  const invoicedValue = invoicedJobValueExGst(jobInvoicesResp?.data, status);
+
   const jobValue = useMemo(() => {
+    if (invoicedValue != null) return invoicedValue;
     const toNum = (v: unknown): number => {
       if (v == null) return 0;
       const n = typeof v === "string" ? parseFloat(v) : (v as number);
@@ -256,7 +277,7 @@ export function JobCardMobile({
     if (incGst > 0) return incGst / 1.15;
     const totalAmount = toNum(job?.totalAmount);
     return totalAmount > 0 ? totalAmount / 1.15 : undefined;
-  }, [job]);
+  }, [job, invoicedValue]);
 
   // Modal state for the three composer modals reused from GlobalJobCard.
   const [showPhotoModal, setShowPhotoModal] = useState(false);
