@@ -291,7 +291,13 @@ function CallScreen({
   const initial = (displayName.trim()[0] || "?").toUpperCase();
 
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-between bg-gradient-to-b from-neutral-800 to-neutral-950 text-white px-8 pt-[max(4rem,env(safe-area-inset-top))] pb-[max(3rem,env(safe-area-inset-bottom))]">
+    // pointer-events-auto: a Radix modal (Dialog/AlertDialog/Sheet) sets
+    // pointer-events:none on <body> while open, which this overlay inherits —
+    // it sits ABOVE the modal (z-9999 vs z-50) so the modal is invisible, yet
+    // every call control silently stops responding. Hit in the field when the
+    // job-video "Generate quote description?" prompt auto-opened mid-call as
+    // an upload finished: speaker + hang-up dead with no visible cause.
+    <div className="pointer-events-auto fixed inset-0 z-[9999] flex flex-col items-center justify-between bg-gradient-to-b from-neutral-800 to-neutral-950 text-white px-8 pt-[max(4rem,env(safe-area-inset-top))] pb-[max(3rem,env(safe-area-inset-bottom))]">
       {/* Caller identity — collapses to a compact header while the keypad is
           open so the grid fits without scrolling, like the native dialer. */}
       {showKeypad ? (
