@@ -21401,17 +21401,52 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         console.error('📬 Missing email_id in Resend event');
         return res.status(400).json({ error: 'Missing email_id' });
       }
-      
-      // Store the event
-      await storage.createEmailEvent({
-        messageId: messageId,
-        eventType: event.type,
-        recipient: Array.isArray(data?.to) ? data.to[0] : data?.to,
-        timestamp: data?.created_at ? new Date(data.created_at) : new Date(),
-        userAgent: data?.click?.user_agent || data?.open?.user_agent,
-        ipAddress: data?.click?.ip_address || data?.open?.ip_address,
-        linkUrl: data?.click?.link,
-        rawPayload: event
+
+      // Resolve the sending tenant so the event row is stamped to the business
+      // that sent the email. This webhook has no session, so withTenant() would
+      // leave business_id to the column DEFAULT (the legacy tenant) and every
+      // other tenant's email-activity reads would come back empty under RLS.
+      // Every sender records the Resend message id in a job-diary entry's
+      // metadata.sendgridMessageId, so that entry's business_id is the tenant.
+      let eventBusinessId: string | undefined;
+      try {
+        const [senderEntry] = await db
+          .select({ businessId: schema.jobDiaryEntries.businessId })
+          .from(schema.jobDiaryEntries)
+          .where(sql`${schema.jobDiaryEntries.metadata} ->> 'sendgridMessageId' = ${messageId}`)
+          .limit(1);
+        eventBusinessId = senderEntry?.businessId ?? undefined;
+
+        // Fallback (e.g. an email.sent event racing the diary write): the
+        // recipient's customer record — but only when the address belongs to
+        // exactly one tenant, since customers can be shared across businesses.
+        if (!eventBusinessId) {
+          const recipientEmail = Array.isArray(data?.to) ? data.to[0] : data?.to;
+          if (recipientEmail) {
+            const owners = await db
+              .selectDistinct({ businessId: customers.businessId })
+              .from(customers)
+              .where(eq(customers.email, recipientEmail))
+              .limit(2);
+            if (owners.length === 1) eventBusinessId = owners[0].businessId ?? undefined;
+          }
+        }
+      } catch (resolveErr) {
+        console.warn('📬 Could not resolve tenant for Resend event — storing with default stamping:', resolveErr);
+      }
+
+      // Store the event, stamped to the resolved tenant (unresolved → default)
+      await runWithBusiness(eventBusinessId, async () => {
+        await storage.createEmailEvent({
+          messageId: messageId,
+          eventType: event.type,
+          recipient: Array.isArray(data?.to) ? data.to[0] : data?.to,
+          timestamp: data?.created_at ? new Date(data.created_at) : new Date(),
+          userAgent: data?.click?.user_agent || data?.open?.user_agent,
+          ipAddress: data?.click?.ip_address || data?.open?.ip_address,
+          linkUrl: data?.click?.link,
+          rawPayload: event
+        });
       });
       
       console.log(`📬 Stored ${event.type} event for message ${messageId}`);
