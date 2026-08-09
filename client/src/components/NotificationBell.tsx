@@ -623,9 +623,9 @@ export function NotificationBell() {
     return "";
   };
 
+  // modal: an outside click closes the panel without also landing on
+  // whatever is underneath (e.g. opening a job card on the dispatch board)
   return (
-    {/* modal: an outside click closes the panel without also landing on
-        whatever is underneath (e.g. opening a job card on the dispatch board) */}
     <Popover open={isOpen} onOpenChange={setIsOpen} modal>
       <PopoverTrigger asChild>
         <Button
