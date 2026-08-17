@@ -262,7 +262,7 @@ export interface IStorage {
   // Job Management
   createJob(job: InsertJob): Promise<Job>;
   getJob(id: string): Promise<Job | undefined>;
-  getJobByJobNumber(jobNumber: string): Promise<Job | undefined>;
+  getJobByJobNumber(jobNumber: string, senderEmail?: string): Promise<Job | undefined>;
   updateJob(id: string, updates: Partial<InsertJob>): Promise<Job>;
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
@@ -1812,14 +1812,29 @@ class DatabaseStorage implements IStorage {
     return job || undefined;
   }
 
-  async getJobByJobNumber(jobNumber: string): Promise<Job | undefined> {
+  async getJobByJobNumber(jobNumber: string, senderEmail?: string): Promise<Job | undefined> {
     // Job numbers are unique per business, not globally. In-session the RLS
     // proxy scopes this to one tenant (at most one row). Session-less callers
     // (inbound email/SMS matchers run as owner) see every tenant, so an
-    // ambiguous number must never be guessed at — refuse and let the caller's
-    // other matchers (UUID, phone) do the work.
-    const rows = await db.select().from(schema.jobs).where(eq(schema.jobs.jobNumber, jobNumber)).limit(2);
+    // ambiguous number must never be guessed at. When the caller knows the
+    // sender (inbound email reply), disambiguate by the matched job's customer
+    // email; otherwise refuse and let the caller's other matchers (UUID,
+    // phone) do the work.
+    const rows = await db.select().from(schema.jobs).where(eq(schema.jobs.jobNumber, jobNumber)).limit(10);
     if (rows.length > 1) {
+      const sender = senderEmail?.trim().toLowerCase();
+      if (sender) {
+        const senderMatches: Job[] = [];
+        for (const row of rows) {
+          if (!row.customerId) continue;
+          const [cust] = await db.select().from(schema.customers).where(eq(schema.customers.id, row.customerId));
+          if (cust?.email && cust.email.trim().toLowerCase() === sender) senderMatches.push(row);
+        }
+        if (senderMatches.length === 1) {
+          console.log(`getJobByJobNumber("${jobNumber}"): multiple tenants share this number — resolved by sender email`);
+          return senderMatches[0];
+        }
+      }
       console.warn(`getJobByJobNumber("${jobNumber}"): matches multiple tenants — refusing to guess`);
       return undefined;
     }
