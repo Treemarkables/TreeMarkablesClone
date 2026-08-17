@@ -23303,7 +23303,9 @@ Transcription: ${transcriptText}`;
       if (!jobFound && jobNumberMatch) {
         const jobNumber = jobNumberMatch[1];
         console.log(`🔍 Looking up job by number: ${jobNumber}`);
-        const job = await storage.getJobByJobNumber(jobNumber);
+        // Pass the sender so a job number shared across tenants (per-tenant
+        // numbering) can still resolve to the job whose customer sent the reply.
+        const job = await storage.getJobByJobNumber(jobNumber, actualFromEmail || undefined);
         
         if (job) {
           console.log(`✅ Found job ${job.jobNumber} - creating diary entry`);

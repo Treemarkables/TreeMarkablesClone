@@ -294,17 +294,12 @@ class GmailReplyService {
           
           if (isJobNumber) {
             // Find job by job number. Numbers are unique per business, and this
-            // poller runs session-less (sees all tenants) — only accept an
-            // unambiguous match; UUID aliases are unaffected.
-            const matches = await db.query.jobs.findMany({
-              where: eq(jobs.jobNumber, jobIdentifier),
-              limit: 2,
-            });
-            if (matches.length > 1) {
-              console.warn(`📧 Job number ${jobIdentifier} matches multiple tenants — skipping number match`);
-            } else {
-              job = matches[0];
-            }
+            // poller runs session-less (sees all tenants) — getJobByJobNumber
+            // accepts an unambiguous match, and when several tenants share the
+            // number it resolves by the sender's email (the reply's From must
+            // be the matched job's customer). UUID aliases are unaffected.
+            const { storage } = await import('../storage.js');
+            job = (await storage.getJobByJobNumber(jobIdentifier, email.from)) ?? null;
           } else {
             // Find job by UUID (database ID)
             job = await db.query.jobs.findFirst({
@@ -325,11 +320,15 @@ class GmailReplyService {
             if (customer) {
               console.log(`📧 ✅ Found job #${job.jobNumber} for customer: ${customer.name}`);
             } else {
-              console.log(`📧 ⚠️ Found job #${jobNumber} but customer not found`);
+              // NOTE: these logs used to reference an undefined `jobNumber`
+              // variable — a ReferenceError that killed the WHOLE email (no
+              // diary entry, no conversation fallback) whenever the alias
+              // didn't resolve to a job+customer.
+              console.log(`📧 ⚠️ Found job for alias ${jobIdentifier} but customer not found`);
               job = null; // Reset job if customer not found
             }
           } else {
-            console.log(`📧 ⚠️ No job found with number ${jobNumber}`);
+            console.log(`📧 ⚠️ No unambiguous job found for alias ${jobIdentifier}`);
           }
         }
       }
