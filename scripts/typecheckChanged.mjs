@@ -44,7 +44,7 @@ console.log(`${changed.length} TypeScript file(s) changed vs ${base} — compari
 // tsc needs a big heap on this codebase (OOMs at the default limit).
 // --incremental false: both runs must be full, deterministic checks — the
 // shared tsbuildinfo cache would otherwise leak state between them.
-function runTsc(cwd) {
+function runTsc(cwd, stripRoots) {
   // --noErrorTruncation: tsc elides long types differently depending on how
   // long the embedded absolute paths are, so the same error can print
   // differently in the two checkouts — full messages compare reliably.
@@ -54,11 +54,17 @@ function runTsc(cwd) {
     env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=8192' },
     maxBuffer: 256 * 1024 * 1024,
   });
-  // Error messages can embed ABSOLUTE paths (e.g. import("/abs/path/shared/schema")),
-  // which differ between the head and base checkouts — strip the run's root so
-  // identical errors compare equal across the two runs.
-  const cwdPrefix = new RegExp(cwd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/', 'g');
-  const out = `${res.stdout || ''}\n${res.stderr || ''}`.replace(cwdPrefix, '');
+  // Error messages can embed ABSOLUTE paths (e.g. import("/abs/path/shared/schema"),
+  // or a module path realpathed through the base tree's node_modules symlink),
+  // which differ between the head and base checkouts. Strip EVERY known root
+  // from both runs — and canonicalize any residual absolute node_modules path —
+  // so identical errors compare equal across the two runs.
+  let out = `${res.stdout || ''}\n${res.stderr || ''}`;
+  for (const root of stripRoots) {
+    const prefix = new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[/\\\\]', 'g');
+    out = out.replace(prefix, '');
+  }
+  out = out.replace(/(?:[A-Za-z]:)?[/\\](?:[^\s'"()]+[/\\])*node_modules[/\\]/g, 'node_modules/');
   // tsc line format: path/to/file.ts(12,34): error TS2304: Cannot find name 'x'.
   const errors = [];
   for (const line of out.split('\n')) {
@@ -68,12 +74,16 @@ function runTsc(cwd) {
   return errors;
 }
 
+// The base run happens in a throwaway git worktree sharing our node_modules.
+// Both checkout roots get stripped from BOTH runs' error messages (a message
+// can reference either root once module resolution follows the symlink).
+const baseTree = resolve(process.cwd(), '.typecheck-base-tree');
+const stripRoots = [baseTree, process.cwd()]; // baseTree first — it nests under cwd
+
 // Head run first (working tree — also usable locally before committing).
 console.log('Typechecking HEAD (working tree)...');
-const headErrors = runTsc(process.cwd());
+const headErrors = runTsc(process.cwd(), stripRoots);
 
-// Base run in a throwaway git worktree sharing our node_modules.
-const baseTree = resolve(process.cwd(), '.typecheck-base-tree');
 let baseErrors;
 try {
   if (existsSync(baseTree)) {
@@ -82,7 +92,7 @@ try {
   execSync(`git worktree add --detach ${JSON.stringify(baseTree)} ${base}`, { stdio: 'ignore' });
   symlinkSync(resolve(process.cwd(), 'node_modules'), resolve(baseTree, 'node_modules'), 'dir');
   console.log(`Typechecking base (${base})...`);
-  baseErrors = runTsc(baseTree);
+  baseErrors = runTsc(baseTree, stripRoots);
 } finally {
   try {
     rmSync(resolve(baseTree, 'node_modules'), { force: true }); // remove symlink, not the real node_modules
