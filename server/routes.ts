@@ -11050,7 +11050,8 @@ Draft the reply now.`;
         subject,
         html: htmlContent,
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our services.'}`,
-        jobNumber: job?.jobNumber // Reply-to will be job-{number}@jobs.treemarkables.co.nz
+        jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
+        jobNumber: job?.jobNumber // Fallback if no id (legacy numeric alias)
       });
 
       if (!emailResult.success) {
@@ -11846,7 +11847,8 @@ Draft the reply now.`;
         subject: subject,
         text: emailBody,
         html: emailHtml,
-        jobNumber: job?.jobNumber, // Reply-to will be job-{number}@jobs.treemarkables.co.nz
+        jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
+        jobNumber: job?.jobNumber, // Fallback if no id (legacy numeric alias)
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
@@ -23582,13 +23584,18 @@ Transcription: ${transcriptText}`;
                 },
               });
               try {
-                const notificationHelper = await import('./services/notificationHelper.js');
-                await notificationHelper.createNotification({
+                // NOTE: this used to call notificationHelper.createNotification(),
+                // which does not exist — it threw on EVERY email quote-acceptance
+                // and was swallowed by the catch below, so the owner never got a
+                // quote_accepted bell entry (same latent bug the UUID reply path
+                // had). Use storage.createNotification like every other path.
+                await storage.createNotification({
                   type: 'quote_accepted',
                   title: `Quote ${acceptedNumber} accepted`,
                   message: `${actualFromName || actualFromEmail} accepted quote ${acceptedNumber} for Job #${targetJob.jobNumber}`,
                   jobId: targetJob.id,
                   priority: 'high',
+                  isRead: false,
                   actionUrl: `/dispatch?job=${targetJob.id}&tab=diary`,
                   metadata: { proposalId: quoteProposal.id, quoteNumber: acceptedNumber },
                 });

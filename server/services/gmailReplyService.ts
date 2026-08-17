@@ -761,6 +761,42 @@ class GmailReplyService {
       return true; // Successfully processed
     } catch (error) {
       console.error('📧 Error processing email reply:', error);
+      // FAIL-SAFE: never let a customer email die silently. A processing bug
+      // here used to mean the reply existed only in Gmail (Aug 2026 incident) —
+      // raise a bell alert so a broken pipeline is noticed in hours, not weeks.
+      // Deduped by Message-ID so the every-minute re-poll of the same failing
+      // email alerts once. Stamped to the default (platform operator) tenant,
+      // since at this point the owning tenant may be exactly what we failed to
+      // work out.
+      try {
+        if (email.messageId) {
+          const { storage } = await import('../storage.js');
+          const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          const recent = await storage.getNotificationsCreatedSince(since);
+          const alreadyAlerted = recent.some(
+            (n) =>
+              n.type === 'email_processing_failed' &&
+              (n.metadata as any)?.emailMessageId === email.messageId,
+          );
+          if (!alreadyAlerted) {
+            await storage.createNotification({
+              title: 'Customer email failed to process',
+              message: `Reply from ${email.from} ("${email.subject}") could not be filed to a job or conversation — check server logs.`,
+              type: 'email_processing_failed',
+              priority: 'high',
+              metadata: {
+                emailMessageId: email.messageId,
+                from: email.from,
+                to: email.to,
+                error: String((error as Error)?.message || error),
+              },
+            });
+            console.log(`🔔 Raised email-processing-failure alert for messageId ${email.messageId}`);
+          }
+        }
+      } catch (alertErr) {
+        console.error('📧 Failed to raise email-processing alert:', alertErr);
+      }
       return false; // Failed to process
     }
   }

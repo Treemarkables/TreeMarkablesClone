@@ -239,9 +239,43 @@ async function runTwilioConfigCheck(): Promise<CheckResult> {
   }
 }
 
+/** Email-reply pipeline: the Gmail IMAP poller files customer replies onto job
+ *  cards every minute. When it stops succeeding — bad credentials, IMAP outage,
+ *  a processing bug — replies pile up invisibly in Gmail (the Aug 2026
+ *  incident). Healthy = at least one successful poll in the last 35 minutes.
+ *  Environments without Gmail credentials (local dev) report ok/skipped. */
+async function runEmailReplyPollerCheck(): Promise<CheckResult> {
+  const name = 'Email replies (Gmail poller)';
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    return { name, ok: true, detail: 'Gmail credentials not configured — skipped' };
+  }
+  try {
+    const { getEmailPollerHealth } = await import('./emailReplyPoller.js');
+    const h = getEmailPollerHealth();
+    if (!h.running) {
+      return { name, ok: false, detail: 'poller is not running (startEmailReplyPolling never ran or was stopped)' };
+    }
+    const STALE_MS = 35 * 60 * 1000; // ~35 polls missed before alarming — rides out transient IMAP blips
+    if (!h.lastSuccessAt) {
+      // Give a fresh boot time to complete its first poll before alarming.
+      if (process.uptime() < 10 * 60) {
+        return { name, ok: true, detail: 'no successful poll yet — instance booted recently' };
+      }
+      return { name, ok: false, detail: `no successful poll since boot; ${h.consecutiveFailures} consecutive failure(s), last error: ${h.lastErrorMessage || 'none recorded'}` };
+    }
+    const ageMs = Date.now() - h.lastSuccessAt.getTime();
+    if (ageMs > STALE_MS) {
+      return { name, ok: false, detail: `last successful poll ${Math.round(ageMs / 60000)} min ago; ${h.consecutiveFailures} consecutive failure(s), last error: ${h.lastErrorMessage || 'none recorded'}` };
+    }
+    return { name, ok: true, detail: `last successful poll ${Math.round(ageMs / 60000)} min ago` };
+  } catch (e) {
+    return { name, ok: false, detail: `could not read poller health: ${(e as Error).message}` };
+  }
+}
+
 async function runHealthChecks(): Promise<void> {
   const results: CheckResult[] = [];
-  for (const run of [runLeadPipelineCheck, runTwilioConfigCheck, runCustomerLinkCheck]) {
+  for (const run of [runLeadPipelineCheck, runTwilioConfigCheck, runCustomerLinkCheck, runEmailReplyPollerCheck]) {
     try {
       results.push(await run());
     } catch (e) {
