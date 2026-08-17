@@ -11050,7 +11050,8 @@ Draft the reply now.`;
         subject,
         html: htmlContent,
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our services.'}`,
-        jobNumber: job?.jobNumber // Reply-to will be job-{number}@jobs.treemarkables.co.nz
+        jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
+        jobNumber: job?.jobNumber // Fallback if no id (legacy numeric alias)
       });
 
       if (!emailResult.success) {
@@ -11846,7 +11847,8 @@ Draft the reply now.`;
         subject: subject,
         text: emailBody,
         html: emailHtml,
-        jobNumber: job?.jobNumber, // Reply-to will be job-{number}@jobs.treemarkables.co.nz
+        jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
+        jobNumber: job?.jobNumber, // Fallback if no id (legacy numeric alias)
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
