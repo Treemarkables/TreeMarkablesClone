@@ -23584,13 +23584,18 @@ Transcription: ${transcriptText}`;
                 },
               });
               try {
-                const notificationHelper = await import('./services/notificationHelper.js');
-                await notificationHelper.createNotification({
+                // NOTE: this used to call notificationHelper.createNotification(),
+                // which does not exist — it threw on EVERY email quote-acceptance
+                // and was swallowed by the catch below, so the owner never got a
+                // quote_accepted bell entry (same latent bug the UUID reply path
+                // had). Use storage.createNotification like every other path.
+                await storage.createNotification({
                   type: 'quote_accepted',
                   title: `Quote ${acceptedNumber} accepted`,
                   message: `${actualFromName || actualFromEmail} accepted quote ${acceptedNumber} for Job #${targetJob.jobNumber}`,
                   jobId: targetJob.id,
                   priority: 'high',
+                  isRead: false,
                   actionUrl: `/dispatch?job=${targetJob.id}&tab=diary`,
                   metadata: { proposalId: quoteProposal.id, quoteNumber: acceptedNumber },
                 });
