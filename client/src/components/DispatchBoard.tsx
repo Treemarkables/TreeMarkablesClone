@@ -173,7 +173,22 @@ interface JobAssignment {
   startTime: string;
   endTime: string;
   duration: number; // hours
-  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  // Full job-status set (matches shared/schema.ts jobs.status + legacy "work order"
+  // spelling still present in old rows). Was a stale 4-value union that made every
+  // `status === "work_order"` comparison a TS2367 error.
+  status:
+    | "lead"
+    | "quote"
+    | "mulch"
+    | "scheduled"
+    | "work_order"
+    | "work order"
+    | "in_progress"
+    | "completed"
+    | "cancelled"
+    | "invoiced"
+    | "unsuccessful"
+    | "archived";
   priority: "low" | "medium" | "high" | "urgent";
   notes?: string;
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
