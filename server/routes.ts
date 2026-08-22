@@ -101,6 +101,7 @@ import {
 } from "./stripe";
 import * as billing from "./billing";
 import * as usageMeter from "./services/usageMeter";
+import * as supplierIngest from "./services/supplierInvoiceIngest";
 import { createTenant } from "./onboarding";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import {
@@ -10034,6 +10035,213 @@ Draft the reply now.`;
     }
   });
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // Supplier-invoice INGESTION (Phase 1) — suppliers email bills to a
+  // per-supplier address; Resend → webhook → extract → validate → triage queue.
+  // Logic lives in server/services/supplierInvoiceIngest.ts; these are thin.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Resend `email.received` for the bills.* receiving domain. Separate route +
+  // separate signing secret from /api/webhooks/resend-events (outbound
+  // telemetry) and /api/webhooks/email (customer replies). Must answer fast:
+  // no parsing here — record + policy-check + hand off.
+  app.post('/api/webhooks/inbound-invoice', async (req: Request, res: Response) => {
+    try {
+      // This is a public write path into a financial ledger — signature
+      // verification is not optional. Fail closed in production.
+      const secret = process.env.RESEND_INBOUND_WEBHOOK_SECRET;
+      if (secret) {
+        const svixId        = req.headers['svix-id'] as string;
+        const svixTimestamp = req.headers['svix-timestamp'] as string;
+        const svixSignature = req.headers['svix-signature'] as string;
+        if (!svixId || !svixTimestamp || !svixSignature) {
+          return res.status(401).json({ success: false, message: 'Missing webhook signature headers' });
+        }
+        try {
+          const wh = new SvixWebhook(secret);
+          const rawBody = (req as any).rawBody as Buffer | undefined;
+          wh.verify(rawBody ? rawBody.toString('utf-8') : JSON.stringify(req.body), {
+            'svix-id': svixId, 'svix-timestamp': svixTimestamp, 'svix-signature': svixSignature,
+          });
+        } catch {
+          console.warn('🧾 inbound-invoice webhook: invalid Svix signature — rejecting');
+          return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
+        }
+      } else if (process.env.NODE_ENV === 'production') {
+        console.error('⚠️ RESEND_INBOUND_WEBHOOK_SECRET not set in production — rejecting inbound-invoice webhook');
+        return res.status(401).json({ success: false, message: 'Webhook verification not configured' });
+      } else {
+        console.warn('⚠️ RESEND_INBOUND_WEBHOOK_SECRET not set — inbound-invoice webhook unverified (dev only)');
+      }
+
+      const event = req.body || {};
+      if (event.type !== 'email.received') {
+        return res.status(200).json({ received: true, ignored: event.type });
+      }
+      const data = event.data || {};
+      if (!data.email_id) return res.status(200).json({ received: true, ignored: 'no_email_id' });
+      const outcome = await supplierIngest.receiveInboundEmail({
+        email_id: String(data.email_id),
+        from: String(data.from || ''),
+        to: Array.isArray(data.to) ? data.to.map(String) : (data.to ? [String(data.to)] : []),
+        subject: data.subject ? String(data.subject) : undefined,
+      });
+      console.log(`🧾 inbound-invoice webhook: ${data.email_id} → ${outcome.action}${'reason' in outcome ? ` (${outcome.reason})` : ''}`);
+      return res.status(200).json({ received: true, ...outcome });
+    } catch (error) {
+      console.error('🧾 inbound-invoice webhook error:', error);
+      // 200 so Resend doesn't hammer retries on a bug; the row (if written) is
+      // picked up by the boot sweep.
+      return res.status(200).json({ received: true, error: 'processing_error' });
+    }
+  });
+
+  // ── Supplier connections (Settings › Suppliers) ───────────────────────────
+  app.get('/api/supplier-connections', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const data = await supplierIngest.listSupplierConnections(businessId);
+      res.json({ success: true, data: data.connections, catchAllAddress: data.catchAllAddress, inboundDomain: supplierIngest.getInboundDomain() });
+    } catch (error) {
+      console.error('Error listing supplier connections:', error);
+      res.status(500).json({ success: false, message: 'Error listing supplier connections' });
+    }
+  });
+
+  app.post('/api/supplier-connections', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const supplierName = String(req.body?.supplierName || '').trim();
+      if (!supplierName) return res.status(400).json({ success: false, message: 'Supplier name is required' });
+      const created = await supplierIngest.createSupplierConnection(businessId, supplierName);
+      res.json({ success: true, data: created });
+    } catch (error) {
+      console.error('Error creating supplier connection:', error);
+      res.status(500).json({ success: false, message: 'Error creating supplier connection' });
+    }
+  });
+
+  app.post('/api/supplier-connections/:id/confirm-sender', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const result = await supplierIngest.confirmConnectionSender(businessId, req.params.id);
+      if (!result) return res.status(404).json({ success: false, message: 'Supplier not found' });
+      res.json({ success: true, data: result.connection, released: result.released });
+    } catch (error) {
+      console.error('Error confirming supplier sender:', error);
+      res.status(500).json({ success: false, message: 'Error confirming sender' });
+    }
+  });
+
+  app.patch('/api/supplier-connections/:id', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const updates: Partial<schema.SupplierConnection> = { updatedAt: new Date() };
+      if (req.body?.status !== undefined) {
+        const st = String(req.body.status);
+        if (!['active', 'paused', 'pending_first_email'].includes(st)) return res.status(400).json({ success: false, message: 'Invalid status' });
+        updates.status = st;
+      }
+      if (req.body?.supplierName !== undefined) {
+        const name = String(req.body.supplierName).trim();
+        if (!name) return res.status(400).json({ success: false, message: 'Supplier name is required' });
+        updates.supplierName = name;
+      }
+      if (req.body?.extractionHint !== undefined) updates.extractionHint = req.body.extractionHint ? String(req.body.extractionHint) : null;
+      const [row] = await ownerDb.update(schema.supplierConnections).set(updates)
+        .where(and(eq(schema.supplierConnections.id, req.params.id), eq(schema.supplierConnections.businessId, businessId)))
+        .returning();
+      if (!row) return res.status(404).json({ success: false, message: 'Supplier not found' });
+      res.json({ success: true, data: row });
+    } catch (error) {
+      console.error('Error updating supplier connection:', error);
+      res.status(500).json({ success: false, message: 'Error updating supplier connection' });
+    }
+  });
+
+  // ── Triage queue ──────────────────────────────────────────────────────────
+  app.get('/api/supplier-invoices', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const { rows, nextCursor } = await supplierIngest.listTriageInvoices(businessId, {
+        status: typeof req.query.status === 'string' ? req.query.status : undefined,
+        cursor: typeof req.query.cursor === 'string' ? req.query.cursor : undefined,
+        limit: req.query.limit ? parseInt(String(req.query.limit)) : undefined,
+      });
+      res.json({ success: true, data: rows, nextCursor });
+    } catch (error) {
+      console.error('Error listing supplier invoices:', error);
+      res.status(500).json({ success: false, message: 'Error listing supplier invoices' });
+    }
+  });
+
+  // Failed + quarantined inbound documents (separate tab, not mixed into review).
+  app.get('/api/inbound-documents', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const rows = await supplierIngest.listInboundDocuments(businessId, {
+        status: typeof req.query.status === 'string' ? req.query.status : undefined,
+        limit: req.query.limit ? parseInt(String(req.query.limit)) : undefined,
+      });
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('Error listing inbound documents:', error);
+      res.status(500).json({ success: false, message: 'Error listing inbound documents' });
+    }
+  });
+
+  app.get('/api/supplier-invoices/:id', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const detail = await supplierIngest.getInvoiceDetail(businessId, req.params.id);
+      if (!detail) return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+      res.json({ success: true, data: detail });
+    } catch (error) {
+      console.error('Error fetching supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error fetching supplier invoice' });
+    }
+  });
+
+  app.post('/api/supplier-invoices/:id/assign', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const jobId = String(req.body?.jobId || '').trim();
+      if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
+      const result = await supplierIngest.assignInvoiceToJob({ businessId, invoiceId: req.params.id, jobId, userId: req.session.employeeId });
+      if ('error' in result) {
+        if (result.error === 'not_found') return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+        if (result.error === 'job_not_found') return res.status(404).json({ success: false, message: 'Job not found' });
+        return res.status(409).json({ success: false, message: `Cannot assign an invoice in status "${result.status}"` });
+      }
+      res.json({ success: true, data: { status: result.status, jobId } });
+    } catch (error) {
+      console.error('Error assigning supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error assigning supplier invoice' });
+    }
+  });
+
+  app.post('/api/supplier-invoices/:id/reject', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const reason = req.body?.reason ? String(req.body.reason).slice(0, 500) : null;
+      const row = await supplierIngest.rejectInvoice(businessId, req.params.id, reason);
+      if (!row) return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error rejecting supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error rejecting supplier invoice' });
+    }
+  });
+
   // Upload a supplier invoice (image or PDF), store it in GCS, and run GPT-5
   // over it to extract the fields. Returns the extracted data + stored document
   // reference — nothing is persisted to supplier_invoices until the user
@@ -10138,6 +10346,19 @@ Draft the reply now.`;
   app.patch('/api/supplier-invoices/:id', async (req: Request, res: Response) => {
     try {
       const b = req.body || {};
+      // Triage-queue corrections (header + `lines`) go through the ingestion
+      // service so the arithmetic validation + dedupe hash are recomputed. The
+      // manual job-card editor keeps sending the legacy keys below.
+      const CORRECTION_KEYS = ['lines', 'subtotalExGst', 'gstAmount', 'totalIncGst', 'poOrJobReference', 'customerAccountRef', 'branch', 'documentType'];
+      if (CORRECTION_KEYS.some((k) => k in b)) {
+        const businessId = req.session.businessId;
+        if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+        const result = await supplierIngest.applyInvoiceCorrections(businessId, req.params.id, b);
+        if (!result) return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+        if ('error' in result) return res.status(409).json({ success: false, message: 'Another invoice with this number and total is already in the queue', duplicateId: result.duplicateId });
+        const detail = await supplierIngest.getInvoiceDetail(businessId, req.params.id);
+        return res.json({ success: true, data: detail, validation: result.validation });
+      }
       const updates: any = {};
       if (b.supplierName !== undefined) updates.supplierName = String(b.supplierName).trim();
       if (b.invoiceNumber !== undefined) updates.invoiceNumber = b.invoiceNumber ? String(b.invoiceNumber) : null;

@@ -20,6 +20,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
+import { sweepStaleInboundDocuments } from "./services/supplierInvoiceIngest";
 import { attachVoiceAgentWss } from "./services/voiceAgent";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
@@ -534,6 +535,10 @@ function startNotificationQueueWorker() {
     } catch (e) {
       console.error("[schema] boot migrations failed (continuing):", e);
     }
+    // Re-queue any inbound supplier-invoice documents a previous instance left
+    // mid-flight (the claim is an atomic status transition, so this is safe on
+    // both app instances).
+    void sweepStaleInboundDocuments().then((n) => { if (n) log(`🧾 re-queued ${n} stale inbound invoice document(s)`, "startup"); });
 
     let devServer: http.Server | undefined;
     try {
