@@ -64,6 +64,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
+import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -333,12 +334,32 @@ export function JobCardDesktop({
   const status = (job?.status as string | undefined) ?? "lead";
   const badge = getJobStatusBadge(status);
 
+  // Once this job has an invoice that counts (issued, or any draft after the
+  // job is won — see invoicedJobValueExGst), the header price follows the
+  // invoice (ex-GST) instead of the quoted line items, so adjustments made
+  // at invoicing time — e.g. a discount — show on the job card.
+  // Same query key + envelope shape as GlobalJobCard so the cache is shared
+  // and InvoiceBuilder's ["/api/invoices"] invalidations refresh this too.
+  const { data: jobInvoicesResp } = useQuery<{ success?: boolean; data?: Array<Record<string, unknown>> }>({
+    queryKey: ["/api/invoices", jobId],
+    queryFn: async () => {
+      const response = await fetch(`/api/invoices?jobId=${jobId}`);
+      if (!response.ok) throw new Error("Failed to fetch invoices");
+      return response.json();
+    },
+    enabled: !!jobId,
+    staleTime: 30_000,
+  });
+  const invoicedValue = invoicedJobValueExGst(jobInvoicesResp?.data, status);
+
   // Canonical job-price hierarchy (mirrors StaffSchedule.getJobPrice / PR #24):
-  // line items (ex-GST) → job.subtotal → job.totalIncludingGst / 1.15 →
-  // job.totalAmount / 1.15. The totalIncludingGst step matters: jobs whose
-  // value lives only in total_including_gst (subtotal + totalAmount both 0)
+  // issued invoices → line items (ex-GST) → job.subtotal →
+  // job.totalIncludingGst / 1.15 → job.totalAmount / 1.15. The
+  // totalIncludingGst step matters: jobs whose value lives only in
+  // total_including_gst (subtotal + totalAmount both 0)
   // otherwise render as $0.00 here while the roster shows the real figure.
   const jobValue = (() => {
+    if (invoicedValue != null) return invoicedValue;
     const toNum = (v: unknown): number => {
       if (v == null) return 0;
       const n = typeof v === "string" ? parseFloat(v) : (v as number);

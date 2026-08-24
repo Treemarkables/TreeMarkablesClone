@@ -171,7 +171,6 @@ export default function MulchThanks() {
           {[
             "We'll call you within one working day to confirm timing and tip location.",
             "Mulch is delivered straight off the truck, tipped where you want it.",
-            "Invoice arrives by email after delivery — no payment up front.",
           ].map((line, i) => (
             <div
               key={line}
