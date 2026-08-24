@@ -121,10 +121,15 @@ export function useOnlyUnconfirmed(): [boolean, (v: boolean) => void] {
 // The Dispatch Queue "Queue" chip was removed 2026-07 — queue-style holds are
 // modelled as Lanes now (e.g. a "Queue work order" lane via the Lanes filter),
 // and queued jobs must stay visible under All / Unscheduled / Scheduled.
+// "Work Order" (`work_order_all`) is the union of Unscheduled + Scheduled:
+// every job with status work_order regardless of booking state. Because the
+// board excludes completed/invoiced jobs, this chip is the review view for
+// accepted work that hasn't been invoiced yet.
 export const DISPATCH_STATUS_FILTERS = [
-  { value: "lead",       label: "Lead" },
-  { value: "quote",      label: "Quote" },
-  { value: "mulch",      label: "Mulch" },
-  { value: "work_order", label: "Unscheduled" },
-  { value: "scheduled",  label: "Scheduled" },
+  { value: "lead",           label: "Lead" },
+  { value: "quote",          label: "Quote" },
+  { value: "mulch",          label: "Mulch" },
+  { value: "work_order_all", label: "Work Order" },
+  { value: "work_order",     label: "Unscheduled" },
+  { value: "scheduled",      label: "Scheduled" },
 ] as const;
