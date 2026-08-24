@@ -18,6 +18,7 @@ import {
   Target,
   DollarSign,
   TrendingUp,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -40,6 +41,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 import { PlanGate } from "@/components/PlanGate";
 
 interface AppSidebarProps {
@@ -90,6 +92,9 @@ function SidebarNavContent({
   isCrew: boolean;
   logout: () => void;
 }) {
+  // Platform operator (Treemarkables/Inflow) — gates the Subscribers footer link.
+  const platformOperator = useRoleChecklistFeature();
+
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const safetyActive = location === "/safety" || location.startsWith("/safety/") || ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
   const financeActive = ["/metrics", "/profitability-calculator"].includes(location);
@@ -518,6 +523,19 @@ function SidebarNavContent({
 
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu className="font-normal text-[16px]">
+          {/* Platform-operator only: concierge subscriber management. Same
+              allowlist gate as the Settings Platform section; the server
+              enforces via requirePlatformAdmin regardless. */}
+          {isAdmin && platformOperator && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={location === "/admin/subscribers"} className={ITEM}>
+                <Link href="/admin/subscribers" onClick={handleLinkClick} data-testid="link-subscribers">
+                  <Building2 className="h-5 w-5 shrink-0 text-slate-600" />
+                  <span>Subscribers</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           {isAdmin && (
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={location.startsWith("/settings")} className={ITEM}>
