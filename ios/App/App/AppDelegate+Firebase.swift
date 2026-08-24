@@ -248,13 +248,15 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
     }
 
     private func navigateWebView(to path: String, attempt: Int = 0) {
-        // Up to ~6s of retries (20 × 0.3s). A cold launch from a notification tap
+        // Up to ~30s of retries (100 × 0.3s). A cold launch from a notification tap
         // fires this before the WebView has even loaded the app origin, so we
         // can't just deliver once — we retry until the document is actually on
         // the app origin (app.inflowapp.co.nz), otherwise the localStorage write below would
-        // land on about:blank and be lost.
-        guard attempt < 20 else {
-            print("⚠️ Navigation: gave up delivering deep link after 20 attempts: \(path)")
+        // land on about:blank and be lost. The window must cover a full cold boot
+        // over cellular (remote index.html + JS boot) — the old ~6s window expired
+        // on slow launches and the tap silently fell to the default dispatch board.
+        guard attempt < 100 else {
+            print("⚠️ Navigation: gave up delivering deep link after 100 attempts: \(path)")
             return
         }
 
