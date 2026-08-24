@@ -10414,6 +10414,9 @@ Draft the reply now.`;
       if (!supplierInvoice) {
         return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
       }
+      if (!supplierInvoice.jobId) {
+        return res.status(400).json({ success: false, message: 'Supplier invoice is not assigned to a job yet' });
+      }
       const job = await storage.getJob(supplierInvoice.jobId);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });

@@ -68,7 +68,7 @@ interface EmailComposerModalProps {
   invoiceData?: any;
   quoteData?: any;
   proposalData?: any;
-  templateType?: "invoice" | "quote" | "proposal";
+  templateType?: "invoice" | "quote" | "proposal" | "general";
   customEmail?: string;
   defaultCc?: string;
 }
