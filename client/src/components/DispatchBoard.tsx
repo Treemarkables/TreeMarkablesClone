@@ -173,7 +173,22 @@ interface JobAssignment {
   startTime: string;
   endTime: string;
   duration: number; // hours
-  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  // Full job-status set (matches shared/schema.ts jobs.status + legacy "work order"
+  // spelling still present in old rows). Was a stale 4-value union that made every
+  // `status === "work_order"` comparison a TS2367 error.
+  status:
+    | "lead"
+    | "quote"
+    | "mulch"
+    | "scheduled"
+    | "work_order"
+    | "work order"
+    | "in_progress"
+    | "completed"
+    | "cancelled"
+    | "invoiced"
+    | "unsuccessful"
+    | "archived";
   priority: "low" | "medium" | "high" | "urgent";
   notes?: string;
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
@@ -655,6 +670,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     lead: { title: "Leads", subtitle: "Enquiries & unqualified leads" },
     quote: { title: "Quotes", subtitle: "Quote status" },
     mulch: { title: "Mulch", subtitle: "Mulch status" },
+    work_order_all: { title: "Work Orders", subtitle: "All accepted work — not yet invoiced" },
     work_order: { title: "Unscheduled", subtitle: "Work orders awaiting a booking" },
     scheduled: { title: "Scheduled", subtitle: "Booked on the calendar" },
   };
@@ -670,7 +686,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const showUnconfirmedBadge =
     jobFilters.length === 0 ||
     jobFilters.includes("scheduled") ||
-    jobFilters.includes("work_order");
+    jobFilters.includes("work_order") ||
+    jobFilters.includes("work_order_all");
 
   const QUEUE_REASONS = [
     "Weather Hold",
@@ -1696,6 +1713,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             if (f === "lead") return job.status === "lead";
             if (f === "quote") return job.status === "quote";
             if (f === "mulch") return job.status === "mulch";
+            if (f === "work_order_all") return job.status === "work_order";
             if (f === "work_order") return job.status === "work_order" && !hasUpcomingBookingNZ(job, todayNZ);
             if (f === "scheduled") return job.status === "work_order" && hasUpcomingBookingNZ(job, todayNZ);
             return false;
@@ -1722,7 +1740,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const tabSupportsFilter =
           jobFilters.length === 0 ||
           jobFilters.includes("scheduled") ||
-          jobFilters.includes("work_order");
+          jobFilters.includes("work_order") ||
+          jobFilters.includes("work_order_all");
         if (!tabSupportsFilter) return true;
         // 'scheduled' status retired 2026-05 — booked work is all work_order.
         return job.status === "work_order" && !job.customerConfirmed;
@@ -1815,11 +1834,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       // jobs that predate the workOrderAt column — lastActivityAt gets bumped on every email,
       // note, or edit, which caused those jobs to reshuffle whenever they were touched.
       // createdAt is immutable so positions stay stable.
-      // FIFO only applies when Unscheduled is the sole active filter — mixed
-      // selections (e.g. Unscheduled + Scheduled) fall through to the activity
-      // sort below, since FIFO-by-conversion-time is meaningless for
-      // already-booked jobs.
-      if (jobFilters.length === 1 && jobFilters[0] === "work_order") {
+      // FIFO only applies when Unscheduled or Work Order is the sole active
+      // filter — mixed selections (e.g. Unscheduled + Scheduled) fall through
+      // to the activity sort below. On the Work Order view, oldest-accepted
+      // first surfaces the work that has waited longest to be invoiced.
+      if (
+        jobFilters.length === 1 &&
+        (jobFilters[0] === "work_order" || jobFilters[0] === "work_order_all")
+      ) {
         const getAcceptedTime = (job: JobAssignment): number => {
           if (job.workOrderAt) return new Date(job.workOrderAt).getTime();
           if (job.createdAt) return new Date(job.createdAt).getTime();
