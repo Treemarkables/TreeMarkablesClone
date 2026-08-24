@@ -299,6 +299,9 @@ export function SMSComposerModal({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      // An SMS'd invoice gets stamped status='sent' server-side — refresh
+      // invoice caches so the job-card header price picks it up.
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       onClose();
       form.reset();
     },

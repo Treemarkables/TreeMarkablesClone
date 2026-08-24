@@ -11858,6 +11858,24 @@ Draft the reply now.`;
           embeddedPhotoCount > 0 ? ` with ${embeddedPhotoCount} embedded photo(s)` : ''
         }${emailResult.messageId ? ` (Message ID: ${emailResult.messageId})` : ''}`);
 
+        // Stamp the invoice as sent. The dedicated /api/invoices/:id/send-email
+        // endpoint does this, but most invoice emails go out through this
+        // generic composer endpoint, which previously left a pre-existing
+        // invoice 'pending' forever. status/sentDate drive downstream surfaces
+        // (job-card header price override, billing badge). Never downgrade a
+        // paid/overdue invoice; a failure here never blocks the send response.
+        if (invoice?.id) {
+          try {
+            const keepStatus = invoice.status === 'paid' || invoice.status === 'overdue';
+            await storage.updateInvoice(invoice.id, {
+              ...(keepStatus ? {} : { status: 'sent' }),
+              sentDate: invoice.sentDate || new Date(),
+            } as any);
+          } catch (invoiceStampError) {
+            console.warn('Failed to stamp invoice as sent:', invoiceStampError);
+          }
+        }
+
         // Create job diary entry for the email
         if (jobId) {
           try {
@@ -11968,7 +11986,22 @@ Draft the reply now.`;
       // Log successful SMS for audit trail
       console.log(`📱 SMS sent successfully to ${phone}`);
       console.log(`📱 Message: ${message}`);
-      
+
+      // Stamp the invoice as sent when this SMS carried one — mirrors the
+      // email path so an SMS'd invoice also flips 'pending' → 'sent' and
+      // drives the same downstream surfaces (job-card price, billing badge).
+      if (invoice?.id) {
+        try {
+          const keepStatus = invoice.status === 'paid' || invoice.status === 'overdue';
+          await storage.updateInvoice(invoice.id, {
+            ...(keepStatus ? {} : { status: 'sent' }),
+            sentDate: invoice.sentDate || new Date(),
+          } as any);
+        } catch (invoiceStampError) {
+          console.warn('Failed to stamp invoice as sent:', invoiceStampError);
+        }
+      }
+
       // Save phone number to job contact and customer so reply matching works
       if (jobId && job && !job.jobContactPhone) {
         try {

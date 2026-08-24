@@ -200,6 +200,7 @@ import { formatTime12Hour, nzTimeToUTC, utcToNZTime, getNZDateString, getJobSche
 import { Calendar as DayCalendar } from "@/components/ui/calendar";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { Linkify, LinkifyMultiline } from "@/lib/linkify";
+import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
 import { Link } from "wouter";
 
 // Lead jobs auto-created on the server land with a literal
@@ -4889,11 +4890,19 @@ The Treemarkables Team`;
                   jobSubtotal > 0
                     ? jobSubtotal
                     : parseFloat(editingJob?.totalAmount || "0") / 1.15;
+                // Once an invoice has been issued, it wins — adjustments made
+                // at invoicing time (e.g. a discount) must show here. Matches
+                // JobCardDesktop / JobCardMobile.
+                const invoicedExGst = invoicedJobValueExGst(
+                  (jobInvoiceResponse as any)?.data,
+                  editingJob?.status,
+                );
                 const jobTotal =
-                  lineItemsTotal ||
-                  proposalSubtotal ||
-                  quoteExGst ||
-                  jobStoredExGst;
+                  invoicedExGst ??
+                  (lineItemsTotal ||
+                    proposalSubtotal ||
+                    quoteExGst ||
+                    jobStoredExGst);
                 const invoiceStatus = (jobInvoiceResponse as any)?.data?.[0]
                   ?.status;
                 const isPaid =
@@ -8127,12 +8136,21 @@ The Treemarkables Team`;
                                           ?.total || "0",
                                       ) || 0;
 
+                                    // Issued invoices win (see the
+                                    // top-header price) so invoicing-time
+                                    // adjustments show here too.
+                                    const issuedExGst =
+                                      invoicedJobValueExGst(
+                                        (jobInvoiceResponse as any)?.data,
+                                        editingJob?.status,
+                                      );
                                     const totalExcGst =
-                                      lineItemsTotal ||
-                                      proposalSubtotal ||
-                                      quoteExGst ||
-                                      jobStoredExGst ||
-                                      invoiceExGst;
+                                      issuedExGst ??
+                                      (lineItemsTotal ||
+                                        proposalSubtotal ||
+                                        quoteExGst ||
+                                        jobStoredExGst ||
+                                        invoiceExGst);
 
                                     return (
                                       <>
