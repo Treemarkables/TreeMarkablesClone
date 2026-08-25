@@ -2102,7 +2102,25 @@ class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<boolean> {
     try {
-      // Clear every table that FK-references jobs.id before deleting the job
+      // Clear every table that FK-references jobs.id before deleting the job.
+      // Payments must go first: they reference the job AND its proposals/invoices,
+      // so deleting proposals/invoices below would violate payments FKs.
+      await db.delete(schema.payments).where(or(
+        eq(schema.payments.jobId, id),
+        inArray(schema.payments.proposalId,
+          db.select({ id: schema.proposals.id }).from(schema.proposals).where(eq(schema.proposals.jobId, id))),
+        inArray(schema.payments.invoiceId,
+          db.select({ id: schema.invoices.id }).from(schema.invoices).where(eq(schema.invoices.jobId, id))),
+      ));
+      // Conversations point at the quote they converted into — null the pointer
+      // (conversations are customer history, not job children)
+      await db.update(schema.conversations)
+        .set({ convertedToQuoteId: null })
+        .where(inArray(schema.conversations.convertedToQuoteId,
+          db.select({ id: schema.quotes.id }).from(schema.quotes).where(eq(schema.quotes.jobId, id))));
+      await db.update(schema.tasks)
+        .set({ linkedJobId: null })
+        .where(eq(schema.tasks.linkedJobId, id));
       await db.delete(schema.jobDiaryEntries).where(eq(schema.jobDiaryEntries.jobId, id));
       await db.delete(schema.proposals).where(eq(schema.proposals.jobId, id));
       await db.delete(schema.jobStaffAssignments).where(eq(schema.jobStaffAssignments.jobId, id));
@@ -2123,12 +2141,40 @@ class DatabaseStorage implements IStorage {
       await db.delete(schema.riskAssessments).where(eq(schema.riskAssessments.jobId, id));
       await db.delete(schema.safetyIncidents).where(eq(schema.safetyIncidents.jobId, id));
       await db.delete(schema.treeMarkers).where(eq(schema.treeMarkers.jobId, id));
+      await db.delete(schema.videos).where(eq(schema.videos.jobId, id));
+      await db.delete(schema.pendingOutboundMessages).where(eq(schema.pendingOutboundMessages.jobId, id));
+      const jobNearMissIds = db.select({ id: schema.nearMissReports.id })
+        .from(schema.nearMissReports).where(eq(schema.nearMissReports.jobId, id));
+      await db.delete(schema.nearMissAttachments).where(inArray(schema.nearMissAttachments.reportId, jobNearMissIds));
+      await db.delete(schema.nearMissWitnesses).where(inArray(schema.nearMissWitnesses.reportId, jobNearMissIds));
+      await db.delete(schema.nearMissActions).where(inArray(schema.nearMissActions.reportId, jobNearMissIds));
+      await db.delete(schema.nearMissReports).where(eq(schema.nearMissReports.jobId, id));
+      await db.delete(schema.toolboxTalkAttendees).where(inArray(schema.toolboxTalkAttendees.talkId,
+        db.select({ id: schema.toolboxTalks.id }).from(schema.toolboxTalks).where(eq(schema.toolboxTalks.jobId, id))));
+      await db.delete(schema.toolboxTalks).where(eq(schema.toolboxTalks.jobId, id));
+      await db.delete(schema.prestartChecklists).where(eq(schema.prestartChecklists.jobId, id));
+      const jobSwmsIds = db.select({ id: schema.swmsDocuments.id })
+        .from(schema.swmsDocuments).where(eq(schema.swmsDocuments.jobId, id));
+      await db.delete(schema.swmsSteps).where(inArray(schema.swmsSteps.swmsId, jobSwmsIds));
+      await db.delete(schema.swmsSignatures).where(inArray(schema.swmsSignatures.swmsId, jobSwmsIds));
+      await db.delete(schema.swmsDocuments).where(eq(schema.swmsDocuments.jobId, id));
+      await db.delete(schema.notifiableEvents).where(eq(schema.notifiableEvents.jobId, id));
+      // Belt-and-braces for tables whose schema declares onDelete: cascade —
+      // prod FKs are applied via manual SQL and may lack the cascade clause
+      await db.delete(schema.supplierInvoices).where(eq(schema.supplierInvoices.jobId, id));
+      await db.delete(schema.jobSiteMaps).where(eq(schema.jobSiteMaps.jobId, id));
+      await db.delete(schema.jobTimelineLinks).where(eq(schema.jobTimelineLinks.jobId, id));
+      await db.delete(schema.activeTimers).where(eq(schema.activeTimers.jobId, id));
+      await db.delete(schema.jobChecklistCompletions).where(eq(schema.jobChecklistCompletions.jobId, id));
+      await db.delete(schema.jobQuotingProcessCompletions).where(eq(schema.jobQuotingProcessCompletions.jobId, id));
 
       const result = await db.delete(schema.jobs).where(eq(schema.jobs.id, id));
       return (result.rowCount || 0) > 0;
     } catch (error) {
-      console.error('Error deleting job:', error);
-      return false;
+      console.error(`Error deleting job ${id}:`, error);
+      // Rethrow so bulkDeleteJobs surfaces the real DB error (e.g. which FK
+      // blocked the delete) instead of a generic "Failed to delete" message
+      throw error;
     }
   }
 
