@@ -70,8 +70,22 @@ class GmailReplyService {
       const imap = new Imap(this.imapConfig);
       let settled = false;
       const settle = (fn: () => void) => {
-        if (!settled) { settled = true; fn(); }
+        if (!settled) { settled = true; clearTimeout(watchdog); fn(); }
       };
+
+      // Session-wide watchdog: connTimeout/authTimeout only cover the connect
+      // phase. A session that stalls after auth (fetch never emits 'end', dead
+      // socket) leaves this promise pending forever, which wedges the poller's
+      // isPolling latch and silently skips every future poll until the next
+      // deploy (Aug 2026 incident). Destroying the connection settles the
+      // promise so the poll counts as a failure and the next one can run;
+      // unmarked emails are re-scanned and deduped by messageId.
+      const WATCHDOG_MS = 4 * 60 * 1000;
+      const watchdog = setTimeout(() => {
+        console.error(`📧 IMAP poll watchdog fired after ${WATCHDOG_MS / 1000}s — destroying hung connection`);
+        try { imap.destroy(); } catch (_) {}
+        settle(() => reject(new Error(`IMAP poll exceeded ${WATCHDOG_MS / 1000}s watchdog — hung connection destroyed`)));
+      }, WATCHDOG_MS);
 
       // Use .on (not .once) so that every error event is caught — IMAP can emit
       // multiple error events during its lifecycle (connect phase, fetch phase,

@@ -37,6 +37,10 @@ async function processEmailReplies() {
     broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary']);
     lastSuccessAt = new Date();
     consecutiveFailures = 0;
+    // Clear the last error on success — otherwise a long-stale message (e.g. an
+    // old auth timeout) shows up in later health alerts and misdirects diagnosis.
+    lastErrorAt = null;
+    lastErrorMessage = '';
   } catch (error) {
     console.error('📧 Error checking for email replies:', error);
     lastErrorAt = new Date();
