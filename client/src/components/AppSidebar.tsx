@@ -49,9 +49,10 @@ interface AppSidebarProps {
   onTabChange: (tab: string) => void;
 }
 
-// Shared row classes: tall flat row + blue-pill active state. Icons inherit
-// currentColor, so the active row tints both the label and the icon blue.
-const ITEM = "rounded-lg h-11 gap-3 text-[15px] data-[active=true]:bg-blue-50 data-[active=true]:text-blue-600 data-[active=true]:hover:bg-blue-50 data-[active=true]:hover:text-blue-600";
+// Shared row classes: tall pill row + ink active state with a lime indicator
+// bar (Inflow brand). Icons inherit currentColor, so the active row tints both
+// the label and the icon.
+const ITEM = "relative rounded-full h-11 gap-3 text-[15px] data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground data-[active=true]:hover:bg-sidebar-primary data-[active=true]:hover:text-sidebar-primary-foreground data-[active=true]:before:absolute data-[active=true]:before:left-2 data-[active=true]:before:top-1/2 data-[active=true]:before:-translate-y-1/2 data-[active=true]:before:h-3.5 data-[active=true]:before:w-1 data-[active=true]:before:rounded-full data-[active=true]:before:bg-brand-lime";
 
 // Fixed-width icon slot so labels line up. The span wrapper keeps the svg out
 // of SidebarMenuButton's [&>svg]:size-4 direct-child rule (we want 20px here
@@ -564,7 +565,7 @@ function SidebarNavContent({
                   close();
                 }}
               >
-                <LogOut className="h-5 w-5 shrink-0 text-slate-600" />
+                <LogOut className="h-5 w-5 shrink-0 text-muted-foreground" />
                 <span>Log Out</span>
               </button>
             </SidebarMenuButton>

@@ -384,7 +384,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* Mobile header - sidebar toggle, logo, and actions */}
           <header
-            className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-white"
+            className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-background"
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 0.75rem)" }}
           >
             <LogoSidebarTrigger size={44} />
@@ -406,9 +406,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         size="icon"
                         aria-label="Create new"
                         data-testid="create-new-button-mobile"
-                        className="rounded-full text-green-700 border-green-400 bg-green-100 shrink-0 h-12 w-12"
+                        className="rounded-full bg-brand-lime text-brand-lime-foreground border-brand-lime-border shrink-0 h-12 w-12"
                       >
-                        <Plus className="h-7 w-7 text-green-700" />
+                        <Plus className="h-7 w-7" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -455,7 +455,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-11 w-11 ${(dispatchFilters.length > 0 || dispatchLane !== "all") ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                        className={`h-11 w-11 ${(dispatchFilters.length > 0 || dispatchLane !== "all") ? "text-primary" : "text-muted-foreground"}`}
                         aria-label="Filter jobs"
                         data-testid="mobile-filter-dropdown-trigger"
                       >
@@ -491,7 +491,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`h-11 w-11 ${dispatchLane !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                          className={`h-11 w-11 ${dispatchLane !== "all" ? "text-primary" : "text-muted-foreground"}`}
                           aria-label="Filter by lane"
                           data-testid="dispatch-lanes-button-mobile"
                         >
@@ -557,7 +557,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   <DropdownMenuContent align="end" className="w-64">
                     <DropdownMenuItem asChild>
                       <Link href="/history" className="flex items-center w-full" data-testid="menu-history-mobile">
-                        <HistoryIcon className="w-8 h-8 mr-3 text-gray-600" />
+                        <HistoryIcon className="w-8 h-8 mr-3 text-muted-foreground" />
                         <div>
                           <div className="font-medium">History</div>
                           <div className="text-sm text-muted-foreground">Find any past job</div>
@@ -567,7 +567,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/clients" className="flex items-center w-full" data-testid="menu-clients-mobile">
-                        <Users className="w-8 h-8 mr-3 text-blue-600" />
+                        <Users className="w-8 h-8 mr-3 text-muted-foreground" />
                         <div>
                           <div className="font-medium">Clients</div>
                           <div className="text-sm text-muted-foreground">Import & manage your customer list</div>
@@ -577,7 +577,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/materials-services" className="flex items-center w-full" data-testid="menu-materials-services-mobile">
-                        <Package className="w-8 h-8 mr-3 text-orange-600" />
+                        <Package className="w-8 h-8 mr-3 text-muted-foreground" />
                         <div>
                           <div className="font-medium">Materials & Services</div>
                           <div className="text-sm text-muted-foreground">Import & manage items you sell</div>
@@ -587,7 +587,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/settings" className="flex items-center w-full" data-testid="menu-settings-mobile">
-                        <Settings2 className="w-8 h-8 mr-3 text-gray-600" />
+                        <Settings2 className="w-8 h-8 mr-3 text-muted-foreground" />
                         <div>
                           <div className="font-medium">Settings</div>
                           <div className="text-sm text-muted-foreground">Add staff & manage your account</div>
@@ -597,7 +597,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/developer" className="flex items-center w-full" data-testid="menu-developer-mobile">
-                        <Code className="w-8 h-8 mr-3 text-purple-600" />
+                        <Code className="w-8 h-8 mr-3 text-muted-foreground" />
                         <div>
                           <div className="font-medium">Developer</div>
                           <div className="text-sm text-muted-foreground">API access and integrations</div>
@@ -619,7 +619,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           </header>
           
           {/* Desktop header - full menu */}
-          <header className="hidden md:flex items-center justify-between p-2 border-b bg-white">
+          <header className="hidden md:flex items-center justify-between p-2 border-b bg-background">
             <LogoSidebarTrigger size={36} />
 
             <div className="flex items-center gap-2">
@@ -644,7 +644,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     }}
                     aria-label={dispatchSearchOpen ? "Close search" : "Search jobs"}
                     data-testid="desktop-search-toggle"
-                    className="text-black"
+                    className="text-foreground"
                   >
                     <Search className="h-5 w-5" />
                   </Button>
@@ -653,7 +653,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="sm"
-                        className={`gap-1.5 ${dispatchFilters.length > 0 ? "text-[#1877F2]" : "text-black"}`}
+                        className={`gap-1.5 ${dispatchFilters.length > 0 ? "bg-accent text-accent-foreground" : "text-foreground"}`}
                         data-testid="desktop-filter-dropdown-trigger"
                       >
                         <Filter className="h-4 w-4" />
@@ -693,7 +693,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                           variant="ghost"
                           size="sm"
                           data-testid="dispatch-lanes-button-desktop"
-                          className={`gap-1.5 ${dispatchLane !== "all" ? "text-[#1877F2]" : "text-black"}`}
+                          className={`gap-1.5 ${dispatchLane !== "all" ? "bg-accent text-accent-foreground" : "text-foreground"}`}
                         >
                           <LayoutGrid className="h-4 w-4" />
                           {dispatchLane !== "all" ? (dispatchLanes.find(l => l.id === dispatchLane)?.name ?? "Lanes") : "Lanes"}
@@ -718,7 +718,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     size="sm"
                     onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
                     data-testid="paste-message-button-desktop"
-                    className="text-black gap-1.5"
+                    className="text-foreground gap-1.5"
                   >
                     <MessageSquare className="h-4 w-4" />
                     Paste
@@ -729,7 +729,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         variant="ghost"
                         size="sm"
                         data-testid="create-new-button-desktop"
-                        className="text-black gap-1.5"
+                        className="text-foreground gap-1.5"
                       >
                         <Plus className="h-4 w-4" />
                         New
@@ -810,7 +810,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                 <DropdownMenuContent align="end" className="w-64">
                   <DropdownMenuItem asChild>
                     <Link href="/history" className="flex items-center w-full" data-testid="menu-history">
-                      <HistoryIcon className="w-8 h-8 mr-3 text-gray-600" />
+                      <HistoryIcon className="w-8 h-8 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">History</div>
                         <div className="text-sm text-muted-foreground">Find any past job, saved forever</div>
@@ -820,7 +820,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/clients" className="flex items-center w-full" data-testid="menu-clients">
-                      <Users className="w-8 h-8 mr-3 text-blue-600" />
+                      <Users className="w-8 h-8 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">Clients</div>
                         <div className="text-sm text-muted-foreground">Import & manage your customer list</div>
@@ -830,7 +830,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/materials-services" className="flex items-center w-full" data-testid="menu-materials-services">
-                      <Package className="w-8 h-8 mr-3 text-orange-600" />
+                      <Package className="w-8 h-8 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">Materials & Services</div>
                         <div className="text-sm text-muted-foreground">Import & manage items you sell</div>
@@ -840,7 +840,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/settings" className="flex items-center w-full" data-testid="menu-settings">
-                      <Settings2 className="w-8 h-8 mr-3 text-gray-600" />
+                      <Settings2 className="w-8 h-8 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">Settings</div>
                         <div className="text-sm text-muted-foreground">Add staff & manage your account</div>
@@ -850,7 +850,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/developer" className="flex items-center w-full" data-testid="menu-developer">
-                      <Code className="w-8 h-8 mr-3 text-purple-600" />
+                      <Code className="w-8 h-8 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">Developer</div>
                         <div className="text-sm text-muted-foreground">API access and integrations</div>
@@ -869,7 +869,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   setLocation('/dispatch?newJob=true');
                 }}
                 data-testid="global-new-job-btn"
-                className="bg-amber-500 hover:bg-amber-600 text-white"
+                className="bg-brand-lime text-brand-lime-foreground border-brand-lime-border"
               >
                 <Plus className="h-8 w-8 mr-1" />
                 New Job

@@ -110,6 +110,13 @@ export default {
           foreground: "hsl(var(--sidebar-accent-foreground) / <alpha-value>)",
           border: "var(--sidebar-accent-border)"
         },
+        // Inflow brand lime (#C8FF3D) — CTAs/accents only. Named brand-lime so
+        // the stock Tailwind lime-* scale (CustomerAvatar, DispatchBoard) keeps working.
+        "brand-lime": {
+          DEFAULT: "hsl(var(--brand-lime) / <alpha-value>)",
+          foreground: "hsl(var(--brand-lime-foreground) / <alpha-value>)",
+          border: "hsl(var(--brand-lime-border) / <alpha-value>)",
+        },
         status: {
           online: "rgb(34 197 94)",
           away: "rgb(245 158 11)",
@@ -125,7 +132,7 @@ export default {
         mute: "#7c857a",
       },
       fontFamily: {
-        sans: ["Inter", "var(--font-sans)"],
+        sans: ['"Inter Tight"', "Inter", "var(--font-sans)"],
         serif: ["Merriweather", "var(--font-serif)"],
         mono: ["var(--font-mono)"],
         display: ['"Space Grotesk"', "Inter", "sans-serif"],
