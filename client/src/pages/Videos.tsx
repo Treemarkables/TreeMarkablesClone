@@ -477,16 +477,16 @@ export default function Videos() {
                     aria-label="Download video"
                     data-testid={`button-library-download-${v.id}`}
                   >
-                    {nativeDownload?.id === v.id && (nativeDownload.phase === "fetching" || nativeDownload.phase === "saving") ? (
+                    {nativeDownload != null && nativeDownload.id === v.id && (nativeDownload.phase === "fetching" || nativeDownload.phase === "saving") ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
                         {nativeDownload.percent > 0 ? `${nativeDownload.percent}%` : "…"}
                       </>
-                    ) : nativeDownload?.id === v.id && nativeDownload.phase === "saved" ? (
+                    ) : nativeDownload != null && nativeDownload.id === v.id && nativeDownload.phase === "saved" ? (
                       <>
                         <Check className="w-3.5 h-3.5 mr-1" /> Saved
                       </>
-                    ) : nativeDownload?.id === v.id && nativeDownload.phase === "ready" ? (
+                    ) : nativeDownload != null && nativeDownload.id === v.id && nativeDownload.phase === "ready" ? (
                       <>
                         <Download className="w-3.5 h-3.5 mr-1" /> Save
                       </>
