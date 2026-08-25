@@ -91,11 +91,13 @@ interface WysiwygBlock {
 interface DraftLineItem {
   description: string;
   itemCode: string;
-  quantity: number;
-  costExGst: number;
-  markupPct: number;
+  // Numeric fields hold the raw typed string while editing so intermediate
+  // states like "8." survive re-renders; parsed via draftNum() on compute/commit.
+  quantity: number | string;
+  costExGst: number | string;
+  markupPct: number | string;
   pricingType: PricingType;
-  fixedPrice: number;
+  fixedPrice: number | string;
   isOptional: boolean;
   priceIncludesTax: boolean;
   choices: LineItemChoice[];
@@ -153,16 +155,21 @@ function inferBlockType(section: {
   return "description";
 }
 
+function draftNum(v: number | string): number {
+  return typeof v === "number" ? v : parseFloat(v) || 0;
+}
+
 function draftPriceExGst(draft: DraftLineItem): number {
   if (draft.pricingType === "fixed") {
-    return draft.priceIncludesTax ? draft.fixedPrice / 1.15 : draft.fixedPrice;
+    const fixed = draftNum(draft.fixedPrice);
+    return draft.priceIncludesTax ? fixed / 1.15 : fixed;
   }
-  const costEx = draft.priceIncludesTax ? draft.costExGst / 1.15 : draft.costExGst;
-  return costEx * (1 + draft.markupPct / 100);
+  const costEx = draft.priceIncludesTax ? draftNum(draft.costExGst) / 1.15 : draftNum(draft.costExGst);
+  return costEx * (1 + draftNum(draft.markupPct) / 100);
 }
 
 function draftTotal(draft: DraftLineItem): number {
-  return draft.quantity * draftPriceExGst(draft);
+  return draftNum(draft.quantity) * draftPriceExGst(draft);
 }
 
 function calcBlockSubtotal(block: WysiwygBlock): number {
@@ -908,7 +915,7 @@ function LineItemsBlock({
     return {
       id: existing?.id || `item-${Date.now()}`,
       description: d.description,
-      quantity: d.quantity,
+      quantity: draftNum(d.quantity),
       unitPrice: priceExGst,
       totalPrice: total,
       unit: existing?.unit || "each",
@@ -917,10 +924,10 @@ function LineItemsBlock({
       selected: existing?.selected !== undefined ? existing.selected : true,
       pricingType: d.pricingType,
       choices: d.choices,
-      fixedPrice: d.pricingType === "fixed" ? d.fixedPrice : undefined,
+      fixedPrice: d.pricingType === "fixed" ? draftNum(d.fixedPrice) : undefined,
       priceIncludesTax: d.priceIncludesTax,
-      costPrice: d.costExGst,
-      markupPct: d.markupPct,
+      costPrice: draftNum(d.costExGst),
+      markupPct: draftNum(d.markupPct),
     };
   };
 
@@ -1035,9 +1042,9 @@ function LineItemsBlock({
           <label className="text-xs text-gray-500 mb-1 block">Qty</label>
           <Input
             type="text"
-            inputMode="numeric"
+            inputMode="decimal"
             value={d.quantity}
-            onChange={(e) => setD((prev) => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+            onChange={(e) => setD((prev) => ({ ...prev, quantity: e.target.value.replace(/[^0-9.]/g, "") }))}
             className="h-9 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
         </div>
@@ -1049,8 +1056,8 @@ function LineItemsBlock({
             <Input
               type="number"
               value={d.fixedPrice === 0 ? '' : d.fixedPrice}
-              onChange={(e) => setD((prev) => ({ ...prev, fixedPrice: parseFloat(e.target.value) || 0 }))}
-              onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.fixedPrice || 0) > 0) { onCommit(); onCancel(); } }}
+              onChange={(e) => setD((prev) => ({ ...prev, fixedPrice: e.target.value }))}
+              onBlur={() => { if (d.description?.trim() && draftNum(d.quantity) > 0 && draftNum(d.fixedPrice) > 0) { onCommit(); onCancel(); } }}
               className="h-9 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               placeholder="0.00"
             />
@@ -1062,8 +1069,8 @@ function LineItemsBlock({
               <Input
                 type="number"
                 value={d.costExGst === 0 ? '' : d.costExGst}
-                onChange={(e) => setD((prev) => ({ ...prev, costExGst: parseFloat(e.target.value) || 0 }))}
-                onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.costExGst || 0) > 0) { onCommit(); onCancel(); } }}
+                onChange={(e) => setD((prev) => ({ ...prev, costExGst: e.target.value }))}
+                onBlur={() => { if (d.description?.trim() && draftNum(d.quantity) > 0 && draftNum(d.costExGst) > 0) { onCommit(); onCancel(); } }}
                 className="h-9 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 placeholder="0.00"
               />
@@ -1073,7 +1080,7 @@ function LineItemsBlock({
               <Input
                 type="number"
                 value={d.markupPct}
-                onChange={(e) => setD((prev) => ({ ...prev, markupPct: parseFloat(e.target.value) || 0 }))}
+                onChange={(e) => setD((prev) => ({ ...prev, markupPct: e.target.value }))}
                 className="h-9 text-sm"
                 placeholder="0"
               />
