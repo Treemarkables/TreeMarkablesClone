@@ -157,7 +157,7 @@ const UnlinkedCalls = lazy(() => import("@/pages/UnlinkedCalls"));
 const Reconciliation = lazy(() => import("@/pages/Reconciliation"));
 const ProfitabilityCalculator = lazy(() => import("@/pages/ProfitabilityCalculator"));
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft, LayoutGrid } from "lucide-react";
 import { useJobFilters, useLaneFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
@@ -238,7 +238,7 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 
 // Inner component that uses useSidebar hook
 function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
-  const { isCrew, isAdmin, logout } = useAuth();
+  const { isCrew, isAdmin, logout, currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState("jobs");
   // Live push: invalidate queries instantly when server broadcasts a change
   useSSE();
@@ -260,6 +260,14 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   const [dispatchFilters, setDispatchFilters] = useJobFilters();
   const [dispatchLane, setDispatchLane] = useLaneFilter();
   const [dispatchSearchOpen, setDispatchSearchOpen] = useDispatchSearchOpen();
+
+  // Logged-in tenant identity for the header wordmark. Shares the cache key
+  // other business-settings consumers already use (envelope shape: { data }).
+  const { data: bizSettingsResponse } = useQuery<{ data?: { businessName?: string } }>({
+    queryKey: ['/api/business-settings'],
+    staleTime: 5 * 60 * 1000,
+  });
+  const businessName = bizSettingsResponse?.data?.businessName?.trim() || "";
 
   // Lanes for the dispatch filter (only on the dispatch page).
   const { data: lanesResponse } = useQuery<{ data: { id: string; name: string; color: string }[] }>({
@@ -388,6 +396,11 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 0.75rem)" }}
           >
             <LogoSidebarTrigger size={44} />
+            {businessName && (
+              <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight" data-testid="header-business-name-mobile">
+                {businessName}
+              </span>
+            )}
             {/* Notifications Bell — standalone so flex-1 spacer gives it room from actions */}
             {isAdmin && <div className="shrink-0"><NotificationBell /></div>}
 
@@ -555,6 +568,11 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuLabel className="font-normal" data-testid="account-identity-mobile">
+                      <div className="font-medium truncate">{[currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ")}</div>
+                      <div className="text-sm text-muted-foreground truncate">{businessName || currentUser?.email}</div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
                       <Link href="/history" className="flex items-center w-full" data-testid="menu-history-mobile">
                         <HistoryIcon className="w-8 h-8 mr-3 text-muted-foreground" />
@@ -620,7 +638,14 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           
           {/* Desktop header - full menu */}
           <header className="hidden md:flex items-center justify-between p-2 border-b bg-background">
-            <LogoSidebarTrigger size={36} />
+            <div className="flex items-center gap-2.5 min-w-0">
+              <LogoSidebarTrigger size={36} />
+              {businessName && (
+                <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight" data-testid="header-business-name">
+                  {businessName}
+                </span>
+              )}
+            </div>
 
             <div className="flex items-center gap-2">
               {/* In-browser dialer (desktop web only; part of the call-recording add-on) */}
@@ -808,6 +833,11 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel className="font-normal" data-testid="account-identity">
+                    <div className="font-medium truncate">{[currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ")}</div>
+                    <div className="text-sm text-muted-foreground truncate">{businessName || currentUser?.email}</div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link href="/history" className="flex items-center w-full" data-testid="menu-history">
                       <HistoryIcon className="w-8 h-8 mr-3 text-muted-foreground" />
