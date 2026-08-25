@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 import { PlanGate } from "@/components/PlanGate";
@@ -80,6 +81,8 @@ function SidebarNavContent({
   isAdmin,
   isCrew,
   logout,
+  userName,
+  userEmail,
 }: {
   activeTab: string;
   onTabChange: (tab: string) => void;
@@ -91,9 +94,28 @@ function SidebarNavContent({
   isAdmin: boolean;
   isCrew: boolean;
   logout: () => void;
+  userName: string;
+  userEmail: string;
 }) {
   // Platform operator (Treemarkables/Inflow) — gates the Subscribers footer link.
   const platformOperator = useRoleChecklistFeature();
+
+  // Which tenant this session belongs to — the response envelope varies across
+  // cached consumers ({data} vs bare row), so coerce both shapes.
+  const { data: settingsResp } = useQuery<{ data?: { businessName?: string }; businessName?: string }>({
+    queryKey: ["/api/business-settings"],
+    staleTime: 5 * 60 * 1000,
+  });
+  const businessName = settingsResp?.data?.businessName ?? settingsResp?.businessName ?? "";
+
+  const identityPrimary = businessName || userName || userEmail;
+  const identitySecondary = businessName ? userName || userEmail : userName ? userEmail : "";
+  const identityInitials = identityPrimary
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
 
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const safetyActive = location === "/safety" || location.startsWith("/safety/") || ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
@@ -143,7 +165,26 @@ function SidebarNavContent({
 
   return (
     <>
-      <SidebarContent className="pt-safe pt-6 md:pt-0 font-light">
+      {identityPrimary && (
+        <SidebarHeader className="border-b border-sidebar-border px-3 py-3">
+          <div className="flex items-center gap-3" data-testid="sidebar-account">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 text-sm font-semibold">
+              {identityInitials}
+            </div>
+            <div className="min-w-0 flex-1" title={userEmail}>
+              <p className="truncate text-[15px] font-semibold leading-tight" data-testid="text-business-name">
+                {identityPrimary}
+              </p>
+              {identitySecondary && (
+                <p className="truncate text-[13px] text-muted-foreground leading-tight mt-0.5" data-testid="text-logged-in-user">
+                  {identitySecondary}
+                </p>
+              )}
+            </div>
+          </div>
+        </SidebarHeader>
+      )}
+      <SidebarContent className="pt-2 md:pt-0 font-light">
         {/* Core Dashboard */}
         <SidebarGroup>
           <SidebarGroupLabel>{isCrew ? "My Work" : "Core Dashboard"}</SidebarGroupLabel>
@@ -598,6 +639,8 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     isAdmin: !!isAdmin,
     isCrew: !!isCrew,
     logout,
+    userName: [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" "),
+    userEmail: currentUser?.email ?? "",
   };
 
   // Mobile: render a custom fixed overlay drawer — bypasses Radix Sheet/portal entirely
