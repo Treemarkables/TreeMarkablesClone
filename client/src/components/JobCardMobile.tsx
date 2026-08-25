@@ -39,6 +39,7 @@ import {
   Navigation,
   Link2,
   FileImage,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -134,6 +135,10 @@ export interface JobCardMobileProps {
     /** True while the send-to-Xero request is in flight — drives the
      *  tile's "Sending…" state so a tap gives visible feedback. */
     sendToXeroPending?: boolean;
+    /** Opens the parent's void-first confirmation dialog; only rendered
+     *  when the job is already synced (xeroStatus === "sent"). */
+    resetXeroSync?: () => void;
+    resetXeroSyncPending?: boolean;
   };
 }
 
@@ -553,6 +558,19 @@ export function JobCardMobile({
                   onClick={actions?.sendToXero ?? actionStub("Send to Xero")}
                   testId="action-tile-send-to-xero"
                 />
+                {/* The AlertDialog opens ON TOP of this Sheet deliberately —
+                    closing the Sheet first races Radix's pointer-events
+                    cleanup and freezes <body> (see the legacy sheet's note). */}
+                {actions?.resetXeroSync && job?.xeroStatus === "sent" && (
+                  <ActionTile
+                    label="Reset Xero Sync"
+                    icon={RotateCcw}
+                    colour="amber"
+                    disabled={actions?.resetXeroSyncPending}
+                    onClick={actions.resetXeroSync}
+                    testId="action-tile-reset-xero-sync"
+                  />
+                )}
               </div>
 
               {/* Secondary admin actions — kept around because they're already wired

@@ -10923,6 +10923,11 @@ The Treemarkables Team`;
     // previously a tap gave zero feedback until the toast (or nothing at all
     // on success, since there are no success toasts).
     sendToXeroPending: sendToXeroMutation.isPending,
+    // Opens the hoisted void-first confirmation dialog — the cards only show
+    // this when the job is already sent, but the sendToXero handler's toast
+    // points here, so it must exist on every surface the toast shows on.
+    resetXeroSync: () => setShowXeroResetConfirm(true),
+    resetXeroSyncPending: resetXeroSyncMutation.isPending,
   };
 
   // Diary doc-click handlers reused by both surfaces. Quote/invoice just
