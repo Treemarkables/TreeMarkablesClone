@@ -62,6 +62,7 @@ import {
   Trash2,
   ListOrdered,
   Loader2,
+  RotateCcw,
 } from "lucide-react";
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
 import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
@@ -152,6 +153,10 @@ export interface JobCardDesktopProps {
     /** True while the send-to-Xero request is in flight — drives the
      *  menu item's "Sending…" state so a click gives visible feedback. */
     sendToXeroPending?: boolean;
+    /** Opens the parent's void-first confirmation dialog; only rendered
+     *  when the job is already synced (xeroStatus === "sent"). */
+    resetXeroSync?: () => void;
+    resetXeroSyncPending?: boolean;
   };
   /**
    * Called after Duplicate Job succeeds. Parent (GlobalJobCard) typically
@@ -763,6 +768,16 @@ export function JobCardDesktop({
                       : job?.xeroStatus === "sent"
                         ? "Sent to Xero"
                         : "Send to Xero"}
+                  </DropdownMenuItem>
+                )}
+                {actions?.resetXeroSync && job?.xeroStatus === "sent" && (
+                  <DropdownMenuItem
+                    onClick={actions.resetXeroSync}
+                    disabled={actions?.resetXeroSyncPending}
+                    data-testid="more-reset-xero-sync"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2 text-amber-600" />
+                    Reset Xero Sync
                   </DropdownMenuItem>
                 )}
                 {(actions?.speechToQuote || actions?.schedule || actions?.profitTracker || actions?.sendToXero) && (
