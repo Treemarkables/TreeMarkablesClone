@@ -2042,18 +2042,24 @@ class DatabaseStorage implements IStorage {
     const offset = options?.offset ?? 0;
     const excludeArchived = options?.excludeArchived ?? true;
     
-    const searchTerm = `%${query.toLowerCase()}%`;
-    
-    // Build WHERE clause conditions including customer name search via raw SQL
-    const searchConditions = or(
-      sql`LOWER(${schema.jobs.jobNumber}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.title}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.description}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.address}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.notes}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.specialInstructions}) LIKE ${searchTerm}`,
-      sql`EXISTS (SELECT 1 FROM customers WHERE customers.id = ${schema.jobs.customerId} AND (LOWER(customers.name) LIKE ${searchTerm} OR LOWER(customers.email) LIKE ${searchTerm}))`
-    );
+    // Multi-word search: each whitespace-separated token must match at least one
+    // field (tokens AND'd, fields OR'd), so "Gisborne council botanical" finds a
+    // Gisborne District Council job with "Botanical" in the address/description
+    // even though no single column contains the whole phrase.
+    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const tokenConditions = tokens.map((token) => {
+      const searchTerm = `%${token}%`;
+      return or(
+        sql`LOWER(${schema.jobs.jobNumber}) LIKE ${searchTerm}`,
+        sql`LOWER(${schema.jobs.title}) LIKE ${searchTerm}`,
+        sql`LOWER(${schema.jobs.description}) LIKE ${searchTerm}`,
+        sql`LOWER(${schema.jobs.address}) LIKE ${searchTerm}`,
+        sql`LOWER(${schema.jobs.notes}) LIKE ${searchTerm}`,
+        sql`LOWER(${schema.jobs.specialInstructions}) LIKE ${searchTerm}`,
+        sql`EXISTS (SELECT 1 FROM customers WHERE customers.id = ${schema.jobs.customerId} AND (LOWER(customers.name) LIKE ${searchTerm} OR LOWER(customers.email) LIKE ${searchTerm}))`
+      );
+    });
+    const searchConditions = and(...tokenConditions);
     
     // Add archived filter if needed
     const whereClause = excludeArchived
