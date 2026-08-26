@@ -2595,7 +2595,9 @@ export function ProposalBuilderV2({
                 gstAmount: gst.toString(),
                 totalAmount: grandTotal.toString(),
                 taxRate: taxRate.toString(),
-                discountAmount: discountAmount.toString(),
+                // Dollar discount (discountAmount state holds the raw % for
+                // percentage discounts) — matches what the server persists.
+                discountAmount: discountValue.toString(),
                 discountType,
                 validUntil: validUntil || null,
                 expiryDate: validUntil || null,
@@ -2676,6 +2678,12 @@ export function ProposalBuilderV2({
                         blocks={blocksForRenderer}
                         selectedChoices={previewSelectedChoices}
                         selectedOptionalItems={previewSelectedOptional}
+                        onOptionalToggle={(lineItemId, selected) =>
+                          setPreviewSelectedOptional((prev) => ({ ...prev, [lineItemId]: selected }))
+                        }
+                        onChoiceSelect={(lineItemId, choiceId) =>
+                          setPreviewSelectedChoices((prev) => ({ ...prev, [lineItemId]: choiceId }))
+                        }
                       />
                     ) : (
                       <ProposalTemplate

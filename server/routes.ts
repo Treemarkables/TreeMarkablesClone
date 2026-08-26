@@ -1270,8 +1270,24 @@ async function generateProposalPDFBuffer(
     }
   }
 
+  // Optional items — the per-item isOptional flag, or any item in an
+  // 'optional'/'multipleChoice' section — are customer-selectable extras.
+  // Before acceptance nothing has been chosen, so they're listed (marked
+  // "optional") but excluded from the totals, matching the online proposal
+  // page. After acceptance each item's `selected` flag holds the customer's
+  // actual picks (stamped by the accept endpoint).
+  const pdfInteractiveSectionIds = new Set(
+    sections
+      .filter((s: any) => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+      .map((s: any) => s.id),
+  );
+  const pdfIsAccepted = proposal.status === 'accepted' || proposal.status === 'accepted_pending_deposit';
+  const pdfItemIsOptional = (item: any) =>
+    item.isOptional === true || pdfInteractiveSectionIds.has(item.sectionId || '');
+
   let subtotal = 0;
   for (const item of lineItems) {
+    if (!pdfIsAccepted && pdfItemIsOptional(item)) continue;
     if (item.selected !== false) {
       subtotal += parseFloat(item.totalPrice || '0');
     }
@@ -1353,7 +1369,12 @@ async function generateProposalPDFBuffer(
     // Section photos (proposal_sections.images, pre-fetched above) render as a
     // two-up grid under the section's text, mirroring the online viewer.
     for (const section of sections) {
-      const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+      // Pre-acceptance, optional items are always listed (marked below) even
+      // though they don't count toward the totals; post-acceptance only the
+      // customer's actual picks survive the selected filter.
+      const items = (sectionLineItems.get(section.id) || []).filter((i: any) =>
+        !pdfIsAccepted && pdfItemIsOptional(i) ? true : i.selected !== false,
+      );
       const sectionContent = (section.content || '').trim();
       const sectionImages: Buffer[] = (Array.isArray((section as any).images) ? (section as any).images : [])
         .map((u: string) => sectionPhotoBuffers.get(u))
@@ -1407,8 +1428,9 @@ async function generateProposalPDFBuffer(
         for (const item of items) {
           const itemTotal = parseFloat(item.totalPrice || '0');
           const rowY = doc.y;
+          const optionalMark = !pdfIsAccepted && pdfItemIsOptional(item) ? ' (optional - select online)' : '';
           doc.fontSize(9).font('Helvetica').fillColor('#111827')
-            .text(item.description || '', col.desc, rowY, { width: 300 });
+            .text(`${item.description || ''}${optionalMark}`, col.desc, rowY, { width: 300 });
           const rowH = doc.y - rowY;
           doc.text(`${item.quantity || 1}`, col.qty, rowY, { width: 40, align: 'right' });
           doc.text(item.unit || '', col.unit, rowY, { width: 40, align: 'right' });
@@ -1547,8 +1569,21 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
       sectionLineItems.get(item.sectionId)!.push(item);
     }
   }
+  // Same optional-item rules as the PDF: pre-acceptance, customer-selectable
+  // items (isOptional flag or optional/multipleChoice sections) are listed but
+  // excluded from totals; post-acceptance the stamped `selected` flags rule.
+  const summaryInteractiveSectionIds = new Set(
+    sections
+      .filter((s: any) => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+      .map((s: any) => s.id),
+  );
+  const summaryIsAccepted = proposal.status === 'accepted' || proposal.status === 'accepted_pending_deposit';
+  const summaryItemIsOptional = (item: any) =>
+    item.isOptional === true || summaryInteractiveSectionIds.has(item.sectionId || '');
+
   let subtotal = 0;
   for (const item of lineItems) {
+    if (!summaryIsAccepted && summaryItemIsOptional(item)) continue;
     if (item.selected !== false) subtotal += parseFloat(item.totalPrice || '0');
   }
   // Apply the proposal-level discount (stored in dollars) so the summary's
@@ -1564,13 +1599,16 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
 
   let htmlItems = '';
   for (const section of sections) {
-    const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+    const items = (sectionLineItems.get(section.id) || []).filter((i: any) =>
+      !summaryIsAccepted && summaryItemIsOptional(i) ? true : i.selected !== false,
+    );
     if (items.length === 0) continue;
     htmlItems += `<h3 style="color:#374151;margin:12px 0 6px">${section.title}</h3>`;
     htmlItems += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
     items.forEach((item: any) => {
       const p = parseFloat(item.totalPrice || '0');
-      htmlItems += `<tr><td style="padding:4px 8px">${item.description}</td><td style="padding:4px 8px;text-align:right">$${p.toFixed(2)}</td></tr>`;
+      const optionalMark = !summaryIsAccepted && summaryItemIsOptional(item) ? ' <em>(optional — select online)</em>' : '';
+      htmlItems += `<tr><td style="padding:4px 8px">${item.description}${optionalMark}</td><td style="padding:4px 8px;text-align:right">$${p.toFixed(2)}</td></tr>`;
     });
     htmlItems += '</table>';
   }
@@ -26776,12 +26814,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   app.post('/api/proposals/:id/accept', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { selectedChoices } = req.body || {};
+      const { selectedChoices, selectedOptionalItems } = req.body || {};
       console.log('🚀 ACCEPT PROPOSAL REQUEST RECEIVED - Proposal ID:', id);
       console.log('📋 Request method:', req.method);
       console.log('🔐 Session ID:', req.session?.id);
       console.log('👤 Employee ID:', req.session?.employeeId);
-      console.log('🎯 Selected choices:', selectedChoices);
+      console.log('🎯 Selected choices:', selectedChoices, 'optional items:', selectedOptionalItems);
       
       // Get the proposal
       const proposal = await storage.getProposal(id);
@@ -26834,114 +26872,96 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         return res.status(400).json({ success: false, message: 'Proposal has expired' });
       }
 
-      // If customer selected different choices, update the proposal sections
-      let updatedSections = proposal.sections;
+      // Recompute totals from the stored line items, honouring the customer's
+      // optional-item and choice selections (keyed by proposal_line_items row
+      // ids — the same ids the public endpoint serves to the accept page).
+      // Optional items — the per-item isOptional flag OR any item in an
+      // 'optional'/'multipleChoice' section — count ONLY when the customer
+      // explicitly selected them: their stored `selected` flag defaults to
+      // true, so trusting it silently added unchosen options to the total.
       let updatedTotalAmount: number = parseFloat(proposal.totalAmount?.toString() || '0');
       let updatedSubtotal: number = parseFloat(proposal.subtotal?.toString() || '0');
+      let updatedGst: number | undefined;
+      try {
+        const [acceptSections, acceptLineItems] = await Promise.all([
+          storage.getProposalSectionsByProposal(id),
+          storage.getProposalLineItemsByProposal(id),
+        ]);
+        const interactiveSectionIds = new Set(
+          acceptSections
+            .filter((s: any) => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+            .map((s: any) => s.id),
+        );
+        const optSel: Record<string, boolean> =
+          selectedOptionalItems && typeof selectedOptionalItems === 'object' ? selectedOptionalItems : {};
+        const choiceSel: Record<string, string> =
+          selectedChoices && typeof selectedChoices === 'object' ? selectedChoices : {};
+        const acceptTaxRate = (parseFloat(proposal.taxRate?.toString() || '15') || 15) / 100;
 
-      // When no choices are made, recompute from actual DB line items (more reliable than cached proposal.subtotal)
-      if (!selectedChoices || Object.keys(selectedChoices).length === 0) {
-        try {
-          const acceptLineItems = await storage.getProposalLineItemsByProposal(id);
-          const acceptTaxRate = parseFloat(proposal.taxRate?.toString() || '15') / 100;
-          const acceptDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
-          let computedSubtotal = 0;
-          for (const item of acceptLineItems) {
-            if (item.selected !== false) {
-              const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
-              computedSubtotal += item.priceIncludesTax ? price / (1 + acceptTaxRate) : price;
+        let computedSubtotal = 0;
+        const itemUpdates: Array<{ id: string; selected: boolean; selectedChoiceId: string | null }> = [];
+        for (const item of acceptLineItems) {
+          const toggleable = item.isOptional === true || interactiveSectionIds.has(item.sectionId || '');
+          const isSelected = toggleable ? optSel[item.id] === true : item.selected !== false;
+
+          // Validate any customer-picked choice against the item's stored choices
+          let selectedChoiceId: string | null = item.selectedChoiceId ?? null;
+          let choices: any[] = [];
+          if (item.pricingType === 'choice') {
+            choices = await storage.getProposalLineItemChoicesByLineItem(item.id);
+            if (choiceSel[item.id]) {
+              if (choices.some((c: any) => c.id === choiceSel[item.id])) {
+                selectedChoiceId = choiceSel[item.id];
+              } else {
+                console.log(`⚠️ Invalid choice ${choiceSel[item.id]} for item ${item.id}, keeping original`);
+              }
             }
           }
-          // discountAmount is the pre-computed dollar discount (see CREATE/PUT).
-          const acceptDiscountValue = acceptDiscountAmt;
-          const acceptSubtotalAfterDiscount = Math.max(0, computedSubtotal - acceptDiscountValue);
-          const acceptGst = acceptSubtotalAfterDiscount * acceptTaxRate;
-          updatedSubtotal = Math.round(computedSubtotal * 100) / 100;
-          updatedTotalAmount = Math.round((acceptSubtotalAfterDiscount + acceptGst) * 100) / 100;
-          console.log(`💰 Accept: recomputed from line items: subtotal=${updatedSubtotal}, total=${updatedTotalAmount}`);
-        } catch (err) {
-          console.error('⚠️ Accept: failed to recompute from line items, using cached values:', err);
+
+          // Persist the customer's picks so later reads (PDF, re-renders,
+          // invoicing) agree with the accepted totals.
+          if ((toggleable && isSelected !== (item.selected !== false))
+            || selectedChoiceId !== (item.selectedChoiceId ?? null)) {
+            itemUpdates.push({ id: item.id, selected: isSelected, selectedChoiceId });
+          }
+
+          if (!isSelected) continue;
+          let itemPrice = 0;
+          if (item.pricingType === 'choice' && choices.length > 0) {
+            const chosen = choices.find((c: any) => c.id === selectedChoiceId)
+              ?? choices.find((c: any) => c.isDefault)
+              ?? choices[0];
+            itemPrice = (parseFloat(chosen.price?.toString() || '0') || 0)
+              * (parseFloat(item.quantity?.toString() || '1') || 1);
+          } else if (item.pricingType === 'fixed' && item.fixedPrice) {
+            itemPrice = parseFloat(item.fixedPrice.toString()) || 0;
+          } else {
+            itemPrice = parseFloat(item.totalPrice?.toString() || '0') || 0;
+          }
+          computedSubtotal += item.priceIncludesTax ? itemPrice / (1 + acceptTaxRate) : itemPrice;
         }
-      }
-      
-      if (selectedChoices && Object.keys(selectedChoices).length > 0 && Array.isArray(proposal.sections)) {
-        console.log('🎯 Applying customer-selected choices to proposal...');
-        
-        // Update sections with selected choices (validate choice IDs)
-        updatedSections = proposal.sections.map((section: any) => ({
-          ...section,
-          lineItems: (section.lineItems || []).map((item: any) => {
-            if (selectedChoices[item.id] && item.pricingType === 'choice') {
-              // Validate that the selected choice exists
-              const validChoice = (item.choices || []).find((c: any) => c.id === selectedChoices[item.id]);
-              if (validChoice) {
-                console.log(`🎯 Updating line item ${item.id} with choice ${selectedChoices[item.id]}`);
-                return {
-                  ...item,
-                  selectedChoiceId: selectedChoices[item.id]
-                };
-              } else {
-                console.log(`⚠️ Invalid choice ${selectedChoices[item.id]} for item ${item.id}, keeping original`);
-              }
-            }
-            return item;
-          })
-        }));
-        
-        // Recalculate totals based on selected choices (matching ProposalTemplate logic)
-        let subtotalExGst = 0;
-        let gstAmount = 0;
-        const gstRate = 0.15;
-        
-        updatedSections.forEach((section: any) => {
-          (section.lineItems || []).forEach((item: any) => {
-            if (item.selected) {
-              let itemPrice = 0;
-              if (item.pricingType === 'choice' && item.selectedChoiceId) {
-                const selectedChoice = (item.choices || []).find((c: any) => c.id === item.selectedChoiceId);
-                if (selectedChoice) {
-                  itemPrice = Number(selectedChoice.price) * Number(item.quantity);
-                }
-              } else if (item.pricingType === 'fixed' && item.fixedPrice) {
-                itemPrice = Number(item.fixedPrice);
-              } else {
-                itemPrice = Number(item.totalPrice);
-              }
-              
-              // Handle priceIncludesTax flag (matching ProposalTemplate logic)
-              const isInclusive = item.priceIncludesTax || false;
-              
-              if (isInclusive) {
-                // Price includes GST - extract the ex-GST amount
-                const exGst = itemPrice / (1 + gstRate);
-                subtotalExGst += exGst;
-                gstAmount += itemPrice - exGst;
-              } else {
-                // Price is ex-GST
-                subtotalExGst += itemPrice;
-                gstAmount += itemPrice * gstRate;
-              }
-            }
-          });
-        });
-        
-        // Apply discount (discount reduces the taxable amount - matching ProposalTemplate logic)
-        const discountAmount = Number(proposal.discountAmount || 0);
-        const subtotalAfterDiscount = Math.max(0, subtotalExGst - discountAmount);
-        
-        // GST is calculated on the discounted amount (less GST)
-        const gstOnDiscounted = subtotalAfterDiscount * gstRate;
-        const totalAmount = subtotalAfterDiscount + gstOnDiscounted;
-        
-        // Round to 2 decimal places (matching UI formatting)
-        updatedSubtotal = Math.round(subtotalExGst * 100) / 100;
-        updatedTotalAmount = Math.round(totalAmount * 100) / 100;
-        const roundedGst = Math.round(gstOnDiscounted * 100) / 100;
-        console.log(`💰 Recalculated totals: subtotal=${updatedSubtotal}, discount=${discountAmount}, subtotalAfterDiscount=${Math.round(subtotalAfterDiscount * 100) / 100}, gst=${roundedGst}, total=${updatedTotalAmount}`);
+
+        // discountAmount is the pre-computed dollar discount (see CREATE/PUT).
+        const acceptDiscountValue = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
+        const acceptSubtotalAfterDiscount = Math.max(0, computedSubtotal - acceptDiscountValue);
+        const acceptGst = acceptSubtotalAfterDiscount * acceptTaxRate;
+        updatedSubtotal = Math.round(computedSubtotal * 100) / 100;
+        updatedGst = Math.round(acceptGst * 100) / 100;
+        updatedTotalAmount = Math.round((acceptSubtotalAfterDiscount + acceptGst) * 100) / 100;
+        console.log(`💰 Accept: recomputed from line items: subtotal=${updatedSubtotal}, discount=${acceptDiscountValue}, gst=${updatedGst}, total=${updatedTotalAmount} (${itemUpdates.length} selection updates)`);
+
+        for (const u of itemUpdates) {
+          await storage.updateProposalLineItem(u.id, {
+            selected: u.selected,
+            selectedChoiceId: u.selectedChoiceId,
+          } as any);
+        }
+      } catch (err) {
+        console.error('⚠️ Accept: failed to recompute from line items, using cached values:', err);
       }
       
       // Deposit gate. If this proposal requires an upfront payment, persist
-      // the updated sections/totals and stop here — the customer UI will
+      // the updated totals and stop here — the customer UI will
       // open Stripe Checkout via /api/proposals/:id/deposit-checkout and
       // the webhook will run finalizeProposalAcceptance() on payment.
       const depositAmount = computeDepositAmount(
@@ -26954,9 +26974,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const pendingProposal = await storage.updateProposal(id, {
           status: 'accepted_pending_deposit',
           acceptedDate: new Date(),
-          sections: updatedSections,
           totalAmount: updatedTotalAmount,
           subtotal: updatedSubtotal,
+          ...(updatedGst !== undefined ? { gstAmount: updatedGst } : {}),
         } as any);
         console.log(`⏸️ Proposal ${proposal.proposalNumber} acceptance pending deposit of ${depositAmount}`);
         return res.json({
@@ -26977,9 +26997,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const updatedProposal = await storage.updateProposal(id, {
         status: 'accepted',
         acceptedDate: new Date(),
-        sections: updatedSections,
         totalAmount: updatedTotalAmount,
         subtotal: updatedSubtotal,
+        ...(updatedGst !== undefined ? { gstAmount: updatedGst } : {}),
       } as any);
 
       // Owner-pathed public accept link (no session) → bind the proposal's tenant so
