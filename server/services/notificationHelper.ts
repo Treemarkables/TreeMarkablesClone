@@ -1,4 +1,5 @@
 import { storage } from '../storage.js';
+import { isWithinStaffPushWindow, nextStaffPushWindowStart } from './notificationWindow.js';
 
 /**
  * Notification helper service
@@ -11,6 +12,118 @@ interface NotificationOptions {
   clickAction?: string;
   collapseId?: string;
   data?: Record<string, any>;
+}
+
+type StaffPushPrefKey = 'jobAssignments' | 'scheduleChanges';
+
+interface QueuedPushMetadata {
+  push?: {
+    clickAction?: string;
+    collapseId?: string;
+    data?: Record<string, any>;
+    prefKey?: StaffPushPrefKey;
+  };
+}
+
+/**
+ * Staff scheduling pushes respect the 7am-6pm NZ delivery window: inside it
+ * they send immediately, outside it they're parked in notification_queue and
+ * the queue worker delivers them at the next 7am (via deliverQueuedPush).
+ */
+async function sendOrQueueStaffPush(
+  employeeId: string,
+  prefKey: StaffPushPrefKey,
+  options: NotificationOptions,
+  jobId?: string,
+): Promise<boolean> {
+  if (isWithinStaffPushWindow()) {
+    return notifyEmployee(employeeId, options);
+  }
+
+  try {
+    const sendAt = nextStaffPushWindowStart();
+
+    // Supersede any still-pending queued push carrying the same collapseId so
+    // a job reassigned three times overnight delivers one push at 7am, not three.
+    if (options.collapseId) {
+      const pending = await storage.getPendingNotifications(new Date(Date.now() + 48 * 60 * 60 * 1000));
+      for (const item of pending) {
+        if (item.notificationType !== 'push' || item.recipientId !== employeeId) continue;
+        const meta = (item.metadata as QueuedPushMetadata | null)?.push;
+        if (meta?.collapseId === options.collapseId) {
+          await storage.markNotificationFailed(item.id, 'Superseded by a newer queued push');
+        }
+      }
+    }
+
+    await storage.createNotificationQueueItem({
+      recipientId: employeeId,
+      notificationType: 'push',
+      subject: options.title,
+      message: options.body,
+      metadata: {
+        push: {
+          clickAction: options.clickAction,
+          collapseId: options.collapseId,
+          data: options.data,
+          prefKey,
+        },
+      },
+      sendAt,
+      status: 'pending',
+      jobId,
+    });
+    console.log(`🌙 Outside 7am-6pm NZ push window — queued ${prefKey} push for employee ${employeeId} until ${sendAt.toISOString()}`);
+    return true;
+  } catch (error) {
+    // Queueing failed — better a late push than a lost one.
+    console.error('Error queueing staff push, sending immediately instead:', error);
+    return notifyEmployee(employeeId, options);
+  }
+}
+
+/**
+ * Deliver a notification_queue row of type 'push' (called by the queue worker
+ * once sendAt has passed). Re-checks the gating preference and, for
+ * job-linked pushes, that the employee is still assigned to the job — an
+ * overnight unassignment shouldn't produce a 7am "you've been assigned" push.
+ */
+export async function deliverQueuedPush(item: {
+  id: string;
+  recipientId: string;
+  subject: string | null;
+  message: string;
+  metadata: unknown;
+  jobId: string | null;
+}): Promise<boolean> {
+  const meta = (item.metadata as QueuedPushMetadata | null)?.push ?? {};
+
+  const prefs = await storage.getNotificationPreferences(item.recipientId);
+  if (prefs) {
+    if (meta.prefKey === 'jobAssignments' && !prefs.jobAssignments) return false;
+    if (meta.prefKey === 'scheduleChanges' && !prefs.scheduleChanges) return false;
+  }
+
+  if (item.jobId) {
+    try {
+      const assignments = await storage.getJobStaffAssignmentsByJob(item.jobId);
+      if (!assignments.some(a => a.employeeId === item.recipientId)) {
+        console.log(`⏭️ Skipping queued push ${item.id} — employee ${item.recipientId} no longer assigned to job ${item.jobId}`);
+        return false;
+      }
+    } catch (error) {
+      // Staleness check is best-effort — deliver rather than drop.
+      console.error('Error checking assignment freshness for queued push:', error);
+    }
+  }
+
+  return notifyEmployee(item.recipientId, {
+    title: item.subject || 'Notification',
+    body: item.message,
+    clickAction: meta.clickAction,
+    collapseId: meta.collapseId,
+    data: meta.data,
+  });
 }
 
 /**
@@ -94,8 +207,8 @@ export async function notifyJobAssignment(employeeId: string, jobNumber: string,
   }
   
   const clickUrl = jobId ? `/dispatch?job=${jobId}` : '/dispatch';
-  
-  return notifyEmployee(employeeId, {
+
+  return sendOrQueueStaffPush(employeeId, 'jobAssignments', {
     title: '📋 New Job Assignment',
     body: `You've been assigned to Job #${jobNumber}${jobTitle ? `: ${jobTitle}` : ''}`,
     clickAction: clickUrl,
@@ -105,7 +218,7 @@ export async function notifyJobAssignment(employeeId: string, jobNumber: string,
       jobNumber,
       jobId: jobId || '',
     },
-  });
+  }, jobId);
 }
 
 /**
@@ -118,8 +231,8 @@ export async function notifyScheduleChange(employeeId: string, jobNumber: string
   }
   
   const clickUrl = jobId ? `/dispatch?job=${jobId}` : '/dispatch';
-  
-  return notifyEmployee(employeeId, {
+
+  return sendOrQueueStaffPush(employeeId, 'scheduleChanges', {
     title: '🕒 Schedule Update',
     body: `Job #${jobNumber} has been rescheduled to ${newDate}`,
     clickAction: clickUrl,
@@ -129,7 +242,7 @@ export async function notifyScheduleChange(employeeId: string, jobNumber: string
       jobNumber,
       jobId: jobId || '',
     },
-  });
+  }, jobId);
 }
 
 /**

@@ -445,6 +445,18 @@ function startNotificationQueueWorker() {
 
       for (const notification of pendingNotifications) {
         try {
+          // Staff pushes deferred by the 7am-6pm NZ delivery window
+          // (see server/services/notificationWindow.ts). deliverQueuedPush
+          // re-checks prefs + assignment freshness; a false return means
+          // "deliberately skipped", which still counts as processed.
+          if (notification.notificationType === 'push') {
+            const { deliverQueuedPush } = await import("./services/notificationHelper");
+            const delivered = await deliverQueuedPush(notification);
+            await storage.markNotificationSent(notification.id);
+            log(`[Notification Queue] Queued push ${notification.id} ${delivered ? 'delivered' : 'skipped (prefs off, unassigned, or no active tokens)'}`, "startup");
+            continue;
+          }
+
           if (notification.recipientEmail && (notification.notificationType === 'email' || notification.notificationType === 'both')) {
             await emailService.sendEmail({
               to: notification.recipientEmail,
