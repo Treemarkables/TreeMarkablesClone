@@ -32,6 +32,8 @@
 	<string>Inflow uses your location to sort today's jobs by distance from you.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Inflow needs microphone access for voice calls with customers.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Inflow saves job photos and videos to your Photos library when you tap Save.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Inflow needs photo library access so you can attach screenshots of customer messages and job-site photos to leads.</string>
 	<key>UIBackgroundModes</key>
