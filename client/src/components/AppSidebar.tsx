@@ -19,7 +19,7 @@ import {
   DollarSign,
   TrendingUp,
   Building2,
-  type LucideIcon,
+  type LucideIcon, Receipt,
 } from "lucide-react";
 import {
   Sidebar,
@@ -299,6 +299,18 @@ function SidebarNavContent({
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 </PlanGate>
+              )}
+
+              {/* Supplier Invoices — emailed bills waiting to be assigned to a job */}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/supplier-invoices"} className={ITEM}>
+                    <Link href="/supplier-invoices" onClick={handleLinkClick} data-testid="link-supplier-invoices">
+                      <NavIcon icon={Receipt} />
+                      <span>Supplier Invoices</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               )}
 
               {/* Staff Schedule */}

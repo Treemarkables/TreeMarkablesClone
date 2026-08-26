@@ -3266,7 +3266,9 @@ export type UpdateInvoiceLineItem = z.infer<typeof updateInvoiceLineItemSchema>;
 export const supplierInvoices = pgTable("supplier_invoices", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  jobId: varchar("job_id").references(() => jobs.id, { onDelete: 'cascade' }).notNull(),
+  // Nullable since the inbound-ingestion queue (#supplier-invoice-ingestion):
+  // an emailed bill sits unassigned (`needs_review`) until a human picks a job.
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: 'cascade' }),
   supplierName: text("supplier_name").notNull(),
   invoiceNumber: text("invoice_number"),
   invoiceDate: timestamp("invoice_date"),
@@ -3290,10 +3292,28 @@ export const supplierInvoices = pgTable("supplier_invoices", {
   rebill: boolean("rebill").notNull().default(false),
   markupPercent: decimal("markup_percent", { precision: 10, scale: 2 }).default("0"),
   rebilledAt: timestamp("rebilled_at"), // when rebilled items were pushed onto the job's line items
-  status: text("status").notNull().default("confirmed"), // pending_review | confirmed
+  // Manual flow: pending_review | confirmed.
+  // Inbound (emailed) flow: needs_review | assigned | rejected | quarantined.
+  status: text("status").notNull().default("confirmed"),
   notes: text("notes"),
-  rawExtraction: jsonb("raw_extraction"), // raw GPT-5 output, kept for audit/debugging
+  rawExtraction: jsonb("raw_extraction"), // raw model output, kept for audit/debugging
   createdBy: varchar("created_by"),
+  // ── Inbound ingestion (supplier emails → triage queue) ─────────────────────
+  source: text("source").notNull().default("manual"), // manual | inbound
+  inboundDocumentId: varchar("inbound_document_id"),
+  supplierConnectionId: varchar("supplier_connection_id"),
+  documentType: text("document_type").notNull().default("invoice"), // invoice | credit_note | statement | unknown
+  customerAccountRef: text("customer_account_ref"),
+  poOrJobReference: text("po_or_job_reference"), // extracted; unused in Phase 1, drives Phase 2 matching
+  branch: text("branch"),
+  arithmeticValid: boolean("arithmetic_valid"),
+  confidence: decimal("confidence", { precision: 3, scale: 2 }), // 0.00–1.00
+  validationIssues: jsonb("validation_issues").default([]), // string[] of failed checks for the reviewer
+  // sha256(supplierConnectionId + normalised(invoiceNumber) + totalIncGst);
+  // partial unique on (business_id, dedupe_hash) WHERE status != 'rejected'.
+  dedupeHash: text("dedupe_hash"),
+  assignedByUserId: varchar("assigned_by_user_id"),
+  assignedAt: timestamp("assigned_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -3318,6 +3338,90 @@ export const updateSupplierInvoiceSchema = insertSupplierInvoiceSchema.partial()
 export type SupplierInvoice = typeof supplierInvoices.$inferSelect;
 export type InsertSupplierInvoice = z.infer<typeof insertSupplierInvoiceSchema>;
 export type UpdateSupplierInvoice = z.infer<typeof updateSupplierInvoiceSchema>;
+
+// ── Supplier invoice ingestion (Phase 1) ─────────────────────────────────────
+// Suppliers email invoices to a per-supplier Inflow address
+// (inv-{tenantSlug}-{token}@<INBOUND_EMAIL_DOMAIN>) or the tenant catch-all
+// (bills-{tenantSlug}@…). The token identifies the supplier BEFORE any parsing
+// — the supplier is never derived from the email's From address.
+export const supplierConnections = pgTable("supplier_connections", {
+  businessId: varchar("business_id").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplierName: text("supplier_name").notNull(), // user-entered, e.g. "Placemakers Gisborne"
+  inboundToken: text("inbound_token").notNull().unique(), // random 12-char, in the address local part
+  inboundAddress: text("inbound_address").notNull().unique(), // generated, denormalised for display
+  allowedSenderDomains: text("allowed_sender_domains").array().notNull().default(sql`'{}'::text[]`),
+  // Domain seen on the first (quarantined) email, awaiting "Confirm this sender".
+  pendingSenderDomain: text("pending_sender_domain"),
+  status: text("status").notNull().default("pending_first_email"), // pending_first_email | active | paused
+  extractionHint: text("extraction_hint"), // per-supplier parser hint, Phase 2
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  businessIdx: index("supplier_connections_business_idx").on(table.businessId),
+}));
+export const insertSupplierConnectionSchema = createInsertSchema(supplierConnections).omit({ id: true, createdAt: true, updatedAt: true });
+export type SupplierConnection = typeof supplierConnections.$inferSelect;
+export type InsertSupplierConnection = z.infer<typeof insertSupplierConnectionSchema>;
+
+// The raw receipt record — written synchronously in the webhook before any work.
+export const inboundDocuments = pgTable("inbound_documents", {
+  businessId: varchar("business_id").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplierConnectionId: varchar("supplier_connection_id"), // null for the tenant catch-all
+  resendEmailId: text("resend_email_id").notNull().unique(), // dedupe key for webhook replays
+  fromAddress: text("from_address"),
+  toAddress: text("to_address"),
+  subject: text("subject"),
+  spfPass: boolean("spf_pass"), // null = not reported by the provider
+  dkimPass: boolean("dkim_pass"),
+  attachmentRefs: jsonb("attachment_refs").default([]), // [{ filename, mimeType, size, url }] after fetch
+  status: text("status").notNull().default("received"), // received | fetching | parsing | parsed | failed | quarantined
+  failureReason: text("failure_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  businessIdx: index("inbound_documents_business_idx").on(table.businessId),
+}));
+export type InboundDocument = typeof inboundDocuments.$inferSelect;
+
+// Extracted line items. 4dp unit cost — trade pricing (fasteners, cable,
+// chain) goes below cents and 2dp introduces rounding drift that shows up as
+// failed arithmetic validation on large line counts.
+export const supplierInvoiceLines = pgTable("supplier_invoice_lines", {
+  businessId: varchar("business_id").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplierInvoiceId: varchar("supplier_invoice_id").notNull().references(() => supplierInvoices.id, { onDelete: 'cascade' }),
+  lineNumber: integer("line_number").notNull(), // preserve source ordering
+  description: text("description").notNull().default(""),
+  sku: text("sku"),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("1"),
+  unit: text("unit"),
+  unitCostExGst: decimal("unit_cost_ex_gst", { precision: 12, scale: 4 }).notNull().default("0"),
+  lineTotalExGst: decimal("line_total_ex_gst", { precision: 12, scale: 2 }).notNull().default("0"),
+  gstRate: decimal("gst_rate", { precision: 4, scale: 3 }).notNull().default("0.150"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  invoiceIdx: index("supplier_invoice_lines_invoice_idx").on(table.supplierInvoiceId),
+}));
+export type SupplierInvoiceLine = typeof supplierInvoiceLines.$inferSelect;
+
+// Not used for splitting in Phase 1 — every invoice allocates wholly to its
+// assignedJobId, but assignment still writes one row per line at full value so
+// Phase 2 line-level splitting is an edit rather than a backfill.
+export const invoiceJobAllocations = pgTable("invoice_job_allocations", {
+  businessId: varchar("business_id").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplierInvoiceLineId: varchar("supplier_invoice_line_id").notNull().references(() => supplierInvoiceLines.id, { onDelete: 'cascade' }),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  jobPhaseId: varchar("job_phase_id"),
+  allocatedAmountExGst: decimal("allocated_amount_ex_gst", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  lineIdx: index("invoice_job_allocations_line_idx").on(table.supplierInvoiceLineId),
+  jobIdx: index("invoice_job_allocations_job_idx").on(table.jobId),
+}));
+export type InvoiceJobAllocation = typeof invoiceJobAllocations.$inferSelect;
 
 // Invoice Section Schema Exports
 export const insertInvoiceSectionSchema = createInsertSchema(invoiceSections).omit({

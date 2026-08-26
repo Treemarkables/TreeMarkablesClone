@@ -145,6 +145,8 @@ const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
 const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
 const SettingsAccount = lazy(() => import("@/pages/SettingsAccount"));
 const SettingsChannels = lazy(() => import("@/pages/SettingsChannels"));
+const SettingsSuppliers = lazy(() => import("@/pages/SettingsSuppliers"));
+const SupplierInvoices = lazy(() => import("@/pages/SupplierInvoices"));
 const SettingsSetup = lazy(() => import("@/pages/SettingsSetup"));
 const SettingsImport = lazy(() => import("@/pages/SettingsImport"));
 const AdminSubscribers = lazy(() => import("@/pages/AdminSubscribers"));
@@ -1313,6 +1315,13 @@ function Router() {
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
+      <Route path="/supplier-invoices">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <SupplierInvoices />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
       <Route path="/calls">
         <ProtectedRoute>
           <SidebarLayout>
@@ -1582,6 +1591,11 @@ function Router() {
       <Route path="/settings/channels">
         <SidebarLayout>
           <SettingsChannels />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/suppliers">
+        <SidebarLayout>
+          <SettingsSuppliers />
         </SidebarLayout>
       </Route>
       <Route path="/settings/setup">
