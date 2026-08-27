@@ -1,5 +1,5 @@
 import { storage } from '../storage.js';
-import { isWithinStaffPushWindow, nextStaffPushWindowStart } from './notificationWindow.js';
+import { getStaffPushWindow, isWithinStaffPushWindow, nextStaffPushWindowStart } from './notificationWindow.js';
 
 /**
  * Notification helper service
@@ -26,9 +26,10 @@ interface QueuedPushMetadata {
 }
 
 /**
- * Staff scheduling pushes respect the 7am-6pm NZ delivery window: inside it
- * they send immediately, outside it they're parked in notification_queue and
- * the queue worker delivers them at the next 7am (via deliverQueuedPush).
+ * Staff scheduling pushes respect the tenant's configured delivery window
+ * (business settings, default 7am-6pm NZ): inside it they send immediately,
+ * outside it they're parked in notification_queue and the queue worker
+ * delivers them at the next window start (via deliverQueuedPush).
  */
 async function sendOrQueueStaffPush(
   employeeId: string,
@@ -36,12 +37,13 @@ async function sendOrQueueStaffPush(
   options: NotificationOptions,
   jobId?: string,
 ): Promise<boolean> {
-  if (isWithinStaffPushWindow()) {
+  const window = await getStaffPushWindow();
+  if (isWithinStaffPushWindow(window)) {
     return notifyEmployee(employeeId, options);
   }
 
   try {
-    const sendAt = nextStaffPushWindowStart();
+    const sendAt = nextStaffPushWindowStart(window);
 
     // Supersede any still-pending queued push carrying the same collapseId so
     // a job reassigned three times overnight delivers one push at 7am, not three.
@@ -73,7 +75,7 @@ async function sendOrQueueStaffPush(
       status: 'pending',
       jobId,
     });
-    console.log(`🌙 Outside 7am-6pm NZ push window — queued ${prefKey} push for employee ${employeeId} until ${sendAt.toISOString()}`);
+    console.log(`🌙 Outside staff push window — queued ${prefKey} push for employee ${employeeId} until ${sendAt.toISOString()}`);
     return true;
   } catch (error) {
     // Queueing failed — better a late push than a lost one.
