@@ -13841,7 +13841,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     if (!env.TWILIO_TWIML_APP_SID.set) recommendations.push('Set TWILIO_TWIML_APP_SID to enable outgoing calls from the iOS app');
     if (!env.TWILIO_PUSH_CREDENTIAL_SID.set) recommendations.push('Set TWILIO_PUSH_CREDENTIAL_SID (a VoIP Push Credential in Twilio Console → Voice → Push Credentials, backed by an Apple VoIP Services APNs certificate) so the iOS app can RECEIVE incoming calls');
     if (twilioPhoneNumber && !twilioPhoneNumber.voiceUrlMatchesExpected) {
-      recommendations.push(`Update Twilio console voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'})`);
+      recommendations.push(`Update Twilio voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'}) — POST /api/twilio/admin/configure-incoming sets it`);
     }
     if (twilioTwimlApp && !twilioTwimlApp.error && !twilioTwimlApp.voiceUrlMatchesExpected) {
       recommendations.push(`TwiML App voice URL should be ${expectedWebhooks.outgoing} for web-dialer outgoing calls (currently: ${twilioTwimlApp.voiceUrl || 'unset'}) — POST /api/twilio/admin/configure-outgoing sets it`);
@@ -13914,6 +13914,60 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     } catch (error: any) {
       console.error('❌ Failed to configure TwiML App voice URL:', error);
       return res.status(500).json({ success: false, message: error?.message || 'Failed to update TwiML App' });
+    }
+  });
+
+  // One-click setup for the INCOMING number's webhooks — points the Twilio
+  // number's voice URL and status callback at APP_URL, so a domain move (e.g.
+  // treemarkables → inflowapp) is a single authenticated POST instead of a
+  // manual console edit. Deliberately leaves smsUrl alone: inbound SMS lives
+  // with SMS Everyone, and repointing the Twilio number's SMS webhook is a
+  // separate behavioural decision, not part of a domain rename. Verified by
+  // the diagnostic's voiceUrlMatchesExpected flag.
+  app.post('/api/twilio/admin/configure-incoming', async (req: Request, res: Response) => {
+    const secret = req.headers['x-webhook-secret'];
+    const secretOk = !!secret && secret === process.env.HERO_WEBHOOK_SECRET;
+    let sessionOk = false;
+    if (!secretOk && req.session.employeeId) {
+      try {
+        const emp = await storage.getEmployee(req.session.employeeId);
+        sessionOk = !!emp && emp.role === 'admin';
+      } catch {
+        sessionOk = false;
+      }
+    }
+    if (!secretOk && !sessionOk) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    try {
+      const phoneNumber = process.env.TWILIO_PHONE_NUMBER;
+      if (!phoneNumber) {
+        return res.status(400).json({ success: false, message: 'TWILIO_PHONE_NUMBER not set' });
+      }
+      const client = await getTwilioClient();
+      const list = await client.incomingPhoneNumbers.list({ phoneNumber, limit: 1 });
+      const num = list[0];
+      if (!num) {
+        return res.status(404).json({ success: false, message: `No incoming number found in Twilio account for ${phoneNumber}` });
+      }
+      const previous = { voiceUrl: num.voiceUrl, statusCallback: num.statusCallback };
+      const updated = await client.incomingPhoneNumbers(num.sid).update({
+        voiceUrl: `${APP_URL}/api/webhooks/twilio-answer`,
+        voiceMethod: 'POST',
+        statusCallback: `${APP_URL}/api/webhooks/twilio-voice`,
+        statusCallbackMethod: 'POST',
+      });
+      console.log(`✅ Incoming number ${phoneNumber} voice URL set to ${updated.voiceUrl} (was ${previous.voiceUrl})`);
+      return res.json({
+        success: true,
+        sid: updated.sid,
+        previous,
+        voiceUrl: updated.voiceUrl,
+        statusCallback: updated.statusCallback,
+      });
+    } catch (error: any) {
+      console.error('❌ Failed to configure incoming number webhooks:', error);
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to update incoming number' });
     }
   });
 

@@ -58,6 +58,15 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     /// (so a later revert gets a fresh budget) and on each user toggle / call end.
     private var speakerReassertAttempts = 0
     private let maxSpeakerReasserts = 4
+    /// Call-setup timing for the "seconds of silence after answering" report.
+    /// Stamped when CallKit performs the answer / activates the audio session;
+    /// the deltas ride the "callConnected" event so the in-app call screen can
+    /// display them (device logs are unreadable on the owner's setup). They
+    /// split the wait into audio-session activation (app-side, fixable) vs
+    /// media negotiation to the Twilio edge (network-side). Cleared on
+    /// disconnect; never set for outgoing calls.
+    private var answerRequestedAt: Date?
+    private var audioActivatedAt: Date?
     /// Error text from the most recent route attempt, forwarded to the webview
     /// in the "audioRoute" event. os_log is unreadable on the owner's device,
     /// so a route failure that only logs is a route failure that never
@@ -620,6 +629,8 @@ extension TwilioVoicePlugin: CXProviderDelegate {
             action.fail()
             return
         }
+        self.answerRequestedAt = Date()
+        self.audioActivatedAt = nil
         // Disable the Twilio audio device before accepting and hand the SDK our
         // CallKit UUID via AcceptOptions. Per the SDK 6.x contract, a nil
         // AcceptOptions.uuid means "no CallKit here" and the SDK enables the
@@ -667,7 +678,13 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         // through CallKit and setSpeaker(.speaker) will silently stay on the
         // earpiece. Both lock-screen and in-app answers route through
         // CXAnswerCallAction, so it should fire for both.
-        tvLog.log("CallKit didActivate — speakerOn=\(self.speakerOn, privacy: .public)")
+        self.audioActivatedAt = Date()
+        if let t0 = self.answerRequestedAt {
+            let ms = Int(Date().timeIntervalSince(t0) * 1000)
+            tvLog.log("CallKit didActivate — speakerOn=\(self.speakerOn, privacy: .public) answer→activate=\(ms, privacy: .public)ms")
+        } else {
+            tvLog.log("CallKit didActivate — speakerOn=\(self.speakerOn, privacy: .public)")
+        }
         emitAudioRoute("didActivate")
         (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = true
         // Watch for the route being yanked back to the earpiece. Earpiece audio
@@ -735,7 +752,16 @@ extension TwilioVoicePlugin: CallDelegate {
             DispatchQueue.main.async { self.applySpeakerRoute(true) }
         }
         emitAudioRoute("callDidConnect")
-        notifyListeners("callConnected", data: ["sid": call.sid ?? ""], retainUntilConsumed: true)
+        var data: [String: Any] = ["sid": call.sid ?? ""]
+        if let t0 = self.answerRequestedAt {
+            let connectMs = Int(Date().timeIntervalSince(t0) * 1000)
+            data["answerToConnectMs"] = String(connectMs)
+            if let t1 = self.audioActivatedAt {
+                data["answerToActivateMs"] = String(Int(t1.timeIntervalSince(t0) * 1000))
+            }
+            tvLog.log("call setup — answer→connect=\(connectMs, privacy: .public)ms")
+        }
+        notifyListeners("callConnected", data: data, retainUntilConsumed: true)
     }
 
     public func callDidDisconnect(call: Call, error: Error?) {
@@ -746,6 +772,8 @@ extension TwilioVoicePlugin: CallDelegate {
         callUUID = nil
         speakerOn = false
         lastRouteError = ""
+        answerRequestedAt = nil
+        audioActivatedAt = nil
         notifyListeners("callDisconnected", data: [
             "error": error?.localizedDescription ?? "",
         ], retainUntilConsumed: true)
@@ -759,6 +787,8 @@ extension TwilioVoicePlugin: CallDelegate {
         callUUID = nil
         speakerOn = false
         lastRouteError = ""
+        answerRequestedAt = nil
+        audioActivatedAt = nil
         notifyListeners("callFailed", data: ["error": error.localizedDescription], retainUntilConsumed: true)
     }
 }
