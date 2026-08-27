@@ -1494,6 +1494,15 @@ export const businessSettings = pgTable("business_settings", {
   complianceRemindersEnabled: boolean("compliance_reminders_enabled").default(true),
   complianceReminderOffsets: jsonb("compliance_reminder_offsets").$type<number[]>().default(sql`'[30, 7]'::jsonb`),
 
+  // Staff push delivery window ("quiet hours"). Staff scheduling pushes
+  // (job assignments, schedule changes) are only delivered between start and
+  // end (NZ time, every day); out-of-window pushes are queued and delivered
+  // at the next window start. Times are 24h "HH:MM" strings. Disabling the
+  // window sends pushes immediately around the clock.
+  staffPushWindowEnabled: boolean("staff_push_window_enabled").default(true),
+  staffPushWindowStart: text("staff_push_window_start").default("07:00"),
+  staffPushWindowEnd: text("staff_push_window_end").default("18:00"),
+
   // Inquiry auto-reply (sent to the customer immediately on website form submission)
   // The default copy follows what Jules asked for: "Hey, we have received your
   // inquiry. Jules will be in touch within 24 hours to schedule in your quote."
@@ -1557,6 +1566,8 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
   })).optional(),
   // Lead times (whole days before expiry) for vehicle compliance reminders, e.g. [30, 7].
   complianceReminderOffsets: z.array(z.number().int().min(1).max(365)).max(6).optional(),
+  staffPushWindowStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24h HH:MM format').optional(),
+  staffPushWindowEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24h HH:MM format').optional(),
   inquiryAutoReplyChannel: z.enum(['email', 'sms', 'both']).optional(),
   inquiryAutoReplyEmailSubject: z.string().max(200).optional(),
   inquiryAutoReplyEmailMessage: z.string().max(5000).optional(),

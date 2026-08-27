@@ -446,7 +446,7 @@ function startNotificationQueueWorker() {
 
       for (const notification of pendingNotifications) {
         try {
-          // Staff pushes deferred by the 7am-6pm NZ delivery window
+          // Staff pushes deferred by the configurable delivery window
           // (see server/services/notificationWindow.ts). deliverQueuedPush
           // re-checks prefs + assignment freshness; a false return means
           // "deliberately skipped", which still counts as processed.
@@ -798,6 +798,9 @@ The {businessName} Team';
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminders_enabled BOOLEAN DEFAULT true;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminder_offsets JSONB DEFAULT '[30, 7]'::jsonb;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS job_reply_forward_email TEXT;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_enabled BOOLEAN DEFAULT true;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_start TEXT DEFAULT '07:00';
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_end TEXT DEFAULT '18:00';
         CREATE TABLE IF NOT EXISTS equipment_compliance_reminders (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           business_id VARCHAR,

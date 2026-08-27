@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Calendar as CalendarIcon,
   ArrowLeft,
@@ -16,6 +17,7 @@ import {
   Percent,
   FileText,
   Banknote,
+  BellRing,
 } from "lucide-react";
 import {
   Select,
@@ -49,6 +51,9 @@ export default function SettingsPreferences() {
   const [dailyRevenueTarget, setDailyRevenueTarget] = useState<string>("3500");
   const [defaultDepositType, setDefaultDepositType] = useState<"none" | "percent" | "fixed">("none");
   const [defaultDepositValue, setDefaultDepositValue] = useState<string>("");
+  const [staffPushWindowEnabled, setStaffPushWindowEnabled] = useState(true);
+  const [staffPushWindowStart, setStaffPushWindowStart] = useState("07:00");
+  const [staffPushWindowEnd, setStaffPushWindowEnd] = useState("18:00");
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -72,6 +77,13 @@ export default function SettingsPreferences() {
     }
     const depValue = parseFloat(settings?.data?.defaultDepositValue || "0") || 0;
     setDefaultDepositValue(depValue > 0 ? String(depValue) : "");
+    setStaffPushWindowEnabled(settings?.data?.staffPushWindowEnabled !== false);
+    if (settings?.data?.staffPushWindowStart) {
+      setStaffPushWindowStart(settings.data.staffPushWindowStart);
+    }
+    if (settings?.data?.staffPushWindowEnd) {
+      setStaffPushWindowEnd(settings.data.staffPushWindowEnd);
+    }
   }, [settings]);
 
   // Mutation to update settings
@@ -127,6 +139,25 @@ export default function SettingsPreferences() {
 
   const marginNum = parseFloat(defaultGrossMarginPct) || 0;
   const marginValid = marginNum >= 0 && marginNum <= 100;
+
+  const pushWindowValid =
+    !staffPushWindowEnabled || staffPushWindowStart < staffPushWindowEnd;
+
+  const handleSavePushWindow = () => {
+    updateSettingsMutation.mutate({
+      staffPushWindowEnabled,
+      staffPushWindowStart,
+      staffPushWindowEnd,
+    });
+  };
+
+  const formatWindowTime = (time: string) => {
+    const [h, m] = time.split(":").map(Number);
+    if (isNaN(h) || isNaN(m)) return time;
+    const suffix = h < 12 ? "am" : "pm";
+    const hour12 = h % 12 === 0 ? 12 : h % 12;
+    return m === 0 ? `${hour12}${suffix}` : `${hour12}:${String(m).padStart(2, "0")}${suffix}`;
+  };
 
   return (
     <div className="flex flex-col h-full p-6 space-y-6">
@@ -440,6 +471,115 @@ export default function SettingsPreferences() {
                   (!marginValid && defaultGrossMarginPct !== "")
                 }
                 data-testid="button-save-preferences"
+              >
+                {updateSettingsMutation.isPending
+                  ? "Saving..."
+                  : "Save Changes"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Staff Notification Hours Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BellRing className="w-5 h-5" />
+              Staff Notification Hours
+            </CardTitle>
+            <CardDescription>
+              Control when staff receive scheduling push notifications (job
+              assignments and schedule changes)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1 pr-4">
+                <Label
+                  htmlFor="staff-push-window-enabled"
+                  className="text-base font-medium"
+                >
+                  Limit notification hours
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  When on, scheduling notifications outside the hours below are
+                  held and delivered at the start of the next window. When off,
+                  staff are notified immediately at any time of day.
+                </p>
+              </div>
+              <Switch
+                id="staff-push-window-enabled"
+                checked={staffPushWindowEnabled}
+                onCheckedChange={setStaffPushWindowEnabled}
+                data-testid="switch-staff-push-window"
+              />
+            </div>
+
+            {staffPushWindowEnabled && (
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-base font-medium">Delivery window</Label>
+                <p className="text-sm text-muted-foreground">
+                  Notifications are sent between these times (NZ time), every
+                  day of the week.
+                </p>
+                <div className="flex items-center gap-3 mt-3">
+                  <div className="space-y-1">
+                    <Label
+                      htmlFor="staff-push-window-start"
+                      className="text-sm text-muted-foreground"
+                    >
+                      From
+                    </Label>
+                    <Input
+                      id="staff-push-window-start"
+                      type="time"
+                      value={staffPushWindowStart}
+                      onChange={(e) => setStaffPushWindowStart(e.target.value)}
+                      className="w-32"
+                      data-testid="input-staff-push-window-start"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label
+                      htmlFor="staff-push-window-end"
+                      className="text-sm text-muted-foreground"
+                    >
+                      Until
+                    </Label>
+                    <Input
+                      id="staff-push-window-end"
+                      type="time"
+                      value={staffPushWindowEnd}
+                      onChange={(e) => setStaffPushWindowEnd(e.target.value)}
+                      className="w-32"
+                      data-testid="input-staff-push-window-end"
+                    />
+                  </div>
+                </div>
+                {!pushWindowValid && (
+                  <p className="text-sm text-destructive mt-2">
+                    The start time must be before the end time
+                  </p>
+                )}
+                {pushWindowValid && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    A job scheduled after{" "}
+                    <strong>{formatWindowTime(staffPushWindowEnd)}</strong>{" "}
+                    notifies the crew at{" "}
+                    <strong>{formatWindowTime(staffPushWindowStart)}</strong>{" "}
+                    the next morning.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                onClick={handleSavePushWindow}
+                disabled={
+                  updateSettingsMutation.isPending || isLoading || !pushWindowValid
+                }
+                data-testid="button-save-staff-push-window"
               >
                 {updateSettingsMutation.isPending
                   ? "Saving..."
