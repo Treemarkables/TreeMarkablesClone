@@ -56,7 +56,19 @@ export default function SettingsPreferences() {
   const [staffPushWindowEnd, setStaffPushWindowEnd] = useState("18:00");
 
   // Fetch current settings
-  const { data: settings, isLoading } = useQuery({
+  const { data: settings, isLoading } = useQuery<{
+    data?: {
+      metricsStartDate?: string | null;
+      defaultGrossMarginPct?: string | null;
+      invoicePaymentDays?: number | null;
+      dailyRevenueTarget?: string | null;
+      defaultDepositType?: string | null;
+      defaultDepositValue?: string | null;
+      staffPushWindowEnabled?: boolean | null;
+      staffPushWindowStart?: string | null;
+      staffPushWindowEnd?: string | null;
+    };
+  }>({
     queryKey: ["/api/business-settings"],
   });
 
