@@ -171,7 +171,19 @@ export interface DocumentRenderContext {
     selectedChoiceId?: string;
     isOptional?: boolean;
     selected?: boolean;
+    // Section the item came from — 'optional'/'multipleChoice' sections make
+    // every item in them customer-toggleable; sectionId groups multipleChoice
+    // siblings so selecting one deselects the rest.
+    sectionId?: string;
+    sectionType?: string;
   }>;
+  // Interactive selection callbacks. Customer-facing proposal pages pass these
+  // so optional / multiple-choice items render as tappable circles that feed
+  // selections back into the page's totals + accept payload. Static callers
+  // (builder canvas, PDF-ish read-only renders) omit them and get the current
+  // non-interactive markers.
+  onOptionalToggle?: (lineItemId: string, selected: boolean) => void;
+  onChoiceSelect?: (lineItemId: string, choiceId: string) => void;
   photos?: Array<{ id: string; url: string; caption?: string; altText?: string }>;
   acceptance?: {
     accepted: boolean;
@@ -589,25 +601,73 @@ export function renderDocumentBlock(
                     rate = item.unitPrice ?? 0;
                     total = item.total ?? qty * rate;
                   }
-                  const dimmed = item.isOptional && item.selected === false;
+                  const sectionInteractive = item.sectionType === 'optional' || item.sectionType === 'multipleChoice';
+                  const toggleable = !!item.isOptional || sectionInteractive;
+                  const isSelected = item.selected !== false;
+                  const dimmed = toggleable && !isSelected;
+                  const canToggle = toggleable && !!ctx.onOptionalToggle && cfg.showOptionalToggle !== false;
+                  const isMultipleChoice = item.sectionType === 'multipleChoice';
+                  const handleToggle = () => {
+                    if (!canToggle) return;
+                    // multipleChoice sections are radio-style: picking one item
+                    // deselects its siblings in the same section.
+                    if (isMultipleChoice && !isSelected) {
+                      items.forEach(li => {
+                        if (li.sectionId === item.sectionId && li.id !== item.id) ctx.onOptionalToggle!(li.id, false);
+                      });
+                    }
+                    ctx.onOptionalToggle!(item.id, !isSelected);
+                  };
                   return (
-                    <tr key={item.id} className={`even:bg-gray-50 ${dimmed ? 'opacity-50' : ''}`}>
+                    <tr
+                      key={item.id}
+                      onClick={canToggle ? handleToggle : undefined}
+                      className={`${toggleable && isSelected && canToggle ? 'bg-green-50' : 'even:bg-gray-50'} ${dimmed && !canToggle ? 'opacity-50' : ''} ${canToggle ? 'cursor-pointer' : ''}`}
+                    >
                       <td className="border border-gray-200 px-2 py-2 text-xs text-gray-900">
                         <div className="flex items-start gap-2">
-                          {cfg.showOptionalToggle && item.isOptional && (
-                            <span className="inline-block mt-0.5 w-3 h-3 rounded border border-gray-400 flex-shrink-0" style={item.selected !== false ? { backgroundColor: '#2563eb', borderColor: '#2563eb' } : undefined} />
-                          )}
-                          <div className="flex-1">
+                          {canToggle ? (
+                            <button
+                              type="button"
+                              aria-pressed={isSelected}
+                              aria-label={isSelected ? `Remove ${item.description}` : `Add ${item.description}`}
+                              onClick={(e) => { e.stopPropagation(); handleToggle(); }}
+                              className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-1 ${isSelected ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-gray-400'}`}
+                            >
+                              {isSelected ? (
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                              ) : (
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                              )}
+                            </button>
+                          ) : cfg.showOptionalToggle && toggleable ? (
+                            <span className="inline-block mt-0.5 w-3 h-3 rounded border border-gray-400 flex-shrink-0" style={isSelected ? { backgroundColor: '#2563eb', borderColor: '#2563eb' } : undefined} />
+                          ) : null}
+                          <div className={`flex-1 ${dimmed && canToggle ? 'text-gray-500' : ''}`}>
                             <LinkifiedText text={item.description} />
+                            {canToggle && (
+                              <div className={`text-[10px] mt-0.5 font-medium ${isSelected ? 'text-green-700' : 'text-gray-400'}`}>
+                                {isSelected ? (isMultipleChoice ? 'Selected' : 'Added') : (isMultipleChoice ? 'Tap to select this option' : 'Optional — tap to add')}
+                              </div>
+                            )}
                             {item.notes && <div className="text-[10px] text-gray-500 mt-0.5">{item.notes}</div>}
                             {cfg.showChoiceSelector && item.pricingType === 'choice' && item.choices && (
                               <div className="mt-1 space-y-0.5">
                                 {item.choices.map(c => {
                                   const selectedId = item.selectedChoiceId ?? item.choices!.find(x => x.isDefault)?.id ?? item.choices![0].id;
                                   const isSel = selectedId === c.id;
+                                  const canPick = !!ctx.onChoiceSelect;
                                   return (
-                                    <div key={c.id} className={`flex items-center gap-1.5 text-[10px] ${isSel ? 'font-semibold text-black' : 'text-gray-600'}`}>
-                                      <span className="inline-block w-2 h-2 rounded-full border border-gray-400 flex-shrink-0" style={isSel ? { backgroundColor: '#2563eb', borderColor: '#2563eb' } : undefined} />
+                                    <div
+                                      key={c.id}
+                                      role={canPick ? 'radio' : undefined}
+                                      aria-checked={canPick ? isSel : undefined}
+                                      tabIndex={canPick ? 0 : undefined}
+                                      onClick={canPick ? (e) => { e.stopPropagation(); ctx.onChoiceSelect!(item.id, c.id); } : undefined}
+                                      onKeyDown={canPick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); ctx.onChoiceSelect!(item.id, c.id); } } : undefined}
+                                      className={`flex items-center gap-1.5 text-[10px] ${isSel ? 'font-semibold text-black' : 'text-gray-600'} ${canPick ? 'cursor-pointer rounded px-1 -mx-1 py-0.5' : ''}`}
+                                    >
+                                      <span className={`inline-block rounded-full border flex-shrink-0 ${canPick ? 'w-3 h-3 border-2' : 'w-2 h-2'} border-gray-400`} style={isSel ? { backgroundColor: '#16a34a', borderColor: '#16a34a' } : undefined} />
                                       <span>{c.label}</span>
                                       <span className="ml-auto">{formatCurrency(c.price)}</span>
                                     </div>
@@ -618,9 +678,9 @@ export function renderDocumentBlock(
                           </div>
                         </div>
                       </td>
-                      {cfg.showQty && <td className="border border-gray-200 px-2 py-2 text-xs text-center text-gray-900">{qty}</td>}
-                      {cfg.showRate && <td className="border border-gray-200 px-2 py-2 text-xs text-right text-gray-900">{formatCurrency(rate)}</td>}
-                      <td className="border border-gray-200 px-2 py-2 text-xs text-right font-medium text-gray-900">{formatCurrency(total)}</td>
+                      {cfg.showQty && <td className={`border border-gray-200 px-2 py-2 text-xs text-center ${dimmed ? 'text-gray-400' : 'text-gray-900'}`}>{qty}</td>}
+                      {cfg.showRate && <td className={`border border-gray-200 px-2 py-2 text-xs text-right ${dimmed ? 'text-gray-400' : 'text-gray-900'}`}>{formatCurrency(rate)}</td>}
+                      <td className={`border border-gray-200 px-2 py-2 text-xs text-right font-medium ${dimmed ? 'text-gray-400' : toggleable && isSelected && canToggle ? 'text-green-700' : 'text-gray-900'}`}>{formatCurrency(total)}</td>
                     </tr>
                   );
                 })}
