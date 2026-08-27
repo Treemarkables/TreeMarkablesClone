@@ -120,6 +120,27 @@ function openPhotoLightbox(urls: string[], startIndex: number): void {
   document.body.appendChild(modal);
 }
 
+export interface ChoiceLineItem {
+  id: string;
+  description: string;
+  quantity?: number;
+  unit?: string;
+  notes?: string;
+  pricingType: 'normal' | 'choice' | 'fixed';
+  unitPrice?: number;
+  total?: number;
+  fixedPrice?: number;
+  choices?: Array<{ id: string; label: string; description?: string; price: number; isDefault?: boolean }>;
+  selectedChoiceId?: string;
+  isOptional?: boolean;
+  selected?: boolean;
+  // Section the item came from — 'optional'/'multipleChoice' sections make
+  // every item in them customer-toggleable; sectionId groups multipleChoice
+  // siblings so selecting one deselects the rest.
+  sectionId?: string;
+  sectionType?: string;
+}
+
 export interface DocumentRenderContext {
   // Document noun for headings/labels — 'Invoice' (default), 'Proposal', or
   // 'Quote'. The header and meta blocks are shared across all three document
@@ -157,25 +178,16 @@ export interface DocumentRenderContext {
   // Proposal-flavoured fields — all optional; invoice callers can omit.
   proposalNumber?: string;
   expiryDate?: Date;
-  lineItemsWithChoices?: Array<{
+  lineItemsWithChoices?: ChoiceLineItem[];
+  // Ordered content flow mirroring the builder's sections (description, line
+  // items, description, …). When present, the lineItemsWithChoices block
+  // renders this interleaved flow instead of one flattened table, so the
+  // customer sees the document in exactly the order it was authored.
+  sectionFlow?: Array<{
     id: string;
-    description: string;
-    quantity?: number;
-    unit?: string;
-    notes?: string;
-    pricingType: 'normal' | 'choice' | 'fixed';
-    unitPrice?: number;
-    total?: number;
-    fixedPrice?: number;
-    choices?: Array<{ id: string; label: string; description?: string; price: number; isDefault?: boolean }>;
-    selectedChoiceId?: string;
-    isOptional?: boolean;
-    selected?: boolean;
-    // Section the item came from — 'optional'/'multipleChoice' sections make
-    // every item in them customer-toggleable; sectionId groups multipleChoice
-    // siblings so selecting one deselects the rest.
-    sectionId?: string;
-    sectionType?: string;
+    title?: string;
+    content?: string;
+    items: ChoiceLineItem[];
   }>;
   // Ex-GST value of the optional extras currently selected — rendered as an
   // "Includes optional extras" line in the totals block so customers see their
@@ -574,12 +586,11 @@ export function renderDocumentBlock(
     }
     case 'lineItemsWithChoices': {
       const cfg = block.config as DocumentBlockConfigLineItemsWithChoices;
-      const items = ctx.lineItemsWithChoices ?? [];
-      if (items.length === 0) return null;
       const descPct = cfg.descColPct ?? 60;
-      return (
-        <div key={block.id} className="mb-4">
-          <h2 className="text-xs font-semibold text-black mb-2">{cfg.labelDescription || 'Services & Pricing'}</h2>
+      // Renders one items table. Named `items` so the shared row/banner logic
+      // below reads the same whether it's the whole flattened list (legacy) or
+      // a single section's items (sectionFlow).
+      const renderItemsTable = (items: ChoiceLineItem[]) => (
           <div className="w-full overflow-x-auto">
             <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
               <thead className="bg-gray-50">
@@ -752,6 +763,50 @@ export function renderDocumentBlock(
               </tbody>
             </table>
           </div>
+      );
+
+      // Interleaved flow: render the builder's sections in their authored
+      // order — description, line items, description, line items — instead of
+      // merging all text into one Overview and all items into one table.
+      if (ctx.sectionFlow && ctx.sectionFlow.length > 0) {
+        const genericTitles = new Set([
+          '', 'line items', 'items', 'pricing', 'services', 'service', 'quote',
+          'description', 'job description', 'overview', 'photos', 'untitled section',
+        ]);
+        return (
+          <div key={block.id} className="mb-4">
+            {ctx.sectionFlow.map(sec => {
+              const title = (sec.title ?? '').trim();
+              const showTitle = !genericTitles.has(title.toLowerCase());
+              const hasContent = !!sec.content?.trim();
+              if (!hasContent && sec.items.length === 0) return null;
+              return (
+                <div key={sec.id} className="mb-4">
+                  {showTitle && <h2 className="text-xs font-semibold text-black mb-2">{title}</h2>}
+                  {hasContent && (
+                    <div className={`text-xs text-gray-700 whitespace-pre-wrap ${sec.items.length > 0 ? 'mb-2' : ''}`}>
+                      <LinkifiedText text={sec.content!} />
+                    </div>
+                  )}
+                  {sec.items.length > 0 && (
+                    <>
+                      {!showTitle && <h2 className="text-xs font-semibold text-black mb-2">{cfg.labelDescription || 'Services & Pricing'}</h2>}
+                      {renderItemsTable(sec.items)}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
+
+      const items = ctx.lineItemsWithChoices ?? [];
+      if (items.length === 0) return null;
+      return (
+        <div key={block.id} className="mb-4">
+          <h2 className="text-xs font-semibold text-black mb-2">{cfg.labelDescription || 'Services & Pricing'}</h2>
+          {renderItemsTable(items)}
         </div>
       );
     }
