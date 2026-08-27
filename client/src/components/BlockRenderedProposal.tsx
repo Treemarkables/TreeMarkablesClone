@@ -233,6 +233,28 @@ export function buildProposalRenderContext(
     return sum + itemExGst(item);
   }, 0) * 100) / 100;
 
+  // Ordered content flow mirroring the builder's sections (description, line
+  // items, description, …). The renderer uses this to interleave text and
+  // tables in authored order instead of merging all text into one Overview
+  // and all items into one table.
+  const itemsBySection = new Map<string, typeof lineItemsWithChoices>();
+  for (const it of lineItemsWithChoices) {
+    if (!it.sectionId) continue;
+    const arr = itemsBySection.get(it.sectionId) ?? [];
+    arr.push(it);
+    itemsBySection.set(it.sectionId, arr);
+  }
+  const sectionFlow = !proposal.lineItems && proposal.sections
+    ? proposal.sections
+      .map(s => ({
+        id: s.id,
+        title: s.title,
+        content: s.content ?? undefined,
+        items: itemsBySection.get(s.id) ?? [],
+      }))
+      .filter(s => (s.content && s.content.trim().length > 0) || s.items.length > 0)
+    : undefined;
+
   // Pull photos from section images
   const photos = (proposal.sections ?? [])
     .filter(s => s.sectionType === 'photos' || (s.images && s.images.length > 0))
@@ -253,15 +275,15 @@ export function buildProposalRenderContext(
     customerAddress: customer?.address ?? undefined,
     customerEmail: customer?.email ?? undefined,
     jobAddress: job?.address ?? undefined,
-    // Prefer the explicit introduction field, then fall back to the content
-    // of any non-line-items / non-photos section. The proposal builder lets
-    // users put the job description in a free-text section (e.g. one titled
-    // "Job Description") rather than the introduction field, and without
-    // this fallback the customer-facing render dropped that content silently.
+    // Prefer the explicit introduction field. Section text renders in authored
+    // order via sectionFlow, so it must NOT also be joined into the description
+    // block (that's what stacked every description on top of the tables). The
+    // joined fallback only survives for section-less legacy data.
     description: (() => {
       if (proposal.introduction && proposal.introduction.trim().length > 0) {
         return proposal.introduction;
       }
+      if (sectionFlow && sectionFlow.length > 0) return undefined;
       const fromSections = (proposal.sections ?? [])
         .filter(s =>
           s.sectionType !== 'photos'
@@ -282,6 +304,7 @@ export function buildProposalRenderContext(
     discountAmount: discountAmount > 0.005 ? discountAmount : undefined,
     jobNumber: job?.jobNumber,
     lineItemsWithChoices,
+    sectionFlow,
     photos: photos.length > 0 ? photos : undefined,
     acceptance: {
       accepted: proposal.status === 'accepted',
