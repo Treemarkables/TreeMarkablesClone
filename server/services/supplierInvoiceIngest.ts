@@ -967,6 +967,57 @@ export async function listTriageInvoices(businessId: string, opts: { status?: st
   return { rows: page, nextCursor };
 }
 
+/**
+ * Candidate job-number tokens from an extracted PO / job reference.
+ * "Job 4021" → ["job 4021", "Job", "4021"]; "PO#4021-A" → ["po#4021-a", "4021-A", "4021"].
+ * Kept deliberately dumb — exact matches against this tenant's job numbers only;
+ * fuzzy suggestion is a later phase.
+ */
+export function extractJobNumberCandidates(ref: string | null | undefined): string[] {
+  if (!ref) return [];
+  const tokens = new Set<string>();
+  const cleaned = ref.trim();
+  if (!cleaned) return [];
+  tokens.add(cleaned);
+  for (const m of cleaned.match(/[A-Za-z0-9][A-Za-z0-9-]{0,19}/g) || []) {
+    tokens.add(m);
+    const digits = m.replace(/\D/g, "");
+    if (digits.length >= 3) tokens.add(digits);
+  }
+  return Array.from(tokens).slice(0, 12);
+}
+
+export interface SuggestedJob { id: string; jobNumber: string | null; title: string | null; customerName: string | null; address: string | null; }
+
+/** Exact-match the invoice's PO/job reference against this tenant's job numbers. */
+export async function suggestJobsForReference(businessId: string, poOrJobReference: string | null | undefined): Promise<SuggestedJob[]> {
+  const candidates = extractJobNumberCandidates(poOrJobReference);
+  if (candidates.length === 0) return [];
+  try {
+    const rows = await ownerDb
+      .select({
+        id: schema.jobs.id,
+        jobNumber: schema.jobs.jobNumber,
+        title: schema.jobs.title,
+        address: schema.jobs.address,
+        customerName: schema.customers.name,
+      })
+      .from(schema.jobs)
+      .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+      .where(and(
+        eq(schema.jobs.businessId, businessId),
+        inArray(schema.jobs.jobNumber, candidates),
+        ne(schema.jobs.status, "archived"),
+      ))
+      .limit(3);
+    return rows;
+  } catch (err) {
+    // Suggestions are a convenience — never let them break the review pane.
+    console.warn("🧾 job suggestion lookup failed:", err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
 export async function getInvoiceDetail(businessId: string, id: string) {
   const [inv] = await ownerDb
     .select()
@@ -987,7 +1038,10 @@ export async function getInvoiceDetail(businessId: string, id: string) {
     const [j] = await ownerDb.select({ id: schema.jobs.id, jobNumber: schema.jobs.jobNumber, title: schema.jobs.title }).from(schema.jobs).where(eq(schema.jobs.id, inv.jobId)).limit(1);
     job = j ?? null;
   }
-  return { invoice: inv, lines, inbound, job };
+  const suggestedJobs = !inv.jobId && ["needs_review", "quarantined"].includes(inv.status)
+    ? await suggestJobsForReference(businessId, inv.poOrJobReference)
+    : [];
+  return { invoice: inv, lines, inbound, job, suggestedJobs };
 }
 
 export async function listInboundDocuments(businessId: string, opts: { status?: string; limit?: number }) {

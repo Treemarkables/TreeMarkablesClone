@@ -61,6 +61,7 @@ interface InvoiceDetail {
   lines: InvoiceLine[];
   inbound: { fromAddress: string | null; subject: string | null; createdAt: string } | null;
   job: { id: string; jobNumber: string | null; title: string | null } | null;
+  suggestedJobs?: JobHit[];
 }
 
 interface InboundDoc {
@@ -294,21 +295,20 @@ function ReviewPane({ id, readOnly, onDone }: { id: string; readOnly?: boolean; 
   });
 
   const assign = useMutation({
-    mutationFn: async () => {
-      if (!job) throw new Error("Pick a job first.");
+    mutationFn: async (target: JobHit) => {
       if (dirty) {
         const r0 = await apiRequest("PATCH", `/api/supplier-invoices/${id}`, buildPayload());
         const j0 = await r0.json();
         if (!j0.success) throw new Error(j0.message || "Could not save corrections.");
       }
-      const r = await apiRequest("POST", `/api/supplier-invoices/${id}/assign`, { jobId: job.id });
+      const r = await apiRequest("POST", `/api/supplier-invoices/${id}/assign`, { jobId: target.id });
       const j = await r.json();
       if (!j.success) throw new Error(j.message || "Could not assign.");
       return j;
     },
-    onSuccess: () => {
+    onSuccess: (_data, target) => {
       invalidateAll();
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs", job?.id, "supplier-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", target.id, "supplier-invoices"] });
       onDone();
     },
     onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't assign invoice", description: e.message }),
@@ -480,11 +480,30 @@ function ReviewPane({ id, readOnly, onDone }: { id: string; readOnly?: boolean; 
         </div>
       </div>
 
+      {/* Job suggestion: the invoice's PO/job reference exactly matched a job number. */}
+      {!readOnly && (detail.suggestedJobs?.length ?? 0) > 0 && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/20 p-3 space-y-2" data-testid="job-suggestions">
+          <div className="text-sm font-medium">The reference "{inv.poOrJobReference}" matches {detail.suggestedJobs!.length === 1 ? "a job" : "these jobs"}:</div>
+          {detail.suggestedJobs!.map((sj) => (
+            <div key={sj.id} className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
+              <span className="flex-1 min-w-0 truncate">
+                <span className="font-medium">#{sj.jobNumber ?? "—"} · {sj.title || "Untitled job"}</span>
+                {(sj.customerName || sj.address) && <span className="text-muted-foreground"> — {[sj.customerName, sj.address].filter(Boolean).join(" · ")}</span>}
+              </span>
+              <Button size="sm" onClick={() => assign.mutate(sj)} disabled={assign.isPending} data-testid={`button-assign-suggested-${sj.id}`}>
+                {assign.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                Assign to this job
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Primary action: pick a job, assign. Two interactions. */}
       {!readOnly ? (
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t">
           <JobCombobox value={job} onChange={setJob} />
-          <Button onClick={() => assign.mutate()} disabled={!job || assign.isPending} data-testid="button-assign-to-job">
+          <Button onClick={() => job && assign.mutate(job)} disabled={!job || assign.isPending} data-testid="button-assign-to-job">
             {assign.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
             Assign to job
           </Button>
