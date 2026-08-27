@@ -177,6 +177,10 @@ export interface DocumentRenderContext {
     sectionId?: string;
     sectionType?: string;
   }>;
+  // Ex-GST value of the optional extras currently selected — rendered as an
+  // "Includes optional extras" line in the totals block so customers see their
+  // taps changing the price. Omitted/0 hides the line.
+  optionsSelectedExGst?: number;
   // Interactive selection callbacks. Customer-facing proposal pages pass these
   // so optional / multiple-choice items render as tappable circles that feed
   // selections back into the page's totals + accept payload. Static callers
@@ -482,6 +486,9 @@ export function renderDocumentBlock(
           <div className="flex justify-end">
             <div className="w-full max-w-sm space-y-1">
               {cfg.showSubtotal && <div className="flex justify-between text-xs"><span className="text-gray-600">{editText('labelSubtotal', cfg.labelSubtotal || 'Subtotal (excl GST)')}:</span><span className="text-black">{formatCurrency(ctx.subtotal)}</span></div>}
+              {ctx.optionsSelectedExGst !== undefined && ctx.optionsSelectedExGst > 0 && (
+                <div className="flex justify-between text-xs"><span className="text-green-700 font-medium">Includes optional extras:</span><span className="text-green-700 font-medium">+{formatCurrency(ctx.optionsSelectedExGst)}</span></div>
+              )}
               {ctx.discountAmount !== undefined && ctx.discountAmount > 0 && <div className="flex justify-between text-xs"><span className="text-gray-600">Discount:</span><span className="text-black">-{formatCurrency(ctx.discountAmount)}</span></div>}
               {cfg.showGST && <div className="flex justify-between text-xs border-b border-gray-200 pb-1"><span className="text-gray-600">{editText('labelGST', cfg.labelGST || 'GST (15%)')}:</span><span className="text-black">{formatCurrency(ctx.gstAmount)}</span></div>}
               <div className="flex justify-between pt-2"><span className="text-sm font-bold text-black">{editText('labelTotal', cfg.labelTotal || 'Total Amount')}:</span><span className="text-sm font-bold text-black">{formatCurrency(ctx.totalAmount)}</span></div>
@@ -584,7 +591,24 @@ export function renderDocumentBlock(
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
+                {(() => {
+                  // Group stats for the customer-selectable sections, so each
+                  // group's banner can show a live "n added" count.
+                  const interactive = !!ctx.onOptionalToggle && cfg.showOptionalToggle !== false;
+                  const groupStats = new Map<string, { count: number; selected: number }>();
+                  for (const li of items) {
+                    if (li.sectionType !== 'optional' && li.sectionType !== 'multipleChoice') continue;
+                    const k = li.sectionId ?? 'none';
+                    const s = groupStats.get(k) ?? { count: 0, selected: 0 };
+                    s.count += 1;
+                    if (li.selected !== false) s.selected += 1;
+                    groupStats.set(k, s);
+                  }
+                  const colCount = 2 + (cfg.showQty ? 1 : 0) + (cfg.showRate ? 1 : 0);
+                  const rows: JSX.Element[] = [];
+                  let prevGroupKey: string | null = null;
+
+                  items.forEach((item) => {
                   const qty = item.quantity ?? 1;
                   let rate = 0;
                   let total = 0;
@@ -605,7 +629,7 @@ export function renderDocumentBlock(
                   const toggleable = !!item.isOptional || sectionInteractive;
                   const isSelected = item.selected !== false;
                   const dimmed = toggleable && !isSelected;
-                  const canToggle = toggleable && !!ctx.onOptionalToggle && cfg.showOptionalToggle !== false;
+                  const canToggle = toggleable && interactive;
                   const isMultipleChoice = item.sectionType === 'multipleChoice';
                   const handleToggle = () => {
                     if (!canToggle) return;
@@ -618,7 +642,39 @@ export function renderDocumentBlock(
                     }
                     ctx.onOptionalToggle!(item.id, !isSelected);
                   };
-                  return (
+
+                  // Banner row announcing a run of customer-selectable items —
+                  // spells out that they're optional and whether multiple can
+                  // be picked, with a live count of what's been added.
+                  const groupKey = sectionInteractive ? `${item.sectionId ?? 'none'}:${item.sectionType}` : null;
+                  if (interactive && groupKey && groupKey !== prevGroupKey) {
+                    const stats = groupStats.get(item.sectionId ?? 'none') ?? { count: 0, selected: 0 };
+                    rows.push(
+                      <tr key={`banner-${groupKey}`} className="bg-amber-50">
+                        <td colSpan={colCount} className="border border-amber-200 px-2 py-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <svg className="w-4 h-4 text-amber-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
+                            <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wide">
+                              {isMultipleChoice ? 'Optional — choose one' : 'Optional extras'}
+                            </span>
+                            <span className="text-[11px] text-amber-800">
+                              {isMultipleChoice
+                                ? 'Tap a circle to pick the option you want — it will be added to your total.'
+                                : `Tap a circle to add ${stats.count > 1 ? 'as many as you like ' : 'it '}to your total.`}
+                            </span>
+                            <span className={`ml-auto text-[11px] font-semibold rounded-full px-2 py-0.5 ${stats.selected > 0 ? 'bg-green-100 text-green-800' : 'bg-white text-amber-700 border border-amber-300'}`}>
+                              {stats.selected > 0
+                                ? `${stats.selected} ${isMultipleChoice ? 'selected' : 'added'}`
+                                : 'None added yet'}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>,
+                    );
+                  }
+                  prevGroupKey = groupKey;
+
+                  rows.push(
                     <tr
                       key={item.id}
                       onClick={canToggle ? handleToggle : undefined}
@@ -632,12 +688,12 @@ export function renderDocumentBlock(
                               aria-pressed={isSelected}
                               aria-label={isSelected ? `Remove ${item.description}` : `Add ${item.description}`}
                               onClick={(e) => { e.stopPropagation(); handleToggle(); }}
-                              className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-1 ${isSelected ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-gray-400'}`}
+                              className={`mt-0.5 w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-1 ${isSelected ? 'bg-green-600 border-green-600 text-white shadow-sm scale-105' : 'bg-white border-gray-400 text-gray-500'}`}
                             >
                               {isSelected ? (
-                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                               ) : (
-                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                               )}
                             </button>
                           ) : cfg.showOptionalToggle && toggleable ? (
@@ -646,8 +702,10 @@ export function renderDocumentBlock(
                           <div className={`flex-1 ${dimmed && canToggle ? 'text-gray-500' : ''}`}>
                             <LinkifiedText text={item.description} />
                             {canToggle && (
-                              <div className={`text-[10px] mt-0.5 font-medium ${isSelected ? 'text-green-700' : 'text-gray-400'}`}>
-                                {isSelected ? (isMultipleChoice ? 'Selected' : 'Added') : (isMultipleChoice ? 'Tap to select this option' : 'Optional — tap to add')}
+                              <div className={`text-[11px] mt-0.5 font-semibold ${isSelected ? 'text-green-700' : 'text-amber-700'}`}>
+                                {isSelected
+                                  ? (isMultipleChoice ? 'Selected — counted in your total' : 'Added to your total')
+                                  : (isMultipleChoice ? 'Tap to choose this option' : 'Optional — tap to add')}
                               </div>
                             )}
                             {item.notes && <div className="text-[10px] text-gray-500 mt-0.5">{item.notes}</div>}
@@ -680,10 +738,17 @@ export function renderDocumentBlock(
                       </td>
                       {cfg.showQty && <td className={`border border-gray-200 px-2 py-2 text-xs text-center ${dimmed ? 'text-gray-400' : 'text-gray-900'}`}>{qty}</td>}
                       {cfg.showRate && <td className={`border border-gray-200 px-2 py-2 text-xs text-right ${dimmed ? 'text-gray-400' : 'text-gray-900'}`}>{formatCurrency(rate)}</td>}
-                      <td className={`border border-gray-200 px-2 py-2 text-xs text-right font-medium ${dimmed ? 'text-gray-400' : toggleable && isSelected && canToggle ? 'text-green-700' : 'text-gray-900'}`}>{formatCurrency(total)}</td>
-                    </tr>
+                      <td className={`border border-gray-200 px-2 py-2 text-xs text-right font-semibold whitespace-nowrap ${dimmed ? 'text-gray-400' : toggleable && isSelected && canToggle ? 'text-green-700' : 'text-gray-900'}`}>
+                        {/* "+" prefix on selectable extras makes it read as an
+                            addition to the total rather than an already-included
+                            price. multipleChoice picks ARE the price, no prefix. */}
+                        {canToggle && !isMultipleChoice ? `+ ${formatCurrency(total)}` : formatCurrency(total)}
+                      </td>
+                    </tr>,
                   );
-                })}
+                  });
+                  return rows;
+                })()}
               </tbody>
             </table>
           </div>
