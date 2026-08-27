@@ -180,6 +180,24 @@ export function buildProposalRenderContext(
     };
   });
 
+  // Per-item ex-GST value under the current selections — shared by the live
+  // totals recompute and the "Includes optional extras" info line.
+  const gstRate = (toNum(proposal.taxRate) || 15) / 100;
+  const itemExGst = (item: (typeof lineItemsWithChoices)[number]): number => {
+    let itemPrice = 0;
+    if (item.pricingType === 'choice' && item.choices && item.choices.length > 0) {
+      const chosen = item.choices.find(c => c.id === item.selectedChoiceId)
+        ?? item.choices.find(c => c.isDefault)
+        ?? item.choices[0];
+      itemPrice = chosen.price * (item.quantity ?? 1);
+    } else if (item.pricingType === 'fixed' && item.fixedPrice !== undefined) {
+      itemPrice = item.fixedPrice;
+    } else {
+      itemPrice = item.total ?? (item.unitPrice ?? 0) * (item.quantity ?? 1);
+    }
+    return item.priceIncludesTax ? itemPrice / (1 + gstRate) : itemPrice;
+  };
+
   // Live totals: when the proposal has customer-selectable content (optional
   // items, optional/multipleChoice sections, or choice items) the stored
   // totals can't reflect the customer's current picks — recompute from the
@@ -193,22 +211,10 @@ export function buildProposalRenderContext(
     || (i.pricingType === 'choice' && (i.choices?.length ?? 0) > 0),
   );
   if (hasInteractive && !selectionsLocked) {
-    const gstRate = (toNum(proposal.taxRate) || 15) / 100;
     let subtotalExGst = 0;
     for (const item of lineItemsWithChoices) {
       if (item.selected === false) continue;
-      let itemPrice = 0;
-      if (item.pricingType === 'choice' && item.choices && item.choices.length > 0) {
-        const chosen = item.choices.find(c => c.id === item.selectedChoiceId)
-          ?? item.choices.find(c => c.isDefault)
-          ?? item.choices[0];
-        itemPrice = chosen.price * (item.quantity ?? 1);
-      } else if (item.pricingType === 'fixed' && item.fixedPrice !== undefined) {
-        itemPrice = item.fixedPrice;
-      } else {
-        itemPrice = item.total ?? (item.unitPrice ?? 0) * (item.quantity ?? 1);
-      }
-      subtotalExGst += item.priceIncludesTax ? itemPrice / (1 + gstRate) : itemPrice;
+      subtotalExGst += itemExGst(item);
     }
     const liveDiscount = toNum(proposal.discountAmount);
     const afterDiscount = Math.max(0, subtotalExGst - liveDiscount);
@@ -218,6 +224,14 @@ export function buildProposalRenderContext(
     totalAmount = Math.round((afterDiscount + liveGst) * 100) / 100;
     discountAmount = liveDiscount;
   }
+
+  // Ex-GST value of the selected optional extras — surfaces in the totals
+  // block so a tap visibly changes the price.
+  const optionsSelectedExGst = Math.round(lineItemsWithChoices.reduce((sum, item) => {
+    const toggleable = item.isOptional || item.sectionType === 'optional' || item.sectionType === 'multipleChoice';
+    if (!toggleable || item.selected === false) return sum;
+    return sum + itemExGst(item);
+  }, 0) * 100) / 100;
 
   // Pull photos from section images
   const photos = (proposal.sections ?? [])
@@ -277,6 +291,7 @@ export function buildProposalRenderContext(
     // Customer-facing proposal pages render their own page-level Accept
     // button at the top — suppress the duplicate in-document acceptance block.
     hidePageAcceptance: true,
+    optionsSelectedExGst: optionsSelectedExGst > 0 ? optionsSelectedExGst : undefined,
     onOptionalToggle: selectionsLocked ? undefined : overrides?.onOptionalToggle,
     onChoiceSelect: selectionsLocked ? undefined : overrides?.onChoiceSelect,
   };
