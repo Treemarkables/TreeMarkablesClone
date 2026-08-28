@@ -12104,8 +12104,11 @@ Draft the reply now.`;
 
       // Send email using the emailService
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
+      // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const emailResult = await emailService.sendEmail({
         to: to,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject: subject,
         text: emailBody,
         html: emailHtml,
@@ -19110,6 +19113,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
             const emailResult = await emailService.sendEmail({
               to: clientEmail,
+              fromName: __bizName || undefined, // From matches the "{business} Team" sign-off; blank → platform default
               subject: emailSubject,
               html: emailBody,
               text: `Hi ${clientName}, your job is scheduled for ${scheduleDate} at ${startTimeStr}.\n\nWe look forward to completing your job.\n\nThanks,\n${__signoff}`
@@ -21557,9 +21561,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         message.includes('leave the team a review')
       );
       
-      // Send email using the service - don't override from, let Resend config handle it
+      // Send email using the service - address stays on the shared verified domain
+      // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const emailResult = await emailService.sendEmail({
         to,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         text: message,
         html: `<p>${message.replace(/\n/g, '<br>')}</p>`,
@@ -24577,8 +24584,11 @@ Transcription: ${transcriptText}`;
       if (messagePlatform === 'email') {
         // Send email using EmailService
         try {
+          // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+          const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
           const emailResult = await emailService.sendEmail({
             to: recipientContact,
+            fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
             subject: lastInboundMessage.subject ? `Re: ${lastInboundMessage.subject}` : 'Response to your enquiry',
             text: content,
             html: content.replace(/\n/g, '<br>')
@@ -34826,8 +34836,10 @@ If you cannot find a value, use null. Do not guess.`
       // Convert newlines to <br> for HTML rendering — template stores plain text
       const htmlBody = rawBody.replace(/\n/g, '<br>');
 
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings()); // authed route → RLS-scoped to this tenant
       const result = await emailService.sendEmail({
         to: customer.email,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         html: htmlBody,
         text: rawBody,
