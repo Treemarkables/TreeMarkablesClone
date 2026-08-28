@@ -82,7 +82,8 @@ import { db, ownerDb } from "./db";
 import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
 import { cacheGet, cacheSet, cacheDelete, cacheDeletePrefix } from "./perfCache";
 import { invalidateEntitlementsCache } from "./tenancy/entitlements";
-import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
+import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull, type SQL } from "drizzle-orm";
+import { EXPENSE_COMPANY_KEYWORDS } from "@shared/customerFilters";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
 
@@ -153,6 +154,10 @@ export function jobRevenueExGst(job: { lineItems?: any; subtotal?: any; totalInc
 // modify the interface with any CRUD methods
 // you might need
 
+// Filter/sort vocabulary for the paginated customers list (Clients page).
+export type CustomerListFilter = 'all' | 'active' | 'historical' | 'customers' | 'potential_expenses' | 'vip';
+export type CustomerListSort = 'name' | 'email' | 'recent';
+
 export interface IStorage {
   // User management
   getUser(id: string): Promise<User | undefined>;
@@ -174,6 +179,14 @@ export interface IStorage {
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
   deleteCustomer(id: string): Promise<boolean>;
   getAllCustomers(): Promise<Customer[]>;
+  getCustomersPage(options: {
+    limit: number;
+    offset: number;
+    search?: string;
+    filter?: CustomerListFilter;
+    sortBy?: CustomerListSort;
+  }): Promise<{ customers: Customer[]; total: number }>;
+  getCustomerStats(): Promise<{ total: number; active: number; historical: number; lifetimeValueTotal: number }>;
   clearAllCustomers(): Promise<number>;
   searchCustomers(query: string): Promise<Customer[]>;
 
@@ -1269,6 +1282,79 @@ class DatabaseStorage implements IStorage {
 
   async getAllCustomers(): Promise<Customer[]> {
     return await db.select().from(schema.customers).orderBy(asc(schema.customers.name));
+  }
+
+  async getCustomersPage(options: {
+    limit: number;
+    offset: number;
+    search?: string;
+    filter?: CustomerListFilter;
+    sortBy?: CustomerListSort;
+  }): Promise<{ customers: Customer[]; total: number }> {
+    const conditions: SQL[] = [];
+
+    const search = options.search?.trim();
+    if (search) {
+      const term = `%${search}%`;
+      conditions.push(
+        sql`(${schema.customers.name} ILIKE ${term} OR ${schema.customers.email} ILIKE ${term} OR ${schema.customers.phone} ILIKE ${term} OR ${schema.customers.mobile} ILIKE ${term})`
+      );
+    }
+
+    switch (options.filter) {
+      case 'active':
+        // Null is_active counts as active, matching the legacy endpoints
+        conditions.push(sql`${schema.customers.isActive} IS DISTINCT FROM false`);
+        break;
+      case 'historical':
+        conditions.push(sql`${schema.customers.isActive} = false`);
+        break;
+      case 'vip':
+        conditions.push(sql`${schema.customers.isVipMember} = true`);
+        break;
+      case 'customers':
+      case 'potential_expenses': {
+        const keywordMatch = sql.join(
+          EXPENSE_COMPANY_KEYWORDS.map((keyword) => sql`${schema.customers.name} ILIKE ${`%${keyword}%`}`),
+          sql` OR `
+        );
+        conditions.push(
+          options.filter === 'potential_expenses' ? sql`(${keywordMatch})` : sql`NOT (${keywordMatch})`
+        );
+        break;
+      }
+      default:
+        break; // 'all' — no condition
+    }
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const orderBy =
+      options.sortBy === 'recent'
+        ? desc(schema.customers.createdAt)
+        : options.sortBy === 'email'
+          ? asc(schema.customers.email)
+          : asc(schema.customers.name);
+
+    const [customers, [{ count }]] = await Promise.all([
+      db.select().from(schema.customers)
+        .where(where)
+        .orderBy(orderBy)
+        .limit(options.limit)
+        .offset(options.offset),
+      db.select({ count: sql<number>`count(*)::int` }).from(schema.customers).where(where),
+    ]);
+
+    return { customers, total: count };
+  }
+
+  async getCustomerStats(): Promise<{ total: number; active: number; historical: number; lifetimeValueTotal: number }> {
+    const [row] = await db.select({
+      total: sql<number>`count(*)::int`,
+      active: sql<number>`(count(*) FILTER (WHERE ${schema.customers.isActive} IS DISTINCT FROM false))::int`,
+      historical: sql<number>`(count(*) FILTER (WHERE ${schema.customers.isActive} = false))::int`,
+      lifetimeValueTotal: sql<number>`COALESCE(SUM(${schema.customers.lifetimeValue}), 0)::float`,
+    }).from(schema.customers);
+    return row;
   }
 
   async clearAllCustomers(): Promise<number> {

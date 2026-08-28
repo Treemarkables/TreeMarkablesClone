@@ -4535,9 +4535,42 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.get('/api/customers', async (req: Request, res: Response) => {
     try {
-      const { search } = req.query;
+      const { search, limit, offset, filter, sort } = req.query;
+
+      // Paginated mode (Clients page): presence of `limit` opts in, so the
+      // many existing full-list consumers (dropdown pickers, name joins) keep
+      // the legacy behaviour below untouched.
+      if (limit !== undefined) {
+        const parsedLimit = Math.min(Math.max(parseInt(limit as string) || 25, 1), 200);
+        const parsedOffset = Math.max(parseInt(offset as string) || 0, 0);
+        const validFilters = ['all', 'active', 'historical', 'customers', 'potential_expenses', 'vip'] as const;
+        const validSorts = ['name', 'email', 'recent'] as const;
+        const parsedFilter = validFilters.includes(filter as any) ? (filter as typeof validFilters[number]) : 'all';
+        const parsedSort = validSorts.includes(sort as any) ? (sort as typeof validSorts[number]) : 'name';
+
+        const [page, stats] = await Promise.all([
+          storage.getCustomersPage({
+            limit: parsedLimit,
+            offset: parsedOffset,
+            search: typeof search === 'string' ? search : undefined,
+            filter: parsedFilter,
+            sortBy: parsedSort,
+          }),
+          storage.getCustomerStats(),
+        ]);
+
+        return res.json({
+          success: true,
+          data: page.customers,
+          total: page.total,
+          limit: parsedLimit,
+          offset: parsedOffset,
+          stats,
+        });
+      }
+
       let customers;
-      
+
       if (search && typeof search === 'string') {
         customers = await storage.searchCustomers(search);
         // Filter out inactive customers from search results too
