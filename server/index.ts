@@ -20,6 +20,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
+import { sweepStaleInboundDocuments } from "./services/supplierInvoiceIngest";
 import { attachVoiceAgentWss } from "./services/voiceAgent";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
@@ -445,6 +446,18 @@ function startNotificationQueueWorker() {
 
       for (const notification of pendingNotifications) {
         try {
+          // Staff pushes deferred by the configurable delivery window
+          // (see server/services/notificationWindow.ts). deliverQueuedPush
+          // re-checks prefs + assignment freshness; a false return means
+          // "deliberately skipped", which still counts as processed.
+          if (notification.notificationType === 'push') {
+            const { deliverQueuedPush } = await import("./services/notificationHelper");
+            const delivered = await deliverQueuedPush(notification);
+            await storage.markNotificationSent(notification.id);
+            log(`[Notification Queue] Queued push ${notification.id} ${delivered ? 'delivered' : 'skipped (prefs off, unassigned, or no active tokens)'}`, "startup");
+            continue;
+          }
+
           if (notification.recipientEmail && (notification.notificationType === 'email' || notification.notificationType === 'both')) {
             await emailService.sendEmail({
               to: notification.recipientEmail,
@@ -534,6 +547,10 @@ function startNotificationQueueWorker() {
     } catch (e) {
       console.error("[schema] boot migrations failed (continuing):", e);
     }
+    // Re-queue any inbound supplier-invoice documents a previous instance left
+    // mid-flight (the claim is an atomic status transition, so this is safe on
+    // both app instances).
+    void sweepStaleInboundDocuments().then((n) => { if (n) log(`🧾 re-queued ${n} stale inbound invoice document(s)`, "startup"); });
 
     let devServer: http.Server | undefined;
     try {
@@ -781,6 +798,9 @@ The {businessName} Team';
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminders_enabled BOOLEAN DEFAULT true;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminder_offsets JSONB DEFAULT '[30, 7]'::jsonb;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS job_reply_forward_email TEXT;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_enabled BOOLEAN DEFAULT true;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_start TEXT DEFAULT '07:00';
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_end TEXT DEFAULT '18:00';
         CREATE TABLE IF NOT EXISTS equipment_compliance_reminders (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           business_id VARCHAR,

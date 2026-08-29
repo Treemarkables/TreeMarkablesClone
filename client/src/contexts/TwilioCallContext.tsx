@@ -48,6 +48,9 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
   const [audioRoute, setAudioRoute] = useState<AudioRouteInfo | null>(null);
+  // Answer→media-connected time from the native side (ms) — displayed on the
+  // call screen as the field diagnostic for "silence after I answer".
+  const [setupMs, setSetupMs] = useState<number | null>(null);
 
   const refreshCallHistory = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
@@ -59,6 +62,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setIsMuted(false);
     setIsSpeaker(false);
     setAudioRoute(null);
+    setSetupMs(null);
   }, []);
 
   const handleIncomingCall = useCallback((data: CallEvent) => {
@@ -79,7 +83,17 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleCallAnswered = useCallback(() => setCallState("connecting"), []);
-  const handleCallConnected = useCallback(() => setCallState("active"), []);
+  const handleCallConnected = useCallback((data: CallEvent) => {
+    // Console line is the Web-Inspector trace; the call screen shows the total
+    // so the owner can read it off the phone mid-call.
+    console.log("[TwilioCall] connected", {
+      answerToConnectMs: data.answerToConnectMs,
+      answerToActivateMs: data.answerToActivateMs,
+    });
+    const ms = Number(data.answerToConnectMs);
+    setSetupMs(Number.isFinite(ms) && ms > 0 ? ms : null);
+    setCallState("active");
+  }, []);
 
   const handleCallEnded = useCallback(
     (data?: CallEvent) => {
@@ -214,6 +228,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
           isMuted={isMuted}
           isSpeaker={isSpeaker}
           audioRoute={audioRoute}
+          setupMs={setupMs}
           onHangup={onHangup}
           onToggleMute={onToggleMute}
           onToggleSpeaker={onToggleSpeaker}
@@ -247,6 +262,7 @@ function CallScreen({
   isMuted,
   isSpeaker,
   audioRoute,
+  setupMs,
   onHangup,
   onToggleMute,
   onToggleSpeaker,
@@ -258,6 +274,7 @@ function CallScreen({
   isMuted: boolean;
   isSpeaker: boolean;
   audioRoute: AudioRouteInfo | null;
+  setupMs: number | null;
   onHangup: () => void;
   onToggleMute: () => void;
   onToggleSpeaker: () => void;
@@ -328,6 +345,16 @@ function CallScreen({
               data-testid="call-audio-route"
             >
               Audio: {audioRoute.outputs || "unknown"}
+            </p>
+          )}
+          {/* How long between tapping Answer and live media — the number to
+              quote when reporting "silence after answering". */}
+          {setupMs !== null && (
+            <p
+              className="text-white/40 text-xs mt-1 tabular-nums"
+              data-testid="call-setup-time"
+            >
+              Setup: {(setupMs / 1000).toFixed(1)}s
             </p>
           )}
         </div>
