@@ -169,7 +169,7 @@ function SidebarNavContent({
       {identityPrimary && (
         <SidebarHeader className="border-b border-sidebar-border px-3 py-3">
           <div className="flex items-center gap-3" data-testid="sidebar-account">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 text-sm font-semibold">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-lime text-brand-lime-foreground text-sm font-semibold">
               {identityInitials}
             </div>
             <div className="min-w-0 flex-1" title={userEmail}>
