@@ -4,7 +4,7 @@ import { BRAND, NAV } from "@/lib/brand";
 
 export default function Footer() {
   return (
-    <footer className="bg-fairway-950 text-cream">
+    <footer className="bg-club-950 text-cream">
       <div className="mx-auto max-w-site px-6 md:px-10 py-14 md:py-16">
         <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>

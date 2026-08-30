@@ -4,21 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Deep parkland greens. 900 is the workhorse dark surface,
-        // 950 the near-black for footer / high-contrast text on cream.
-        fairway: {
-          DEFAULT: "#1B4D35",
-          950: "#0B2117",
-          900: "#123527",
-          800: "#17402F",
-          700: "#28654A",
-          600: "#3D7D5F",
-          500: "#5E967B",
-          400: "#8AB39E",
-          300: "#B4CEC1",
-          200: "#D6E5DC",
-          100: "#E9F1EC",
-          50: "#F3F7F4",
+        // Club royal blue, sampled from the Gisborne Park crest. 700 is the
+        // crest colour itself; 900/950 are the dark surfaces, light steps the
+        // tints for borders, chips and washes.
+        club: {
+          DEFAULT: "#2B3990",
+          950: "#0E1233",
+          900: "#1B2460",
+          800: "#232E77",
+          700: "#2B3990",
+          600: "#3D4899",
+          500: "#5560AD",
+          400: "#7F87C6",
+          300: "#A9AFDB",
+          200: "#CDD1EB",
+          100: "#E7E9F6",
+          50: "#F3F4FB",
         },
         // Aged-scorecard card stock, warm variant for alternating bands.
         cream: {
@@ -31,8 +32,8 @@ export default {
           bright: "#DDBA45",
           deep: "#A8861D",
         },
-        // Warm near-black for body text on cream.
-        bark: "#2A241C",
+        // Blue-black for body text on cream.
+        ink: "#1C2033",
       },
       fontFamily: {
         display: ["Young Serif", "Georgia", "Times New Roman", "serif"],
@@ -55,8 +56,8 @@ export default {
         site: "1200px",
       },
       boxShadow: {
-        soft: "0 1px 2px rgba(11,33,23,0.05), 0 8px 24px rgba(11,33,23,0.07)",
-        lift: "0 2px 4px rgba(11,33,23,0.06), 0 16px 48px rgba(11,33,23,0.12)",
+        soft: "0 1px 2px rgba(14,18,51,0.05), 0 8px 24px rgba(14,18,51,0.07)",
+        lift: "0 2px 4px rgba(14,18,51,0.06), 0 16px 48px rgba(14,18,51,0.12)",
       },
     },
   },

@@ -26,13 +26,13 @@ function Nine({
   totalYards: number;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-fairway-200 bg-cream shadow-soft">
+    <div className="overflow-hidden rounded-2xl border border-club-200 bg-cream shadow-soft">
       <table className="w-full text-sm">
-        <caption className="bg-fairway-900 px-4 py-3 text-left font-display text-base text-cream">
+        <caption className="bg-club-900 px-4 py-3 text-left font-display text-base text-cream">
           {title}
         </caption>
         <thead>
-          <tr className="border-b border-fairway-200 text-xs uppercase tracking-[0.12em] text-fairway-600">
+          <tr className="border-b border-club-200 text-xs uppercase tracking-[0.12em] text-club-600">
             <th scope="col" className="px-4 py-2.5 text-left font-semibold">Hole</th>
             <th scope="col" className="px-4 py-2.5 text-center font-semibold">Par</th>
             <th scope="col" className="px-4 py-2.5 text-right font-semibold">Yards</th>
@@ -41,16 +41,16 @@ function Nine({
         </thead>
         <tbody>
           {holes.map((h) => (
-            <tr key={h.hole} className="border-b border-fairway-100 last:border-0">
-              <td className="px-4 py-2.5 font-semibold text-fairway-950 tabular-nums">{h.hole}</td>
-              <td className="px-4 py-2.5 text-center text-bark/80"><ParBadge par={h.par} /></td>
-              <td className="px-4 py-2.5 text-right text-bark/80 tabular-nums">{h.yards}</td>
-              <td className="px-4 py-2.5 text-right text-bark/50 tabular-nums">{h.si}</td>
+            <tr key={h.hole} className="border-b border-club-100 last:border-0">
+              <td className="px-4 py-2.5 font-semibold text-club-950 tabular-nums">{h.hole}</td>
+              <td className="px-4 py-2.5 text-center text-ink/80"><ParBadge par={h.par} /></td>
+              <td className="px-4 py-2.5 text-right text-ink/80 tabular-nums">{h.yards}</td>
+              <td className="px-4 py-2.5 text-right text-ink/50 tabular-nums">{h.si}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
-          <tr className="bg-fairway-100/70 font-semibold text-fairway-950">
+          <tr className="bg-club-100/70 font-semibold text-club-950">
             <td className="px-4 py-3">{totalLabel}</td>
             <td className="px-4 py-3 text-center tabular-nums">{totalPar}</td>
             <td className="px-4 py-3 text-right tabular-nums">{totalYards.toLocaleString()}</td>
@@ -81,7 +81,7 @@ export default function Scorecard() {
           totalYards={COURSE.in.yards}
         />
       </div>
-      <p className="mt-5 text-sm text-bark/60">
+      <p className="mt-5 text-sm text-ink/60">
         White tees. Course total par {COURSE.par}, {COURSE.yards.toLocaleString()} yards.
         Hardest hole on the card is the 10th, index 1. The friendly ones are the
         short par 3s at 5 and 14.

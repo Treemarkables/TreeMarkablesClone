@@ -31,7 +31,7 @@ export default function Header() {
     <header
       className={`sticky top-0 z-50 transition-colors duration-200 ${
         scrolled || open
-          ? "bg-cream/90 backdrop-blur border-b border-fairway-200/70"
+          ? "bg-cream/90 backdrop-blur border-b border-club-200/70"
           : "bg-transparent"
       }`}
     >
@@ -43,8 +43,8 @@ export default function Header() {
             const active = location === item.href;
             const idle = onDark
               ? "text-cream/75 hover:text-cream"
-              : "text-bark/60 hover:text-fairway-950";
-            const current = onDark ? "text-cream font-semibold" : "text-fairway-950 font-semibold";
+              : "text-ink/60 hover:text-club-950";
+            const current = onDark ? "text-cream font-semibold" : "text-club-950 font-semibold";
             return (
               <Link
                 key={item.href}
@@ -71,7 +71,7 @@ export default function Header() {
 
         <button
           className={`md:hidden inline-flex h-10 w-10 items-center justify-center rounded-md ${
-            onDark ? "text-cream" : "text-fairway-950"
+            onDark ? "text-cream" : "text-club-950"
           }`}
           aria-label="Toggle menu"
           aria-expanded={open}
@@ -95,13 +95,13 @@ export default function Header() {
       </div>
 
       {open && (
-        <div className="md:hidden border-t border-fairway-200/70 bg-cream">
+        <div className="md:hidden border-t border-club-200/70 bg-cream">
           <nav className="px-6 py-4 flex flex-col gap-1">
             {NAV.slice(1).map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="px-3 py-3 rounded-md text-base text-fairway-950 hover:bg-fairway-100"
+                className="px-3 py-3 rounded-md text-base text-club-950 hover:bg-club-100"
               >
                 {item.label}
               </Link>

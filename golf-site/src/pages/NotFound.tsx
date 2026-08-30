@@ -5,10 +5,10 @@ export default function NotFound() {
   return (
     <Section className="py-32 text-center">
       <p className="kicker">Out of bounds</p>
-      <h1 className="heading-display mt-4 text-5xl text-fairway-950">
+      <h1 className="heading-display mt-4 text-5xl text-club-950">
         That one's in the trees.
       </h1>
-      <p className="mx-auto mt-4 max-w-md text-bark/70">
+      <p className="mx-auto mt-4 max-w-md text-ink/70">
         The page you're after doesn't exist. Take a drop and head back to the
         clubhouse.
       </p>

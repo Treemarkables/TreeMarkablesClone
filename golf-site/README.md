@@ -30,6 +30,10 @@ npm run build      # tsc -b && vite build → dist/
    file: `src/lib/photos.ts`). Swap for the club's own shots. The clubhouse
    section on the home page is deliberately an empty frame awaiting a real
    photo.
+5. **Crest** — the colour scheme is sampled from the club's royal-blue crest,
+   and the header/footer mark is a simplified shield echo of it. Once a
+   transparent-background version of the real crest lands in `public/`, swap
+   the `<svg>` in `src/components/Wordmark.tsx` for it.
 5. **Scorecard** — data in `src/lib/course.ts` came from Hole19 (white tees);
    have the club sight-check it against the printed card.
 

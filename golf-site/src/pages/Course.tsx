@@ -33,7 +33,7 @@ export default function Course() {
           alt={PHOTOS.openField.alt}
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-fairway-950/90 via-fairway-950/35 to-fairway-950/25" />
+        <div className="absolute inset-0 bg-gradient-to-t from-club-950/90 via-club-950/35 to-club-950/25" />
         <Container className="relative pb-14 pt-40 text-cream">
           <p className="kicker text-gold-bright">The course</p>
           <h1 className="heading-display mt-4 max-w-3xl text-4xl md:text-6xl">
@@ -51,10 +51,10 @@ export default function Course() {
         <div className="grid items-start gap-12 lg:grid-cols-[1.1fr_1fr]">
           <div>
             <span className="rule-gold" aria-hidden="true" />
-            <h2 className="heading-section mt-5 text-3xl md:text-4xl text-fairway-950">
+            <h2 className="heading-section mt-5 text-3xl md:text-4xl text-club-950">
               Straight hitters prosper.
             </h2>
-            <div className="mt-6 max-w-prose space-y-4 leading-relaxed text-bark/75">
+            <div className="mt-6 max-w-prose space-y-4 leading-relaxed text-ink/75">
               <p>
                 The Park is honest golf. There are no blind tricks and no
                 mountain-goat climbs, just mature trees lining nearly every
@@ -80,13 +80,13 @@ export default function Course() {
         </div>
       </Section>
 
-      <section className="bg-cream-warm border-y border-fairway-200/70">
+      <section className="bg-cream-warm border-y border-club-200/70">
         <Container className="py-16 md:py-24">
           <span className="rule-gold" aria-hidden="true" />
-          <h2 className="heading-section mt-5 text-3xl md:text-4xl text-fairway-950">
+          <h2 className="heading-section mt-5 text-3xl md:text-4xl text-club-950">
             The card.
           </h2>
-          <p className="mt-3 max-w-prose text-bark/70">
+          <p className="mt-3 max-w-prose text-ink/70">
             Out in {COURSE.out.yards.toLocaleString()}, home in{" "}
             {COURSE.in.yards.toLocaleString()}.
           </p>
@@ -97,22 +97,22 @@ export default function Course() {
       </section>
 
       <Section>
-        <h2 className="heading-section text-3xl md:text-4xl text-fairway-950">
+        <h2 className="heading-section text-3xl md:text-4xl text-club-950">
           Holes worth a story.
         </h2>
         <div className="mt-10 grid gap-x-10 gap-y-12 md:grid-cols-3">
           {SIGNATURES.map((s) => (
             <div key={s.hole}>
-              <div className="font-display text-5xl text-fairway-300">{s.hole}</div>
+              <div className="font-display text-5xl text-club-300">{s.hole}</div>
               <div className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-gold-deep">
                 {s.par}
               </div>
-              <p className="mt-3 leading-relaxed text-bark/75">{s.note}</p>
+              <p className="mt-3 leading-relaxed text-ink/75">{s.note}</p>
             </div>
           ))}
         </div>
-        <div className="mt-14 flex flex-wrap items-center gap-4 rounded-2xl bg-fairway-100 px-6 py-5">
-          <p className="text-sm text-fairway-900">
+        <div className="mt-14 flex flex-wrap items-center gap-4 rounded-2xl bg-club-100 px-6 py-5">
+          <p className="text-sm text-club-900">
             {FRONT_NINE.length + BACK_NINE.length} holes of it waiting on{" "}
             {BRAND.address.split(",")[0]}. Green fees at the clubhouse, no
             booking needed.

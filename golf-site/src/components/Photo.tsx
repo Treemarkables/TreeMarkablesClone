@@ -12,7 +12,7 @@ export default function Photo({
   eager?: boolean;
 }) {
   return (
-    <div className={`overflow-hidden rounded-2xl bg-fairway-100 ${className}`}>
+    <div className={`overflow-hidden rounded-2xl bg-club-100 ${className}`}>
       <img
         src={src}
         alt={alt}

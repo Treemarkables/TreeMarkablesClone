@@ -9,11 +9,11 @@
     text-rendering: optimizeLegibility;
   }
   body {
-    @apply bg-cream text-bark font-sans antialiased;
+    @apply bg-cream text-ink font-sans antialiased;
   }
   ::selection {
     background: #c9a227;
-    color: #0b2117;
+    color: #0e1233;
   }
 }
 

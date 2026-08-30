@@ -34,7 +34,7 @@ export default function Events() {
           alt={PHOTOS.drive.alt}
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-fairway-950/90 via-fairway-950/40 to-fairway-950/25" />
+        <div className="absolute inset-0 bg-gradient-to-t from-club-950/90 via-club-950/40 to-club-950/25" />
         <Container className="relative pb-14 pt-40 text-cream">
           <p className="kicker text-gold-bright">Events & functions</p>
           <h1 className="heading-display mt-4 max-w-3xl text-4xl md:text-6xl">
@@ -46,18 +46,18 @@ export default function Events() {
       <Section>
         <div className="grid gap-x-10 gap-y-12 md:grid-cols-3">
           {CLUB_GOLF.map((e) => (
-            <div key={e.name} className="border-t-2 border-fairway-900 pt-5">
+            <div key={e.name} className="border-t-2 border-club-900 pt-5">
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-deep">
                 {e.when}
               </div>
-              <h2 className="mt-2 font-display text-2xl text-fairway-950">{e.name}</h2>
-              <p className="mt-3 leading-relaxed text-bark/75">{e.blurb}</p>
+              <h2 className="mt-2 font-display text-2xl text-club-950">{e.name}</h2>
+              <p className="mt-3 leading-relaxed text-ink/75">{e.blurb}</p>
             </div>
           ))}
         </div>
       </Section>
 
-      <section className="bg-cream-warm border-y border-fairway-200/70">
+      <section className="bg-cream-warm border-y border-club-200/70">
         <Container className="grid items-center gap-12 py-16 md:py-24 lg:grid-cols-[1fr_1.1fr]">
           <Photo
             src={PHOTOS.walkers.src}
@@ -66,10 +66,10 @@ export default function Events() {
           />
           <div>
             <span className="rule-gold" aria-hidden="true" />
-            <h2 className="heading-section mt-5 text-3xl md:text-4xl text-fairway-950">
+            <h2 className="heading-section mt-5 text-3xl md:text-4xl text-club-950">
               Hire the clubhouse.
             </h2>
-            <div className="mt-6 max-w-prose space-y-4 leading-relaxed text-bark/75">
+            <div className="mt-6 max-w-prose space-y-4 leading-relaxed text-ink/75">
               <p>
                 Birthdays, prizegivings, wakes, work dos: the clubhouse looks
                 out over the course, has a licensed bar, and holds a decent
@@ -85,7 +85,7 @@ export default function Events() {
               <LinkButton href={BRAND.phoneHref} external variant="primary" size="md">
                 Ring us about a date
               </LinkButton>
-              <LinkButton href={`mailto:${BRAND.email}`} external variant="ghost" size="md" className="border border-fairway-200">
+              <LinkButton href={`mailto:${BRAND.email}`} external variant="ghost" size="md" className="border border-club-200">
                 {BRAND.email}
               </LinkButton>
             </div>
@@ -94,7 +94,7 @@ export default function Events() {
       </section>
 
       <Section>
-        <div className="grid items-center gap-10 rounded-3xl bg-fairway-900 p-8 text-cream md:grid-cols-[1.2fr_1fr] md:p-12">
+        <div className="grid items-center gap-10 rounded-3xl bg-club-900 p-8 text-cream md:grid-cols-[1.2fr_1fr] md:p-12">
           <div>
             <h2 className="heading-section text-2xl md:text-4xl">
               Rain on the forecast? The simulator isn't fussed.
@@ -115,7 +115,7 @@ export default function Events() {
 function SimulatorGlyph() {
   return (
     <svg viewBox="0 0 320 200" className="mx-auto w-full max-w-xs" role="img" aria-label="Drawing of a golf simulator screen with a ball's flight arc">
-      <rect x="20" y="16" width="280" height="150" rx="10" fill="#0B2117" stroke="#C9A227" strokeOpacity="0.5" strokeWidth="2" />
+      <rect x="20" y="16" width="280" height="150" rx="10" fill="#0E1233" stroke="#C9A227" strokeOpacity="0.5" strokeWidth="2" />
       <path d="M40 150 C110 60 210 44 284 58" stroke="#FAF6EB" strokeWidth="2" strokeDasharray="1 8" strokeLinecap="round" fill="none" />
       <path d="M40 152 C120 130 220 122 284 126" stroke="#3D7D5F" strokeWidth="26" strokeLinecap="round" fill="none" opacity="0.8" />
       <circle cx="284" cy="58" r="5" fill="#FAF6EB" />

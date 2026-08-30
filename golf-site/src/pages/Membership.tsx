@@ -10,14 +10,14 @@ function PlaceholderPrice({ price, per }: { price: string | null; per?: string }
   if (price) {
     return (
       <div className="flex items-baseline gap-1.5">
-        <span className="font-display text-3xl text-fairway-950">{price}</span>
-        {per && <span className="text-sm text-bark/50">{per}</span>}
+        <span className="font-display text-3xl text-club-950">{price}</span>
+        {per && <span className="text-sm text-ink/50">{per}</span>}
       </div>
     );
   }
   return (
     <div className="flex flex-wrap items-center gap-2.5">
-      <span className="font-display text-3xl text-fairway-300" aria-hidden="true">
+      <span className="font-display text-3xl text-club-300" aria-hidden="true">
         $ —
       </span>
       <span className="inline-flex items-center rounded-full border border-gold px-3 py-1 text-xs font-semibold text-gold-deep">
@@ -32,19 +32,19 @@ export default function Membership() {
     <>
       <Section className="pb-10 md:pb-12">
         <p className="kicker">Membership & green fees</p>
-        <h1 className="heading-display mt-4 max-w-3xl text-4xl md:text-6xl text-fairway-950">
+        <h1 className="heading-display mt-4 max-w-3xl text-4xl md:text-6xl text-club-950">
           Join Gisborne's friendliest club.
         </h1>
-        <p className="mt-6 max-w-prose text-lg leading-relaxed text-bark/75">
+        <p className="mt-6 max-w-prose text-lg leading-relaxed text-ink/75">
           Whether you play four rounds a week or four a year, there's a
           membership that fits, and casual visitors are always welcome to pay a
           green fee and play.
         </p>
         {!PRICING_CONFIRMED && (
-          <div className="mt-8 max-w-2xl rounded-xl border border-gold/50 bg-gold/10 px-5 py-4 text-sm leading-relaxed text-bark/80">
+          <div className="mt-8 max-w-2xl rounded-xl border border-gold/50 bg-gold/10 px-5 py-4 text-sm leading-relaxed text-ink/80">
             Prices on this page are being confirmed with the club. For current
             membership rates and green fees, phone{" "}
-            <a href={BRAND.phoneHref} className="font-semibold text-fairway-900 underline underline-offset-2">
+            <a href={BRAND.phoneHref} className="font-semibold text-club-900 underline underline-offset-2">
               {BRAND.phone}
             </a>{" "}
             or call into the clubhouse.
@@ -57,11 +57,11 @@ export default function Membership() {
           {MEMBERSHIP_TIERS.map((tier) => (
             <div
               key={tier.name}
-              className="flex flex-col justify-between rounded-2xl border border-fairway-200 bg-cream-warm p-7 shadow-soft"
+              className="flex flex-col justify-between rounded-2xl border border-club-200 bg-cream-warm p-7 shadow-soft"
             >
               <div>
-                <h2 className="font-display text-2xl text-fairway-950">{tier.name}</h2>
-                <p className="mt-3 leading-relaxed text-bark/70">{tier.blurb}</p>
+                <h2 className="font-display text-2xl text-club-950">{tier.name}</h2>
+                <p className="mt-3 leading-relaxed text-ink/70">{tier.blurb}</p>
               </div>
               <div className="mt-7">
                 <PlaceholderPrice price={tier.price} per={tier.per} />
@@ -71,7 +71,7 @@ export default function Membership() {
         </div>
       </Section>
 
-      <section className="bg-fairway-950 text-cream">
+      <section className="bg-club-950 text-cream">
         <Container className="py-16 md:py-20">
           <div className="grid gap-12 lg:grid-cols-[1fr_1.2fr] lg:items-center">
             <div>
@@ -106,18 +106,18 @@ export default function Membership() {
       <Section>
         <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_1fr]">
           <div>
-            <h2 className="heading-section text-3xl md:text-4xl text-fairway-950">
+            <h2 className="heading-section text-3xl md:text-4xl text-club-950">
               What your sub gets you.
             </h2>
-            <ul className="mt-7 max-w-prose space-y-4 text-bark/75">
+            <ul className="mt-7 max-w-prose space-y-4 text-ink/75">
               <Benefit>Unlimited golf on a course that stays open all year</Benefit>
               <Benefit>An official NZ Golf handicap and weekly club competitions</Benefit>
               <Benefit>Clubhouse privileges, including the simulator on wet days</Benefit>
               <Benefit>A club small enough to know your name by week two</Benefit>
             </ul>
-            <div className="mt-9 rounded-2xl bg-fairway-100 p-6">
-              <h3 className="font-display text-xl text-fairway-950">How to join</h3>
-              <p className="mt-2 text-sm leading-relaxed text-bark/70">
+            <div className="mt-9 rounded-2xl bg-club-100 p-6">
+              <h3 className="font-display text-xl text-club-950">How to join</h3>
+              <p className="mt-2 text-sm leading-relaxed text-ink/70">
                 No forms on this website, on purpose. Ring the clubhouse or call
                 in ({BRAND.hours.toLowerCase()}), have a yarn, and we'll sort
                 the rest over a cuppa.
@@ -126,7 +126,7 @@ export default function Membership() {
                 <LinkButton href={BRAND.phoneHref} external variant="primary" size="md">
                   Call {BRAND.phone}
                 </LinkButton>
-                <LinkButton href={`mailto:${BRAND.email}`} external variant="ghost" size="md" className="border border-fairway-200">
+                <LinkButton href={`mailto:${BRAND.email}`} external variant="ghost" size="md" className="border border-club-200">
                   Email the club
                 </LinkButton>
               </div>

@@ -6,7 +6,7 @@ import { Container } from "./Container";
 // story, so they travel with every page instead of hiding behind a nav item.
 export default function ContactBand() {
   return (
-    <section className="bg-fairway-900 text-cream">
+    <section className="bg-club-900 text-cream">
       <Container className="py-16 md:py-20">
         <div className="grid items-center gap-10 md:grid-cols-[1.3fr_1fr]">
           <div>

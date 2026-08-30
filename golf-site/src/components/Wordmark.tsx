@@ -1,17 +1,24 @@
 import { Link } from "wouter";
 
-// Pure-SVG roundel + set type; the club has no digital logo assets yet.
+// Simplified echo of the club crest (royal-blue shield, gold edge, three
+// marks rising like the crest's doves). Swap the <svg> for the real crest
+// artwork once a transparent-background version of the logo is in public/.
 export default function Wordmark({ onDark = false }: { onDark?: boolean }) {
-  const text = onDark ? "text-cream" : "text-fairway-950";
-  const sub = onDark ? "text-cream/60" : "text-fairway-600";
+  const text = onDark ? "text-cream" : "text-club-900";
+  const sub = onDark ? "text-cream/60" : "text-club-500";
   return (
     <Link href="/" className="flex items-center gap-3" aria-label="Gisborne Park Golf Club, home">
-      <svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true">
-        <circle cx="32" cy="32" r="30" fill="#123527" />
-        <circle cx="32" cy="32" r="30" fill="none" stroke="#C9A227" strokeWidth="2.5" />
-        <line x1="27" y1="14" x2="27" y2="46" stroke="#FAF6EB" strokeWidth="3" strokeLinecap="round" />
-        <path d="M29 15 L46 21 L29 27 Z" fill="#C9A227" />
-        <ellipse cx="31" cy="49" rx="13" ry="3.5" fill="#28654A" />
+      <svg width="38" height="38" viewBox="0 0 64 64" aria-hidden="true">
+        <path
+          d="M32 4 L56 11 V32 C56 46.5 46 56.5 32 61.5 C18 56.5 8 46.5 8 32 V11 Z"
+          fill="#2B3990"
+          stroke="#C9A227"
+          strokeWidth="3"
+          strokeLinejoin="round"
+        />
+        <circle cx="24" cy="21" r="4.5" fill="#FAF6EB" />
+        <circle cx="32" cy="33" r="4.5" fill="#FAF6EB" />
+        <circle cx="40" cy="45" r="4.5" fill="#FAF6EB" />
       </svg>
       <span className="leading-none">
         <span className={`block font-display text-[17px] ${text}`}>Gisborne Park</span>

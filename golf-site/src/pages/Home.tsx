@@ -15,7 +15,7 @@ export default function Home() {
           alt={PHOTOS.heroFairway.alt}
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-fairway-950/90 via-fairway-950/40 to-fairway-950/30" />
+        <div className="absolute inset-0 bg-gradient-to-t from-club-950/90 via-club-950/40 to-club-950/30" />
         <Container className="relative pb-16 pt-40 md:pb-24 text-cream">
           <p className="kicker text-gold-bright">Elgin, Gisborne · Est. on the flat</p>
           <h1 className="heading-display mt-4 max-w-3xl text-5xl md:text-7xl">
@@ -40,7 +40,7 @@ export default function Home() {
       </section>
 
       {/* Course facts, engraved-plaque style strip. */}
-      <section className="border-b border-fairway-200/70 bg-cream-warm">
+      <section className="border-b border-club-200/70 bg-cream-warm">
         <Container className="grid grid-cols-2 gap-x-6 gap-y-8 py-10 md:grid-cols-4 md:py-12">
           <Fact value={String(COURSE.holes)} label="holes" />
           <Fact value={String(COURSE.par)} label="par, white tees" />
@@ -54,16 +54,16 @@ export default function Home() {
         <div className="grid items-center gap-12 lg:grid-cols-[1fr_1.1fr]">
           <div>
             <span className="rule-gold" aria-hidden="true" />
-            <h2 className="heading-section mt-5 text-3xl md:text-5xl text-fairway-950">
+            <h2 className="heading-section mt-5 text-3xl md:text-5xl text-club-950">
               Mature trees, honest golf.
             </h2>
-            <p className="mt-6 max-w-prose leading-relaxed text-bark/75">
+            <p className="mt-6 max-w-prose leading-relaxed text-ink/75">
               One of only two full eighteen-hole courses in Gisborne, the Park
               rewards straight hitting: stray left or right and the trees will
               have a word. The ground is flat and quick to walk, the greens are
               kept true, and the layout punches well above its weight.
             </p>
-            <p className="mt-4 max-w-prose leading-relaxed text-bark/75">
+            <p className="mt-4 max-w-prose leading-relaxed text-ink/75">
               Being beside the airport means big sky, sea air and the odd plane
               to watch between shots. It also means we drain well, so winter
               golf here is actual golf, not bog snorkelling.
@@ -89,7 +89,7 @@ export default function Home() {
       </Section>
 
       {/* Clubhouse band. */}
-      <section className="bg-fairway-950 text-cream">
+      <section className="bg-club-950 text-cream">
         <Container className="grid items-center gap-10 py-16 md:grid-cols-2 md:py-24">
           <div>
             <span className="rule-gold" aria-hidden="true" />
@@ -126,7 +126,7 @@ export default function Home() {
       <Section>
         <Link
           href="/events"
-          className="group grid items-center gap-8 rounded-3xl border border-fairway-200 bg-cream-warm p-8 transition-shadow hover:shadow-lift md:grid-cols-[1fr_1.2fr] md:p-12"
+          className="group grid items-center gap-8 rounded-3xl border border-club-200 bg-cream-warm p-8 transition-shadow hover:shadow-lift md:grid-cols-[1fr_1.2fr] md:p-12"
         >
           <Photo
             src={PHOTOS.twilight.src}
@@ -135,14 +135,14 @@ export default function Home() {
           />
           <div>
             <p className="kicker">Events & functions</p>
-            <h2 className="heading-section mt-3 text-2xl md:text-4xl text-fairway-950">
+            <h2 className="heading-section mt-3 text-2xl md:text-4xl text-club-950">
               Twilight golf, tournaments, and a venue with a view of the 18th.
             </h2>
-            <p className="mt-4 max-w-prose text-bark/70 leading-relaxed">
+            <p className="mt-4 max-w-prose text-ink/70 leading-relaxed">
               Weekly club days, open tournaments and a clubhouse you can book
               for your own do.
             </p>
-            <span className="mt-6 inline-flex items-center gap-2 font-semibold text-fairway-900 group-hover:gap-3 transition-all">
+            <span className="mt-6 inline-flex items-center gap-2 font-semibold text-club-900 group-hover:gap-3 transition-all">
               What's on <span aria-hidden="true">→</span>
             </span>
           </div>
@@ -155,8 +155,8 @@ export default function Home() {
 function Fact({ value, label }: { value: string; label: string }) {
   return (
     <div className="text-center md:text-left">
-      <div className="font-display text-4xl md:text-5xl text-fairway-900 tabular-nums">{value}</div>
-      <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-bark/50">{label}</div>
+      <div className="font-display text-4xl md:text-5xl text-club-900 tabular-nums">{value}</div>
+      <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-ink/50">{label}</div>
     </div>
   );
 }
