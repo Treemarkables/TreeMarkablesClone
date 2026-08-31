@@ -254,6 +254,35 @@ interface AllocationSuggestion {
 }
 
 // Unique color palette for each staff member
+// Multi-word search: split the query into whitespace-separated tokens; every
+// token must match at least one searchable field (tokens AND'd, fields OR'd).
+// "Gisborne council botanical" matches a Gisborne District Council job whose
+// address mentions Botanical even though no single field holds the whole phrase.
+const tokenizeSearchQuery = (rawQuery: string): string[] =>
+  rawQuery
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    // Strip a leading '#' so typing "#3571" matches job number "3571"
+    .map((t) => (t.startsWith("#") ? t.slice(1) : t))
+    .filter(Boolean);
+
+const jobMatchesSearchTokens = (
+  job: JobAssignment,
+  tokens: string[],
+): boolean => {
+  if (tokens.length === 0) return true;
+  const fields = [
+    job.customerName?.toLowerCase() || "",
+    job.address?.toLowerCase() || "",
+    job.serviceType?.toLowerCase() || "",
+    job.description?.toLowerCase() || "",
+    job.id?.toLowerCase() || "",
+    String(job.jobNumber ?? "").toLowerCase(),
+  ];
+  return tokens.every((token) => fields.some((field) => field.includes(token)));
+};
+
 const staffColorPalette = [
   "bg-emerald-500", // Green
   "bg-blue-500", // Blue
@@ -1629,26 +1658,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     if (isDeepSearchActive || isDeepSearchLoading) return;
 
     const handle = setTimeout(() => {
-      const rawQuery = trimmed.toLowerCase();
-      const query = rawQuery.startsWith("#") ? rawQuery.slice(1) : rawQuery;
+      const tokens = tokenizeSearchQuery(trimmed);
 
       const hasQuickHit = jobs.some((job) => {
         if (job.status === "unsuccessful" || job.status === "archived") return false;
         if (job.status === "completed" || job.status === "invoiced") return false;
-        const customerName = job.customerName?.toLowerCase() || "";
-        const address = job.address?.toLowerCase() || "";
-        const serviceType = job.serviceType?.toLowerCase() || "";
-        const description = job.description?.toLowerCase() || "";
-        const jobId = job.id?.toLowerCase() || "";
-        const jobNumber = String(job.jobNumber ?? "").toLowerCase();
-        return (
-          customerName.includes(query) ||
-          address.includes(query) ||
-          serviceType.includes(query) ||
-          description.includes(query) ||
-          jobId.includes(query) ||
-          jobNumber.includes(query)
-        );
+        return jobMatchesSearchTokens(job, tokens);
       });
 
       if (!hasQuickHit) {
@@ -1775,25 +1790,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       .filter((job) => {
         // Apply search filter across all searchable fields including job number
         if (!isSearching) return true;
-
-        const rawQuery = searchQuery.toLowerCase().trim();
-        // Strip a leading '#' so typing "#3571" matches job number "3571"
-        const query = rawQuery.startsWith("#") ? rawQuery.slice(1) : rawQuery;
-        const customerName = job.customerName?.toLowerCase() || "";
-        const address = job.address?.toLowerCase() || "";
-        const serviceType = job.serviceType?.toLowerCase() || "";
-        const description = job.description?.toLowerCase() || "";
-        const jobId = job.id?.toLowerCase() || "";
-        const jobNumber = String(job.jobNumber ?? "").toLowerCase();
-
-        return (
-          customerName.includes(query) ||
-          address.includes(query) ||
-          serviceType.includes(query) ||
-          description.includes(query) ||
-          jobId.includes(query) ||
-          jobNumber.includes(query)
-        );
+        return jobMatchesSearchTokens(job, tokenizeSearchQuery(searchQuery));
       });
 
     // Deduplicate jobs by ID (keep the most recent assignment for each unique job)
@@ -1815,14 +1812,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const sorted = uniqueJobs.sort((a, b) => {
       // When searching, rank by relevance first
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
+        const tokens = tokenizeSearchQuery(searchQuery);
         const scoreJob = (job: JobAssignment) => {
           const name = job.customerName?.toLowerCase() || "";
-          if (name.startsWith(query)) return 4;
-          if (name.includes(query)) return 3;
+          if (tokens.every((t) => name.includes(t))) {
+            return name.startsWith(tokens[0]) ? 4 : 3;
+          }
           const addr = job.address?.toLowerCase() || "";
           const svc = job.serviceType?.toLowerCase() || "";
-          if (addr.includes(query) || svc.includes(query)) return 2;
+          if (tokens.every((t) => addr.includes(t) || svc.includes(t))) return 2;
           return 1;
         };
         const diff = scoreJob(b) - scoreJob(a);
