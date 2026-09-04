@@ -3947,6 +3947,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
             }${sigHtml}</div>`;
             emailService.sendEmail({
               to: lowerEmail,
+              fromName: bizSettings.businessName || undefined, // From shows the tenant's business name; blank → platform default
               subject: emailSubject,
               text: emailBodyTextWithSig,
               html: emailBodyHtml,
@@ -28009,6 +28010,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const __updBiz = (await storage.getBusinessSettings())?.businessName || '';
         await emailService.sendEmail({
           to: msg.recipientEmail,
+          fromName: __updBiz || undefined, // From shows the tenant's business name; blank → platform default
           subject: __updBiz ? `Update from ${__updBiz}` : 'Update',
           html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
           text: msg.message,
@@ -30090,8 +30092,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       
       if (data.sentVia === 'email' || data.sentVia === 'both') {
         if (data.customerEmail) {
+          // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+          const __reviewBiz = (await storage.getBusinessSettings())?.businessName || '';
           await emailService.sendEmail({
             to: data.customerEmail,
+            fromName: __reviewBiz || undefined, // From shows the tenant's business name; blank → platform default
             subject: 'How was our service?',
             html: `
               <p>Hi ${data.customerName},</p>
@@ -30099,7 +30104,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
               <p>We'd love to hear about your experience! Please take a moment to leave us a review:</p>
               <p><a href="${reviewLink}" style="background-color: #4CAF50; color: white; padding: 14px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Leave a Review</a></p>
               <p>Your feedback helps us improve our services.</p>
-              <p>Best regards,<br>Treemarkables Team</p>
+              <p>Best regards,<br>${__reviewBiz ? `${__reviewBiz} Team` : 'The Team'}</p>
             `
           });
         }

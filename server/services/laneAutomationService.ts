@@ -231,6 +231,7 @@ async function runCustomerNudge(job: Job, cfg: NudgeConfig): Promise<boolean> {
   } else {
     await emailService.sendEmail({
       to: contact.email,
+      fromName: settings?.businessName || undefined, // From shows the tenant's business name; blank → platform default
       subject,
       text: message,
       html,
