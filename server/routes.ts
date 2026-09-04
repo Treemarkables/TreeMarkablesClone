@@ -32,7 +32,7 @@ import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db, ownerDb } from "./db";
 import { eq, desc, sql, inArray, and, gte, lt, lte, ne } from "drizzle-orm";
-import { invoices, invoiceLineItems, customers, jobs, documentTemplates } from "@shared/schema";
+import { invoices, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
   insertCustomerSchema, insertCustomerContactSchema, updateCustomerContactSchema,
@@ -11709,11 +11709,22 @@ Draft the reply now.`;
       
       if (validatedInvoiceData && !effectiveInvoiceId) {
         try {
+          // invoices.amount is EX-GST everywhere (renderers add 15% on top).
+          // The client sends both `amount` (ex-GST subtotal) and `totalAmount`
+          // (inc-GST). Storing totalAmount here put an inc-GST figure into an
+          // ex-GST field, so the pay-online checkout added GST on top of a
+          // GST-inclusive total — customers were overcharged by exactly 15%.
+          const exGstAmount = (() => {
+            const amt = parseFloat(validatedInvoiceData.amount?.toString() || '');
+            if (Number.isFinite(amt) && amt > 0) return amt;
+            const incGst = parseFloat(validatedInvoiceData.totalAmount?.toString() || '');
+            return Number.isFinite(incGst) ? Math.round((incGst / 1.15) * 100) / 100 : 0;
+          })();
           const newInvoice = await storage.createInvoice({
             jobId: validatedInvoiceData.jobId || jobId,
             customerId: validatedInvoiceData.customerId || customerId,
             invoiceNumber: validatedInvoiceData.invoiceNumber,
-            amount: validatedInvoiceData.totalAmount,
+            amount: exGstAmount.toString(),
             dueDate: validatedInvoiceData.dueDate ? new Date(validatedInvoiceData.dueDate) : undefined,
             issueDate: validatedInvoiceData.issueDate ? new Date(validatedInvoiceData.issueDate) : undefined,
             status: 'sent', // Mark as sent since we're sending it now
@@ -14510,6 +14521,26 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Ex-GST subtotal for an invoice, computed EXACTLY like the customer-facing
+  // surfaces (InvoiceView totals + the PDF): sum the `items` JSONB line totals
+  // (item.total with item.amount as the legacy field name), falling back to
+  // invoice.amount only when there are no line items. Every caller that
+  // charges or states a total MUST go through this so the amount charged can
+  // never diverge from the amount displayed.
+  function invoiceSubtotalExGst(invoice: any): number {
+    const items: any[] = Array.isArray(invoice?.items) ? invoice.items : [];
+    let subtotal = 0;
+    for (const item of items) {
+      const raw = item?.total ?? item?.amount ?? 0;
+      const n = typeof raw === 'string' ? parseFloat(raw) : raw;
+      if (Number.isFinite(n)) subtotal += n;
+    }
+    if (subtotal === 0) {
+      subtotal = parseFloat(invoice?.amount || '0') || 0;
+    }
+    return subtotal;
+  }
+
   // Public: create a Stripe Checkout session to pay an invoice online. Mirrors
   // the proposal deposit-checkout endpoint. Charges the GST-inclusive
   // outstanding balance (invoice total computed the same way as the email /
@@ -14544,16 +14575,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       // Total = subtotal (line items, or invoice.amount fallback) + 15% GST.
-      // Mirrors send-email + InvoiceView so we charge exactly what the
-      // customer sees.
-      const dbLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoice.id));
-      let subtotal = 0;
-      for (const li of dbLineItems) {
-        subtotal += parseFloat(li.totalPrice || '0') || 0;
-      }
-      if (subtotal === 0) {
-        subtotal = parseFloat((invoice as any).amount || '0') || 0;
-      }
+      // Subtotal comes from the invoice's `items` JSONB — the SAME source
+      // InvoiceView and the PDF render from — so we charge exactly what the
+      // customer sees. (The invoice_line_items table has no writers; reading
+      // it always fell back to invoice.amount, which on some invoices holds
+      // the GST-inclusive total → customers were charged GST twice.)
+      const subtotal = invoiceSubtotalExGst(invoice);
       const total = Math.round((subtotal * 1.15) * 100) / 100;
 
       // Subtract anything already paid against this invoice (succeeded, non-refund).
@@ -14633,15 +14660,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const customerName = customer?.name || 'Valued Customer';
       const invoiceViewUrl = invoiceViewLink(invoiceId, { base: baseUrl });
 
-      // Calculate total from line items table or fall back to invoice.amount
-      const dbLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoiceId));
-      let subtotal = 0;
-      for (const li of dbLineItems) {
-        subtotal += parseFloat(li.totalPrice || '0');
-      }
-      if (subtotal === 0) {
-        subtotal = parseFloat((invoice as any).amount || '0');
-      }
+      // Calculate total from the invoice's items JSONB (same source as
+      // InvoiceView / the PDF / payment-checkout) or fall back to invoice.amount
+      const subtotal = invoiceSubtotalExGst(invoice);
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
