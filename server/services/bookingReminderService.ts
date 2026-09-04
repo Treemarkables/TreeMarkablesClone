@@ -32,8 +32,12 @@ async function buildReminderContent(
   job: Job,
   channel: Channel,
   offsetLabel: string | null,
-): Promise<{ subject: string; emailBody: string; smsBody: string }> {
-  const settings = await storage.getBusinessSettings();
+): Promise<{ subject: string; emailBody: string; smsBody: string; fromName?: string }> {
+  // Prefer per-business settings: the cron path runs without tenant context, where
+  // getBusinessSettings() can't know which tenant's job this reminder belongs to.
+  const settings = job.businessId
+    ? await storage.getBusinessSettingsForBusiness(job.businessId)
+    : await storage.getBusinessSettings();
   const businessName = settings?.businessName || 'Treemarkables';
   const firstName = job.jobContactFirstName || 'there';
   const scheduledAt = job.scheduledDate ? new Date(job.scheduledDate) : null;
@@ -109,7 +113,9 @@ async function buildReminderContent(
     sms = `Hi ${firstName}, reminder: your ${jobTitle} booking is on ${dateStr}${startTime ? ` at ${startTime}` : ''}. - ${businessName}`;
   }
 
-  return { subject, emailBody: emailHtml, smsBody: sms };
+  // fromName carries the raw per-tenant name only (no Treemarkables fallback) so a
+  // tenant with no name set falls back to the platform default From, not TM's brand.
+  return { subject, emailBody: emailHtml, smsBody: sms, fromName: settings?.businessName || undefined };
 }
 
 /**
@@ -135,7 +141,7 @@ export async function sendBookingReminderRow(reminderId: string): Promise<{ ok: 
   const recipientEmail = reminder.recipientEmail || pickRecipientEmail(job);
   const recipientPhone = reminder.recipientPhone || pickRecipientPhone(job);
 
-  const { subject, emailBody, smsBody } = await buildReminderContent(job, channel, null);
+  const { subject, emailBody, smsBody, fromName } = await buildReminderContent(job, channel, null);
 
   let emailSent = false;
   let smsSent = false;
@@ -145,6 +151,7 @@ export async function sendBookingReminderRow(reminderId: string): Promise<{ ok: 
     try {
       const result = await emailService.sendEmail({
         to: recipientEmail,
+        fromName, // From shows the tenant's business name; blank → platform default
         subject,
         html: emailBody,
         text: emailBody.replace(/<[^>]*>/g, ''),
