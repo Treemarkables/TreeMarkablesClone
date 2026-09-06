@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-cream text-ink font-sans antialiased;
+  }
+  ::selection {
+    background: #c9a227;
+    color: #0e1233;
+  }
+}
+
+@layer utilities {
+  /* Young Serif ships a single 400 weight; it carries headings on shape alone. */
+  .heading-display {
+    @apply font-display font-normal;
+    line-height: 1.04;
+    letter-spacing: -0.01em;
+  }
+  .heading-section {
+    @apply font-display font-normal;
+    line-height: 1.08;
+    letter-spacing: -0.005em;
+  }
+  .kicker {
+    @apply text-[13px] font-semibold uppercase tracking-[0.16em] text-gold-deep;
+  }
+  .rule-gold {
+    @apply inline-block h-[3px] w-10 rounded-full bg-gold;
+  }
+}
