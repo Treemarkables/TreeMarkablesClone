@@ -4,7 +4,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Home from "@/pages/Home";
 import Features from "@/pages/Features";
-import Pricing from "@/pages/Pricing";
+// Pricing hidden until launch — restore this import, its <Route> and PAGE_META entry together.
+// import Pricing from "@/pages/Pricing";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
 import Privacy from "@/pages/Privacy";
@@ -31,10 +32,6 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
   "/features": {
     title: "Features — Inflow",
     description: "Every workflow a trades business runs on — jobs & dispatch, quoting & proposals, invoicing, safety, CRM, supplier invoices and job costing — in one app.",
-  },
-  "/pricing": {
-    title: "Pricing — Inflow",
-    description: "Start free, then pay by jobs per month — never per seat. Unlimited users on every paid plan. NZD, plus GST. No lock-in.",
   },
   "/about": {
     title: "About — Inflow",
@@ -96,7 +93,6 @@ export default function App() {
         <Switch>
           <Route path="/" component={Home} />
           <Route path="/features" component={Features} />
-          <Route path="/pricing" component={Pricing} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/support" component={Support} />

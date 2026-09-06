@@ -11,7 +11,8 @@ export const BRAND = {
 export const NAV = [
   { href: "/", label: "Home" },
   { href: "/features", label: "Features" },
-  { href: "/pricing", label: "Pricing" },
+  // Pricing hidden until launch — restore alongside the /pricing route in App.tsx.
+  // { href: "/pricing", label: "Pricing" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
 ] as const;
