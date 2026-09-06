@@ -1242,8 +1242,8 @@ export default function Features() {
           </div>
 
           <div className="mt-8 text-center">
-            <LinkButton href="/pricing" variant="primary" size="md">
-              See pricing
+            <LinkButton href="/contact" variant="primary" size="md">
+              Request access
             </LinkButton>
           </div>
         </Container>
@@ -1261,9 +1261,6 @@ export default function Features() {
           <div className="mt-8 flex justify-center gap-3">
             <LinkButton href="/contact" variant="secondary" size="lg">
               Request access
-            </LinkButton>
-            <LinkButton href="/pricing" variant="ghost" size="lg" className="text-paper border border-ink-700 hover:bg-ink-800">
-              See pricing
             </LinkButton>
           </div>
         </Container>
@@ -1338,9 +1335,6 @@ function FeatureModal({ active, onClose }: { active: Active; onClose: () => void
           <div className="mt-8 flex flex-wrap gap-3">
             <LinkButton href="/contact" variant="primary" size="md">
               Request access
-            </LinkButton>
-            <LinkButton href="/pricing" variant="ghost" size="md">
-              See pricing
             </LinkButton>
           </div>
         </div>
