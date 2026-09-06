@@ -111,6 +111,7 @@ import QuoteManagement from "./QuoteManagement";
 import { RecordedTimeModal } from "./RecordedTimeModal";
 import { PhotoCaptureModal } from "./PhotoCaptureModal";
 import { SpeechToQuote } from "./SpeechToQuote";
+import { AiPolishDescription } from "./AiPolishDescription";
 import { CustomerAvatar } from "./CustomerAvatar";
 import { JobLocationMap } from "./JobLocationMap";
 import { JobSiteMapSection } from "./JobSiteMapSection";
@@ -11871,6 +11872,11 @@ The Treemarkables Team`;
                 "Describe the work that needs to be done\n\nUse the 'Add Bullet' button or type • for bullet points"
               }
               data-testid="textarea-description-popup"
+            />
+            <AiPolishDescription
+              text={descriptionDraft}
+              onApply={(polished) => setDescriptionDraft(polished)}
+              className="mt-2"
             />
           </div>
           <div className="flex gap-2 pt-2">

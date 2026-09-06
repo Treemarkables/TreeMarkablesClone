@@ -9944,6 +9944,64 @@ Draft the reply now.`;
     }
   });
 
+  // Rewrite a rough job description into a tidy, professional version. Returns
+  // a suggestion only — the client shows it as a preview and the user chooses
+  // whether to replace their text (never auto-applied).
+  app.post('/api/ai/polish-description', async (req: Request, res: Response) => {
+    try {
+      const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      if (!text) {
+        return res.status(400).json({ success: false, message: 'Description text is required' });
+      }
+      if (text.length > 8000) {
+        return res.status(400).json({ success: false, message: 'Description is too long to tidy up' });
+      }
+
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'polish_description');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
+      const __idPolish = getBusinessIdentity(await storage.getBusinessSettings());
+
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const aiResponse = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'system',
+            content: `You rewrite rough job descriptions for ${__idPolish.name}, a New Zealand ${__idPolish.discipline} business. The rewritten description sits on the job card and can flow through to customer-facing quotes and proposals.
+
+Rules:
+- Keep every factual detail from the original: quantities, measurements, species/materials, locations, access notes, prices, names, dates. Never invent details that aren't there.
+- Restructure for clarity: if the work has multiple parts, break it into short "• " bullet lines (one task per line). A single simple task stays as one or two clean sentences — no bullets needed.
+- Professional but plainspoken NZ trade voice — clear and direct, not corporate or flowery.
+- Fix spelling, grammar and capitalisation. NZ English spelling.
+- Plain text only: no markdown (no **, #, or - bullets), no emoji. Bullets use the "• " character only.
+- Similar length to the original or shorter — this is a tidy-up, not an expansion.
+
+Return only the rewritten description, nothing else.`,
+          },
+          { role: 'user', content: text },
+        ],
+      });
+
+      const polished = (aiResponse.choices[0].message.content || '').trim();
+      if (!polished) {
+        return res.status(502).json({ success: false, message: 'AI returned an empty rewrite' });
+      }
+
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'polish_description' });
+
+      return res.json({ success: true, data: { polished } });
+    } catch (error) {
+      console.error('Error polishing description:', error);
+      const cause = error instanceof Error ? error.message : String(error);
+      return res.status(500).json({ success: false, message: `Failed to tidy up description: ${cause}` });
+    }
+  });
+
   // Validate if gross margin calculation is complete
   app.get('/api/jobs/:id/gross-margin/validate', async (req: Request, res: Response) => {
     try {

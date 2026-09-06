@@ -27,6 +27,7 @@ import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { SpeechToQuote } from "@/components/SpeechToQuote";
 import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAutocomplete";
 import { JobSiteMapSection } from "@/components/JobSiteMapSection";
+import { AiPolishDescription } from "@/components/AiPolishDescription";
 import { JobTimerControl } from "@/components/JobTimerControl";
 
 // The Web Speech API (webkitSpeechRecognition) is present on `window` inside the
@@ -767,6 +768,14 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           rows={3}
           className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
           data-testid="job-description"
+        />
+        <AiPolishDescription
+          text={description}
+          onApply={(polished) => {
+            setDescription(polished);
+            saveField.mutate({ description: polished });
+          }}
+          className="mt-2"
         />
       </div>
 
