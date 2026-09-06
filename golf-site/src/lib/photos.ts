@@ -1,10 +1,7 @@
-// CLUB photos (in /public/photos) are the club's own shots. The remaining
-// Unsplash entries are verified stand-in stock for slots the club hasn't
-// photographed yet (dusk hero, twilight silhouette) — swap when they have
-// something better. This file is the only place image URLs live.
-const u = (id: string, w = 1600) =>
-  `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
-
+// All photography is self-hosted in /public/photos. The first four are the
+// club's own shots; the rest are licensed Unsplash stand-ins downloaded into
+// the repo (no runtime third-party dependency) — swap them for club photos
+// when the club has equivalents. This file is the only place image URLs live.
 export const PHOTOS = {
   // Real club photos
   green: {
@@ -24,21 +21,21 @@ export const PHOTOS = {
     alt: "The Park Golf Club clubhouse on Cochrane Street",
   },
 
-  // Stand-in stock (Unsplash)
+  // Stand-in stock (Unsplash, self-hosted)
   heroFairway: {
-    src: u("photo-1636646220328-61d531af9f31", 2000),
+    src: "/photos/hero-dusk.jpg",
     alt: "A tree-lined fairway running toward a distant flag",
   },
   drive: {
-    src: u("photo-1535131749006-b7f58c99034b"),
+    src: "/photos/events-hero.jpg",
     alt: "A golfer at the top of the backswing, driver in hand",
   },
   twilight: {
-    src: u("photo-1505794718076-13e166c01a33"),
+    src: "/photos/twilight.jpg",
     alt: "A golfer silhouetted against the last of the evening light",
   },
   openField: {
-    src: u("photo-1538628166020-9c7589dc6913", 2000),
+    src: "/photos/course-hero.jpg",
     alt: "A wide, flat stretch of mown fairway under big sky",
   },
 };
