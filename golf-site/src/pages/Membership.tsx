@@ -132,7 +132,7 @@ export default function Membership() {
               </div>
             </div>
           </div>
-          <Photo src={PHOTOS.pair.src} alt={PHOTOS.pair.alt} className="aspect-[4/5]" />
+          <Photo src={PHOTOS.golfers.src} alt={PHOTOS.golfers.alt} className="aspect-square" />
         </div>
       </Section>
     </>

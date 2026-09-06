@@ -60,8 +60,8 @@ export default function Events() {
       <section className="bg-cream-warm border-y border-club-200/70">
         <Container className="grid items-center gap-12 py-16 md:py-24 lg:grid-cols-[1fr_1.1fr]">
           <Photo
-            src={PHOTOS.walkers.src}
-            alt={PHOTOS.walkers.alt}
+            src={PHOTOS.clubhouse.src}
+            alt={PHOTOS.clubhouse.alt}
             className="aspect-[4/3] lg:order-2"
           />
           <div>

@@ -26,14 +26,14 @@ npm run build      # tsc -b && vite build → dist/
 3. **Domain** — `BRAND.domain` in `src/lib/brand.ts`, plus `index.html` meta,
    `public/robots.txt` and `public/sitemap.xml` all use the placeholder
    `gisbornepark.co.nz`.
-4. **Photos** — all photography is Unsplash stand-in stock (verified URLs, one
-   file: `src/lib/photos.ts`). Swap for the club's own shots. The clubhouse
-   section on the home page is deliberately an empty frame awaiting a real
-   photo.
-5. **Crest** — the colour scheme is sampled from the club's royal-blue crest,
-   and the header/footer mark is a simplified shield echo of it. Once a
-   transparent-background version of the real crest lands in `public/`, swap
-   the `<svg>` in `src/components/Wordmark.tsx` for it.
+4. **Photos** — the club's own shots (green, gazebo, golfers, clubhouse) live
+   in `public/photos/` and are wired up via `src/lib/photos.ts`. The dusk
+   hero, course-page hero, events hero and twilight shots are still verified
+   Unsplash stand-ins — swap them in the same file when the club has
+   equivalents (a wide, high-res hero shot is the one most worth chasing).
+5. **Crest** — the real crest is in as `public/crest.png` (navy on
+   transparent) and `public/crest-light.png` (cream, for dark bands), both
+   generated from the club's artwork; the colour scheme is sampled from it.
 5. **Scorecard** — data in `src/lib/course.ts` came from Hole19 (white tees);
    have the club sight-check it against the printed card.
 

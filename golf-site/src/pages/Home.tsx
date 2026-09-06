@@ -74,15 +74,11 @@ export default function Home() {
               </LinkButton>
             </div>
           </div>
-          <div className="grid grid-cols-[1.4fr_1fr] gap-4">
-            <Photo
-              src={PHOTOS.greenFlag.src}
-              alt={PHOTOS.greenFlag.alt}
-              className="aspect-[4/5]"
-            />
-            <div className="grid gap-4">
-              <Photo src={PHOTOS.walkers.src} alt={PHOTOS.walkers.alt} className="aspect-square" />
-              <Photo src={PHOTOS.redFlag.src} alt={PHOTOS.redFlag.alt} className="aspect-square" />
+          <div className="grid gap-4">
+            <Photo src={PHOTOS.green.src} alt={PHOTOS.green.alt} className="aspect-[4/3]" />
+            <div className="grid grid-cols-2 gap-4">
+              <Photo src={PHOTOS.gazebo.src} alt={PHOTOS.gazebo.alt} className="aspect-[4/3]" />
+              <Photo src={PHOTOS.golfers.src} alt={PHOTOS.golfers.alt} className="aspect-[4/3]" />
             </div>
           </div>
         </div>
@@ -108,17 +104,11 @@ export default function Home() {
               <li className="flex gap-3"><Tick /> Club competitions and social golf every week</li>
             </ul>
           </div>
-          {/* Photo slot: replace with the club's own clubhouse shot. Stock
-              interiors would misrepresent the venue, so this stays a frame. */}
-          <div className="flex aspect-[4/3] items-center justify-center rounded-2xl border-2 border-dashed border-cream/25 text-center">
-            <div className="px-8">
-              <p className="font-display text-xl text-cream/70">Clubhouse photo goes here</p>
-              <p className="mt-2 text-sm text-cream/45">
-                Waiting on a real shot of the bar, the simulator or the honours
-                board. No stock stand-ins for home turf.
-              </p>
-            </div>
-          </div>
+          <Photo
+            src={PHOTOS.clubhouse.src}
+            alt={PHOTOS.clubhouse.alt}
+            className="aspect-[4/3]"
+          />
         </Container>
       </section>
 
