@@ -1,5 +1,6 @@
-import { Route, Switch, useLocation } from "wouter";
-import { useEffect } from "react";
+import { Route, Router, Switch, useLocation } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
+import { useEffect, type ReactNode } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactBand from "@/components/ContactBand";
@@ -9,6 +10,17 @@ import Membership from "@/pages/Membership";
 import Events from "@/pages/Events";
 import NotFound from "@/pages/NotFound";
 import { BRAND } from "@/lib/brand";
+
+// Hash-based routing for single-file preview builds (e.g. the shareable
+// artifact), where the site isn't served from its own origin root.
+const USE_HASH_ROUTER = import.meta.env.VITE_HASH_ROUTER === "1";
+
+function RouterMode({ children }: { children: ReactNode }) {
+  if (USE_HASH_ROUTER) {
+    return <Router hook={useHashLocation}>{children}</Router>;
+  }
+  return <>{children}</>;
+}
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -77,21 +89,23 @@ function DocumentMeta() {
 
 export default function App() {
   return (
-    <div className="min-h-screen flex flex-col bg-cream">
-      <ScrollToTop />
-      <DocumentMeta />
-      <Header />
-      <main className="flex-1">
-        <Switch>
-          <Route path="/" component={Home} />
-          <Route path="/course" component={Course} />
-          <Route path="/membership" component={Membership} />
-          <Route path="/events" component={Events} />
-          <Route component={NotFound} />
-        </Switch>
-      </main>
-      <ContactBand />
-      <Footer />
-    </div>
+    <RouterMode>
+      <div className="min-h-screen flex flex-col bg-cream">
+        <ScrollToTop />
+        <DocumentMeta />
+        <Header />
+        <main className="flex-1">
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/course" component={Course} />
+            <Route path="/membership" component={Membership} />
+            <Route path="/events" component={Events} />
+            <Route component={NotFound} />
+          </Switch>
+        </main>
+        <ContactBand />
+        <Footer />
+      </div>
+    </RouterMode>
   );
 }
