@@ -61,6 +61,17 @@ interface TreeMarker {
 // Fixed CRS.Simple height for the uploaded photo; width scales by aspect.
 const IMG_PLANE_H = 1000;
 
+// A pin dropped in add-mode but not yet saved — coords are raw map-plane
+// values (converted to normalized/geo coords only at save time).
+interface PendingMarker {
+  lat: number;
+  lng: number;
+  label: string;
+  notes: string;
+  markerType: string;
+  color: string;
+}
+
 interface JobSiteMapProps {
   jobId: string;
   address?: string;
@@ -98,6 +109,32 @@ function createTreeIcon(color: string = "#22c55e"): L.DivIcon {
         <rect x="10" y="18" width="4" height="4"/>
       </svg>
     </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
+    popupAnchor: [0, -28],
+  });
+}
+
+// Pending (not-yet-saved) pins show their list number so the describe-all
+// dialog rows can be matched back to positions on the map.
+function createNumberedIcon(color: string, n: number): L.DivIcon {
+  return L.divIcon({
+    className: "custom-tree-marker",
+    html: `<div style="
+      background-color: ${color};
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 3px solid white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+      font-family: sans-serif;
+    ">${n}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 28],
     popupAnchor: [0, -28],
@@ -271,10 +308,9 @@ export function JobSiteMap({
     }
   };
   const [editingMarker, setEditingMarker] = useState<TreeMarker | null>(null);
-  const [newMarkerPosition, setNewMarkerPosition] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
+  // Pins dropped in add-mode, described together in one dialog before saving.
+  const [pendingMarkers, setPendingMarkers] = useState<PendingMarker[]>([]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [markerForm, setMarkerForm] = useState({
     label: "",
     notes: "",
@@ -309,37 +345,50 @@ export function JobSiteMap({
         ]
       : [parseFloat(m.latitude), parseFloat(m.longitude)];
 
-  const createMarkerMutation = useMutation({
-    mutationFn: async (marker: {
-      latitude: number;
-      longitude: number;
-      label: string;
-      notes: string;
-      markerType: string;
-      color: string;
-      surface: string;
-    }) => {
-      return apiRequest("POST", `/api/jobs/${jobId}/tree-markers`, marker);
+  const createMarkersMutation = useMutation({
+    // Sequential so the saved order matches the on-map numbering; failures
+    // are collected (not thrown) so a partial save keeps only the failed
+    // pins pending instead of re-creating the ones that went through.
+    mutationFn: async (
+      toCreate: Array<{
+        pending: PendingMarker;
+        payload: {
+          latitude: number;
+          longitude: number;
+          label: string;
+          notes: string;
+          markerType: string;
+          color: string;
+          surface: string;
+        };
+      }>,
+    ) => {
+      const failed: PendingMarker[] = [];
+      for (const { pending, payload } of toCreate) {
+        try {
+          await apiRequest("POST", `/api/jobs/${jobId}/tree-markers`, payload);
+        } catch {
+          failed.push(pending);
+        }
+      }
+      return failed;
     },
-    onSuccess: () => {
+    onSuccess: (failed) => {
       queryClient.invalidateQueries({
         queryKey: ["/api/jobs", jobId, "tree-markers"],
       });
-      setNewMarkerPosition(null);
-      setMarkerForm({
-        label: "",
-        notes: "",
-        markerType: "tree",
-        color: "#22c55e",
-      });
+      if (failed.length > 0) {
+        setPendingMarkers(failed);
+        toast({
+          title: "Error",
+          description: `${failed.length} marker${failed.length === 1 ? "" : "s"} failed to save — try saving again`,
+          variant: "destructive",
+        });
+        return;
+      }
+      setPendingMarkers([]);
+      setDetailsOpen(false);
       setIsAddingMarker(false);
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to add marker",
-        variant: "destructive",
-      });
     },
   });
 
@@ -391,29 +440,54 @@ export function JobSiteMap({
   });
 
   const handleMapClick = (lat: number, lng: number) => {
-    setNewMarkerPosition({ lat, lng });
+    setPendingMarkers((prev) => [
+      ...prev,
+      { lat, lng, label: "", notes: "", markerType: "tree", color: "#22c55e" },
+    ]);
   };
 
-  const handleSaveNewMarker = () => {
-    if (!newMarkerPosition) return;
-    // Photo view: convert the CRS.Simple click into normalized image coords.
-    const latitude =
-      view === "photo"
-        ? 1 - newMarkerPosition.lat / IMG_PLANE_H
-        : newMarkerPosition.lat;
-    const longitude =
-      view === "photo"
-        ? newMarkerPosition.lng / imgPlaneW
-        : newMarkerPosition.lng;
-    createMarkerMutation.mutate({
-      latitude,
-      longitude,
-      label: markerForm.label,
-      notes: markerForm.notes,
-      markerType: markerForm.markerType,
-      color: markerForm.color,
-      surface: view === "photo" ? "image" : "map",
+  const updatePendingMarker = (
+    index: number,
+    patch: Partial<PendingMarker>,
+  ) => {
+    setPendingMarkers((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, ...patch } : m)),
+    );
+  };
+
+  const handlePendingTypeChange = (index: number, value: string) => {
+    const type = MARKER_TYPES.find((t) => t.value === value);
+    updatePendingMarker(index, {
+      markerType: value,
+      color: type?.color || "#22c55e",
     });
+  };
+
+  const removePendingMarker = (index: number) => {
+    const next = pendingMarkers.filter((_, i) => i !== index);
+    setPendingMarkers(next);
+    if (next.length === 0) setDetailsOpen(false);
+  };
+
+  const handleSaveAllMarkers = () => {
+    if (pendingMarkers.length === 0) return;
+    createMarkersMutation.mutate(
+      pendingMarkers.map((pending) => ({
+        pending,
+        payload: {
+          // Photo view: convert the CRS.Simple position into normalized
+          // image coords.
+          latitude:
+            view === "photo" ? 1 - pending.lat / IMG_PLANE_H : pending.lat,
+          longitude: view === "photo" ? pending.lng / imgPlaneW : pending.lng,
+          label: pending.label,
+          notes: pending.notes,
+          markerType: pending.markerType,
+          color: pending.color,
+          surface: view === "photo" ? "image" : "map",
+        },
+      })),
+    );
   };
 
   const handleUpdateMarker = () => {
@@ -486,12 +560,13 @@ export function JobSiteMap({
         </Marker>
       ))}
 
-      {newMarkerPosition && (
+      {pendingMarkers.map((marker, i) => (
         <Marker
-          position={[newMarkerPosition.lat, newMarkerPosition.lng]}
-          icon={createTreeIcon(markerForm.color)}
+          key={`pending-${i}`}
+          position={[marker.lat, marker.lng]}
+          icon={createNumberedIcon(marker.color, i + 1)}
         />
-      )}
+      ))}
     </>
   );
 
@@ -506,7 +581,7 @@ export function JobSiteMap({
               onClick={() => {
                 setManualView("photo");
                 setIsAddingMarker(false);
-                setNewMarkerPosition(null);
+                setPendingMarkers([]);
               }}
               className="text-xs"
             >
@@ -519,7 +594,7 @@ export function JobSiteMap({
               onClick={() => {
                 setManualView("satellite");
                 setIsAddingMarker(false);
-                setNewMarkerPosition(null);
+                setPendingMarkers([]);
               }}
               className="text-xs"
             >
@@ -557,12 +632,22 @@ export function JobSiteMap({
           {/* Floats over photo/satellite imagery, so it needs a solid fill —
               the theme's outline variant is transparent and primary is near
               black, both of which vanish against dark trees. */}
+          {isAddingMarker && pendingMarkers.length > 0 && (
+            <Button
+              size="sm"
+              onClick={() => setDetailsOpen(true)}
+              className="shadow-lg"
+            >
+              <Save className="h-4 w-4 mr-1" />
+              Done ({pendingMarkers.length})
+            </Button>
+          )}
           <Button
             size="sm"
             variant={isAddingMarker ? "destructive" : "outline"}
             onClick={() => {
               setIsAddingMarker(!isAddingMarker);
-              setNewMarkerPosition(null);
+              setPendingMarkers([]);
             }}
             className={
               isAddingMarker
@@ -578,7 +663,7 @@ export function JobSiteMap({
             ) : (
               <>
                 <Plus className="h-4 w-4 mr-1" />
-                Add Marker
+                Add Markers
               </>
             )}
           </Button>
@@ -588,7 +673,11 @@ export function JobSiteMap({
           <div className="absolute top-2 left-2 z-[1000] bg-white/95 border border-gray-200 px-3 py-2 rounded-lg shadow-lg text-sm text-gray-900">
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-green-600" />
-              <span>Click on the {view === "photo" ? "photo" : "map"} to place a marker</span>
+              <span>
+                {pendingMarkers.length === 0
+                  ? `Click on the ${view === "photo" ? "photo" : "map"} to place markers`
+                  : "Keep clicking to add more, then press Done to describe them"}
+              </span>
             </div>
           </div>
         )}
@@ -674,80 +763,94 @@ export function JobSiteMap({
         </div>
       )}
 
-      <Dialog
-        open={!!newMarkerPosition}
-        onOpenChange={() => setNewMarkerPosition(null)}
-      >
-        <DialogContent>
+      {/* Describe-all dialog: one place to type/label/note every pending pin;
+          closing it keeps the pins so more can be placed on the map. */}
+      <Dialog open={detailsOpen} onOpenChange={(open) => setDetailsOpen(open)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <TreePine className="h-5 w-5 text-green-600" />
-              Add Tree Marker
+              Describe Markers ({pendingMarkers.length})
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label>Type</Label>
-              <Select
-                value={markerForm.markerType}
-                onValueChange={handleMarkerTypeChange}
+          <div className="space-y-3 py-2">
+            {pendingMarkers.map((marker, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-border p-3 space-y-2"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MARKER_TYPES.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: type.color }}
-                        />
-                        {type.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Label</Label>
-              <Input
-                placeholder="e.g., Large oak - remove"
-                value={markerForm.label}
-                onChange={(e) =>
-                  setMarkerForm({ ...markerForm, label: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <Label>Notes</Label>
-              <Input
-                placeholder="Additional notes..."
-                value={markerForm.notes}
-                onChange={(e) =>
-                  setMarkerForm({ ...markerForm, notes: e.target.value })
-                }
-              />
-            </div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                    style={{ backgroundColor: marker.color }}
+                  >
+                    {i + 1}
+                  </div>
+                  <Select
+                    value={marker.markerType}
+                    onValueChange={(value) => handlePendingTypeChange(i, value)}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MARKER_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: type.color }}
+                            />
+                            {type.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 text-muted-foreground"
+                    onClick={() => removePendingMarker(i)}
+                    title="Remove this marker"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Input
+                  placeholder="e.g., Large oak - remove"
+                  value={marker.label}
+                  onChange={(e) =>
+                    updatePendingMarker(i, { label: e.target.value })
+                  }
+                />
+                <Input
+                  placeholder="Additional notes..."
+                  value={marker.notes}
+                  onChange={(e) =>
+                    updatePendingMarker(i, { notes: e.target.value })
+                  }
+                />
+              </div>
+            ))}
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setNewMarkerPosition(null)}
-            >
-              Cancel
+            <Button variant="outline" onClick={() => setDetailsOpen(false)}>
+              Back to Map
             </Button>
             <Button
-              onClick={handleSaveNewMarker}
-              disabled={createMarkerMutation.isPending}
+              onClick={handleSaveAllMarkers}
+              disabled={
+                createMarkersMutation.isPending || pendingMarkers.length === 0
+              }
             >
-              {createMarkerMutation.isPending ? (
+              {createMarkersMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1" />
               ) : (
                 <Save className="h-4 w-4 mr-1" />
               )}
-              Save Marker
+              Save {pendingMarkers.length}{" "}
+              {pendingMarkers.length === 1 ? "Marker" : "Markers"}
             </Button>
           </DialogFooter>
         </DialogContent>
