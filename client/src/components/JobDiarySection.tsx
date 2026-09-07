@@ -2137,7 +2137,8 @@ export function JobDiarySection({
         {/* Header */}
         <div className="flex-shrink-0 p-2 border-b bg-gray-50 dark:bg-gray-900">
           <div className="flex items-center justify-between mb-1">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
+              <span className="w-1 h-4 rounded-full bg-brand-lime" aria-hidden="true" />
               Job Diary
             </h3>
             <div className="flex gap-1">
