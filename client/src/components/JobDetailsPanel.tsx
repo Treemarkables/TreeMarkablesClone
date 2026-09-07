@@ -435,7 +435,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           New-customer creation deferred — for now point users at the
           /customers page if their customer isn't on the list. */}
       {customerId ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+        <div className="bg-card border border-border rounded-2xl p-4">
           <div className="flex items-start justify-between gap-3">
             <button
               type="button"
@@ -444,10 +444,10 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
               data-testid="button-change-customer"
               aria-label="Change linked customer"
             >
-              <h2 className="text-[20px] font-extrabold tracking-tight text-slate-900 leading-tight truncate group-hover:underline">
+              <h2 className="text-[20px] font-extrabold tracking-tight text-foreground leading-tight truncate group-hover:underline">
                 {customer?.name ?? "Unnamed customer"}
               </h2>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 group-hover:bg-blue-100 px-2 py-0.5 rounded-full flex-shrink-0">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-foreground bg-secondary/50 border border-border group-hover:bg-secondary px-2 py-0.5 rounded-full flex-shrink-0">
                 <Pencil className="w-3 h-3" />
                 Change
               </span>
@@ -461,14 +461,14 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           </div>
 
           {isChangingCustomer && (
-            <div className="mt-3 border border-blue-200 rounded-xl bg-blue-50/40 p-2">
+            <div className="mt-3 border border-border rounded-xl bg-muted/60 p-2">
               <div className="flex items-center gap-2 mb-2">
                 <input
                   type="text"
                   value={changeCustomerSearch}
                   onChange={(e) => setChangeCustomerSearch(e.target.value)}
                   placeholder="Search customers..."
-                  className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 bg-card border border-border rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-ring"
                   data-testid="input-change-customer-search"
                   autoFocus
                 />
@@ -478,16 +478,16 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                     setIsChangingCustomer(false);
                     setChangeCustomerSearch("");
                   }}
-                  className="p-2 text-slate-500 hover:text-slate-800"
+                  className="p-2 text-muted-foreground hover:text-foreground"
                   data-testid="button-change-customer-cancel"
                   aria-label="Cancel"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <ul className="max-h-60 overflow-y-auto bg-white rounded-lg border border-blue-100 divide-y divide-blue-50">
+              <ul className="max-h-60 overflow-y-auto bg-card rounded-lg border border-border/60 divide-y divide-border/50">
                 {filteredChangeCustomers.length === 0 ? (
-                  <li className="px-3 py-2 text-[13px] text-slate-500">No matches</li>
+                  <li className="px-3 py-2 text-[13px] text-muted-foreground">No matches</li>
                 ) : (
                   filteredChangeCustomers.map((c) => (
                     <li key={c.id}>
@@ -498,14 +498,14 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                           setIsChangingCustomer(false);
                           setChangeCustomerSearch("");
                         }}
-                        className="w-full text-left px-3 py-2 hover:bg-blue-50 flex flex-col"
+                        className="w-full text-left px-3 py-2 hover:bg-muted flex flex-col"
                         data-testid={`change-customer-option-${c.id}`}
                       >
-                        <span className="text-[14px] font-semibold text-slate-900">
+                        <span className="text-[14px] font-semibold text-foreground">
                           {c.name}
                         </span>
                         {c.address && (
-                          <span className="text-[12px] text-slate-500 truncate">
+                          <span className="text-[12px] text-muted-foreground truncate">
                             {c.address}
                           </span>
                         )}
@@ -518,7 +518,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           )}
 
           <div className="flex items-start gap-1.5 mt-2">
-            <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-2" />
+            <MapPin className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0 mt-2" />
             <div className="flex-1 min-w-0">
               <AddressAutocomplete
                 value={address}
@@ -550,7 +550,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                 placeholder="Add job address..."
                 mode="full"
                 bare
-                className="bg-transparent border-0 px-1.5 -mx-1.5 h-auto py-1 text-[14px] text-slate-700 placeholder:text-slate-400 focus-visible:ring-0 focus-visible:bg-slate-50 focus-visible:rounded-md"
+                className="bg-transparent border-0 px-1.5 -mx-1.5 h-auto py-1 text-[14px] text-foreground placeholder:text-muted-foreground/70 focus-visible:ring-0 focus-visible:bg-muted focus-visible:rounded-md"
                 data-testid="input-job-address"
               />
             </div>
@@ -560,7 +560,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
               href={`https://www.google.com/maps/place/${encodeURIComponent(addressDisplay)}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 mt-2.5 text-[14px] font-semibold text-blue-600"
+              className="inline-flex items-center gap-1 mt-2.5 text-[14px] font-semibold text-foreground"
             >
               View on Map (Bird's Eye)
               <ChevronDown className="w-3 h-3" />
@@ -568,11 +568,11 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           )}
         </div>
       ) : (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+        <div className="bg-secondary/50 border border-border rounded-2xl p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <UserPlus className="w-4 h-4 text-blue-600 shrink-0" />
-              <h2 className="text-[16px] font-bold text-blue-900 truncate">
+              <UserPlus className="w-4 h-4 text-foreground shrink-0" />
+              <h2 className="text-[16px] font-bold text-foreground truncate">
                 Pick a customer to get started
               </h2>
             </div>
@@ -583,7 +583,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
               {statusLabel}
             </span>
           </div>
-          <p className="text-[13px] text-blue-700/85 mt-1">
+          <p className="text-[13px] text-muted-foreground mt-1">
             Link this job to a customer. Auto-saves on select.
           </p>
           <div className="mt-3">
@@ -592,11 +592,11 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
               value={pickCustomerSearch}
               onChange={(e) => setPickCustomerSearch(e.target.value)}
               placeholder="Search customers..."
-              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2.5 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-card border border-input rounded-lg px-3 py-2.5 text-[14px] outline-none focus:ring-2 focus:ring-ring"
               data-testid="customer-picker-search"
               disabled={saveField.isPending}
             />
-            <ul className="mt-2 max-h-60 overflow-y-auto bg-white rounded-lg border border-blue-100 divide-y divide-blue-50">
+            <ul className="mt-2 max-h-60 overflow-y-auto bg-card rounded-lg border border-border/60 divide-y divide-border/50">
               {filteredPickCustomers.length === 0 ? (
                 <li className="px-3 py-2">
                   {pickCustomerSearch.trim() ? (
@@ -606,14 +606,14 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                         setNewCustomerName(pickCustomerSearch.trim());
                         setShowNewCustomerForm(true);
                       }}
-                      className="text-[13px] font-semibold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1"
+                      className="text-[13px] font-semibold text-foreground hover:opacity-70 inline-flex items-center gap-1"
                       data-testid="customer-picker-create-from-search"
                     >
                       <UserPlus className="w-3.5 h-3.5" />
                       Create "{pickCustomerSearch.trim()}" as a new customer
                     </button>
                   ) : (
-                    <span className="text-[13px] text-slate-500">No matches</span>
+                    <span className="text-[13px] text-muted-foreground">No matches</span>
                   )}
                 </li>
               ) : (
@@ -626,14 +626,14 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                         setPickCustomerSearch("");
                       }}
                       disabled={saveField.isPending}
-                      className="w-full text-left px-3 py-2 hover:bg-blue-50 flex flex-col disabled:opacity-60"
+                      className="w-full text-left px-3 py-2 hover:bg-muted flex flex-col disabled:opacity-60"
                       data-testid={`customer-picker-option-${c.id}`}
                     >
-                      <span className="text-[14px] font-semibold text-slate-900">
+                      <span className="text-[14px] font-semibold text-foreground">
                         {c.name}
                       </span>
                       {c.address && (
-                        <span className="text-[12px] text-slate-500 truncate">
+                        <span className="text-[12px] text-muted-foreground truncate">
                           {c.address}
                         </span>
                       )}
@@ -647,13 +647,13 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           {/* New-customer inline form — expanded via the toggle below. Lets
               the user create + link a customer without leaving the card. */}
           {showNewCustomerForm ? (
-            <div className="mt-3 border-t border-blue-200 pt-3 space-y-2">
+            <div className="mt-3 border-t border-border pt-3 space-y-2">
               <input
                 type="text"
                 value={newCustomerName}
                 onChange={(e) => setNewCustomerName(e.target.value)}
                 placeholder="Customer name (required)"
-                className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-card border border-input rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-ring"
                 data-testid="new-customer-name"
                 autoFocus
               />
@@ -662,7 +662,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                 value={newCustomerPhone}
                 onChange={(e) => setNewCustomerPhone(e.target.value)}
                 placeholder="Phone (optional)"
-                className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-card border border-input rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-ring"
                 data-testid="new-customer-phone"
               />
               <input
@@ -670,7 +670,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                 value={newCustomerEmail}
                 onChange={(e) => setNewCustomerEmail(e.target.value)}
                 placeholder="Email (optional)"
-                className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-card border border-input rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-ring"
                 data-testid="new-customer-email"
               />
               {createCustomer.error && (
@@ -688,7 +688,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                     setNewCustomerEmail("");
                   }}
                   disabled={createCustomer.isPending}
-                  className="flex-1 bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                  className="flex-1 bg-card border border-input rounded-lg px-3 py-2 text-[14px] font-semibold text-foreground hover:bg-secondary disabled:opacity-60"
                   data-testid="new-customer-cancel"
                 >
                   Cancel
@@ -705,7 +705,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                     });
                   }}
                   disabled={!newCustomerName.trim() || createCustomer.isPending || saveField.isPending}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-[14px] font-semibold disabled:opacity-60"
+                  className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg px-3 py-2 text-[14px] font-semibold disabled:opacity-60"
                   data-testid="new-customer-save"
                 >
                   {createCustomer.isPending || saveField.isPending ? "Saving…" : "Create + link"}
@@ -721,7 +721,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                 }
                 setShowNewCustomerForm(true);
               }}
-              className="mt-3 text-[13px] font-semibold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1"
+              className="mt-3 text-[13px] font-semibold text-foreground hover:opacity-70 inline-flex items-center gap-1"
               data-testid="show-new-customer-form"
             >
               <UserPlus className="w-3.5 h-3.5" />
@@ -732,14 +732,17 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       )}
 
       {/* ── Site Map (bird's-eye tree markers) ── */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-2">
+      <div className="bg-card border border-border rounded-2xl p-2">
         <JobSiteMapSection jobId={jobId} address={job?.address ?? undefined} />
       </div>
 
       {/* ── Job Description ── */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4">
+      <div className="bg-card border border-border rounded-2xl p-4">
         <div className="flex items-center justify-between mb-2">
-          <div className="text-[14px] font-bold text-blue-600">Job Description</div>
+          <div className="flex items-center gap-2 text-[14px] font-bold text-foreground">
+            <span className="w-1 h-3.5 rounded-full bg-brand-lime" aria-hidden="true" />
+            Job Description
+          </div>
           <VoiceButton
             context="job-description"
             onTranscript={(text) => {
@@ -753,7 +756,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           // Light hint so the user knows where this text came from. The first
           // edit + blur saves it onto job.description, after which the
           // fallback disappears on its own (job.description is no longer empty).
-          <div className="mb-2 text-[12px] text-slate-500" data-testid="description-from-proposal-hint">
+          <div className="mb-2 text-[12px] text-muted-foreground" data-testid="description-from-proposal-hint">
             From the accepted proposal — edit and tap away to save to the job.
           </div>
         )}
@@ -766,7 +769,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           }}
           placeholder="Add a job description..."
           rows={3}
-          className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
+          className="w-full bg-muted rounded-xl px-3.5 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/70 outline-none focus:bg-card focus:ring-2 focus:ring-ring resize-none overflow-hidden"
           data-testid="job-description"
         />
         <AiPolishDescription
@@ -780,9 +783,9 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       </div>
 
       {/* ── Internal Notes (orange tint) ── */}
-      <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4">
+      <div className="bg-orange/10 border border-orange/25 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 text-[14px] font-bold text-orange-700">
+          <div className="flex items-center gap-1.5 text-[14px] font-bold text-orange">
             <Lock className="w-3.5 h-3.5" />
             Internal Notes
           </div>
@@ -795,7 +798,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             }}
           />
         </div>
-        <div className="text-[12.5px] font-semibold text-orange-700/70 mb-2.5">
+        <div className="text-[12.5px] font-semibold text-orange/70 mb-2.5">
           Staff only — not visible to customers
         </div>
         <textarea
@@ -807,7 +810,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           }}
           placeholder="Add internal notes..."
           rows={3}
-          className="w-full bg-white border border-orange-200 rounded-xl px-3.5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-orange-400 resize-none overflow-hidden"
+          className="w-full bg-card border border-orange/25 rounded-xl px-3.5 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/70 outline-none focus:ring-2 focus:ring-orange/60 resize-none overflow-hidden"
           data-testid="internal-notes"
         />
       </div>
@@ -865,12 +868,12 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       </div>
 
       {/* ── Confirmation checkbox ── */}
-      <label className="flex items-center gap-2.5 px-1 py-2 text-[15px] text-slate-900 cursor-pointer select-none">
+      <label className="flex items-center gap-2.5 px-1 py-2 text-[15px] text-foreground cursor-pointer select-none">
         <input
           type="checkbox"
           checked={!!job?.customerConfirmed}
           onChange={(e) => saveField.mutate({ customerConfirmed: e.target.checked })}
-          className="w-5 h-5 accent-blue-600 cursor-pointer"
+          className="w-5 h-5 accent-primary cursor-pointer"
           data-testid="customer-confirmed"
         />
         Customer confirmed
@@ -1063,16 +1066,19 @@ function ContactsCard({
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4">
-      <h3 className="text-[17px] font-extrabold tracking-tight text-slate-900 mb-3">Contacts</h3>
+    <div className="bg-card border border-border rounded-2xl p-4">
+      <h3 className="flex items-center gap-2 text-[17px] font-extrabold tracking-tight text-foreground mb-3">
+        <span className="w-1 h-4 rounded-full bg-brand-lime" aria-hidden="true" />
+        Contacts
+      </h3>
 
       {/* Saved contacts banner */}
-      <div className="bg-blue-50 rounded-xl px-3.5 py-3 flex items-start justify-between gap-3">
+      <div className="bg-secondary/50 rounded-xl px-3.5 py-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[14px] font-bold text-blue-700 leading-tight">
+          <div className="text-[14px] font-bold text-foreground leading-tight">
             Saved contacts under {customer?.name ?? "this customer"}
           </div>
-          <div className="text-[12.5px] text-blue-600/85 mt-1 leading-snug">
+          <div className="text-[12.5px] text-muted-foreground mt-1 leading-snug">
             {savedContacts.length === 0
               ? "No saved contacts yet — add one to reuse across jobs at this customer."
               : `${savedContacts.length} saved ${savedContacts.length === 1 ? "contact" : "contacts"} — tap to load.`}
@@ -1091,7 +1097,7 @@ function ContactsCard({
             }
           }}
           disabled={!customerId}
-          className="text-[14px] font-bold text-blue-600 flex-shrink-0 self-start disabled:opacity-50"
+          className="text-[14px] font-bold text-foreground flex-shrink-0 self-start disabled:opacity-50"
           data-testid="add-saved-contact"
         >
           {contactFormOpen ? "Close" : "+ Add"}
@@ -1101,8 +1107,8 @@ function ContactsCard({
       {/* Add/edit-contact inline form — opens under the banner via + Add, or via
           the Edit button on a saved contact. */}
       {contactFormOpen && (
-        <div className="mt-2 border border-blue-200 rounded-xl p-3 space-y-2 bg-blue-50/40">
-          <div className="text-[12px] font-bold uppercase tracking-wider text-blue-700">
+        <div className="mt-2 border border-border rounded-xl p-3 space-y-2 bg-muted/60">
+          <div className="text-[12px] font-bold uppercase tracking-wider text-foreground">
             {editingId !== null ? "Edit contact" : "New contact"}
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -1111,7 +1117,7 @@ function ContactsCard({
               value={contactDraft.firstName}
               onChange={(e) => setContactDraft({ ...contactDraft, firstName: e.target.value })}
               placeholder="First name"
-              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-card border border-input rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-ring"
               data-testid="add-contact-first-name"
               autoFocus
             />
@@ -1120,7 +1126,7 @@ function ContactsCard({
               value={contactDraft.lastName}
               onChange={(e) => setContactDraft({ ...contactDraft, lastName: e.target.value })}
               placeholder="Last name"
-              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-card border border-input rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-ring"
               data-testid="add-contact-last-name"
             />
           </div>
@@ -1129,7 +1135,7 @@ function ContactsCard({
             value={contactDraft.role}
             onChange={(e) => setContactDraft({ ...contactDraft, role: e.target.value })}
             placeholder="Role (e.g. Manager)"
-            className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full bg-card border border-input rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-ring"
             data-testid="add-contact-role"
           />
           <input
@@ -1137,7 +1143,7 @@ function ContactsCard({
             value={contactDraft.email}
             onChange={(e) => setContactDraft({ ...contactDraft, email: e.target.value })}
             placeholder="Email"
-            className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full bg-card border border-input rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-ring"
             data-testid="add-contact-email"
           />
           <div className="grid grid-cols-2 gap-2">
@@ -1146,7 +1152,7 @@ function ContactsCard({
               value={contactDraft.mobile}
               onChange={(e) => setContactDraft({ ...contactDraft, mobile: e.target.value })}
               placeholder="Mobile"
-              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-card border border-input rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-ring"
               data-testid="add-contact-mobile"
             />
             <input
@@ -1154,7 +1160,7 @@ function ContactsCard({
               value={contactDraft.phone}
               onChange={(e) => setContactDraft({ ...contactDraft, phone: e.target.value })}
               placeholder="Phone (landline)"
-              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-card border border-input rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-ring"
               data-testid="add-contact-phone"
             />
           </div>
@@ -1166,7 +1172,7 @@ function ContactsCard({
               type="button"
               onClick={closeContactForm}
               disabled={contactFormPending}
-              className="flex-1 bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+              className="flex-1 bg-card border border-input rounded-lg px-3 py-2 text-[14px] font-semibold text-foreground hover:bg-secondary disabled:opacity-60"
               data-testid="add-contact-cancel"
             >
               Cancel
@@ -1193,7 +1199,7 @@ function ContactsCard({
                 (!contactDraft.firstName.trim() && !contactDraft.lastName.trim()) ||
                 contactFormPending
               }
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-[14px] font-semibold disabled:opacity-60"
+              className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg px-3 py-2 text-[14px] font-semibold disabled:opacity-60"
               data-testid="add-contact-save"
             >
               {contactFormPending ? "Saving…" : "Save contact"}
@@ -1210,7 +1216,7 @@ function ContactsCard({
             return (
               <div
                 key={sc.id}
-                className="w-full flex items-center gap-1 px-1 rounded-lg border border-slate-200 hover:bg-slate-50"
+                className="w-full flex items-center gap-1 px-1 rounded-lg border border-border hover:bg-muted"
               >
                 <button
                   type="button"
@@ -1237,17 +1243,17 @@ function ContactsCard({
                   data-testid={`load-saved-contact-${sc.id}`}
                 >
                   <div className="min-w-0">
-                    <div className="text-[14px] font-semibold text-slate-900 truncate">{name}</div>
-                    {sc.role && <div className="text-[12px] text-slate-500 truncate">{sc.role}</div>}
+                    <div className="text-[14px] font-semibold text-foreground truncate">{name}</div>
+                    {sc.role && <div className="text-[12px] text-muted-foreground truncate">{sc.role}</div>}
                   </div>
                   {sc.isPrimary && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">Primary</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-foreground bg-secondary/50 px-2 py-0.5 rounded-full flex-shrink-0">Primary</span>
                   )}
                 </button>
                 <button
                   type="button"
                   onClick={() => openEditContact(sc)}
-                  className="flex-shrink-0 p-2 text-slate-400 hover:text-blue-600"
+                  className="flex-shrink-0 p-2 text-muted-foreground/70 hover:text-foreground"
                   data-testid={`edit-saved-contact-${sc.id}`}
                   aria-label={`Edit ${name}`}
                 >
@@ -1260,11 +1266,11 @@ function ContactsCard({
       )}
 
       {/* Job Contact / Tenant Details segmented pill */}
-      <div className="flex bg-slate-100 rounded-full p-1 mt-3.5">
+      <div className="flex bg-muted rounded-full p-1 mt-3.5">
         <button
           type="button"
           onClick={() => setTab("job")}
-          className={`flex-1 py-2 rounded-full text-[14px] font-semibold ${tab === "job" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+          className={`flex-1 py-2 rounded-full text-[14px] font-semibold ${tab === "job" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
           data-testid="contacts-tab-job"
         >
           Job Contact
@@ -1272,7 +1278,7 @@ function ContactsCard({
         <button
           type="button"
           onClick={() => setTab("tenant")}
-          className={`flex-1 py-2 rounded-full text-[14px] font-semibold ${tab === "tenant" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+          className={`flex-1 py-2 rounded-full text-[14px] font-semibold ${tab === "tenant" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
           data-testid="contacts-tab-tenant"
         >
           Tenant Details
@@ -1335,7 +1341,7 @@ function NativeVoiceButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1 text-[14px] font-bold text-purple-600"
+        className="flex items-center gap-1 text-[14px] font-bold text-foreground"
         data-testid="voice-button"
       >
         <Mic className="w-3.5 h-3.5" />
@@ -1375,7 +1381,7 @@ function WebVoiceButton({ onTranscript }: { onTranscript: (text: string) => void
       type="button"
       onClick={toggleListening}
       className={`flex items-center gap-1 text-[14px] font-bold ${
-        isListening ? "text-red-600 animate-pulse" : "text-purple-600"
+        isListening ? "text-red-600 animate-pulse" : "text-foreground"
       }`}
       data-testid="voice-button"
     >
@@ -1406,7 +1412,7 @@ function InputField({
       onBlur={onBlur}
       placeholder={placeholder}
       aria-label={placeholder}
-      className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500"
+      className="w-full bg-muted rounded-xl px-3.5 py-3 text-[14px] text-foreground placeholder:text-muted-foreground/70 outline-none focus:bg-card focus:ring-2 focus:ring-ring"
     />
   );
 }
@@ -1424,18 +1430,18 @@ function SelectField({
 }) {
   return (
     <div>
-      <div className="text-[12px] font-semibold text-slate-500 mb-1">{label}</div>
+      <div className="text-[12px] font-semibold text-muted-foreground mb-1">{label}</div>
       <div className="relative">
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none bg-white border border-slate-200 rounded-lg pl-3 pr-8 py-2.5 text-[14px] font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full appearance-none bg-card border border-border rounded-lg pl-3 pr-8 py-2.5 text-[14px] font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring"
         >
           {options.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-        <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
       </div>
     </div>
   );
