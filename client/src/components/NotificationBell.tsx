@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Bell,
   Check,
@@ -624,7 +625,10 @@ export function NotificationBell() {
   };
 
   // modal: an outside click closes the panel without also landing on
-  // whatever is underneath (e.g. opening a job card on the dispatch board)
+  // whatever is underneath (e.g. opening a job card on the dispatch board).
+  // The explicit backdrop below is the close mechanism — Radix's own
+  // outside-click detection misses clicks on elements that stop pointerdown
+  // propagation (radix-ui/primitives#2782), which left the panel stuck open.
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen} modal>
       <PopoverTrigger asChild>
@@ -650,8 +654,24 @@ export function NotificationBell() {
           )}
         </Button>
       </PopoverTrigger>
+      {isOpen &&
+        createPortal(
+          // pointer-events-auto: the modal popover sets pointer-events: none
+          // on <body>, so the backdrop must re-enable them to catch the click.
+          <div
+            className="fixed inset-0 z-[110] pointer-events-auto"
+            onPointerDown={() => setIsOpen(false)}
+            aria-hidden="true"
+            data-testid="notifications-backdrop"
+          />,
+          document.body,
+        )}
       <PopoverContent
-        className="w-96 p-0"
+        // animate-none on close: Radix keeps the panel mounted until the exit
+        // animation's animationend fires, and intermittently misses it — the
+        // panel then sticks around with body pointer-events:none (modal),
+        // freezing the app. Closing must unmount immediately.
+        className="w-96 p-0 data-[state=closed]:!animate-none"
         align="end"
         data-testid="dropdown-notifications"
       >
