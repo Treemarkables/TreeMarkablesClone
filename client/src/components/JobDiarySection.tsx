@@ -2135,7 +2135,7 @@ export function JobDiarySection({
         className={embedded ? (className ?? "") : `h-full flex flex-col ${className ?? ""}`}
       >
         {/* Header */}
-        <div className="flex-shrink-0 p-2 border-b bg-gray-50 dark:bg-gray-900">
+        <div className="flex-shrink-0 p-2 border-b bg-muted">
           <div className="flex items-center justify-between mb-1">
             <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
               <span className="w-1 h-4 rounded-full bg-brand-lime" aria-hidden="true" />
@@ -2230,7 +2230,7 @@ export function JobDiarySection({
               data-testid="tab-diary-timeline"
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
                 diaryTab === "timeline"
-                  ? "border-primary text-primary"
+                  ? "border-brand-lime-border text-foreground"
                   : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               }`}
             >
@@ -2243,7 +2243,7 @@ export function JobDiarySection({
               data-testid="tab-diary-photos"
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
                 diaryTab === "photos"
-                  ? "border-primary text-primary"
+                  ? "border-brand-lime-border text-foreground"
                   : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               }`}
             >

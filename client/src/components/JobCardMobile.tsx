@@ -359,11 +359,11 @@ export function JobCardMobile({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col" data-testid="job-card-mobile">
+    <div className="fixed inset-0 z-50 bg-background flex flex-col" data-testid="job-card-mobile">
       {/* ── Header (compact — price sits inline with the badge to save vertical space) ── */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 flex-shrink-0" style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
-        <div className="flex items-baseline gap-2 min-w-0">
-          <h1 className="text-[22px] font-extrabold tracking-tight text-slate-900 truncate">
+        <div className="flex items-center gap-2 min-w-0">
+          <h1 className="text-[22px] font-extrabold tracking-tight text-foreground truncate">
             Job {jobNumber ?? ""}
           </h1>
           <span
@@ -372,7 +372,7 @@ export function JobCardMobile({
           >
             {badge.label}
           </span>
-          <span className="text-[16px] font-bold text-slate-900 truncate" data-testid="job-card-mobile-price">
+          <span className="text-[13px] font-bold bg-primary text-brand-lime px-2.5 py-1 rounded-full truncate" data-testid="job-card-mobile-price">
             {formatNzd(jobValue)}
           </span>
         </div>
@@ -381,7 +381,7 @@ export function JobCardMobile({
             type="button"
             onClick={handleClose}
             aria-label="Close"
-            className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 grid place-items-center hover:bg-slate-200"
+            className="w-7 h-7 rounded-full bg-secondary text-muted-foreground grid place-items-center hover:bg-border"
           >
             <XIcon className="w-4 h-4" />
           </button>
@@ -389,7 +389,7 @@ export function JobCardMobile({
             size="sm"
             onClick={onSave}
             disabled={isSaving || !onSave}
-            className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 h-9"
+            className="bg-primary text-brand-lime font-bold px-4 h-9 rounded-full"
             data-testid="btn-save-job"
           >
             {isSaving ? "Saving..." : "Save"}
@@ -398,7 +398,7 @@ export function JobCardMobile({
       </div>
 
       {/* ── Tab strip ── */}
-      <div className="flex border-b border-slate-200 px-4 gap-5 flex-shrink-0 overflow-x-auto overflow-y-hidden" data-testid="job-card-mobile-tabs">
+      <div className="flex items-center border-b border-border px-3 gap-1.5 flex-shrink-0 overflow-x-auto overflow-y-hidden" data-testid="job-card-mobile-tabs">
         {TABS.filter((t) => {
           // Back Costing is only meaningful once work has happened — hide
           // it on lead/quote so the tab strip stays focused on the job's
@@ -418,22 +418,21 @@ export function JobCardMobile({
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
-              className={`relative py-3 text-[15px] font-semibold whitespace-nowrap flex-shrink-0 ${
-                on ? "text-slate-900" : "text-slate-500"
+              className={`my-2 px-3.5 py-1.5 rounded-full text-[14px] font-semibold whitespace-nowrap flex-shrink-0 ${
+                on
+                  ? "bg-brand-lime text-brand-lime-foreground border border-brand-lime-border"
+                  : "text-muted-foreground"
               }`}
               data-testid={`job-card-mobile-tab-${t.id}`}
             >
               {t.label}
-              {on && (
-                <span className="absolute -bottom-px left-[-4px] right-[-4px] h-0.5 bg-blue-600 rounded-full" />
-              )}
             </button>
           );
         })}
       </div>
 
       {/* ── Body (scrollable, action bar overlays bottom) ── */}
-      <div className="flex-1 overflow-y-auto bg-slate-50">
+      <div className="flex-1 overflow-y-auto bg-muted">
         <div className="pb-[110px]">
           {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
           {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
@@ -478,16 +477,16 @@ export function JobCardMobile({
 
       {/* ── Fixed bottom action bar ── */}
       <div
-        className="absolute left-0 right-0 bottom-0 bg-white border-t border-slate-200 flex justify-around items-start gap-1 px-3 z-10"
+        className="absolute left-0 right-0 bottom-0 bg-white border-t border-border flex justify-around items-start gap-1 px-3 z-10"
         style={{
           paddingTop: 10,
           paddingBottom: "max(22px, env(safe-area-inset-bottom))",
         }}
       >
-        <ActionBtn label="Photo" color="bg-emerald-500" onClick={handlePhoto} icon={Camera} />
-        <ActionBtn label="Call" color="bg-green-600" onClick={handleCall} icon={Phone} />
-        <ActionBtn label="SMS" color="bg-blue-600" onClick={handleSms} icon={MessageSquare} />
-        <ActionBtn label="Email" color="bg-red-500" onClick={handleEmail} icon={Mail} />
+        <ActionBtn label="Photo" color="bg-primary" onClick={handlePhoto} icon={Camera} />
+        <ActionBtn label="Call" color="bg-primary" onClick={handleCall} icon={Phone} />
+        <ActionBtn label="SMS" color="bg-primary" onClick={handleSms} icon={MessageSquare} />
+        <ActionBtn label="Email" color="bg-primary" onClick={handleEmail} icon={Mail} />
 
         {/* More — opens an iOS-style Actions sheet from the bottom. */}
         <Sheet>
@@ -498,19 +497,19 @@ export function JobCardMobile({
               data-testid="job-card-mobile-action-more"
               onClick={() => onMore?.()}
             >
-              <div className="w-12 h-12 rounded-full bg-slate-700 grid place-items-center text-white shadow-md">
+              <div className="w-12 h-12 rounded-full bg-primary grid place-items-center text-white shadow-md">
                 <MoreHorizontal className="w-5 h-5" />
               </div>
-              <div className="text-[12px] font-semibold text-slate-800">More</div>
+              <div className="text-[12px] font-semibold text-foreground">More</div>
             </button>
           </SheetTrigger>
           <SheetContent
             side="bottom"
-            className="rounded-t-3xl border-t border-slate-200 p-0 max-h-[90vh] flex flex-col"
+            className="rounded-t-3xl border-t border-border p-0 max-h-[90vh] flex flex-col"
           >
-            <SheetHeader className="px-6 pt-3 pb-4 border-b border-slate-100 flex-shrink-0">
-              <div className="mx-auto w-10 h-1 rounded-full bg-slate-300 mb-3" />
-              <SheetTitle className="text-center text-lg font-extrabold tracking-tight text-slate-900">
+            <SheetHeader className="px-6 pt-3 pb-4 border-b border-border/60 flex-shrink-0">
+              <div className="mx-auto w-10 h-1 rounded-full bg-border mb-3" />
+              <SheetTitle className="text-center text-lg font-extrabold tracking-tight text-foreground">
                 Actions
               </SheetTitle>
             </SheetHeader>
@@ -575,17 +574,17 @@ export function JobCardMobile({
 
               {/* Secondary admin actions — kept around because they're already wired
                   and live data deletion shouldn't be buried any further. */}
-              <div className="mt-6 pt-5 border-t border-slate-100 space-y-2">
+              <div className="mt-6 pt-5 border-t border-border/60 space-y-2">
                 <button
                   type="button"
                   onClick={onMarkComplete}
                   disabled={markComplete.isPending || job?.status === "completed"}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-muted hover:bg-secondary disabled:opacity-50"
                 >
                   <span className="w-9 h-9 rounded-[10px] bg-gradient-to-b from-emerald-400 to-emerald-600 grid place-items-center flex-shrink-0 shadow-sm">
                     <CheckCircle className="w-[18px] h-[18px] text-white" strokeWidth={2.25} />
                   </span>
-                  <span className="text-[15px] font-semibold text-slate-900">
+                  <span className="text-[15px] font-semibold text-foreground">
                     {job?.status === "completed" ? "Already complete" : "Mark job as complete"}
                   </span>
                 </button>
@@ -593,13 +592,13 @@ export function JobCardMobile({
                   type="button"
                   onClick={onDuplicate}
                   disabled={duplicateJob.isPending}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-muted hover:bg-secondary disabled:opacity-50"
                   data-testid="btn-duplicate-job"
                 >
                   <span className="w-9 h-9 rounded-[10px] bg-gradient-to-b from-blue-400 to-blue-600 grid place-items-center flex-shrink-0 shadow-sm">
                     <Copy className="w-[18px] h-[18px] text-white" strokeWidth={2.25} />
                   </span>
-                  <span className="text-[15px] font-semibold text-slate-900">
+                  <span className="text-[15px] font-semibold text-foreground">
                     {duplicateJob.isPending ? "Duplicating..." : "Duplicate job"}
                   </span>
                 </button>
@@ -681,7 +680,7 @@ export function JobCardMobile({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ListOrdered className="h-5 w-5 text-indigo-500" />
+              <ListOrdered className="h-5 w-5 text-muted-foreground" />
               Add to Dispatch Queue
             </DialogTitle>
             <DialogDescription>
@@ -785,7 +784,7 @@ function ActionTile({
         <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-white/30 via-white/5 to-transparent" />
         <Icon className={`relative w-7 h-7 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)] ${iconSpin ? "animate-spin" : ""}`} strokeWidth={2} />
       </div>
-      <div className="text-[11.5px] font-semibold text-slate-900 leading-tight text-center max-w-[72px]">
+      <div className="text-[11.5px] font-semibold text-foreground leading-tight text-center max-w-[72px]">
         {label}
       </div>
     </button>
@@ -815,7 +814,7 @@ function ActionBtn({
       >
         <Icon className="w-5 h-5" />
       </div>
-      <div className="text-[12px] font-semibold text-slate-800">{label}</div>
+      <div className="text-[12px] font-semibold text-foreground">{label}</div>
     </button>
   );
 }

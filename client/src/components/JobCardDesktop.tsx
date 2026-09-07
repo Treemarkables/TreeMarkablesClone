@@ -522,9 +522,9 @@ export function JobCardDesktop({
       <div className="bg-background rounded-2xl shadow-xl border border-border w-full max-w-[1480px] h-[92vh] flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
-        <div className="bg-primary px-6 py-4 flex items-center justify-between gap-4 flex-shrink-0">
-          <div className="flex items-baseline gap-3 min-w-0">
-            <h2 className="text-[22px] font-extrabold tracking-tight text-primary-foreground truncate">
+        <div className="bg-card px-6 py-4 border-b border-border flex items-center justify-between gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <h2 className="text-[22px] font-extrabold tracking-tight text-foreground truncate">
               Job {jobNumber ?? ""}
             </h2>
             <span
@@ -533,11 +533,11 @@ export function JobCardDesktop({
             >
               {badge.label}
             </span>
-            <span className="text-[16px] font-bold text-brand-lime flex-shrink-0" data-testid="job-card-desktop-price">
+            <span className="text-[13px] font-bold bg-primary text-brand-lime px-2.5 py-1 rounded-full flex-shrink-0" data-testid="job-card-desktop-price">
               {formatNzd(jobValue)}
             </span>
             {customerSummary && (
-              <span className="text-[12px] text-primary-foreground/60 truncate">· {customerSummary}</span>
+              <span className="text-[12px] text-muted-foreground truncate">· {customerSummary}</span>
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -545,7 +545,7 @@ export function JobCardDesktop({
               size="sm"
               onClick={onSave}
               disabled={isSaving || !onSave}
-              className="bg-brand-lime text-brand-lime-foreground border border-brand-lime-border font-bold px-5 h-9"
+              className="bg-primary text-brand-lime font-bold px-5 h-9 rounded-full"
               data-testid="btn-save-job"
             >
               {isSaving ? "Saving..." : "Save"}
@@ -554,7 +554,7 @@ export function JobCardDesktop({
               type="button"
               onClick={handleClose}
               aria-label="Close"
-              className="w-9 h-9 rounded-full bg-primary-foreground/10 text-primary-foreground grid place-items-center hover:bg-primary-foreground/20"
+              className="w-9 h-9 rounded-full bg-secondary text-muted-foreground grid place-items-center hover:bg-border"
             >
               <XIcon className="w-4 h-4" />
             </button>
@@ -609,10 +609,9 @@ export function JobCardDesktop({
                     key={t.id}
                     type="button"
                     onClick={() => setActiveTab(t.id)}
-                    className={`flex items-center gap-1.5 my-2 px-3.5 py-1.5 rounded-full text-[14px] font-semibold ${on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    className={`flex items-center gap-1.5 my-2 px-3.5 py-1.5 rounded-full text-[14px] font-semibold ${on ? "bg-brand-lime text-brand-lime-foreground border border-brand-lime-border" : "text-muted-foreground hover:text-foreground"}`}
                     data-testid={`job-card-desktop-tab-${t.id}`}
                   >
-                    {on && <span className="w-1.5 h-1.5 rounded-full bg-brand-lime" />}
                     {t.label}
                   </button>
                 );

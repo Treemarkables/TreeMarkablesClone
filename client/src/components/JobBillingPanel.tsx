@@ -233,13 +233,13 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
   return (
     <div className="p-4 space-y-3.5">
       {/* ── Line items card ── */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4">
+      <div className="bg-white border border-border rounded-2xl p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[17px] font-extrabold tracking-tight text-slate-900">Line items</h3>
+          <h3 className="flex items-center gap-2 text-[17px] font-extrabold tracking-tight text-foreground"><span className="w-1 h-4 rounded-full bg-brand-lime" aria-hidden="true" />Line items</h3>
           <button
             type="button"
             onClick={addItem}
-            className="flex items-center gap-1 text-[14px] font-semibold text-blue-600"
+            className="flex items-center gap-1 text-[14px] font-semibold text-foreground"
             data-testid="add-line-item"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -248,11 +248,11 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
         </div>
 
         {items.length === 0 ? (
-          <div className="text-[14px] text-slate-500 py-2">
+          <div className="text-[14px] text-muted-foreground py-2">
             No line items yet — tap <strong>+ Add</strong> to create one.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-border/60">
             {items.map((li, idx) => (
               <LineItemRow
                 key={li.id ?? idx}
@@ -269,38 +269,38 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
       </div>
 
       {/* ── Totals card ── */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4">
-        <div className="flex justify-between py-1.5 text-[14px] text-slate-600">
+      <div className="bg-white border border-border rounded-2xl p-4">
+        <div className="flex justify-between py-1.5 text-[14px] text-muted-foreground">
           <span>Subtotal (excl GST)</span>
           <span>{money(subtotal)}</span>
         </div>
-        <div className="flex justify-between py-1.5 text-[14px] text-slate-600">
+        <div className="flex justify-between py-1.5 text-[14px] text-muted-foreground">
           <span>GST (15%)</span>
           <span>{money(gst)}</span>
         </div>
-        <div className="border-t-2 border-slate-900 mt-1 pt-2.5 flex justify-between text-[17px] font-extrabold text-slate-900">
+        <div className="border-t-2 border-primary mt-1 pt-2.5 flex justify-between text-[17px] font-extrabold text-foreground">
           <span>Total</span>
           <span>{money(total)}</span>
         </div>
       </div>
 
       {/* ── Invoice card ── */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4">
+      <div className="bg-white border border-border rounded-2xl p-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-[17px] font-extrabold tracking-tight text-slate-900">Invoice</h3>
+          <h3 className="flex items-center gap-2 text-[17px] font-extrabold tracking-tight text-foreground"><span className="w-1 h-4 rounded-full bg-brand-lime" aria-hidden="true" />Invoice</h3>
           <InvoiceStatusBadge invoice={invoice} />
         </div>
         {invoice ? (
           <>
-            <div className="text-[13.5px] text-slate-600 leading-relaxed">
-              Invoice <span className="font-bold text-slate-900">{invoice.invoiceNumber ?? "(no #)"}</span>
+            <div className="text-[13.5px] text-muted-foreground leading-relaxed">
+              Invoice <span className="font-bold text-foreground">{invoice.invoiceNumber ?? "(no #)"}</span>
               {invoice.status && <> · status: {invoice.status}</>}
               {invoice.totalAmount && <> · {money(toNum(invoice.totalAmount))}</>}
             </div>
             <button
               type="button"
               onClick={stub("View invoice")}
-              className="w-full mt-3 bg-slate-900 text-white py-3 rounded-xl font-bold text-[15px]"
+              className="w-full mt-3 bg-primary text-primary-foreground py-3 rounded-xl font-bold text-[15px]"
               data-testid="view-invoice"
             >
               View invoice
@@ -308,13 +308,13 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
           </>
         ) : (
           <>
-            <div className="text-[13.5px] text-slate-600 leading-relaxed">
+            <div className="text-[13.5px] text-muted-foreground leading-relaxed">
               When the job's complete, generate an invoice — Treemarkables banking details are included automatically.
             </div>
             <button
               type="button"
               onClick={stub("Create invoice")}
-              className="w-full mt-3 bg-slate-900 text-white py-3 rounded-xl font-bold text-[15px] flex items-center justify-center gap-1.5"
+              className="w-full mt-3 bg-primary text-primary-foreground py-3 rounded-xl font-bold text-[15px] flex items-center justify-center gap-1.5"
               data-testid="create-invoice"
             >
               <Plus className="w-4 h-4" />
@@ -325,44 +325,44 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
       </div>
 
       {/* ── Payment card ── */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4">
-        <h3 className="text-[17px] font-extrabold tracking-tight text-slate-900 mb-2">Payment</h3>
+      <div className="bg-white border border-border rounded-2xl p-4">
+        <h3 className="flex items-center gap-2 text-[17px] font-extrabold tracking-tight text-foreground mb-2"><span className="w-1 h-4 rounded-full bg-brand-lime" aria-hidden="true" />Payment</h3>
         <div className="flex items-center gap-2 text-[14px]">
           {isPaid ? (
             <>
               <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span className="text-slate-900 font-semibold">Paid in full</span>
-              <span className="text-slate-500 ml-1">· {money(paidAmount)}</span>
+              <span className="text-foreground font-semibold">Paid in full</span>
+              <span className="text-muted-foreground ml-1">· {money(paidAmount)}</span>
             </>
           ) : depositPaidAmount > 0 && paidAmount > 0 && paidAmount <= depositPaidAmount + 0.01 ? (
             <>
               <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span className="text-slate-900 font-semibold">Deposit received</span>
-              <span className="text-slate-500 ml-1">· {money(depositPaidAmount)} of {money(total)}</span>
+              <span className="text-foreground font-semibold">Deposit received</span>
+              <span className="text-muted-foreground ml-1">· {money(depositPaidAmount)} of {money(total)}</span>
             </>
           ) : paidAmount > 0 ? (
             <>
               <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-              <span className="text-slate-900 font-semibold">Partial payment</span>
-              <span className="text-slate-500 ml-1">· {money(paidAmount)} of {money(total)}</span>
+              <span className="text-foreground font-semibold">Partial payment</span>
+              <span className="text-muted-foreground ml-1">· {money(paidAmount)} of {money(total)}</span>
             </>
           ) : (
             <>
               <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-              <span className="text-slate-700">No payments recorded</span>
+              <span className="text-foreground">No payments recorded</span>
             </>
           )}
         </div>
         {depositPayments.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
+          <div className="mt-3 pt-3 border-t border-border/60 space-y-1.5">
             {depositPayments.map((p) => (
               <div key={p.id} className="flex items-center justify-between text-[12.5px]">
-                <span className="text-slate-600">
+                <span className="text-muted-foreground">
                   Deposit
-                  {p.provider === "stripe" && <span className="text-slate-400"> · Stripe</span>}
-                  {p.paidAt && <span className="text-slate-400"> · {new Date(p.paidAt).toLocaleDateString("en-NZ")}</span>}
+                  {p.provider === "stripe" && <span className="text-muted-foreground/70"> · Stripe</span>}
+                  {p.paidAt && <span className="text-muted-foreground/70"> · {new Date(p.paidAt).toLocaleDateString("en-NZ")}</span>}
                 </span>
-                <span className="font-semibold text-slate-900">{money(toNum(p.amount))}</span>
+                <span className="font-semibold text-foreground">{money(toNum(p.amount))}</span>
               </div>
             ))}
           </div>
@@ -372,14 +372,14 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
             type="button"
             onClick={() => takePayment.mutate()}
             disabled={takePayment.isPending}
-            className="w-full mt-3 bg-slate-900 text-white py-3 rounded-xl font-bold text-[15px] flex items-center justify-center gap-1.5 disabled:opacity-60"
+            className="w-full mt-3 bg-primary text-primary-foreground py-3 rounded-xl font-bold text-[15px] flex items-center justify-center gap-1.5 disabled:opacity-60"
             data-testid="take-payment"
           >
             <CreditCard className="w-4 h-4" />
             {takePayment.isPending ? "Starting…" : `Take payment · ${money(outstanding)}`}
           </button>
         )}
-        <div className="text-[12.5px] text-slate-500 mt-2 leading-relaxed">
+        <div className="text-[12.5px] text-muted-foreground mt-2 leading-relaxed">
           {stripeConfigured
             ? "Take payment opens a secure Stripe page on this device — the customer can enter or camera-scan their card. Bank-transfer details stay on the invoice."
             : "Payment recording lives on the invoice itself — once an invoice is generated above, payments will surface here automatically."}
@@ -387,7 +387,7 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
       </div>
 
       {/* ── Supplier invoices card ── */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4">
+      <div className="bg-white border border-border rounded-2xl p-4">
         <SupplierInvoiceManager jobId={jobId} />
       </div>
     </div>
@@ -420,13 +420,13 @@ function LineItemRow({
           onChange={(e) => onChange({ description: e.target.value })}
           onBlur={onBlur}
           placeholder="Description"
-          className="flex-1 bg-slate-100 rounded-xl px-3 py-2.5 text-[15px] font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500"
+          className="flex-1 bg-muted rounded-xl px-3 py-2.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/70 outline-none focus:bg-card focus:ring-2 focus:ring-ring"
         />
         <button
           type="button"
           onClick={onRemove}
           aria-label="Remove line item"
-          className="w-9 h-9 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 grid place-items-center flex-shrink-0"
+          className="w-9 h-9 rounded-lg text-muted-foreground/70 hover:bg-red-50 hover:text-red-600 grid place-items-center flex-shrink-0"
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -449,8 +449,8 @@ function LineItemRow({
           step={0.01}
         />
         <div className="text-right pr-1">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">total</div>
-          <div className="text-[15px] font-bold text-slate-900">{money(lineTotal)}</div>
+          <div className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider">total</div>
+          <div className="text-[15px] font-bold text-foreground">{money(lineTotal)}</div>
         </div>
       </div>
     </div>
@@ -474,7 +474,7 @@ function NumberCell({
 }) {
   return (
     <label className="flex flex-col">
-      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 pl-2">{label}</span>
+      <span className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-0.5 pl-2">{label}</span>
       <input
         type="number"
         inputMode="decimal"
@@ -483,7 +483,7 @@ function NumberCell({
         step={step}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
         onBlur={onBlur}
-        className="w-full bg-slate-100 rounded-lg px-2 py-2 text-[14px] font-semibold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500"
+        className="w-full bg-muted rounded-lg px-2 py-2 text-[14px] font-semibold text-foreground outline-none focus:bg-card focus:ring-2 focus:ring-ring"
       />
     </label>
   );
@@ -492,7 +492,7 @@ function NumberCell({
 function InvoiceStatusBadge({ invoice }: { invoice: InvoiceShape | undefined }) {
   if (!invoice) {
     return (
-      <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-500">
+      <span className="flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
         <span className="w-2 h-2 rounded-full bg-amber-500" />
         Not yet invoiced
       </span>
@@ -502,10 +502,10 @@ function InvoiceStatusBadge({ invoice }: { invoice: InvoiceShape | undefined }) 
   const colour = status === "paid" ? "bg-emerald-500"
     : status === "sent" || status === "viewed" ? "bg-blue-500"
     : status === "overdue" ? "bg-red-500"
-    : "bg-slate-400";
+    : "bg-muted-foreground/60";
   const label = status.charAt(0).toUpperCase() + status.slice(1);
   return (
-    <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700">
+    <span className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
       <span className={`w-2 h-2 rounded-full ${colour}`} />
       {label}
     </span>

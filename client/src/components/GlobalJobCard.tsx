@@ -4962,7 +4962,7 @@ The Treemarkables Team`;
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 sm:h-9 px-2 sm:px-3 md:px-4 text-xs bg-orange-500 text-white hover:bg-orange-600 border-0 font-semibold transition-all"
+              className="h-7 sm:h-9 px-2 sm:px-3 md:px-4 text-xs bg-primary text-brand-lime border-0 font-semibold rounded-full transition-all"
               onClick={handleSave}
               disabled={
                 isSaving ||
