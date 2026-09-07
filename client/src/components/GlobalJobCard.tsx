@@ -1700,6 +1700,17 @@ export function GlobalJobCard({
       const firstName = nameParts[0] || "";
       const lastName = nameParts.slice(1).join(" ") || "";
 
+      // True when the job carries any contact of its own (e.g. a saved
+      // contact was loaded onto it) — gates the customer-record fallback
+      // below so different people's details don't get mixed.
+      const jobHasOwnContact = !!(
+        editingJob.jobContactFirstName ||
+        editingJob.jobContactLastName ||
+        editingJob.jobContactEmail ||
+        editingJob.jobContactPhone ||
+        editingJob.jobContactMobile
+      );
+
       const resetData = {
         // Core job data
         title: editingJob.title || "",
@@ -1714,28 +1725,23 @@ export function GlobalJobCard({
         paidAmount: editingJob.paidAmount || "0",
         notes: editingJob.notes || "",
         // Contact fields from job data. Fall back to the customer record only
-        // when the job has NO contact of its own — per-field fallback mixed
-        // people together (a loaded contact without a phone showed the
-        // customer org's number, often a different person's).
-        ...(editingJob.jobContactFirstName ||
-        editingJob.jobContactLastName ||
-        editingJob.jobContactEmail ||
-        editingJob.jobContactPhone ||
-        editingJob.jobContactMobile
-          ? {
-              jobContactFirstName: editingJob.jobContactFirstName || "",
-              jobContactLastName: editingJob.jobContactLastName || "",
-              jobContactEmail: editingJob.jobContactEmail || "",
-              jobContactPhone: editingJob.jobContactPhone || "",
-              jobContactMobile: editingJob.jobContactMobile || "",
-            }
-          : {
-              jobContactFirstName: firstName,
-              jobContactLastName: lastName,
-              jobContactEmail: editingJobCustomer?.email || "",
-              jobContactPhone: editingJobCustomer?.phone || "",
-              jobContactMobile: editingJobCustomer?.mobile || "",
-            }),
+        // when the job has NO contact of its own (jobHasOwnContact) —
+        // per-field fallback mixed people together (a loaded contact without
+        // a phone showed the customer org's number, often a different
+        // person's).
+        jobContactFirstName:
+          editingJob.jobContactFirstName || (jobHasOwnContact ? "" : firstName),
+        jobContactLastName:
+          editingJob.jobContactLastName || (jobHasOwnContact ? "" : lastName),
+        jobContactEmail:
+          editingJob.jobContactEmail ||
+          (jobHasOwnContact ? "" : editingJobCustomer?.email || ""),
+        jobContactPhone:
+          editingJob.jobContactPhone ||
+          (jobHasOwnContact ? "" : editingJobCustomer?.phone || ""),
+        jobContactMobile:
+          editingJob.jobContactMobile ||
+          (jobHasOwnContact ? "" : editingJobCustomer?.mobile || ""),
         tenantContactFirstName: editingJob.tenantContactFirstName || "",
         tenantContactLastName: editingJob.tenantContactLastName || "",
         tenantContactEmail: editingJob.tenantContactEmail || "",
