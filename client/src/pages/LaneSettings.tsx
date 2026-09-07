@@ -20,8 +20,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil, ArrowRight, X, Mail, MessageSquare, Sparkles,
+  Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Pencil, ArrowLeft, ArrowRight, X, Mail, MessageSquare, Sparkles,
 } from "lucide-react";
+import { Link } from "wouter";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type UserAutomationType = "customer_nudge" | "staff_reminder" | "auto_move" | "create_task" | "change_status" | "add_note" | "assign_staff";
@@ -217,6 +218,18 @@ export default function LaneSettings() {
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
+      <Button
+        variant="ghost"
+        size="sm"
+        asChild
+        className="self-start mb-2 -ml-2"
+        data-testid="button-back-to-settings"
+      >
+        <Link href="/settings" className="flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Settings
+        </Link>
+      </Button>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Lanes</h1>

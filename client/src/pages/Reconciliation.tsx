@@ -16,7 +16,9 @@ import {
   ChevronDown,
   Calendar,
   AlertTriangle,
+  ArrowLeft,
 } from "lucide-react";
+import { Link } from "wouter";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -354,6 +356,18 @@ export default function Reconciliation() {
   if (fetchError) {
     return (
       <div className="p-6">
+        <Button
+          variant="ghost"
+          size="sm"
+          asChild
+          className="self-start mb-4 -ml-2"
+          data-testid="button-back-to-settings"
+        >
+          <Link href="/settings" className="flex items-center gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Settings
+          </Link>
+        </Button>
         <Card className="border-red-200 bg-red-50">
           <CardContent className="flex items-start gap-3 pt-6">
             <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
@@ -389,6 +403,18 @@ export default function Reconciliation() {
     <div className="h-full bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          asChild
+          className="self-start mb-2 -ml-2"
+          data-testid="button-back-to-settings"
+        >
+          <Link href="/settings" className="flex items-center gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Settings
+          </Link>
+        </Button>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">

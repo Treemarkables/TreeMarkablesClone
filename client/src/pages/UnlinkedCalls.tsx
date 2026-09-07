@@ -30,7 +30,9 @@ import {
   Plus,
   ChevronDown,
   ChevronUp,
+  ArrowLeft,
 } from "lucide-react";
+import { Link } from "wouter";
 import { format } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -453,6 +455,18 @@ export default function UnlinkedCalls() {
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
+      <Button
+        variant="ghost"
+        size="sm"
+        asChild
+        className="self-start mb-4 -ml-2"
+        data-testid="button-back-to-settings"
+      >
+        <Link href="/settings" className="flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Settings
+        </Link>
+      </Button>
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
           <Phone className="w-5 h-5 text-orange-600 dark:text-orange-400" />
