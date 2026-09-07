@@ -56,6 +56,10 @@ interface InvoiceTemplateProps {
   showActions?: boolean;
   jobAddress?: string;
   contactName?: string;
+  // Email of the invoice recipient. The Bill To block used to show only the
+  // customer org's email, which is wrong for multi-contact orgs where the
+  // invoice goes to a specific person — pass this to show their address.
+  contactEmail?: string;
   billingName?: string;
   jobNumber?: number;
   sectionConfig?: InvoiceSectionConfig[];
@@ -78,6 +82,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   showActions = false,
   jobAddress,
   contactName,
+  contactEmail,
   billingName,
   jobNumber,
   sectionConfig,
@@ -160,7 +165,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     displayContactName: displayContactName || undefined,
     jobAddress: jobAddress || undefined,
     customerAddress: customer?.address || undefined,
-    customerEmail: customer?.email || undefined,
+    customerEmail: contactEmail || customer?.email || undefined,
     description: description || invoice.notes || undefined,
     lineItems,
     hasLineItems,
@@ -300,9 +305,9 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                           <span className="mr-1">c/o</span>{displayContactName}
                         </p>
                       )}
-                      {customer?.email && (
+                      {(contactEmail || customer?.email) && (
                         <p className="text-xs text-gray-600">
-                          <span className="mr-1">✉</span>{customer.email}
+                          <span className="mr-1">✉</span>{contactEmail || customer?.email}
                         </p>
                       )}
                     </div>

@@ -1554,13 +1554,16 @@ export function GlobalJobCard({
           queryKey: ["/api/customers", selectedCustomer?.id, "contacts"],
         });
         const c = response.data;
-        // Auto-pick the freshly-created contact and fill the job-contact fields
+        // Auto-pick the freshly-created contact and fill the job-contact
+        // fields. Set ALL fields (empty included), like
+        // handleSelectSavedContact — only setting truthy ones left the
+        // previous contact's phone/email showing under the new contact.
         form.setValue("customerContactId", c.id, { shouldDirty: true });
-        if (c.firstName) form.setValue("jobContactFirstName", c.firstName, { shouldDirty: true });
-        if (c.lastName) form.setValue("jobContactLastName", c.lastName, { shouldDirty: true });
-        if (c.email) form.setValue("jobContactEmail", c.email, { shouldDirty: true });
-        if (c.phone) form.setValue("jobContactPhone", c.phone, { shouldDirty: true });
-        if (c.mobile) form.setValue("jobContactMobile", c.mobile, { shouldDirty: true });
+        form.setValue("jobContactFirstName", c.firstName || "", { shouldDirty: true });
+        form.setValue("jobContactLastName", c.lastName || "", { shouldDirty: true });
+        form.setValue("jobContactEmail", c.email || "", { shouldDirty: true });
+        form.setValue("jobContactPhone", c.phone || "", { shouldDirty: true });
+        form.setValue("jobContactMobile", c.mobile || "", { shouldDirty: true });
         setShowAddContactDialog(false);
         setContactDraft({ firstName: "", lastName: "", role: "", email: "", phone: "", mobile: "" });
       }
@@ -1697,6 +1700,17 @@ export function GlobalJobCard({
       const firstName = nameParts[0] || "";
       const lastName = nameParts.slice(1).join(" ") || "";
 
+      // True when the job carries any contact of its own (e.g. a saved
+      // contact was loaded onto it) — gates the customer-record fallback
+      // below so different people's details don't get mixed.
+      const jobHasOwnContact = !!(
+        editingJob.jobContactFirstName ||
+        editingJob.jobContactLastName ||
+        editingJob.jobContactEmail ||
+        editingJob.jobContactPhone ||
+        editingJob.jobContactMobile
+      );
+
       const resetData = {
         // Core job data
         title: editingJob.title || "",
@@ -1710,15 +1724,24 @@ export function GlobalJobCard({
         totalAmount: editingJob.totalAmount || "0",
         paidAmount: editingJob.paidAmount || "0",
         notes: editingJob.notes || "",
-        // Contact fields from job data (with customer as fallback)
-        jobContactFirstName: editingJob.jobContactFirstName || firstName,
-        jobContactLastName: editingJob.jobContactLastName || lastName,
+        // Contact fields from job data. Fall back to the customer record only
+        // when the job has NO contact of its own (jobHasOwnContact) —
+        // per-field fallback mixed people together (a loaded contact without
+        // a phone showed the customer org's number, often a different
+        // person's).
+        jobContactFirstName:
+          editingJob.jobContactFirstName || (jobHasOwnContact ? "" : firstName),
+        jobContactLastName:
+          editingJob.jobContactLastName || (jobHasOwnContact ? "" : lastName),
         jobContactEmail:
-          editingJob.jobContactEmail || editingJobCustomer?.email || "",
+          editingJob.jobContactEmail ||
+          (jobHasOwnContact ? "" : editingJobCustomer?.email || ""),
         jobContactPhone:
-          editingJob.jobContactPhone || editingJobCustomer?.phone || "",
+          editingJob.jobContactPhone ||
+          (jobHasOwnContact ? "" : editingJobCustomer?.phone || ""),
         jobContactMobile:
-          editingJob.jobContactMobile || editingJobCustomer?.mobile || "",
+          editingJob.jobContactMobile ||
+          (jobHasOwnContact ? "" : editingJobCustomer?.mobile || ""),
         tenantContactFirstName: editingJob.tenantContactFirstName || "",
         tenantContactLastName: editingJob.tenantContactLastName || "",
         tenantContactEmail: editingJob.tenantContactEmail || "",
@@ -11120,6 +11143,9 @@ The Treemarkables Team`;
               jobContactLastName:
                 form.getValues("jobContactLastName") ??
                 editingJob.jobContactLastName,
+              jobContactEmail:
+                form.getValues("jobContactEmail") ??
+                editingJob.jobContactEmail,
               // Line items are managed via useFieldArray and persist on a
               // separate path from the auto-save debounce; the cached
               // editingJob.lineItems can lag the form state by seconds.

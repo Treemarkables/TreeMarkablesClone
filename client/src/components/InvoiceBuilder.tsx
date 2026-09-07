@@ -456,7 +456,13 @@ export function InvoiceBuilder({
     setEditableAddress(
       job.billingAddress || job.address || customer.address || "",
     );
-    // Build contact name: prefer billing name override, then existing invoice name, then job contact name
+    // Build contact name: prefer billing name override, then the job's CURRENT
+    // contact, then the name stored on the existing invoice. The invoice's
+    // contactName is a point-in-time snapshot from when it was created — when
+    // the user switches the job to a different saved contact (multi-contact
+    // orgs like councils), reopening the invoice must follow the job, not the
+    // stale snapshot. Deliberate per-invoice overrides belong on the Billing
+    // tab (billingNameOverride / billingContactEmail), which still win.
     const jobContactName =
       job.jobContactFirstName && job.jobContactLastName
         ? `${job.jobContactFirstName} ${job.jobContactLastName}`
@@ -465,16 +471,17 @@ export function InvoiceBuilder({
       existingInvoices.length > 0 ? existingInvoices[0]?.contactName : null;
     setEditableContactName(
       job.billingNameOverride ||
-      existingInvoiceContactName ||
       jobContactName ||
+      existingInvoiceContactName ||
       customer.name ||
       "",
     );
-    // Email: prefer billing contact email override, then existing invoice email, then job contact email, then customer email
+    // Email: same ordering rationale — billing override, then the job's
+    // current contact email, then the existing invoice's, then the customer's.
     setEditableEmail(
       job.billingContactEmail ||
-      (existingInvoices.length > 0 ? existingInvoices[0]?.email : null) ||
       (job as any).jobContactEmail ||
+      (existingInvoices.length > 0 ? existingInvoices[0]?.email : null) ||
       customer.email ||
       "",
     );
@@ -2243,6 +2250,7 @@ export function InvoiceBuilder({
                     jobNumber={job.jobNumber}
                     billingName={editableContactName || job.billingNameOverride || undefined}
                     contactName={editableContactName}
+                    contactEmail={editableEmail}
                     template={invoiceTemplate}
                     lineItems={lineItems.map(toStoredExGst)}
                     description={editableDescription}
