@@ -37,7 +37,7 @@ export default function Blog() {
         keywords="tree care blog, arborist tips, Gisborne tree care, tree pruning advice, tree removal tips, professional tree care"
         ogTitle="Tree Care Blog - Expert Tips from Gisborne Arborists"
         ogDescription="Expert tree care advice from Gisborne's professional arborists. Get tips on tree pruning, removal, and maintenance for your property's safety and health."
-        canonicalUrl="https://app.treemarkables.co.nz/blog"
+        canonicalUrl="https://www.treemarkables.co.nz/blog"
       />
       <Header />
       
