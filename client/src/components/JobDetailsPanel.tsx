@@ -942,26 +942,33 @@ function ContactsCard({
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers", customerId, "contacts"] });
       // Auto-load the freshly-created contact into whichever tab is active.
-      const patch: Partial<JobShape> = tab === "job"
-        ? {
-            jobContactFirstName: created.firstName ?? null,
-            jobContactLastName: created.lastName ?? null,
-            jobContactEmail: created.email ?? null,
-            jobContactMobile: created.mobile ?? null,
-            jobContactPhone: created.phone ?? null,
-          }
-        : {
-            tenantContactFirstName: created.firstName ?? null,
-            tenantContactLastName: created.lastName ?? null,
-            tenantContactEmail: created.email ?? null,
-            tenantContactMobile: created.mobile ?? null,
-            tenantContactPhone: created.phone ?? null,
-          };
-      saveField.mutate(patch);
+      saveField.mutate(buildLoadContactPatch(created));
       setShowAddContact(false);
       setContactDraft(emptyContactDraft);
     },
   });
+
+  // Build the PUT body that loads a saved contact into the active tab. Fields
+  // the contact doesn't have must be named in _clearFields — the server's
+  // anti-wipe safeguard otherwise restores the previous contact's value, so
+  // switching from a contact with a phone number to one without kept showing
+  // the old contact's number under the new name.
+  const buildLoadContactPatch = (
+    c: Pick<SavedContact, "firstName" | "lastName" | "email" | "mobile" | "phone">,
+  ): Partial<JobShape> => {
+    const prefix = tab === "job" ? "jobContact" : "tenantContact";
+    const entries: Array<[string, string | null]> = [
+      [`${prefix}FirstName`, c.firstName || null],
+      [`${prefix}LastName`, c.lastName || null],
+      [`${prefix}Email`, c.email || null],
+      [`${prefix}Mobile`, c.mobile || null],
+      [`${prefix}Phone`, c.phone || null],
+    ];
+    const patch: Record<string, unknown> = Object.fromEntries(entries);
+    const cleared = entries.filter(([, v]) => v === null).map(([k]) => k);
+    if (cleared.length > 0) patch._clearFields = cleared;
+    return patch as Partial<JobShape>;
+  };
 
   // Edit an existing saved contact (PATCH /api/customer-contacts/:id). Lets the
   // user fix a contact's email/mobile/etc. so the change persists to the contact
@@ -1017,14 +1024,33 @@ function ContactsCard({
   const custNameParts = (customer?.name ?? "").trim().split(/\s+/).filter(Boolean);
   const custFirstName = custNameParts[0] ?? "";
   const custLastName = custNameParts.slice(1).join(" ");
+  // Only fall back to the customer record when the job has NO contact of its
+  // own at all (all five fields empty). Falling back per-field mixed people
+  // together: load a saved contact who has no phone and the customer org's
+  // phone (often a different person's) showed under their name.
+  const jobHasOwnContact = !!(
+    job?.jobContactFirstName ||
+    job?.jobContactLastName ||
+    job?.jobContactEmail ||
+    job?.jobContactMobile ||
+    job?.jobContactPhone
+  );
   const fields = tab === "job"
-    ? {
-        firstName: job?.jobContactFirstName ?? custFirstName ?? "",
-        lastName: job?.jobContactLastName ?? custLastName ?? "",
-        email: job?.jobContactEmail ?? customer?.email ?? "",
-        mobile: job?.jobContactMobile ?? customer?.mobile ?? "",
-        phone: job?.jobContactPhone ?? customer?.phone ?? "",
-      }
+    ? jobHasOwnContact
+      ? {
+          firstName: job?.jobContactFirstName ?? "",
+          lastName: job?.jobContactLastName ?? "",
+          email: job?.jobContactEmail ?? "",
+          mobile: job?.jobContactMobile ?? "",
+          phone: job?.jobContactPhone ?? "",
+        }
+      : {
+          firstName: custFirstName,
+          lastName: custLastName,
+          email: customer?.email ?? "",
+          mobile: customer?.mobile ?? "",
+          phone: customer?.phone ?? "",
+        }
     : {
         firstName: job?.tenantContactFirstName ?? "",
         lastName: job?.tenantContactLastName ?? "",
@@ -1221,23 +1247,11 @@ function ContactsCard({
                 <button
                   type="button"
                   onClick={() => {
-                    // Tap-to-load: populate the active contact tab with this saved contact.
-                    const patch: Partial<JobShape> = tab === "job"
-                      ? {
-                          jobContactFirstName: sc.firstName ?? null,
-                          jobContactLastName: sc.lastName ?? null,
-                          jobContactEmail: sc.email ?? null,
-                          jobContactMobile: sc.mobile ?? null,
-                          jobContactPhone: sc.phone ?? null,
-                        }
-                      : {
-                          tenantContactFirstName: sc.firstName ?? null,
-                          tenantContactLastName: sc.lastName ?? null,
-                          tenantContactEmail: sc.email ?? null,
-                          tenantContactMobile: sc.mobile ?? null,
-                          tenantContactPhone: sc.phone ?? null,
-                        };
-                    saveField.mutate(patch);
+                    // Tap-to-load: populate the active contact tab with this
+                    // saved contact. buildLoadContactPatch clears fields the
+                    // contact doesn't have so nothing bleeds over from the
+                    // previously loaded contact.
+                    saveField.mutate(buildLoadContactPatch(sc));
                   }}
                   className="flex-1 min-w-0 flex items-center justify-between px-2 py-2 text-left"
                   data-testid={`load-saved-contact-${sc.id}`}
