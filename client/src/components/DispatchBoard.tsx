@@ -75,7 +75,7 @@ import {
   CalendarX,
   Reply,
 } from "lucide-react";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, startTransition } from "react";
 import {
   format,
   addDays,
@@ -507,6 +507,63 @@ const timeSlots = [
   "18:00",
   "19:00",
 ];
+
+// Isolated search input: each keystroke updates only this component's local
+// state (instant), while the board-wide query is pushed up inside a React
+// transition so the expensive full-board re-render/filter never blocks the
+// caret or swallows keystrokes. Without this, every keystroke re-rendered the
+// entire board synchronously (~300-500ms on desktop, worse on phones), which
+// is what made the search field feel unresponsive when tapped.
+interface DispatchSearchInputProps {
+  query: string;
+  onQueryChange: (value: string) => void;
+  onEnter: (value: string) => void;
+  className?: string;
+  testId: string;
+  autoFocus?: boolean;
+}
+
+function DispatchSearchInput({
+  query,
+  onQueryChange,
+  onEnter,
+  className,
+  testId,
+  autoFocus,
+}: DispatchSearchInputProps) {
+  const [text, setText] = useState(query);
+  // Last value we pushed up — distinguishes our own (possibly still-pending)
+  // transition updates from external changes (clear buttons, route-leave
+  // reset), which must overwrite the local text.
+  const lastSent = useRef(query);
+  useEffect(() => {
+    if (query !== lastSent.current) {
+      lastSent.current = query;
+      setText(query);
+    }
+  }, [query]);
+  return (
+    <Input
+      autoFocus={autoFocus}
+      autoComplete="off"
+      placeholder="Search jobs..."
+      value={text}
+      onChange={(e) => {
+        const value = e.target.value;
+        setText(value);
+        lastSent.current = value;
+        startTransition(() => onQueryChange(value));
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && text.trim()) {
+          onEnter(text);
+        }
+      }}
+      className={className}
+      data-testid={testId}
+    />
+  );
+}
 
 export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const { toast } = useToast();
@@ -2877,24 +2934,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         {/* Search Input - Desktop */}
                         <div className="mt-3 relative">
                           <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                          <Input
-                            placeholder="Search jobs..."
-                            value={searchQuery}
-                            autoComplete="off"
-                            onChange={(e) => {
-                              setSearchQuery(e.target.value);
+                          <DispatchSearchInput
+                            query={searchQuery}
+                            onQueryChange={(value) => {
+                              setSearchQuery(value);
                               if (isDeepSearchActive) {
                                 setIsDeepSearchActive(false);
                                 setDeepSearchResults([]);
                               }
                             }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && searchQuery.trim()) {
-                                performDeepSearch(searchQuery);
-                              }
-                            }}
+                            onEnter={performDeepSearch}
                             className="pl-8 pr-8 h-8 text-sm"
-                            data-testid="desktop-job-search-input"
+                            testId="desktop-job-search-input"
                           />
                           {isDeepSearchActive && (
                             <Button
@@ -3293,25 +3344,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                    <Input
+                    <DispatchSearchInput
                       autoFocus
-                      autoComplete="off"
-                      placeholder="Search jobs..."
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
+                      query={searchQuery}
+                      onQueryChange={(value) => {
+                        setSearchQuery(value);
                         if (isDeepSearchActive) {
                           setIsDeepSearchActive(false);
                           setDeepSearchResults([]);
                         }
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && searchQuery.trim()) {
-                          performDeepSearch(searchQuery);
-                        }
-                      }}
+                      onEnter={performDeepSearch}
                       className="pl-9 pr-9 h-9 text-sm rounded-xl"
-                      data-testid="mobile-job-search-input"
+                      testId="mobile-job-search-input"
                     />
                     {searchQuery && (
                       <Button
