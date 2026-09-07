@@ -1309,6 +1309,7 @@ export function GlobalJobCard({
       return;
     const jobId = editingJob.id;
     apiRequest("POST", "/api/xero/sync-payment-status", { jobId })
+      .then((res) => res.json())
       .then((result: any) => {
         if (result?.status === "paid") {
           queryClient.invalidateQueries({ queryKey: ["/api/invoices", jobId] });
@@ -1318,7 +1319,12 @@ export function GlobalJobCard({
           );
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn(
+          `Xero payment sync failed for job ${editingJob.jobNumber}:`,
+          err,
+        );
+      });
   }, [editingJob?.id, editingJob?.xeroInvoiceId]);
 
   // Clipboard paste handler for screenshots
