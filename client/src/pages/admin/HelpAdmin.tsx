@@ -9,7 +9,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useAuth } from "@/contexts/AuthContext";
-import { Redirect } from "wouter";
+import { Redirect, Link as RouterLink } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bold, Italic, Heading2, List, ListOrdered, Link as LinkIcon, Trash2, Upload, Plus, Pencil } from "lucide-react";
+import { ArrowLeft, Bold, Italic, Heading2, List, ListOrdered, Link as LinkIcon, Trash2, Upload, Plus, Pencil } from "lucide-react";
 import { HELP_CATEGORIES as CATEGORIES, helpCategoryRank } from "@/lib/helpCategories";
 
 type HelpArticle = {
@@ -96,6 +96,18 @@ function HelpAdminInner() {
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
+      <Button
+        variant="ghost"
+        size="sm"
+        asChild
+        className="self-start mb-4 -ml-2"
+        data-testid="button-back-to-settings"
+      >
+        <RouterLink href="/settings" className="flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Settings
+        </RouterLink>
+      </Button>
       <Tabs defaultValue="articles">
         <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
           <h1 className="text-2xl font-semibold">Help authoring</h1>

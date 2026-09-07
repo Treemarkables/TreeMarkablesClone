@@ -28,7 +28,9 @@ import {
   Pencil,
   RotateCcw,
   RefreshCw,
+  ArrowLeft,
 } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import type { Job, Customer, Invoice } from "@shared/schema";
@@ -319,6 +321,18 @@ export default function Invoices() {
 
   return (
     <div className="w-full max-w-full min-w-0 overflow-x-hidden p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+      <Button
+        variant="ghost"
+        size="sm"
+        asChild
+        className="self-start -ml-2"
+        data-testid="button-back-to-settings"
+      >
+        <Link href="/settings" className="flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Settings
+        </Link>
+      </Button>
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
