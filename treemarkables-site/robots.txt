@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Allow: /tree-removal
+Allow: /tree-pruning
+Allow: /gisborne-arborist
+Allow: /stump-grinding
+Allow: /hedge-trimming
+Allow: /contact
+Allow: /privacy-policy
+Allow: /sitemap.xml
+Disallow: /api/
+Disallow: /login
+Disallow: /dispatch
+Disallow: /diary
+
+Sitemap: https://www.treemarkables.co.nz/sitemap.xml

@@ -8,6 +8,7 @@ Allow: /$
 Allow: /home$
 Allow: /tree-removal$
 Allow: /tree-pruning$
+Allow: /gisborne-arborist$
 Allow: /stump-grinding$
 Allow: /hedge-trimming$
 Allow: /blog$
