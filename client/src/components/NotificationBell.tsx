@@ -658,9 +658,15 @@ export function NotificationBell() {
         createPortal(
           // pointer-events-auto: the modal popover sets pointer-events: none
           // on <body>, so the backdrop must re-enable them to catch the click.
+          // Close on click (not pointerdown): closing on pointerdown unmounts
+          // the backdrop mid-tap, so the tap's click event then landed on
+          // whatever was underneath — re-toggling the bell, or opening a job
+          // card on the dispatch board. The backdrop must stay mounted through
+          // the full tap to absorb it.
           <div
             className="fixed inset-0 z-[110] pointer-events-auto"
-            onPointerDown={() => setIsOpen(false)}
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => setIsOpen(false)}
             aria-hidden="true"
             data-testid="notifications-backdrop"
           />,
@@ -673,6 +679,10 @@ export function NotificationBell() {
         // freezing the app. Closing must unmount immediately.
         className="w-96 p-0 data-[state=closed]:!animate-none"
         align="end"
+        // The backdrop above is the sole outside-close path. Left to its own
+        // devices Radix dismisses on pointerdown-outside, which unmounts the
+        // backdrop before the tap's click fires — recreating the click-through.
+        onInteractOutside={(e) => e.preventDefault()}
         data-testid="dropdown-notifications"
       >
         <Card className="border-0 shadow-lg">
