@@ -89,34 +89,9 @@ const MARKER_TYPES = [
   { value: "parking", label: "Parking", color: "#8b5cf6" },
 ];
 
-function createTreeIcon(color: string = "#22c55e"): L.DivIcon {
-  return L.divIcon({
-    className: "custom-tree-marker",
-    html: `<div style="
-      background-color: ${color};
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      border: 3px solid white;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    ">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-        <path d="M12 2L7 10h10L12 2z"/>
-        <path d="M12 8L5 18h14L12 8z"/>
-        <rect x="10" y="18" width="4" height="4"/>
-      </svg>
-    </div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 28],
-    popupAnchor: [0, -28],
-  });
-}
-
-// Pending (not-yet-saved) pins show their list number so the describe-all
-// dialog rows can be matched back to positions on the map.
+// Saved and pending pins use the same 1-based number as the description list
+// under the map (and the proposal snapshot PNG). n is display-only — order
+// comes from GET /tree-markers (createdAt).
 function createNumberedIcon(color: string, n: number): L.DivIcon {
   return L.divIcon({
     className: "custom-tree-marker",
@@ -132,8 +107,9 @@ function createNumberedIcon(color: string, n: number): L.DivIcon {
       justify-content: center;
       color: white;
       font-weight: 700;
-      font-size: 13px;
+      font-size: ${n > 9 ? "11px" : "13px"};
       font-family: sans-serif;
+      line-height: 1;
     ">${n}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 28],
@@ -334,6 +310,13 @@ export function JobSiteMap({
   const visibleMarkers = markers.filter((m) =>
     view === "photo" ? m.surface === "image" : m.surface !== "image",
   );
+  // 1-based, creation order (API orderBy createdAt). Per-surface so satellite
+  // and photo lists each start at 1 — matches the snapshot PNG filter.
+  const savedCount = visibleMarkers.length;
+  const numberForMarker = (id: string): number | null => {
+    const idx = visibleMarkers.findIndex((m) => m.id === id);
+    return idx >= 0 ? idx + 1 : null;
+  };
 
   // Photo-view positions: stored normalized (y from top, x from left) →
   // CRS.Simple plane (lat grows upward).
@@ -532,18 +515,20 @@ export function JobSiteMap({
 
   const markerPins = (
     <>
-      {visibleMarkers.map((marker) => (
+      {visibleMarkers.map((marker, i) => (
         <Marker
           key={marker.id}
           position={markerPlanePosition(marker)}
-          icon={createTreeIcon(marker.color)}
+          icon={createNumberedIcon(marker.color, i + 1)}
           eventHandlers={{
             click: () => openEditDialog(marker),
           }}
         >
           <Popup>
             <div className="min-w-[150px]">
-              <p className="font-medium">{marker.label || "Unmarked tree"}</p>
+              <p className="font-medium">
+                {i + 1}. {marker.label || "Unmarked tree"}
+              </p>
               {marker.notes && (
                 <p className="text-sm text-gray-600 mt-1">{marker.notes}</p>
               )}
@@ -564,7 +549,7 @@ export function JobSiteMap({
         <Marker
           key={`pending-${i}`}
           position={[marker.lat, marker.lng]}
-          icon={createNumberedIcon(marker.color, i + 1)}
+          icon={createNumberedIcon(marker.color, savedCount + i + 1)}
         />
       ))}
     </>
@@ -747,16 +732,29 @@ export function JobSiteMap({
 
       {visibleMarkers.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {visibleMarkers.map((marker) => (
+          {visibleMarkers.map((marker, i) => (
             <div
               key={marker.id}
-              className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs cursor-pointer hover:bg-accent"
+              role="button"
+              tabIndex={0}
+              aria-label={`Marker ${i + 1}: ${marker.label || "Unmarked"}`}
+              className="flex items-center gap-1.5 px-2 py-1 bg-muted rounded text-xs cursor-pointer hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => openEditDialog(marker)}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openEditDialog(marker);
+                }
+              }}
             >
               <div
-                className="w-3 h-3 rounded-full"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
                 style={{ backgroundColor: marker.color }}
-              />
+                aria-hidden="true"
+              >
+                {i + 1}
+              </div>
               <span>{marker.label || "Unmarked"}</span>
             </div>
           ))}
@@ -784,7 +782,7 @@ export function JobSiteMap({
                     className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
                     style={{ backgroundColor: marker.color }}
                   >
-                    {i + 1}
+                    {savedCount + i + 1}
                   </div>
                   <Select
                     value={marker.markerType}
@@ -865,6 +863,9 @@ export function JobSiteMap({
             <DialogTitle className="flex items-center gap-2">
               <TreePine className="h-5 w-5 text-green-600" />
               Edit Marker
+              {editingMarker && numberForMarker(editingMarker.id)
+                ? ` ${numberForMarker(editingMarker.id)}`
+                : ""}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
