@@ -1075,6 +1075,8 @@ export interface IStorage {
   createTreePin(pin: schema.InsertTreePin): Promise<schema.TreePin>;
   appendTreePinPhotos(id: string, urls: string[], businessId?: string | null): Promise<schema.TreePin>;
   getTreePinsByJob(jobId: string): Promise<schema.TreePin[]>;
+  findTreePinWorkLink(pinId: string, jobId: string): Promise<schema.TreePinWorkLink | null>;
+  createTreePinWorkLink(link: schema.InsertTreePinWorkLink): Promise<schema.TreePinWorkLink>;
 
 
   // Live job timers (clock in/out)
@@ -7871,6 +7873,25 @@ class DatabaseStorage implements IStorage {
         isNull(schema.treePins.archivedAt),
       ))
       .orderBy(schema.treePins.createdAt);
+  }
+
+  async findTreePinWorkLink(pinId: string, jobId: string): Promise<schema.TreePinWorkLink | null> {
+    const [row] = await db.select()
+      .from(schema.treePinWorkLinks)
+      .where(and(
+        eq(schema.treePinWorkLinks.pinId, pinId),
+        eq(schema.treePinWorkLinks.jobId, jobId),
+      ));
+    return row ?? null;
+  }
+
+  async createTreePinWorkLink(link: schema.InsertTreePinWorkLink): Promise<schema.TreePinWorkLink> {
+    if (link.jobId) {
+      const existing = await this.findTreePinWorkLink(link.pinId, link.jobId);
+      if (existing) return existing;
+    }
+    const [result] = await db.insert(schema.treePinWorkLinks).values(withTenant(link)).returning();
+    return result;
   }
 
   // ─── Live job timers (clock in/out) ───────────────────────────────────────
