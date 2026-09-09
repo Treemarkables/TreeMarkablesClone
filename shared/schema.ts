@@ -4832,6 +4832,8 @@ export const createTreePinRequestSchema = z.object({
   species: z.string().max(120).optional(),
   sizeNotes: z.string().max(500).optional(),
   accessNotes: z.string().max(500).optional(),
+  /** When set, also write tree_pin_work_links so the pin shows on this job. */
+  jobId: z.string().min(1).optional(),
 });
 export type CreateTreePinRequest = z.infer<typeof createTreePinRequestSchema>;
 

@@ -32783,6 +32783,20 @@ Transcription: ${transcriptText}`;
         });
       }
       const body = parsed.data;
+      let linkJobId: string | undefined;
+      if (body.jobId) {
+        const job = await storage.getJob(body.jobId);
+        if (!job) {
+          return res.status(400).json({ success: false, message: "Job not found" });
+        }
+        if (job.customerId !== req.params.id) {
+          return res.status(400).json({
+            success: false,
+            message: "Job is not linked to this customer",
+          });
+        }
+        linkJobId = job.id;
+      }
       let siteId = body.siteId;
       if (siteId) {
         const sites = await storage.getCustomerSites(req.params.id);
@@ -32808,6 +32822,9 @@ Transcription: ${transcriptText}`;
         accessNotes: body.accessNotes ?? null,
         createdBy: req.session.employeeId ?? null,
       });
+      if (linkJobId) {
+        await storage.createTreePinWorkLink({ pinId: pin.id, jobId: linkJobId });
+      }
       res.json({ success: true, data: pin });
     } catch (error) {
       console.error("Error creating tree pin:", error);
@@ -32909,6 +32926,31 @@ Transcription: ${transcriptText}`;
     } catch (error) {
       console.error("Error fetching job tree pins:", error);
       res.status(500).json({ success: false, message: "Failed to fetch tree pins" });
+    }
+  });
+
+  // Link an existing customer pin onto this job (tree_pin_work_links).
+  app.post("/api/jobs/:id/tree-pins/:pinId/link", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: "Job not found" });
+      }
+      const pin = await storage.getTreePin(req.params.pinId);
+      if (!pin || pin.archivedAt) {
+        return res.status(404).json({ success: false, message: "Pin not found" });
+      }
+      if (!job.customerId || pin.customerId !== job.customerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Pin is not on this job's customer",
+        });
+      }
+      const link = await storage.createTreePinWorkLink({ pinId: pin.id, jobId: job.id });
+      res.json({ success: true, data: link });
+    } catch (error) {
+      console.error("Error linking tree pin to job:", error);
+      res.status(500).json({ success: false, message: "Failed to link pin" });
     }
   });
 
