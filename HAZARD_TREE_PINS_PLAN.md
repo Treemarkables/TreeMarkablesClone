@@ -170,8 +170,8 @@ All routes session-gated. All writes `withTenant()`. Dark unless `HAZARD_TREE_PI
 | GET | `/api/customers/:id/tree-pins` | P0 |
 | POST | `/api/customers/:id/tree-pins` | P0 (GPS + risk + work type; photos optional) |
 | GET | `/api/hazard-pins/:id` | P0 |
-| PATCH | `/api/hazard-pins/:id` | P1 |
-| POST | `/api/hazard-pins/:id/photos` | P1 (multer + explicit tenant stamp) |
+| PATCH | `/api/hazard-pins/:id` | P1 (not in this PR) |
+| POST | `/api/hazard-pins/:id/photos` | P1 photos (this PR — multer + explicit tenant stamp) |
 | POST | `/api/hazard-pins/quote` | P2 body `{ pinIds, mode: "per-pin" \| "combined" }` → existing job+quote create |
 | GET | `/api/jobs/:id/tree-pins` | P3 (linked pins for the job card) |
 
@@ -186,9 +186,9 @@ P0 spike implements the enabled flag, sites list/create, pins list/create, and g
 1. Open **Hazard trees** (crew-accessible; not admin-only).
 2. Pick customer (typeahead) → site (default site if only one).
 3. **Drop pin** — `navigator.geolocation.getCurrentPosition` (high accuracy).
-4. Minimum form: risk rating (4 tappable chips) → photos (camera) → recommended work (chips). Submit.
+4. Minimum form: risk rating (4 tappable chips) → photos (camera, this PR) → recommended work (chips). Submit.
 5. Optional later: species / size / access behind “More”.
-6. Offline: queue the JSON + photo blobs in IndexedDB; flush when online. P1 risk, not P0.
+6. Offline: queue the JSON + photo blobs in IndexedDB; flush when online. P1 risk, not in this PR.
 
 NZ English: “Hazard trees”, “Risk rating”, “Recommended work”, “Navigate to pin”, “Assessed / Quoted / Scheduled / Done / Monitor”.
 
@@ -221,7 +221,7 @@ Prove the model without a UI redesign.
 
 ### P1 — field capture
 
-- Camera → `PhotoStorageService` with multer tenant stamp.
+- **Photos (this PR):** Camera via existing `PhotoCaptureModal` → `PhotoStorageService` with multer tenant stamp (`POST /api/hazard-pins/:id/photos`). URLs stored on `tree_pins.photo_urls`. Still dark unless `HAZARD_TREE_PINS=true`.
 - Leaflet site map on `/hazard-pins`.
 - IndexedDB offline queue.
 - Update iOS `NSLocationWhenInUseUsageDescription` to mention dropping tree pins (needs a TestFlight).
@@ -272,6 +272,6 @@ Prove the model without a UI redesign.
 
 ## 10. P0 recommended next step (after this PR)
 
-On a **dev** Neon branch only (not prod): confirm `schemaMigrations` creates the three tables + RLS, set `HAZARD_TREE_PINS=true`, open `/hazard-pins`, pick a test customer, drop a pin with GPS + risk + work type, `GET /api/customers/:id/tree-pins` returns it. Then P1 (photos + map) is unblocked.
+On a **dev** Neon branch only (not prod): confirm `schemaMigrations` creates the three tables + RLS, set `HAZARD_TREE_PINS=true`, open `/hazard-pins`, pick a test customer, drop a pin with GPS + risk + work type + photos, `GET /api/customers/:id/tree-pins` returns it with `photoUrls`. Then P1 remainder is map + offline queue; P2 is quote/job linking.
 
 Owner enablement (later, when wanted): DO env `HAZARD_TREE_PINS=true` after merge. Until then the feature is invisible.

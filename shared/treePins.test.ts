@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  appendUniquePhotoUrls,
   canTransitionTreePinStatus,
   isTreePinStatus,
   nextTreePinStatuses,
@@ -39,6 +40,25 @@ describe("tree pin status machine", () => {
     assert.equal(
       treePinMapsUrl(-38.6623, 178.0176),
       "https://maps.google.com/?q=-38.6623000,178.0176000",
+    );
+  });
+});
+
+describe("tree pin photo URLs", () => {
+  it("appends new URLs and skips blanks and duplicates", () => {
+    assert.deepEqual(
+      appendUniquePhotoUrls(
+        ["/objects/photos/a.jpg", "/objects/photos/b.jpg"],
+        ["/objects/photos/b.jpg", "", "/objects/photos/c.jpg"],
+      ),
+      ["/objects/photos/a.jpg", "/objects/photos/b.jpg", "/objects/photos/c.jpg"],
+    );
+  });
+
+  it("treats a null existing list as empty", () => {
+    assert.deepEqual(
+      appendUniquePhotoUrls(null, ["/objects/photos/a.jpg"]),
+      ["/objects/photos/a.jpg"],
     );
   });
 });

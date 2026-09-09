@@ -1,11 +1,10 @@
 /**
- * Hazard tree pins — P0 spike page.
- * Hidden WIP route (no sidebar). Field capture of GPS + risk + work type
+ * Hazard tree pins — field capture of GPS + risk + photos + work type
  * for a customer site. Dark unless HAZARD_TREE_PINS=true. See HAZARD_TREE_PINS_PLAN.md.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MapPin, Loader2 } from "lucide-react";
+import { Camera, Loader2, MapPin, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -18,10 +17,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { compressImages } from "@/lib/imageCompression";
 import type { Customer, TreePin } from "@shared/schema";
 import type { TreePinRiskRating } from "@shared/treePins";
+import { TREE_PIN_MAX_PHOTOS } from "@shared/treePins";
 
 interface ApiList<T> {
   success: boolean;
@@ -49,6 +52,27 @@ const RISK_LABELS: Record<TreePinRiskRating, string> = {
   critical: "Critical",
 };
 
+async function uploadPinPhotos(pinId: string, files: File[]): Promise<void> {
+  const prepared = await compressImages(files);
+  const formData = new FormData();
+  for (const file of prepared) formData.append("photos", file);
+  const res = await fetch(`/api/hazard-pins/${pinId}/photos`, {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+  if (!res.ok) {
+    let message = "Photo upload failed";
+    try {
+      const body = (await res.json()) as { message?: string };
+      if (body.message) message = body.message;
+    } catch {
+      /* keep default */
+    }
+    throw new Error(message);
+  }
+}
+
 export default function HazardPins() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -62,6 +86,11 @@ export default function HazardPins() {
     gpsAccuracy?: number;
   } | null>(null);
   const [locating, setLocating] = useState(false);
+  const [pendingPhotos, setPendingPhotos] = useState<{ file: File; url: string }[]>([]);
+  const [cameraFor, setCameraFor] = useState<"new" | string | null>(null);
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
+  const pendingPhotosRef = useRef(pendingPhotos);
+  pendingPhotosRef.current = pendingPhotos;
 
   const { data: enabledResp } = useQuery<EnabledPayload>({
     queryKey: ["/api/hazard-pins/enabled"],
@@ -81,6 +110,19 @@ export default function HazardPins() {
   });
   const pins = pinsResp?.data ?? [];
 
+  useEffect(() => {
+    return () => {
+      pendingPhotosRef.current.forEach((p) => URL.revokeObjectURL(p.url));
+    };
+  }, []);
+
+  const clearPendingPhotos = () => {
+    setPendingPhotos((prev) => {
+      prev.forEach((p) => URL.revokeObjectURL(p.url));
+      return [];
+    });
+  };
+
   const createPin = useMutation({
     mutationFn: async () => {
       if (!coords) throw new Error("Location is required");
@@ -92,12 +134,29 @@ export default function HazardPins() {
         recommendedWorkType: workType,
         notes: notes.trim() || undefined,
       });
-      return (await res.json()) as PinCreated;
+      const created = (await res.json()) as PinCreated;
+      let photoError: string | undefined;
+      if (pendingPhotos.length > 0) {
+        try {
+          await uploadPinPhotos(created.data.id, pendingPhotos.map((p) => p.file));
+        } catch (err) {
+          photoError = err instanceof Error ? err.message : "Photo upload failed";
+        }
+      }
+      return { created, photoError };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers", customerId, "tree-pins"] });
       setNotes("");
       setCoords(null);
+      clearPendingPhotos();
+      if (result.photoError) {
+        toast({
+          variant: "destructive",
+          title: "Pin saved, photos failed",
+          description: result.photoError,
+        });
+      }
     },
     onError: (err: Error) => {
       toast({ variant: "destructive", title: "Could not save pin", description: err.message });
@@ -135,12 +194,37 @@ export default function HazardPins() {
     );
   };
 
+  const handlePendingPhotos = (files: File[]) => {
+    const room = TREE_PIN_MAX_PHOTOS - pendingPhotos.length;
+    const toAdd = files.slice(0, Math.max(0, room));
+    if (toAdd.length < files.length) {
+      toast({
+        variant: "destructive",
+        title: "Photo limit",
+        description: `A pin can hold at most ${TREE_PIN_MAX_PHOTOS} photos.`,
+      });
+    }
+    setPendingPhotos((prev) => [
+      ...prev,
+      ...toAdd.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    ]);
+  };
+
+  const removePendingPhoto = (index: number) => {
+    setPendingPhotos((prev) => {
+      const next = [...prev];
+      const [removed] = next.splice(index, 1);
+      if (removed) URL.revokeObjectURL(removed.url);
+      return next;
+    });
+  };
+
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Hazard trees</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Drop a GPS pin at a tree, then take it through quote and job. This page is a
+          Drop a GPS pin at a tree, take photos, then take it through quote and job. This page is a
           spike — not in the sidebar yet.
         </p>
       </div>
@@ -158,7 +242,7 @@ export default function HazardPins() {
             <p>
               Capture is off. Set the server env <code className="text-foreground">HAZARD_TREE_PINS=true</code>{" "}
               on a non-production instance to try dropping a pin. Do not enable on production
-              until field photos and quoting are ready.
+              until quoting is ready.
             </p>
           )}
         </CardContent>
@@ -225,6 +309,42 @@ export default function HazardPins() {
             </div>
 
             <div>
+              <Label className="mb-2 block">Photos</Label>
+              {pendingPhotos.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {pendingPhotos.map((photo, index) => (
+                    <div key={photo.url} className="relative h-20 w-20 rounded-md overflow-hidden border border-border">
+                      <img
+                        src={photo.url}
+                        alt={`Pending photo ${index + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-0.5 right-0.5 h-6 w-6"
+                        onClick={() => removePendingPhoto(index)}
+                        aria-label={`Remove photo ${index + 1}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCameraFor("new")}
+                disabled={pendingPhotos.length >= TREE_PIN_MAX_PHOTOS}
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                Add photos
+              </Button>
+            </div>
+
+            <div>
               <Label htmlFor="work-type" className="mb-2 block">Recommended work</Label>
               <Select value={workType} onValueChange={setWorkType}>
                 <SelectTrigger id="work-type" aria-label="Recommended work">
@@ -282,25 +402,83 @@ export default function HazardPins() {
             )}
             {enabled && pins.length > 0 && (
               <ul className="space-y-2">
-                {pins.map((pin) => (
-                  <li
-                    key={pin.id}
-                    className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-3 text-sm"
-                  >
-                    <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="font-medium">{pin.recommendedWorkType}</span>
-                    <Badge variant="secondary">{pin.riskRating}</Badge>
-                    <Badge variant="outline">{pin.status}</Badge>
-                    <span className="text-muted-foreground">
-                      {Number(pin.latitude).toFixed(5)}, {Number(pin.longitude).toFixed(5)}
-                    </span>
-                  </li>
-                ))}
+                {pins.map((pin) => {
+                  const photos = pin.photoUrls ?? [];
+                  return (
+                    <li
+                      key={pin.id}
+                      className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="font-medium">{pin.recommendedWorkType}</span>
+                        <Badge variant="secondary">{pin.riskRating}</Badge>
+                        <Badge variant="outline">{pin.status}</Badge>
+                        <span className="text-muted-foreground">
+                          {Number(pin.latitude).toFixed(5)}, {Number(pin.longitude).toFixed(5)}
+                        </span>
+                      </div>
+                      {photos.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {photos.map((url, i) => (
+                            <button
+                              key={`${url}-${i}`}
+                              type="button"
+                              className="h-16 w-16 overflow-hidden rounded-md border border-border"
+                              onClick={() => setLightbox({ src: url, alt: `Pin photo ${i + 1}` })}
+                              aria-label={`View photo ${i + 1}`}
+                            >
+                              <img src={url} alt="" className="h-full w-full object-cover" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setCameraFor(pin.id)}
+                          disabled={photos.length >= TREE_PIN_MAX_PHOTOS}
+                        >
+                          <Camera className="h-4 w-4 mr-2" />
+                          Add photos
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </CardContent>
         </Card>
       )}
+
+      <PhotoCaptureModal
+        isOpen={cameraFor !== null}
+        onClose={() => setCameraFor(null)}
+        acceptImagesOnly
+        onPendingPhotos={cameraFor === "new" ? handlePendingPhotos : undefined}
+        uploadUrl={
+          cameraFor && cameraFor !== "new" ? `/api/hazard-pins/${cameraFor}/photos` : undefined
+        }
+        onUploaded={() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/customers", customerId, "tree-pins"] });
+        }}
+      />
+
+      <Dialog open={lightbox !== null} onOpenChange={(open) => { if (!open) setLightbox(null); }}>
+        <DialogContent className="max-w-lg p-2">
+          <DialogTitle className="sr-only">{lightbox?.alt ?? "Pin photo"}</DialogTitle>
+          {lightbox && (
+            <img
+              src={lightbox.src}
+              alt={lightbox.alt}
+              className="w-full h-auto rounded-md"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

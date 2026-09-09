@@ -72,7 +72,7 @@ import {
   createTreePinRequestSchema, insertCustomerSiteSchema,
 } from "@shared/schema";
 import { HAZARD_TREE_PINS_ENABLED, requireHazardTreePins } from "./hazardPins";
-import { TREE_PIN_RISK_RATINGS, TREE_PIN_WORK_TYPES } from "@shared/treePins";
+import { TREE_PIN_RISK_RATINGS, TREE_PIN_WORK_TYPES, TREE_PIN_MAX_PHOTOS } from "@shared/treePins";
 import multer from "multer";
 import Papa from "papaparse";
 import twilio from "twilio";
@@ -32827,6 +32827,76 @@ Transcription: ${transcriptText}`;
       res.status(500).json({ success: false, message: "Failed to fetch tree pin" });
     }
   });
+
+  // NOTE: multer/busboy callbacks run outside the request's ALS tenant context,
+  // so this handler rides the OWNER connection. RLS does not scope the pin read
+  // (explicit ownership check) and withTenant() cannot stamp the update
+  // (businessId passed from the parent pin). Same pattern as site-map images.
+  app.post(
+    "/api/hazard-pins/:id/photos",
+    requireSession,
+    requireHazardTreePins,
+    imageUpload.fields([
+      { name: "photos", maxCount: TREE_PIN_MAX_PHOTOS },
+      { name: "photo", maxCount: 1 },
+    ]),
+    async (req, res) => {
+      try {
+        const pin = await storage.getTreePin(req.params.id);
+        if (
+          !pin ||
+          pin.archivedAt ||
+          (pin.businessId && req.session.businessId && pin.businessId !== req.session.businessId)
+        ) {
+          return res.status(404).json({ success: false, message: "Pin not found" });
+        }
+        const filesMap = req.files as
+          | { photos?: Express.Multer.File[]; photo?: Express.Multer.File[] }
+          | undefined;
+        const files = [...(filesMap?.photos ?? []), ...(filesMap?.photo ?? [])];
+        const images = files.filter((f) => (f.mimetype || "").toLowerCase().startsWith("image/"));
+        if (images.length === 0) {
+          return res.status(400).json({ success: false, message: "No photos provided" });
+        }
+        const existingCount = pin.photoUrls?.length ?? 0;
+        if (existingCount + images.length > TREE_PIN_MAX_PHOTOS) {
+          return res.status(400).json({
+            success: false,
+            message: `A pin can hold at most ${TREE_PIN_MAX_PHOTOS} photos`,
+          });
+        }
+        const photoStorage = new PhotoStorageService();
+        const photoUrls: string[] = [];
+        for (const file of images) {
+          try {
+            const { url } = await photoStorage.uploadPhoto(
+              file.buffer,
+              file.originalname || `hazard-pin-${pin.id}-${Date.now()}.jpg`,
+              file.mimetype,
+            );
+            photoUrls.push(url);
+          } catch (uploadErr) {
+            console.error("Error uploading hazard pin photo to GCS:", uploadErr);
+          }
+        }
+        if (photoUrls.length === 0) {
+          return res.status(500).json({
+            success: false,
+            message: "Failed to upload any photos to storage",
+          });
+        }
+        const updated = await storage.appendTreePinPhotos(
+          pin.id,
+          photoUrls,
+          pin.businessId ?? req.session.businessId,
+        );
+        res.json({ success: true, data: updated, photos: photoUrls });
+      } catch (error) {
+        console.error("Error uploading hazard pin photos:", error);
+        res.status(500).json({ success: false, message: "Failed to upload photos" });
+      }
+    },
+  );
 
   app.get("/api/jobs/:id/tree-pins", requireSession, requireHazardTreePins, async (req, res) => {
     try {

@@ -101,3 +101,24 @@ export function treePinMapsUrl(latitude: number, longitude: number): string {
   const lng = longitude.toFixed(7);
   return `https://maps.google.com/?q=${lat},${lng}`;
 }
+
+/** Cap on photos stored on a pin (`tree_pins.photo_urls`). */
+export const TREE_PIN_MAX_PHOTOS = 20;
+
+/**
+ * Append newly uploaded GCS photo URLs onto a pin's existing list.
+ * Drops blanks and duplicates; does not cap (the API enforces TREE_PIN_MAX_PHOTOS).
+ */
+export function appendUniquePhotoUrls(
+  existing: string[] | null | undefined,
+  incoming: string[],
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const url of [...(existing ?? []), ...incoming]) {
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+  }
+  return out;
+}

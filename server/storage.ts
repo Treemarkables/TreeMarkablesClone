@@ -85,6 +85,7 @@ import { invalidateEntitlementsCache } from "./tenancy/entitlements";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
+import { appendUniquePhotoUrls } from "@shared/treePins";
 
 // Compute an invoice's ex-GST revenue contribution.
 //
@@ -1072,6 +1073,7 @@ export interface IStorage {
   getTreePinsByCustomer(customerId: string): Promise<schema.TreePin[]>;
   getTreePin(id: string): Promise<schema.TreePin | null>;
   createTreePin(pin: schema.InsertTreePin): Promise<schema.TreePin>;
+  appendTreePinPhotos(id: string, urls: string[], businessId?: string | null): Promise<schema.TreePin>;
   getTreePinsByJob(jobId: string): Promise<schema.TreePin[]>;
 
 
@@ -7826,6 +7828,34 @@ class DatabaseStorage implements IStorage {
   async createTreePin(pin: schema.InsertTreePin): Promise<schema.TreePin> {
     const [result] = await db.insert(schema.treePins).values(withTenant(pin)).returning();
     return result;
+  }
+
+  // Multer/busboy callbacks drop ALS tenant context, so withTenant() would
+  // stamp nothing. Read+write on ownerDb and stamp business_id from the parent
+  // pin (same class of bug as site-map image uploads).
+  async appendTreePinPhotos(
+    id: string,
+    urls: string[],
+    businessId?: string | null,
+  ): Promise<schema.TreePin> {
+    const [existing] = await ownerDb
+      .select()
+      .from(schema.treePins)
+      .where(eq(schema.treePins.id, id));
+    if (!existing) throw new Error(`Tree pin ${id} not found`);
+    const stamp = businessId ?? existing.businessId ?? currentBusinessId() ?? null;
+    const photoUrls = appendUniquePhotoUrls(existing.photoUrls, urls);
+    const [row] = await ownerDb
+      .update(schema.treePins)
+      .set({
+        photoUrls,
+        businessId: stamp,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.treePins.id, id))
+      .returning();
+    if (!row) throw new Error(`Tree pin ${id} not found`);
+    return row;
   }
 
   async getTreePinsByJob(jobId: string): Promise<schema.TreePin[]> {
