@@ -474,6 +474,82 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Hazard-tree GPS pin register (golf courses / large sites). Site-persistent
+    // pins — DISTINCT from job-scoped tree_markers. Empty until HAZARD_TREE_PINS
+    // is enabled. Additive; no changes to jobs/quotes/tree_markers.
+    // Mirrors migrations/manual/20260909_hazard_tree_pins.sql.
+    name: "hazard-tree-pins",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS customer_sites (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        customer_id varchar NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+        name text NOT NULL,
+        address text,
+        latitude numeric(10, 7),
+        longitude numeric(10, 7),
+        notes text,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+      `CREATE INDEX IF NOT EXISTS customer_sites_customer_id_idx ON customer_sites (customer_id)`,
+      `CREATE TABLE IF NOT EXISTS tree_pins (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        customer_id varchar NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+        site_id varchar NOT NULL REFERENCES customer_sites(id) ON DELETE RESTRICT,
+        latitude numeric(10, 7) NOT NULL,
+        longitude numeric(10, 7) NOT NULL,
+        gps_accuracy real,
+        risk_rating text NOT NULL,
+        recommended_work_type text NOT NULL,
+        status text NOT NULL DEFAULT 'assessed',
+        photo_urls text[] DEFAULT '{}',
+        species text,
+        size_notes text,
+        access_notes text,
+        notes text,
+        created_by varchar,
+        archived_at timestamp,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+      `CREATE INDEX IF NOT EXISTS tree_pins_customer_id_idx ON tree_pins (customer_id)`,
+      `CREATE INDEX IF NOT EXISTS tree_pins_site_id_idx ON tree_pins (site_id)`,
+      `CREATE INDEX IF NOT EXISTS tree_pins_status_idx ON tree_pins (status)`,
+      `CREATE TABLE IF NOT EXISTS tree_pin_work_links (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        pin_id varchar NOT NULL REFERENCES tree_pins(id) ON DELETE CASCADE,
+        job_id varchar REFERENCES jobs(id) ON DELETE SET NULL,
+        quote_id varchar REFERENCES quotes(id) ON DELETE SET NULL,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+      `CREATE INDEX IF NOT EXISTS tree_pin_work_links_pin_id_idx ON tree_pin_work_links (pin_id)`,
+      `CREATE INDEX IF NOT EXISTS tree_pin_work_links_job_id_idx ON tree_pin_work_links (job_id)`,
+      `CREATE INDEX IF NOT EXISTS tree_pin_work_links_quote_id_idx ON tree_pin_work_links (quote_id)`,
+    ],
+    postChecks: async (client) => {
+      const tables = ["customer_sites", "tree_pins", "tree_pin_work_links"];
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      for (const t of tables) {
+        await client.query(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
+        const pol = await client.query(
+          `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = $1::regclass LIMIT 1`,
+          [t],
+        );
+        if (pol.rowCount === 0) {
+          await client.query(
+            `CREATE POLICY tenant_isolation ON ${t}
+               USING (business_id = nullif(current_setting('app.current_business', true), ''))
+               WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+          );
+          console.log(`[schema] created tenant_isolation policy on ${t}`);
+        }
+        if (hasRole.rowCount && hasRole.rowCount > 0) {
+          await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${t} TO app_tenant`);
+        }
+      }
+    },
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

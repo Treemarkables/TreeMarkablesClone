@@ -85,6 +85,7 @@ import { invalidateEntitlementsCache } from "./tenancy/entitlements";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
+import { appendUniquePhotoUrls } from "@shared/treePins";
 
 // Compute an invoice's ex-GST revenue contribution.
 //
@@ -1064,6 +1065,17 @@ export interface IStorage {
   getTreeMarkersByJob(jobId: string): Promise<schema.TreeMarker[]>;
   getJobSiteMapImage(jobId: string): Promise<schema.JobSiteMapImage | null>;
   upsertJobSiteMapImage(jobId: string, imageUrl: string, businessId?: string | null): Promise<schema.JobSiteMapImage>;
+
+  // Hazard-tree pin register (site-persistent; distinct from tree_markers)
+  getCustomerSites(customerId: string): Promise<schema.CustomerSite[]>;
+  createCustomerSite(site: schema.InsertCustomerSite): Promise<schema.CustomerSite>;
+  ensureDefaultCustomerSite(customerId: string): Promise<schema.CustomerSite>;
+  getTreePinsByCustomer(customerId: string): Promise<schema.TreePin[]>;
+  getTreePin(id: string): Promise<schema.TreePin | null>;
+  createTreePin(pin: schema.InsertTreePin): Promise<schema.TreePin>;
+  appendTreePinPhotos(id: string, urls: string[], businessId?: string | null): Promise<schema.TreePin>;
+  getTreePinsByJob(jobId: string): Promise<schema.TreePin[]>;
+
 
   // Live job timers (clock in/out)
   getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null>;
@@ -7770,6 +7782,95 @@ class DatabaseStorage implements IStorage {
       })
       .returning();
     return row;
+  }
+
+  // ─── Hazard-tree pin register (site-persistent) ───────────────────────────
+  async getCustomerSites(customerId: string): Promise<schema.CustomerSite[]> {
+    return await db.select()
+      .from(schema.customerSites)
+      .where(eq(schema.customerSites.customerId, customerId))
+      .orderBy(schema.customerSites.createdAt);
+  }
+
+  async createCustomerSite(site: schema.InsertCustomerSite): Promise<schema.CustomerSite> {
+    const [result] = await db.insert(schema.customerSites).values(withTenant(site)).returning();
+    return result;
+  }
+
+  async ensureDefaultCustomerSite(customerId: string): Promise<schema.CustomerSite> {
+    const existing = await this.getCustomerSites(customerId);
+    if (existing[0]) return existing[0];
+    const customer = await this.getCustomer(customerId);
+    return this.createCustomerSite({
+      customerId,
+      name: customer?.name || "Site",
+      address: customer?.address || null,
+    });
+  }
+
+  async getTreePinsByCustomer(customerId: string): Promise<schema.TreePin[]> {
+    return await db.select()
+      .from(schema.treePins)
+      .where(and(
+        eq(schema.treePins.customerId, customerId),
+        isNull(schema.treePins.archivedAt),
+      ))
+      .orderBy(desc(schema.treePins.createdAt));
+  }
+
+  async getTreePin(id: string): Promise<schema.TreePin | null> {
+    const [result] = await db.select()
+      .from(schema.treePins)
+      .where(eq(schema.treePins.id, id));
+    return result || null;
+  }
+
+  async createTreePin(pin: schema.InsertTreePin): Promise<schema.TreePin> {
+    const [result] = await db.insert(schema.treePins).values(withTenant(pin)).returning();
+    return result;
+  }
+
+  // Multer/busboy callbacks drop ALS tenant context, so withTenant() would
+  // stamp nothing. Read+write on ownerDb and stamp business_id from the parent
+  // pin (same class of bug as site-map image uploads).
+  async appendTreePinPhotos(
+    id: string,
+    urls: string[],
+    businessId?: string | null,
+  ): Promise<schema.TreePin> {
+    const [existing] = await ownerDb
+      .select()
+      .from(schema.treePins)
+      .where(eq(schema.treePins.id, id));
+    if (!existing) throw new Error(`Tree pin ${id} not found`);
+    const stamp = businessId ?? existing.businessId ?? currentBusinessId() ?? null;
+    const photoUrls = appendUniquePhotoUrls(existing.photoUrls, urls);
+    const [row] = await ownerDb
+      .update(schema.treePins)
+      .set({
+        photoUrls,
+        businessId: stamp,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.treePins.id, id))
+      .returning();
+    if (!row) throw new Error(`Tree pin ${id} not found`);
+    return row;
+  }
+
+  async getTreePinsByJob(jobId: string): Promise<schema.TreePin[]> {
+    const links = await db.select()
+      .from(schema.treePinWorkLinks)
+      .where(eq(schema.treePinWorkLinks.jobId, jobId));
+    if (links.length === 0) return [];
+    const pinIds = links.map((l) => l.pinId);
+    return await db.select()
+      .from(schema.treePins)
+      .where(and(
+        inArray(schema.treePins.id, pinIds),
+        isNull(schema.treePins.archivedAt),
+      ))
+      .orderBy(schema.treePins.createdAt);
   }
 
   // ─── Live job timers (clock in/out) ───────────────────────────────────────

@@ -68,8 +68,11 @@ import {
   // Document Template Management
   insertDocumentTemplateSchema,
   // Review Management
-  insertReviewRequestSchema, insertReviewSubmissionSchema
+  insertReviewRequestSchema, insertReviewSubmissionSchema,
+  createTreePinRequestSchema, insertCustomerSiteSchema,
 } from "@shared/schema";
+import { HAZARD_TREE_PINS_ENABLED, requireHazardTreePins } from "./hazardPins";
+import { TREE_PIN_RISK_RATINGS, TREE_PIN_WORK_TYPES, TREE_PIN_MAX_PHOTOS } from "@shared/treePins";
 import multer from "multer";
 import Papa from "papaparse";
 import twilio from "twilio";
@@ -32692,6 +32695,220 @@ Transcription: ${transcriptText}`;
     } catch (error) {
       console.error('Error deleting tree marker:', error);
       res.status(500).json({ success: false, message: 'Failed to delete tree marker' });
+    }
+  });
+
+  // ========================================
+  // HAZARD TREE PINS — site-persistent register (WIP)
+  // Distinct from tree_markers (job overlay). Dark unless HAZARD_TREE_PINS=true.
+  // See HAZARD_TREE_PINS_PLAN.md. Do not hang this off tree_markers.
+  // ========================================
+
+  app.get("/api/hazard-pins/enabled", requireSession, (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        enabled: HAZARD_TREE_PINS_ENABLED,
+        riskRatings: TREE_PIN_RISK_RATINGS,
+        workTypes: TREE_PIN_WORK_TYPES,
+      },
+    });
+  });
+
+  app.get("/api/customers/:id/sites", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const sites = await storage.getCustomerSites(req.params.id);
+      res.json({ success: true, data: sites });
+    } catch (error) {
+      console.error("Error fetching customer sites:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch sites" });
+    }
+  });
+
+  app.post("/api/customers/:id/sites", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const parsed = insertCustomerSiteSchema.safeParse({
+        ...req.body,
+        customerId: req.params.id,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid site",
+          errors: parsed.error.errors,
+        });
+      }
+      const site = await storage.createCustomerSite(parsed.data);
+      res.json({ success: true, data: site });
+    } catch (error) {
+      console.error("Error creating customer site:", error);
+      res.status(500).json({ success: false, message: "Failed to create site" });
+    }
+  });
+
+  app.get("/api/customers/:id/tree-pins", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const pins = await storage.getTreePinsByCustomer(req.params.id);
+      res.json({ success: true, data: pins });
+    } catch (error) {
+      console.error("Error fetching tree pins:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch tree pins" });
+    }
+  });
+
+  app.post("/api/customers/:id/tree-pins", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const parsed = createTreePinRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          success: false,
+          message: "GPS, risk rating, and recommended work type are required",
+          errors: parsed.error.errors,
+        });
+      }
+      const body = parsed.data;
+      let siteId = body.siteId;
+      if (siteId) {
+        const sites = await storage.getCustomerSites(req.params.id);
+        if (!sites.some((s) => s.id === siteId)) {
+          return res.status(400).json({ success: false, message: "Site does not belong to this customer" });
+        }
+      } else {
+        const site = await storage.ensureDefaultCustomerSite(req.params.id);
+        siteId = site.id;
+      }
+      const pin = await storage.createTreePin({
+        customerId: req.params.id,
+        siteId,
+        latitude: String(body.latitude),
+        longitude: String(body.longitude),
+        gpsAccuracy: body.gpsAccuracy ?? null,
+        riskRating: body.riskRating,
+        recommendedWorkType: body.recommendedWorkType.trim(),
+        status: "assessed",
+        notes: body.notes ?? null,
+        species: body.species ?? null,
+        sizeNotes: body.sizeNotes ?? null,
+        accessNotes: body.accessNotes ?? null,
+        createdBy: req.session.employeeId ?? null,
+      });
+      res.json({ success: true, data: pin });
+    } catch (error) {
+      console.error("Error creating tree pin:", error);
+      res.status(500).json({ success: false, message: "Failed to create tree pin" });
+    }
+  });
+
+  app.get("/api/hazard-pins/:id", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const pin = await storage.getTreePin(req.params.id);
+      if (!pin) {
+        return res.status(404).json({ success: false, message: "Pin not found" });
+      }
+      res.json({ success: true, data: pin });
+    } catch (error) {
+      console.error("Error fetching tree pin:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch tree pin" });
+    }
+  });
+
+  // NOTE: multer/busboy callbacks run outside the request's ALS tenant context,
+  // so this handler rides the OWNER connection. RLS does not scope the pin read
+  // (explicit ownership check) and withTenant() cannot stamp the update
+  // (businessId passed from the parent pin). Same pattern as site-map images.
+  app.post(
+    "/api/hazard-pins/:id/photos",
+    requireSession,
+    requireHazardTreePins,
+    imageUpload.fields([
+      { name: "photos", maxCount: TREE_PIN_MAX_PHOTOS },
+      { name: "photo", maxCount: 1 },
+    ]),
+    async (req, res) => {
+      try {
+        const pin = await storage.getTreePin(req.params.id);
+        if (
+          !pin ||
+          pin.archivedAt ||
+          (pin.businessId && req.session.businessId && pin.businessId !== req.session.businessId)
+        ) {
+          return res.status(404).json({ success: false, message: "Pin not found" });
+        }
+        const filesMap = req.files as
+          | { photos?: Express.Multer.File[]; photo?: Express.Multer.File[] }
+          | undefined;
+        const files = [...(filesMap?.photos ?? []), ...(filesMap?.photo ?? [])];
+        const images = files.filter((f) => (f.mimetype || "").toLowerCase().startsWith("image/"));
+        if (images.length === 0) {
+          return res.status(400).json({ success: false, message: "No photos provided" });
+        }
+        const existingCount = pin.photoUrls?.length ?? 0;
+        if (existingCount + images.length > TREE_PIN_MAX_PHOTOS) {
+          return res.status(400).json({
+            success: false,
+            message: `A pin can hold at most ${TREE_PIN_MAX_PHOTOS} photos`,
+          });
+        }
+        const photoStorage = new PhotoStorageService();
+        const photoUrls: string[] = [];
+        for (const file of images) {
+          try {
+            const { url } = await photoStorage.uploadPhoto(
+              file.buffer,
+              file.originalname || `hazard-pin-${pin.id}-${Date.now()}.jpg`,
+              file.mimetype,
+            );
+            photoUrls.push(url);
+          } catch (uploadErr) {
+            console.error("Error uploading hazard pin photo to GCS:", uploadErr);
+          }
+        }
+        if (photoUrls.length === 0) {
+          return res.status(500).json({
+            success: false,
+            message: "Failed to upload any photos to storage",
+          });
+        }
+        const updated = await storage.appendTreePinPhotos(
+          pin.id,
+          photoUrls,
+          pin.businessId ?? req.session.businessId,
+        );
+        res.json({ success: true, data: updated, photos: photoUrls });
+      } catch (error) {
+        console.error("Error uploading hazard pin photos:", error);
+        res.status(500).json({ success: false, message: "Failed to upload photos" });
+      }
+    },
+  );
+
+  app.get("/api/jobs/:id/tree-pins", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: "Job not found" });
+      }
+      const pins = await storage.getTreePinsByJob(req.params.id);
+      res.json({ success: true, data: pins });
+    } catch (error) {
+      console.error("Error fetching job tree pins:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch tree pins" });
     }
   });
 

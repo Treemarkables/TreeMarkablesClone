@@ -4651,7 +4651,10 @@ export type CallRecord = typeof callRecords.$inferSelect;
 export type InsertCallRecord = z.infer<typeof insertCallRecordSchema>;
 export type UpdateCallRecord = z.infer<typeof updateCallRecordSchema>;
 
-// Tree location markers for job site mapping
+// Tree location markers for job site mapping (THIS JOB's overlay / proposal
+// snapshot). Persistent hazard-tree pins live in `tree_pins` — see
+// HAZARD_TREE_PINS_PLAN.md. Do not hang a site register off this table:
+// jobId is NOT NULL and ON DELETE CASCADE.
 export const treeMarkers = pgTable("tree_markers", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -4728,6 +4731,110 @@ export const updateTreeMarkerSchema = insertTreeMarkerSchema.partial();
 export type TreeMarker = typeof treeMarkers.$inferSelect;
 export type InsertTreeMarker = z.infer<typeof insertTreeMarkerSchema>;
 export type UpdateTreeMarker = z.infer<typeof updateTreeMarkerSchema>;
+
+// ---------------------------------------------------------------------------
+// Hazard-tree pin register (site-persistent). DISTINCT from tree_markers:
+// markers are a job overlay (JobSiteMap / proposal snapshot) and CASCADE when
+// the job is deleted. Pins belong to a customer site and survive across
+// quotes and jobs. See HAZARD_TREE_PINS_PLAN.md.
+// ---------------------------------------------------------------------------
+
+export const customerSites = pgTable("customer_sites", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  address: text("address"),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  customerIdx: index("customer_sites_customer_id_idx").on(table.customerId),
+}));
+
+export const treePins = pgTable("tree_pins", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  siteId: varchar("site_id").notNull().references(() => customerSites.id, { onDelete: "restrict" }),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+  gpsAccuracy: real("gps_accuracy"),
+  riskRating: text("risk_rating").notNull(), // low | medium | high | critical
+  recommendedWorkType: text("recommended_work_type").notNull(),
+  status: text("status").notNull().default("assessed"), // assessed | quoted | scheduled | done | monitor
+  photoUrls: text("photo_urls").array().default([]),
+  species: text("species"),
+  sizeNotes: text("size_notes"),
+  accessNotes: text("access_notes"),
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  archivedAt: timestamp("archived_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  customerIdx: index("tree_pins_customer_id_idx").on(table.customerId),
+  siteIdx: index("tree_pins_site_id_idx").on(table.siteId),
+  statusIdx: index("tree_pins_status_idx").on(table.status),
+}));
+
+export const treePinWorkLinks = pgTable("tree_pin_work_links", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pinId: varchar("pin_id").notNull().references(() => treePins.id, { onDelete: "cascade" }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  quoteId: varchar("quote_id").references(() => quotes.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  pinIdx: index("tree_pin_work_links_pin_id_idx").on(table.pinId),
+  jobIdx: index("tree_pin_work_links_job_id_idx").on(table.jobId),
+  quoteIdx: index("tree_pin_work_links_quote_id_idx").on(table.quoteId),
+}));
+
+export const insertCustomerSiteSchema = createInsertSchema(customerSites).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateCustomerSiteSchema = insertCustomerSiteSchema.partial();
+export type CustomerSite = typeof customerSites.$inferSelect;
+export type InsertCustomerSite = z.infer<typeof insertCustomerSiteSchema>;
+export type UpdateCustomerSite = z.infer<typeof updateCustomerSiteSchema>;
+
+export const insertTreePinSchema = createInsertSchema(treePins).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateTreePinSchema = insertTreePinSchema.partial();
+export type TreePin = typeof treePins.$inferSelect;
+export type InsertTreePin = z.infer<typeof insertTreePinSchema>;
+export type UpdateTreePin = z.infer<typeof updateTreePinSchema>;
+
+export const insertTreePinWorkLinkSchema = createInsertSchema(treePinWorkLinks).omit({
+  id: true,
+  createdAt: true,
+});
+export type TreePinWorkLink = typeof treePinWorkLinks.$inferSelect;
+export type InsertTreePinWorkLink = z.infer<typeof insertTreePinWorkLinkSchema>;
+
+/** Field-capture body for POST /api/customers/:id/tree-pins (P0 minimum). */
+export const createTreePinRequestSchema = z.object({
+  siteId: z.string().optional(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  gpsAccuracy: z.number().positive().optional(),
+  riskRating: z.enum(["low", "medium", "high", "critical"]),
+  recommendedWorkType: z.string().trim().min(1).max(120),
+  notes: z.string().max(2000).optional(),
+  species: z.string().max(120).optional(),
+  sizeNotes: z.string().max(500).optional(),
+  accessNotes: z.string().max(500).optional(),
+});
+export type CreateTreePinRequest = z.infer<typeof createTreePinRequestSchema>;
+
 
 // ─── Mulch Drops ────────────────────────────────────────────────────────────
 export const mulchDrops = pgTable("mulch_drops", {
