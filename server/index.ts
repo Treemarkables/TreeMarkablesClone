@@ -13,6 +13,11 @@ import { requireApiAuth } from "./tenancy/requireApiAuth";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
 import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
+import {
+  createTreemarkablesDocumentBrandMiddleware,
+  requestIsTreemarkablesDocumentHost,
+  applyTreemarkablesDocumentHead,
+} from "./treemarkablesDocumentBrand";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
@@ -99,6 +104,11 @@ app.set('trust proxy', 1);
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
 });
+
+// www.treemarkables.co.nz / treemarkables.co.nz: first HTML byte is Treemarkables
+// branded (title/meta/icons/og). Does not change the React UI, does not 301 app
+// paths, and is a no-op on Inflow hosts. See server/treemarkablesDocumentBrand.ts.
+app.use(createTreemarkablesDocumentBrandMiddleware());
 
 // Legacy-domain redirect. Customer document links already sent out (invoices,
 // proposals, quotes, etc.) point at the old app host. The app now lives at
@@ -320,6 +330,23 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
     res.setHeader('Expires', '0');
 
     log(`Serving SPA fallback: ${req.originalUrl} -> index.html`, "static");
+
+    if (requestIsTreemarkablesDocumentHost(req)) {
+      try {
+        const html = fs.readFileSync(indexPath, "utf8");
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.send(applyTreemarkablesDocumentHead(html, req.path || "/"));
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log(`Error serving branded index.html: ${message}`, "error");
+        res.status(500).json({
+          error: "Failed to serve application",
+          details: message
+        });
+        return;
+      }
+    }
 
     res.sendFile(indexPath, (err) => {
       if (err) {
