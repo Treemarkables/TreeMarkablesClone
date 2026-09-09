@@ -55,8 +55,6 @@ These files are critical infrastructure or tooling-owned:
 - Database: PostgreSQL via Drizzle ORM + `@neondatabase/serverless`
 - Routing: Wouter (not React Router)
 - UI: Shadcn/ui components — always prefer existing components over custom elements
-- **www.treemarkables.co.nz** is Treemarkables-only marketing: static HTML in `treemarkables-site/` (see that folder's `DEPLOY.md`). `server/treemarkablesMarketing.ts` serves it on that host and 301s old app paths to `app.inflowapp.co.nz`. Do **not** put Treemarkables www back into `client/index.html` — that file is the Inflow PWA and overwrites www whenever the DO app deploys.
-- **app.inflowapp.co.nz** is the Inflow product. `www.inflowapp.co.nz` is the Inflow brochure (`inflow-site/`). Do not point Treemarkables www at either Inflow deploy.
 
 ---
 
@@ -71,7 +69,7 @@ These files are critical infrastructure or tooling-owned:
 | UI | No emoji in the UI |
 | Buttons | No manual `hover:bg-*` or `active:bg-*` classes — Shadcn handles this |
 | GPT calls | Do **not** pass `temperature` — GPT-5+ doesn't support it |
-| App/customer URLs | Build customer-facing app links from `APP_URL` (`server/config/appUrl.ts`) on the server, or `window.location.origin` on the client — never hardcode the host. (Exceptions: tree-care **marketing** is `treemarkables-site/` on www.treemarkables.co.nz — not the Inflow SPA — plus per-tenant document identity.) |
+| App/customer URLs | Build customer-facing app links from `APP_URL` (`server/config/appUrl.ts`) on the server, or `window.location.origin` on the client — never hardcode the host. (Exceptions that stay on treemarkables: tree-care **marketing** SEO in `client/src/pages/*` + `sitemap.xml`/`robots.txt`, and per-tenant document identity.) |
 
 ---
 
