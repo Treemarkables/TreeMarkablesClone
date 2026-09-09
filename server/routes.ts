@@ -15903,10 +15903,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const endOfDay = fromZonedTime(`${todayStr}T23:59:59`, 'Pacific/Auckland');
 
       // Get all data
-      const [leads, jobsResult, calls] = await Promise.all([
-        storage.getLeads(),
+      const [leads, jobsResult, calls, allInvoices] = await Promise.all([
+        // Pipeline leads, not the legacy lead-submission stub (returns []).
+        storage.getAllPipelineLeads(),
         storage.getAllJobs({ limit: 999999 }),
-        storage.getCallRecords()
+        storage.getCallRecords(),
+        storage.getAllInvoices()
       ]);
       const jobs = jobsResult.jobs;
 
@@ -15943,9 +15945,17 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         return callDate >= startOfDay && callDate <= endOfDay;
       });
 
-      // Calculate today's revenue from completed and invoiced jobs
-      const todayRevenue = todayJobsCompleted.reduce((sum, job) => {
-        return sum + (job.invoiceTotal || 0);
+      // Today's revenue = invoices ISSUED today, ex-GST. Anchoring on the
+      // invoice (not the job) matches how /api/revenue-stats and
+      // /api/dashboard-stats recognise revenue. The previous version summed
+      // `job.invoiceTotal`, which is not a column on jobs — it was always
+      // undefined, so this tile read $0 for every tenant.
+      const todayRevenue = allInvoices.reduce((sum, inv) => {
+        if (inv.status === 'cancelled') return sum;
+        const anchor = inv.issueDate ? new Date(inv.issueDate) :
+                       inv.createdAt ? new Date(inv.createdAt) : null;
+        if (!anchor || anchor < startOfDay || anchor > endOfDay) return sum;
+        return sum + invoiceRevenueExGst(inv);
       }, 0);
 
       res.json({
