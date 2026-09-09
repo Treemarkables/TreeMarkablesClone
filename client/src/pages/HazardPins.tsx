@@ -224,8 +224,7 @@ export default function HazardPins() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Hazard trees</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Drop a GPS pin at a tree, take photos, then take it through quote and job. This page is a
-          spike — not in the sidebar yet.
+          Drop a GPS pin at a tree, take photos, then take it through quote and job.
         </p>
       </div>
 

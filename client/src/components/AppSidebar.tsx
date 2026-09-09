@@ -19,6 +19,7 @@ import {
   DollarSign,
   TrendingUp,
   Building2,
+  TreePine,
   type LucideIcon, Receipt,
 } from "lucide-react";
 import {
@@ -108,6 +109,14 @@ function SidebarNavContent({
     staleTime: 5 * 60 * 1000,
   });
   const businessName = settingsResp?.data?.businessName ?? settingsResp?.businessName ?? "";
+
+  // Same flag as the spike page: GET /api/hazard-pins/enabled → HAZARD_TREE_PINS.
+  // Hidden while loading or when the flag is off (enabled !== true).
+  const { data: hazardPinsEnabledResp } = useQuery<{ data?: { enabled?: boolean } }>({
+    queryKey: ["/api/hazard-pins/enabled"],
+    staleTime: 5 * 60 * 1000,
+  });
+  const hazardPinsEnabled = hazardPinsEnabledResp?.data?.enabled === true;
 
   const identityPrimary = businessName || userName || userEmail;
   const identitySecondary = businessName ? userName || userEmail : userName ? userEmail : "";
@@ -358,6 +367,19 @@ function SidebarNavContent({
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </Collapsible>
+
+              {/* Hazard trees — field GPS pin register. Crew-visible (not admin-only);
+                  shown only when HAZARD_TREE_PINS is on. See HAZARD_TREE_PINS_PLAN.md. */}
+              {hazardPinsEnabled && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/hazard-pins"} className={ITEM}>
+                    <Link href="/hazard-pins" onClick={handleLinkClick} data-testid="link-hazard-pins">
+                      <NavIcon icon={TreePine} />
+                      <span>Hazard trees</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
 
               {/* Safety — collapsible group (JHA + Near Miss). Crew+ only — hidden on Freemium. */}
               <PlanGate requires="plan:crew">

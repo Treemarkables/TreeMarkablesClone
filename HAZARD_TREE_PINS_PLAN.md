@@ -203,7 +203,7 @@ NZ English: “Hazard trees”, “Risk rating”, “Recommended work”, “Na
 - Job card section **Trees on this job**: mini Leaflet (or list on small screens) + **Navigate** per pin (`treePinMapsUrl`).
 - Do not replace `JobSiteMap`; that remains the proposal overlay.
 
-Do **not** add a sidebar item until P1. `/hazard-pins` is a hidden WIP route so production nav stays clean.
+Sidebar **Hazard trees** is crew-accessible (not admin-only) and shown only when `HAZARD_TREE_PINS=true` via `/api/hazard-pins/enabled`.
 
 ---
 
@@ -217,7 +217,7 @@ Prove the model without a UI redesign.
 - Types in `shared/schema.ts` + helpers in `shared/treePins.ts`.
 - Idempotent SQL in `migrations/manual/20260909_hazard_tree_pins.sql` **and** `server/schemaMigrations.ts` (repo convention). **Not run against prod in this session.** Merging to `main` *will* create three empty tables on next deploy — wait for owner OK.
 - Storage + stub routes behind `HAZARD_TREE_PINS` (default **off**).
-- Empty/WIP page at `/hazard-pins` (no sidebar). When the flag is on, list + drop-pin form for a customer.
+- Empty/WIP page at `/hazard-pins`. Sidebar **Hazard trees** shows only when the flag is on. When the flag is on, list + drop-pin form for a customer.
 
 ### P1 — field capture
 
