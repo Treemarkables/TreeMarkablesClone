@@ -1570,7 +1570,7 @@ function Router() {
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
-      {/* WIP spike — no sidebar link. Crew-accessible field capture for hazard trees. */}
+      {/* Hazard trees — crew-accessible. Sidebar link is gated by HAZARD_TREE_PINS. */}
       <Route path="/hazard-pins">
         <AuthenticatedRoute>
           <SidebarLayout>
