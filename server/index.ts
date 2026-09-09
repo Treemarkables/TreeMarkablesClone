@@ -8,6 +8,10 @@ import http from "http";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.ts";
 import { APP_URL } from "./config/appUrl";
+import {
+  createTreemarkablesMarketingMiddleware,
+  treemarkablesContactCors,
+} from "./treemarkablesMarketing";
 import { tenantContextMiddleware } from "./tenancy/tenantMiddleware";
 import { requireApiAuth } from "./tenancy/requireApiAuth";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
@@ -99,6 +103,10 @@ app.set('trust proxy', 1);
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
 });
+
+// www.treemarkables.co.nz is Treemarkables marketing only. No-op on Inflow hosts.
+app.use(createTreemarkablesMarketingMiddleware());
+app.use(treemarkablesContactCors());
 
 // Legacy-domain redirect. Customer document links already sent out (invoices,
 // proposals, quotes, etc.) point at the old app host. The app now lives at

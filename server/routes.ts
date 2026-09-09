@@ -2683,24 +2683,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // SEO routes - serve sitemap.xml and robots.txt
   app.get('/sitemap.xml', (req: Request, res: Response) => {
+    // Marketing-host requests never reach here (treemarkablesMarketing middleware).
+    // Read into memory so a missing cwd / sendFile root cannot 500 this URL.
     try {
-      const sitemapPath = path.join(process.cwd(), 'sitemap.xml');
-      
-      if (fs.existsSync(sitemapPath)) {
-        res.set('Content-Type', 'application/xml');
-        res.sendFile(sitemapPath);
-      } else {
-        res.status(404).json({ 
-          success: false, 
-          message: 'Sitemap not found. Please generate sitemap using the included Python script.' 
-        });
+      const candidates = [
+        path.join(process.cwd(), 'treemarkables-site', 'sitemap.xml'),
+        path.join(process.cwd(), 'sitemap.xml'),
+      ];
+      for (const sitemapPath of candidates) {
+        if (fs.existsSync(sitemapPath)) {
+          res.set('Content-Type', 'application/xml; charset=utf-8');
+          res.set('Cache-Control', 'public, max-age=60');
+          return res.send(fs.readFileSync(sitemapPath, 'utf8'));
+        }
       }
+      res.status(404).type('text/plain').send('Sitemap not found');
     } catch (error) {
       console.error('Error serving sitemap:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Error serving sitemap' 
-      });
+      res.status(200).set('Content-Type', 'application/xml; charset=utf-8');
+      res.send(`<?xml version="1.0" encoding="utf-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://www.treemarkables.co.nz/</loc></url></urlset>`);
     }
   });
 
@@ -2728,22 +2729,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/robots.txt', (req: Request, res: Response) => {
     try {
-      const robotsPath = path.join(process.cwd(), 'robots.txt');
-      
-      if (fs.existsSync(robotsPath)) {
-        res.set('Content-Type', 'text/plain');
-        res.sendFile(robotsPath);
-      } else {
-        // Serve a basic robots.txt if file doesn't exist
-        res.set('Content-Type', 'text/plain');
-        res.send(`User-agent: *
-Allow: /
-
-Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
+      const candidates = [
+        path.join(process.cwd(), 'treemarkables-site', 'robots.txt'),
+        path.join(process.cwd(), 'robots.txt'),
+      ];
+      for (const robotsPath of candidates) {
+        if (fs.existsSync(robotsPath)) {
+          res.set('Content-Type', 'text/plain; charset=utf-8');
+          res.set('Cache-Control', 'public, max-age=60');
+          return res.send(fs.readFileSync(robotsPath, 'utf8'));
+        }
       }
+      res.set('Content-Type', 'text/plain; charset=utf-8');
+      res.send(`User-agent: *\nAllow: /\n\nSitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     } catch (error) {
       console.error('Error serving robots.txt:', error);
-      res.status(500).send('# Error serving robots.txt');
+      res.status(200).type('text/plain').send('User-agent: *\nAllow: /\nSitemap: https://www.treemarkables.co.nz/sitemap.xml\n');
     }
   });
   // Facebook reviews endpoint
