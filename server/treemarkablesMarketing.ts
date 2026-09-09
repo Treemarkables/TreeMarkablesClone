@@ -348,6 +348,19 @@ export function createTreemarkablesMarketingMiddleware(
       return;
     }
 
+    // Google's favicon crawler falls back to /favicon.ico when it cannot settle
+    // on a <link rel="icon">. A 404 here left it guessing, which is part of how
+    // an Inflow icon ended up beside Treemarkables results. Serve the brand mark
+    // (the PNG is fine — sendSiteFile sets image/png from the extension).
+    if (pathname === "/favicon.ico") {
+      if (sendSiteFile(res, path.join(siteDir, "favicon.ico"))) {
+        return;
+      }
+      if (sendSiteFile(res, path.join(siteDir, "treemarkables-icon-black.png"))) {
+        return;
+      }
+    }
+
     const resolved = resolveMarketingFile(siteDir, pathname);
     if (resolved !== "missing") {
       if (sendSiteFile(res, resolved.filePath, resolved.status)) {
@@ -391,6 +404,117 @@ export function treemarkablesContactCors(): RequestHandler {
     if (req.method === "OPTIONS") {
       return res.status(204).end();
     }
+    return next();
+  };
+}
+
+/* -------------------------------------------------------------------------- *
+ * Inflow app hosts — keep Treemarkables' tree-care SEO off them.
+ *
+ * `app.treemarkables.co.nz` (and `app.inflowapp.co.nz`) serve the Inflow PWA
+ * shell, which still routes the old React marketing pages. Google indexed those
+ * duplicates, so branded searches surfaced `app.treemarkables.co.nz/...` instead
+ * of the real site — and harvested the shell's Inflow manifest/apple-touch icons
+ * as the favicon shown beside the results.
+ *
+ * Two rules fix both symptoms:
+ *   1. the tree-care marketing paths 301 to www.treemarkables.co.nz, so the
+ *      duplicates consolidate onto the canonical host;
+ *   2. every other HTML response carries `X-Robots-Tag: noindex`, because this
+ *      host is a private staff app plus token-authenticated customer documents
+ *      (proposals, invoices) that must never appear in a search index.
+ *
+ * Deliberately NOT redirected: `/` (the already-shipped iOS shell loads the app
+ * root on the legacy host and its origin guard expects it), `/api/*`, and
+ * `/objects/*`. `/mulch` is left alone too — it is a live app route, and the
+ * open mulch PR reworks it.
+ * -------------------------------------------------------------------------- */
+
+/** Hosts that serve the Inflow product, never the Treemarkables website. */
+export const INFLOW_APP_HOSTS = new Set([
+  "app.treemarkables.co.nz",
+  "app.inflowapp.co.nz",
+]);
+
+/**
+ * Marketing paths still routed by the app SPA, mapped to their home on the
+ * canonical marketing host. Pages the static site does not rebuild
+ * (`/home`, `/blog`, `/summer-offer`) collapse onto `/`, matching
+ * LEGACY_MARKETING_REDIRECTS.
+ */
+export const MARKETING_SEO_REDIRECTS: Record<string, string> = {
+  "/home": "/",
+  "/tree-removal": "/tree-removal",
+  "/tree-pruning": "/tree-pruning",
+  "/stump-grinding": "/stump-grinding",
+  "/hedge-trimming": "/hedge-trimming",
+  "/gisborne-arborist": "/gisborne-arborist",
+  "/contact": "/contact",
+  "/privacy-policy": "/privacy-policy",
+  "/blog": "/",
+  "/summer-offer": "/",
+};
+
+/**
+ * Crawling stays open (only the API and media are closed) so Googlebot can
+ * actually reach the 301s and the noindex header — a blanket `Disallow: /`
+ * would freeze the stale app-host URLs in the index instead of clearing them.
+ */
+const INFLOW_APP_ROBOTS = `# Inflow app host — the product, not a website.
+# The Treemarkables website is ${TREEMARKABLES_CANONICAL_ORIGIN}.
+# Every HTML response here is served with "X-Robots-Tag: noindex", and the
+# tree-care marketing paths 301 to the canonical host. Crawling is left open on
+# purpose so both signals can be seen.
+User-agent: *
+Disallow: /api/
+Disallow: /objects/
+`;
+
+export function isInflowAppHost(hostHeader: string | undefined): boolean {
+  return INFLOW_APP_HOSTS.has(normalizeHostname(hostHeader));
+}
+
+/** Marketing path -> canonical-host path, or null when the path is app-owned. */
+export function resolveMarketingSeoRedirect(pathname: string): string | null {
+  const direct = MARKETING_SEO_REDIRECTS[pathname];
+  if (direct) return direct;
+  if (pathname.startsWith("/blog/")) return "/";
+  return null;
+}
+
+export function createInflowAppSeoMiddleware(): RequestHandler {
+  return function inflowAppSeo(req, res, next) {
+    if (!isInflowAppHost(requestHost(req))) {
+      return next();
+    }
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      return next();
+    }
+
+    const pathname = req.path || "/";
+    if (
+      pathname === "/health" ||
+      pathname.startsWith("/api") ||
+      pathname.startsWith("/objects")
+    ) {
+      return next();
+    }
+
+    const target = resolveMarketingSeoRedirect(pathname);
+    if (target) {
+      return res.redirect(301, `${TREEMARKABLES_CANONICAL_ORIGIN}${target}`);
+    }
+
+    if (pathname === "/sitemap.xml") {
+      return res.redirect(301, `${TREEMARKABLES_CANONICAL_ORIGIN}/sitemap.xml`);
+    }
+
+    if (pathname === "/robots.txt") {
+      sendBuffer(res, 200, "text/plain; charset=utf-8", INFLOW_APP_ROBOTS, "public, max-age=300");
+      return;
+    }
+
+    res.setHeader("X-Robots-Tag", "noindex");
     return next();
   };
 }

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import path from "path";
 import { fileURLToPath } from "url";
 import {
+  createInflowAppSeoMiddleware,
   createTreemarkablesMarketingMiddleware,
+  isInflowAppHost,
   isInflowAppPath,
   isTreemarkablesMarketingHost,
   resolveInflowAppOrigin,
@@ -201,6 +203,144 @@ describe("treemarkables marketing host router", () => {
     assert.notEqual(resolved, "missing");
     if (resolved !== "missing") {
       assert.match(resolved.filePath, /contact\/index\.html$/);
+    }
+  });
+
+  it("serves a Treemarkables favicon.ico instead of 404ing", async () => {
+    const result = await run("GET", "/favicon.ico", "www.treemarkables.co.nz");
+    assert.equal(result.status, 200);
+    assert.match(result.headers["content-type"], /image\/(x-icon|png)/);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+function runAppHost(
+  method: string,
+  urlPath: string,
+  host: string,
+): Promise<{ next: boolean; status: number; headers: Record<string, string>; body: string }> {
+  const mw = createInflowAppSeoMiddleware();
+
+  return new Promise((resolve) => {
+    const headers: Record<string, string> = {};
+    const req = {
+      method,
+      path: urlPath.split("?")[0],
+      originalUrl: urlPath,
+      hostname: host,
+      headers: { host },
+    };
+    const res = {
+      statusCode: 200,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      set(name: string, value: string) {
+        headers[name.toLowerCase()] = value;
+        return this;
+      },
+      setHeader(name: string, value: string) {
+        headers[name.toLowerCase()] = value;
+      },
+      type() {
+        return this;
+      },
+      redirect(code: number, location: string) {
+        this.statusCode = code;
+        headers.location = location;
+        resolve({ next: false, status: code, headers, body: "" });
+      },
+      send(body: string | Buffer) {
+        resolve({ next: false, status: this.statusCode, headers, body: body.toString() });
+      },
+      end() {
+        resolve({ next: false, status: this.statusCode, headers, body: "" });
+      },
+    };
+    mw(req as never, res as never, () =>
+      resolve({ next: true, status: res.statusCode, headers, body: "" }),
+    );
+  });
+}
+
+describe("inflow app host SEO", () => {
+  it("recognises only the app hosts", () => {
+    assert.equal(isInflowAppHost("app.treemarkables.co.nz"), true);
+    assert.equal(isInflowAppHost("APP.INFLOWAPP.CO.NZ"), true);
+    assert.equal(isInflowAppHost("app.treemarkables.co.nz:5000"), true);
+    assert.equal(isInflowAppHost("www.treemarkables.co.nz"), false);
+    assert.equal(isInflowAppHost("www.inflowapp.co.nz"), false);
+  });
+
+  it("301s marketing pages onto the canonical marketing host", async () => {
+    for (const slug of [
+      "/tree-removal",
+      "/tree-pruning",
+      "/stump-grinding",
+      "/hedge-trimming",
+      "/gisborne-arborist",
+      "/contact",
+      "/privacy-policy",
+    ]) {
+      const result = await runAppHost("GET", slug, "app.treemarkables.co.nz");
+      assert.equal(result.status, 301, slug);
+      assert.equal(result.headers.location, `${TREEMARKABLES_CANONICAL_ORIGIN}${slug}`, slug);
+    }
+  });
+
+  it("collapses pages the static site does not rebuild onto the home page", async () => {
+    for (const slug of ["/home", "/blog", "/blog/pruning-guide", "/summer-offer"]) {
+      const result = await runAppHost("GET", slug, "app.inflowapp.co.nz");
+      assert.equal(result.status, 301, slug);
+      assert.equal(result.headers.location, `${TREEMARKABLES_CANONICAL_ORIGIN}/`, slug);
+    }
+  });
+
+  it("never redirects the app root, so the shipped iOS shell keeps loading", async () => {
+    const result = await runAppHost("GET", "/", "app.treemarkables.co.nz");
+    assert.equal(result.next, true);
+    assert.equal(result.headers["x-robots-tag"], "noindex");
+  });
+
+  it("noindexes app and customer-document pages", async () => {
+    for (const slug of ["/login", "/dispatch", "/proposal/abc/accept", "/invoice/123", "/mulch"]) {
+      const result = await runAppHost("GET", slug, "app.treemarkables.co.nz");
+      assert.equal(result.next, true, slug);
+      assert.equal(result.headers["x-robots-tag"], "noindex", slug);
+    }
+  });
+
+  it("leaves the API, media and health untouched", async () => {
+    for (const slug of ["/api/contact", "/objects/photo.jpg", "/health"]) {
+      const result = await runAppHost("GET", slug, "app.treemarkables.co.nz");
+      assert.equal(result.next, true, slug);
+      assert.equal(result.headers["x-robots-tag"], undefined, slug);
+    }
+    assert.equal((await runAppHost("POST", "/tree-removal", "app.treemarkables.co.nz")).next, true);
+  });
+
+  it("serves an app-host robots.txt that keeps crawling open", async () => {
+    const result = await runAppHost("GET", "/robots.txt", "app.treemarkables.co.nz");
+    assert.equal(result.status, 200);
+    assert.doesNotMatch(result.body, /^Disallow: \/$/m);
+    assert.match(result.body, /Disallow: \/api\//);
+    assert.doesNotMatch(result.body, /^Sitemap:/m);
+    assert.doesNotMatch(result.body, /Allow: \/tree-removal/);
+  });
+
+  it("points the app-host sitemap at the marketing host", async () => {
+    const result = await runAppHost("GET", "/sitemap.xml", "app.treemarkables.co.nz");
+    assert.equal(result.status, 301);
+    assert.equal(result.headers.location, `${TREEMARKABLES_CANONICAL_ORIGIN}/sitemap.xml`);
+  });
+
+  it("is a no-op on every other host", async () => {
+    for (const host of ["www.treemarkables.co.nz", "www.inflowapp.co.nz", "localhost"]) {
+      const result = await runAppHost("GET", "/tree-removal", host);
+      assert.equal(result.next, true, host);
+      assert.equal(result.headers["x-robots-tag"], undefined, host);
     }
   });
 });

@@ -9,6 +9,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.ts";
 import { APP_URL } from "./config/appUrl";
 import {
+  createInflowAppSeoMiddleware,
   createTreemarkablesMarketingMiddleware,
   treemarkablesContactCors,
 } from "./treemarkablesMarketing";
@@ -106,6 +107,11 @@ app.get('/health', (_req, res) => {
 
 // www.treemarkables.co.nz is Treemarkables marketing only. No-op on Inflow hosts.
 app.use(createTreemarkablesMarketingMiddleware());
+// Runs on the Inflow app hosts only: 301s the stale tree-care marketing paths to
+// www.treemarkables.co.nz and marks every other page noindex. Sits before the
+// legacy-host redirect below so marketing URLs land on the website rather than
+// following customer-document links to APP_URL.
+app.use(createInflowAppSeoMiddleware());
 app.use(treemarkablesContactCors());
 
 // Legacy-domain redirect. Customer document links already sent out (invoices,

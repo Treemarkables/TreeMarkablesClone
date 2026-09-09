@@ -521,8 +521,10 @@ function render(page) {
   <meta name="geo.position" content="-38.6623;178.0176">
   <meta name="ICBM" content="-38.6623, 178.0176">
   <link rel="canonical" href="${canonical}">
-  <link rel="icon" type="image/png" href="/treemarkables-icon-black.png">
-  <link rel="apple-touch-icon" href="/treemarkables-logo-green-180.png">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="512x512" href="/treemarkables-icon-black.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/treemarkables-logo-green-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/treemarkables-logo-green-180.png">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Treemarkables">
   <meta property="og:title" content="${escapeHtml(page.title)}">
