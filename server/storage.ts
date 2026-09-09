@@ -1065,6 +1065,16 @@ export interface IStorage {
   getJobSiteMapImage(jobId: string): Promise<schema.JobSiteMapImage | null>;
   upsertJobSiteMapImage(jobId: string, imageUrl: string, businessId?: string | null): Promise<schema.JobSiteMapImage>;
 
+  // Hazard-tree pin register (site-persistent; distinct from tree_markers)
+  getCustomerSites(customerId: string): Promise<schema.CustomerSite[]>;
+  createCustomerSite(site: schema.InsertCustomerSite): Promise<schema.CustomerSite>;
+  ensureDefaultCustomerSite(customerId: string): Promise<schema.CustomerSite>;
+  getTreePinsByCustomer(customerId: string): Promise<schema.TreePin[]>;
+  getTreePin(id: string): Promise<schema.TreePin | null>;
+  createTreePin(pin: schema.InsertTreePin): Promise<schema.TreePin>;
+  getTreePinsByJob(jobId: string): Promise<schema.TreePin[]>;
+
+
   // Live job timers (clock in/out)
   getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null>;
   getActiveTimersForJob(jobId: string): Promise<schema.ActiveTimer[]>;
@@ -7770,6 +7780,67 @@ class DatabaseStorage implements IStorage {
       })
       .returning();
     return row;
+  }
+
+  // ─── Hazard-tree pin register (site-persistent) ───────────────────────────
+  async getCustomerSites(customerId: string): Promise<schema.CustomerSite[]> {
+    return await db.select()
+      .from(schema.customerSites)
+      .where(eq(schema.customerSites.customerId, customerId))
+      .orderBy(schema.customerSites.createdAt);
+  }
+
+  async createCustomerSite(site: schema.InsertCustomerSite): Promise<schema.CustomerSite> {
+    const [result] = await db.insert(schema.customerSites).values(withTenant(site)).returning();
+    return result;
+  }
+
+  async ensureDefaultCustomerSite(customerId: string): Promise<schema.CustomerSite> {
+    const existing = await this.getCustomerSites(customerId);
+    if (existing[0]) return existing[0];
+    const customer = await this.getCustomer(customerId);
+    return this.createCustomerSite({
+      customerId,
+      name: customer?.name || "Site",
+      address: customer?.address || null,
+    });
+  }
+
+  async getTreePinsByCustomer(customerId: string): Promise<schema.TreePin[]> {
+    return await db.select()
+      .from(schema.treePins)
+      .where(and(
+        eq(schema.treePins.customerId, customerId),
+        isNull(schema.treePins.archivedAt),
+      ))
+      .orderBy(desc(schema.treePins.createdAt));
+  }
+
+  async getTreePin(id: string): Promise<schema.TreePin | null> {
+    const [result] = await db.select()
+      .from(schema.treePins)
+      .where(eq(schema.treePins.id, id));
+    return result || null;
+  }
+
+  async createTreePin(pin: schema.InsertTreePin): Promise<schema.TreePin> {
+    const [result] = await db.insert(schema.treePins).values(withTenant(pin)).returning();
+    return result;
+  }
+
+  async getTreePinsByJob(jobId: string): Promise<schema.TreePin[]> {
+    const links = await db.select()
+      .from(schema.treePinWorkLinks)
+      .where(eq(schema.treePinWorkLinks.jobId, jobId));
+    if (links.length === 0) return [];
+    const pinIds = links.map((l) => l.pinId);
+    return await db.select()
+      .from(schema.treePins)
+      .where(and(
+        inArray(schema.treePins.id, pinIds),
+        isNull(schema.treePins.archivedAt),
+      ))
+      .orderBy(schema.treePins.createdAt);
   }
 
   // ─── Live job timers (clock in/out) ───────────────────────────────────────

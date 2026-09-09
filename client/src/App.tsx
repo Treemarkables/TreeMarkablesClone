@@ -91,6 +91,7 @@ const Dispatch = lazy(() => import("@/pages/Dispatch"));
 const WorkflowAutomation = lazy(() => import("@/components/WorkflowAutomation").then((m) => ({ default: m.WorkflowAutomation })));
 const History = lazy(() => import("@/pages/History"));
 const Clients = lazy(() => import("@/pages/Clients"));
+const HazardPins = lazy(() => import("@/pages/HazardPins"));
 const MaterialsServices = lazy(() => import("@/pages/MaterialsServices"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const StaffManagement = lazy(() => import("@/pages/StaffManagement"));
@@ -1568,6 +1569,14 @@ function Router() {
             <Clients />
           </SidebarLayout>
         </ProtectedRoute>
+      </Route>
+      {/* WIP spike — no sidebar link. Crew-accessible field capture for hazard trees. */}
+      <Route path="/hazard-pins">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <HazardPins />
+          </SidebarLayout>
+        </AuthenticatedRoute>
       </Route>
       <Route path="/materials-services">
         <ProtectedRoute>
