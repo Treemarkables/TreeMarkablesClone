@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Camera, Loader2, MapPin, X } from "lucide-react";
+import { Camera, Check, ChevronsUpDown, Loader2, MapPin, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -18,10 +18,20 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { compressImages } from "@/lib/imageCompression";
+import { cn } from "@/lib/utils";
 import type { Customer, TreePin } from "@shared/schema";
 import type { TreePinRiskRating } from "@shared/treePins";
 import { TREE_PIN_MAX_PHOTOS } from "@shared/treePins";
@@ -73,6 +83,133 @@ async function uploadPinPhotos(pinId: string, files: File[]): Promise<void> {
   }
 }
 
+/**
+ * Search-as-you-type customer picker for field use.
+ * Reuses GET /api/customers?search= (same as job-card deep search in GlobalJobCard)
+ * and the Popover + Command combobox used on job create and SupplierInvoices JobCombobox.
+ * Does not dump the full customer list into a Select.
+ */
+function CustomerCombobox({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (customerId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [selectedName, setSelectedName] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q.trim()), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const { data, isFetching, isError } = useQuery<ApiList<Customer>>({
+    queryKey: ["/api/customers", "search", debounced],
+    queryFn: async () => {
+      const r = await fetch(
+        `/api/customers?search=${encodeURIComponent(debounced)}`,
+        { credentials: "include" },
+      );
+      if (!r.ok) throw new Error("Search failed");
+      return r.json();
+    },
+    enabled: open && debounced.length >= 2,
+    staleTime: 30_000,
+  });
+
+  const hits = debounced.length >= 2 ? (data?.data ?? []).slice(0, 20) : [];
+  const label = value && selectedName ? selectedName : "Search for a customer…";
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQ("");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          aria-label="Customer"
+          className="w-full min-h-11 justify-between font-normal"
+        >
+          <span className="truncate">{label}</span>
+          <ChevronsUpDown className="h-4 w-4 ml-2 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="p-0 w-[min(92vw,420px)]"
+        align="start"
+        onWheel={(e) => e.stopPropagation()}
+      >
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Type a customer name…"
+            value={q}
+            onValueChange={setQ}
+          />
+          <CommandList>
+            {debounced.length < 2 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                Type at least 2 letters to search
+              </div>
+            ) : isFetching && hits.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+              </div>
+            ) : isError ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                Could not search customers
+              </div>
+            ) : (
+              <>
+                <CommandEmpty>No customers match.</CommandEmpty>
+                <CommandGroup>
+                  {hits.map((c) => (
+                    <CommandItem
+                      key={c.id}
+                      value={c.id}
+                      onSelect={() => {
+                        onChange(c.id);
+                        setSelectedName(c.name);
+                        setOpen(false);
+                        setQ("");
+                      }}
+                      className="py-3"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4 shrink-0",
+                          c.id === value ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      <div className="flex min-w-0 flex-col">
+                        <span className="font-medium truncate">{c.name}</span>
+                        {c.address ? (
+                          <span className="text-xs text-muted-foreground truncate">
+                            {c.address}
+                          </span>
+                        ) : null}
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function HazardPins() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -98,11 +235,6 @@ export default function HazardPins() {
   const enabled = enabledResp?.data?.enabled === true;
   const riskRatings = enabledResp?.data?.riskRatings ?? ["low", "medium", "high", "critical"];
   const workTypes = enabledResp?.data?.workTypes ?? [];
-
-  const { data: customersResp } = useQuery<ApiList<Customer>>({
-    queryKey: ["/api/customers"],
-  });
-  const customers = customersResp?.data ?? [];
 
   const { data: pinsResp, isFetching: pinsLoading, isError: pinsError } = useQuery<ApiList<TreePin>>({
     queryKey: ["/api/customers", customerId, "tree-pins"],
@@ -252,18 +384,7 @@ export default function HazardPins() {
           <CardTitle className="text-base">Customer</CardTitle>
         </CardHeader>
         <CardContent>
-          <Select value={customerId} onValueChange={setCustomerId}>
-            <SelectTrigger aria-label="Customer">
-              <SelectValue placeholder="Select a customer" />
-            </SelectTrigger>
-            <SelectContent>
-              {customers.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CustomerCombobox value={customerId} onChange={setCustomerId} />
         </CardContent>
       </Card>
 
