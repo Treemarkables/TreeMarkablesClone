@@ -3031,7 +3031,9 @@ class DatabaseStorage implements IStorage {
     const [allJobs, allCustomers, allLeads, allQuotes, allProposals, allInvoices] = await Promise.all([
       this.getJobsForAnalytics({ fromDate, toDate }),
       this.getAllCustomers(),
-      this.getLeads(),
+      // Pipeline leads, not the legacy lead-submission stub (which returns []
+      // and silently zeroed Total Leads + Conversion Rate for every tenant).
+      this.getAllPipelineLeads(),
       this.getAllQuotes(),
       this.getAllProposals(),
       this.getAllInvoices(),

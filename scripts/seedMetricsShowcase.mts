@@ -344,7 +344,9 @@ try {
   for (const [i, done] of completedOffsets.entries()) {
     specs.push({
       kind: "completed",
-      quoteCreatedDaysAgo: done + intBetween(7, 28),
+      // The newest job is a quick turnaround quoted this week, so the weekly
+      // Quote Win Rate / Presentation Conversion cards have a win in-window.
+      quoteCreatedDaysAgo: done === 0 ? intBetween(1, 3) : done + intBetween(7, 28),
       scheduleOffsetDays: -done,
       invoiceStatus:
         done === 0 ? "pending"
@@ -358,7 +360,7 @@ try {
   for (let i = 0; i < 8; i++) {
     specs.push({
       kind: "work_order",
-      quoteCreatedDaysAgo: intBetween(4, 30),
+      quoteCreatedDaysAgo: i < 3 ? intBetween(0, 2) : intBetween(4, 30),
       scheduleOffsetDays: i < 2 ? 0 : workingDay(intBetween(1, 21)),
     });
   }
@@ -589,7 +591,10 @@ try {
     if (spec.kind !== "lead") {
       const accepted = isBooked;
       const rejected = spec.kind === "unsuccessful";
-      const responseDate = accepted || rejected ? new Date(sentDate.getTime() + intBetween(1, 5) * DAY) : null;
+      // Clamp to now: a proposal accepted/rejected in the future would be
+      // nonsense, and quotes sent in the last day or two now resolve quickly.
+      const rawResponse = accepted || rejected ? new Date(sentDate.getTime() + intBetween(1, 5) * DAY) : null;
+      const responseDate = rawResponse && rawResponse > now ? now : rawResponse;
       await c.query(
         `INSERT INTO proposals (
            business_id, job_id, customer_id, proposal_number, title, status, delivery_method,
@@ -631,7 +636,12 @@ try {
           new Date(cappedIssue.getTime() + 14 * DAY),
           money(subtotal),
           paid ? "paid" : "pending",
-          JSON.stringify([{ description: t.title, quantity: 1, rate: subtotal, amount: subtotal }]),
+          // unitCost feeds the Service Performance card's cost/margin columns
+          // (it multiplies unitCost x quantity); without it every service
+          // reports a 100% margin.
+          JSON.stringify([
+            { description: t.title, quantity: 1, rate: subtotal, amount: subtotal, unitCost: Number(money(totalCosts)) },
+          ]),
           INVOICE_TAG,
           paid ? new Date(Math.min(now.getTime(), cappedIssue.getTime() + intBetween(2, 18) * DAY)) : null,
         ],
