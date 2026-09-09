@@ -27,6 +27,7 @@ import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { SpeechToQuote } from "@/components/SpeechToQuote";
 import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAutocomplete";
 import { JobSiteMapSection } from "@/components/JobSiteMapSection";
+import { JobHazardTreesSection } from "@/components/JobHazardTreesSection";
 import { AiPolishDescription } from "@/components/AiPolishDescription";
 import { JobTimerControl } from "@/components/JobTimerControl";
 
@@ -735,6 +736,9 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       <div className="bg-card border border-border rounded-2xl p-2">
         <JobSiteMapSection jobId={jobId} address={job?.address ?? undefined} />
       </div>
+
+      {/* ── Hazard trees (site-persistent GPS pins; not tree_markers) ── */}
+      <JobHazardTreesSection jobId={jobId} customerId={customerId} />
 
       {/* ── Job Description ── */}
       <div className="bg-card border border-border rounded-2xl p-4">
