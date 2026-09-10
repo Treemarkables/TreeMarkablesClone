@@ -1,7 +1,7 @@
 /**
  * Shared hazard-tree drop-pin form + pin list.
- * Used by /hazard-pins and the job-card Hazard trees section.
- * Same APIs: POST /api/customers/:id/tree-pins + POST /api/hazard-pins/:id/photos.
+ * Used by /hazard-pins. Same APIs: POST /api/customers/:id/tree-pins +
+ * POST /api/hazard-pins/:id/photos.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
