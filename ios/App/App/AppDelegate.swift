@@ -84,6 +84,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     /// against Capacitor's CAPNotificationRouter re-stealing the delegate after a
     /// late WebView bridge load. Logs only when it actually had to reclaim, so a
     /// swallowed-tap regression is visible in the device console.
+    /// Belt-and-braces only: capacitor.config.ts now sets
+    /// `ios.handleApplicationNotifications: false`, which stops the router taking
+    /// the delegate in the first place, so this should never have to fire.
     private func reclaimNotificationDelegate() {
         let center = UNUserNotificationCenter.current()
         if !(center.delegate is NotificationHandler) {
