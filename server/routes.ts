@@ -17,6 +17,7 @@ declare module 'express-session' {
 }
 import { storage, invoiceRevenueExGst } from "./storage";
 import { APP_URL } from "./config/appUrl";
+import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
@@ -24,12 +25,14 @@ import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
 import { resolveEntitlements } from "./tenancy/entitlements";
+import { testServiceM8Connection, startServiceM8Import, getServiceM8ImportStatus } from "./services/servicem8Import";
 import { jwksHandler } from "./tenancy/jwksHandler";
+import { cacheDeletePrefix } from "./perfCache";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db, ownerDb } from "./db";
 import { eq, desc, sql, inArray, and, gte, lt, lte, ne } from "drizzle-orm";
-import { invoices, invoiceLineItems, customers, jobs, documentTemplates } from "@shared/schema";
+import { invoices, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
   insertCustomerSchema, insertCustomerContactSchema, updateCustomerContactSchema,
@@ -49,7 +52,7 @@ import {
   insertCommunicationSchema, updateCommunicationSchema,
   insertConversationSchema, updateConversationSchema,
   insertConversationMessageSchema, updateConversationMessageSchema,
-  insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, videoSearchSchema, gpsLocationSchema,
+  photoSearchSchema, videoSearchSchema, gpsLocationSchema,
   insertInvoiceSchema, insertInvoiceSectionSchema, updateInvoiceSectionSchema,
   insertServiceRequestSchema, insertCustomerAuthSchema,
   insertCommunicationPreferencesSchema,
@@ -65,8 +68,11 @@ import {
   // Document Template Management
   insertDocumentTemplateSchema,
   // Review Management
-  insertReviewRequestSchema, insertReviewSubmissionSchema
+  insertReviewRequestSchema, insertReviewSubmissionSchema,
+  createTreePinRequestSchema, insertCustomerSiteSchema,
 } from "@shared/schema";
+import { HAZARD_TREE_PINS_ENABLED, requireHazardTreePins } from "./hazardPins";
+import { TREE_PIN_RISK_RATINGS, TREE_PIN_WORK_TYPES, TREE_PIN_MAX_PHOTOS } from "@shared/treePins";
 import multer from "multer";
 import Papa from "papaparse";
 import twilio from "twilio";
@@ -98,6 +104,7 @@ import {
 } from "./stripe";
 import * as billing from "./billing";
 import * as usageMeter from "./services/usageMeter";
+import * as supplierIngest from "./services/supplierInvoiceIngest";
 import { createTenant } from "./onboarding";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import {
@@ -142,7 +149,7 @@ if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic as unknown as string);
 }
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
-import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString } from "@shared/dateUtils";
+import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString, nzTimeToUTC } from "@shared/dateUtils";
 import { composeCustomerAddress } from "@shared/customerAddress";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
@@ -231,12 +238,26 @@ const videoUpload = multer({
   }
 });
 
-// Near miss attachment upload — disk storage so files survive server restarts
+// Near miss attachment upload — disk storage so files survive server restarts.
+// The destination folds req.params.id into the path BEFORE the route handler
+// runs, so it must not trust it: a crafted id like `..%2f..%2fdist%2fpublic`
+// would write attacker files outside uploads/ (e.g. into the web root). Report
+// ids are UUIDs — anything else is rejected here, and the resolved directory is
+// asserted to stay under uploads/near-miss as a backstop.
+const NEAR_MISS_UPLOAD_ROOT = path.resolve('uploads', 'near-miss');
 const nearMissUpload = multer({
   storage: multer.diskStorage({
     destination: (req, _file, cb) => {
-      const reportId = (req.params as Record<string, string>).id || 'unknown';
-      const dir = path.join('uploads', 'near-miss', reportId);
+      const reportId = (req.params as Record<string, string>).id || '';
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reportId)) {
+        cb(new Error('Invalid report id'), '');
+        return;
+      }
+      const dir = path.resolve(NEAR_MISS_UPLOAD_ROOT, reportId);
+      if (dir !== path.join(NEAR_MISS_UPLOAD_ROOT, reportId) || !dir.startsWith(NEAR_MISS_UPLOAD_ROOT + path.sep)) {
+        cb(new Error('Invalid upload path'), '');
+        return;
+      }
       fs.mkdirSync(dir, { recursive: true });
       cb(null, dir);
     },
@@ -965,6 +986,27 @@ async function requirePlatformAdmin(req: Request, res: Response, next: express.N
   }
 }
 
+// Session gate for reads any logged-in staff member legitimately needs (employee
+// lists feed dispatch, timers and scheduling UIs for every tier, so a
+// staff.view permission check would break crew features) — but they must never
+// be anonymous: within a tenant RLS doesn't separate staff from the public.
+function requireSession(req: Request, res: Response, next: express.NextFunction): void {
+  if (!req.session.employeeId) {
+    res.status(401).json({ success: false, message: 'Authentication required' });
+    return;
+  }
+  next();
+}
+
+// Employees carry their bcrypt hash in the `password` column; it must never
+// leave the server (offline crack of an admin hash = tenant takeover). Every
+// employee row sent to a client goes through this. (/api/auth/me already
+// whitelists its fields separately.)
+function sanitizeEmployee<T extends Record<string, any>>(employee: T): Omit<T, 'password'> {
+  const { password: _password, ...safe } = employee;
+  return safe;
+}
+
 // Staff-write gate (capabilities.ts: staff.manage = Crew) with a self-exemption:
 // a freemium solo owner can always edit their OWN record (e.g. fix their name);
 // adding or editing OTHER staff requires Crew. Routes with no :id (creating a new
@@ -1031,6 +1073,13 @@ async function buildOnboardingChecklist(businessId: string) {
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.tenantChannels)
     .where(and(eq(schema.tenantChannels.businessId, businessId), eq(schema.tenantChannels.isActive, true)));
+  const [{ count: importedCustomerCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.customers)
+    .where(and(
+      eq(schema.customers.businessId, businessId),
+      sql`${schema.customers.importSource} IS NOT NULL AND ${schema.customers.importSource} <> 'manual'`,
+    ));
 
   const has = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
 
@@ -1042,6 +1091,7 @@ async function buildOnboardingChecklist(businessId: string) {
     { key: 'address', label: 'Business address', description: 'Shown on your documents.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyAddress) },
     { key: 'bank', label: 'Bank details', description: "So customers can pay your invoices — without it, no payment block shows.", path: '/settings/company', optional: false, done: has(settings?.bankAccountName) && has(settings?.bankAccountNumber) },
     { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: (channelCount ?? 0) > 0 },
+    { key: 'importData', label: 'Import your data', description: 'Bring your customers and jobs across from ServiceM8 or a CSV export.', path: '/settings/import', optional: true, done: (importedCustomerCount ?? 0) > 0 },
     { key: 'gst', label: 'GST number', description: 'Shown on tax invoices (only if GST-registered).', path: '/settings/company', optional: true, done: has(settings?.businessGstNumber) },
     { key: 'tradeVocabulary', label: 'Trade vocabulary', description: 'Improves voice-to-quote and AI accuracy for your trade.', path: '/settings/company', optional: true, done: has(settings?.tradeVocabulary) },
     { key: 'replyForward', label: 'Forward customer replies', description: 'Optionally copy job replies to your own inbox.', path: '/settings/company', optional: true, done: has(settings?.jobReplyForwardEmail) },
@@ -1114,6 +1164,49 @@ async function requireApiKey(req: Request, res: Response, next: express.NextFunc
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// WinAnsi text sanitizing for PDFKit's built-in fonts (Helvetica etc.).
+// Those fonts write text into the content stream as UNPADDED hex byte strings:
+// a TAB (0x09 → "9") is a single hex digit, which nibble-shifts every byte
+// after it and renders the rest of the line as mojibake ("%Ï6V7Föæ…" — seen
+// on proposals with bullet lists pasted from Notes/Word, whose lines are
+// "●<TAB>text"). Non-WinAnsi chars (●, ✔, macron vowels in Māori place names)
+// also come out as junk glyphs. Every string is routed through here via
+// installPdfTextSanitizer below.
+// ---------------------------------------------------------------------------
+const WINANSI_EXTRA_CHARS = new Set(
+  '€‚ƒ„…†‡ˆ‰Š‹ŒŽ' +
+  '‘’“”•–—˜™š›œžŸ'
+);
+function toPdfSafeText(input: unknown): string {
+  const text = input == null ? '' : String(input);
+  if (!text) return '';
+  // Common non-WinAnsi bullet/checkbox glyphs → the WinAnsi bullet (U+2022)
+  const pre = text.replace(
+    /[●○▪■◦‣⁃∙・✓✔✅☑☒]/g,
+    '•'
+  );
+  let out = '';
+  for (const ch of pre) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (ch === '\n' || ch === '\r') { out += ch; continue; }
+    if (code < 0x20) { out += '  '; continue; } // tabs + stray control chars
+    if (code <= 0xff || WINANSI_EXTRA_CHARS.has(ch)) { out += ch; continue; }
+    // Accented letters outside Latin-1 (ā, Ō, …) keep the base letter;
+    // anything still unmappable (emoji, dingbats) is dropped.
+    const base = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (base && (base.codePointAt(0) ?? 0x100) <= 0xff) out += base;
+  }
+  return out;
+}
+// Wraps doc.text once per document so every draw call in a generator is
+// sanitized — routes.ts has ~100 call sites across 4 PDF generators, so the
+// choke point beats decorating each one.
+function installPdfTextSanitizer(doc: { text: (...args: unknown[]) => unknown }): void {
+  const rawText = doc.text.bind(doc);
+  doc.text = (text: unknown, ...rest: unknown[]) => rawText(toPdfSafeText(text), ...rest);
+}
+
 // Shared proposal/quote PDF generation helper — used by the GET /pdf route
 // and the send-quote-email handler. When proposal.templateUsed === 'quote',
 // the rendered document uses "QUOTE" header and email-reply acceptance copy.
@@ -1181,8 +1274,24 @@ async function generateProposalPDFBuffer(
     }
   }
 
+  // Optional items — the per-item isOptional flag, or any item in an
+  // 'optional'/'multipleChoice' section — are customer-selectable extras.
+  // Before acceptance nothing has been chosen, so they're listed (marked
+  // "optional") but excluded from the totals, matching the online proposal
+  // page. After acceptance each item's `selected` flag holds the customer's
+  // actual picks (stamped by the accept endpoint).
+  const pdfInteractiveSectionIds = new Set(
+    sections
+      .filter((s: any) => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+      .map((s: any) => s.id),
+  );
+  const pdfIsAccepted = proposal.status === 'accepted' || proposal.status === 'accepted_pending_deposit';
+  const pdfItemIsOptional = (item: any) =>
+    item.isOptional === true || pdfInteractiveSectionIds.has(item.sectionId || '');
+
   let subtotal = 0;
   for (const item of lineItems) {
+    if (!pdfIsAccepted && pdfItemIsOptional(item)) continue;
     if (item.selected !== false) {
       subtotal += parseFloat(item.totalPrice || '0');
     }
@@ -1211,6 +1320,7 @@ async function generateProposalPDFBuffer(
   const __pdfLogo = await getCompanyLogoBytes(proposal.businessId);
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDoc({ size: 'A4', margin: 50 });
+    installPdfTextSanitizer(doc);
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(Buffer.from(c)));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -1263,7 +1373,12 @@ async function generateProposalPDFBuffer(
     // Section photos (proposal_sections.images, pre-fetched above) render as a
     // two-up grid under the section's text, mirroring the online viewer.
     for (const section of sections) {
-      const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+      // Pre-acceptance, optional items are always listed (marked below) even
+      // though they don't count toward the totals; post-acceptance only the
+      // customer's actual picks survive the selected filter.
+      const items = (sectionLineItems.get(section.id) || []).filter((i: any) =>
+        !pdfIsAccepted && pdfItemIsOptional(i) ? true : i.selected !== false,
+      );
       const sectionContent = (section.content || '').trim();
       const sectionImages: Buffer[] = (Array.isArray((section as any).images) ? (section as any).images : [])
         .map((u: string) => sectionPhotoBuffers.get(u))
@@ -1317,8 +1432,9 @@ async function generateProposalPDFBuffer(
         for (const item of items) {
           const itemTotal = parseFloat(item.totalPrice || '0');
           const rowY = doc.y;
+          const optionalMark = !pdfIsAccepted && pdfItemIsOptional(item) ? ' (optional - select online)' : '';
           doc.fontSize(9).font('Helvetica').fillColor('#111827')
-            .text(item.description || '', col.desc, rowY, { width: 300 });
+            .text(`${item.description || ''}${optionalMark}`, col.desc, rowY, { width: 300 });
           const rowH = doc.y - rowY;
           doc.text(`${item.quantity || 1}`, col.qty, rowY, { width: 40, align: 'right' });
           doc.text(item.unit || '', col.unit, rowY, { width: 40, align: 'right' });
@@ -1388,7 +1504,7 @@ async function generateProposalPDFBuffer(
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text('Acceptance', { width: pageW });
     doc.moveDown(0.4);
     if (isQuote) {
-      const acceptUrl = `${APP_URL}/proposal/${proposalId}/accept?type=quote`;
+      const acceptUrl = proposalAcceptLink(proposalId, { base: APP_URL, quote: true });
       doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
         .text('To accept this quote, open the link below and tap "Accept Quote". No signature required.', 50, doc.y, { width: pageW });
       doc.moveDown(0.3);
@@ -1457,8 +1573,21 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
       sectionLineItems.get(item.sectionId)!.push(item);
     }
   }
+  // Same optional-item rules as the PDF: pre-acceptance, customer-selectable
+  // items (isOptional flag or optional/multipleChoice sections) are listed but
+  // excluded from totals; post-acceptance the stamped `selected` flags rule.
+  const summaryInteractiveSectionIds = new Set(
+    sections
+      .filter((s: any) => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+      .map((s: any) => s.id),
+  );
+  const summaryIsAccepted = proposal.status === 'accepted' || proposal.status === 'accepted_pending_deposit';
+  const summaryItemIsOptional = (item: any) =>
+    item.isOptional === true || summaryInteractiveSectionIds.has(item.sectionId || '');
+
   let subtotal = 0;
   for (const item of lineItems) {
+    if (!summaryIsAccepted && summaryItemIsOptional(item)) continue;
     if (item.selected !== false) subtotal += parseFloat(item.totalPrice || '0');
   }
   // Apply the proposal-level discount (stored in dollars) so the summary's
@@ -1474,13 +1603,16 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
 
   let htmlItems = '';
   for (const section of sections) {
-    const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+    const items = (sectionLineItems.get(section.id) || []).filter((i: any) =>
+      !summaryIsAccepted && summaryItemIsOptional(i) ? true : i.selected !== false,
+    );
     if (items.length === 0) continue;
     htmlItems += `<h3 style="color:#374151;margin:12px 0 6px">${section.title}</h3>`;
     htmlItems += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
     items.forEach((item: any) => {
       const p = parseFloat(item.totalPrice || '0');
-      htmlItems += `<tr><td style="padding:4px 8px">${item.description}</td><td style="padding:4px 8px;text-align:right">$${p.toFixed(2)}</td></tr>`;
+      const optionalMark = !summaryIsAccepted && summaryItemIsOptional(item) ? ' <em>(optional — select online)</em>' : '';
+      htmlItems += `<tr><td style="padding:4px 8px">${item.description}${optionalMark}</td><td style="padding:4px 8px;text-align:right">$${p.toFixed(2)}</td></tr>`;
     });
     htmlItems += '</table>';
   }
@@ -1595,6 +1727,7 @@ async function generateInvoicePDFBuffer(
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
+    installPdfTextSanitizer(doc);
     const chunks: Buffer[] = [];
 
     doc.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
@@ -2015,6 +2148,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/safety-analytics', requireEntitlement('plan:business', 'safety_analytics'));
   app.use('/api/workflows', requireEntitlement('plan:business', 'workflow_automation'));
   app.use('/api/lane-automations', requireEntitlement('plan:business', 'workflow_automation'));
+  // Calls (recorded call log) → call_recording add-on, any tier. Session-less
+  // Twilio webhooks pass through the gate untouched (no tenant context).
+  app.use('/api/calls', requireEntitlement('addon:call_recording', 'calls'));
   // Metrics Dashboard (advanced analytics) → Crew. These endpoints are exclusive to the
   // (UI-gated) Metrics Dashboard, so gating them is safe; /api/analytics/* is deliberately
   // NOT here — it's shared with the executive dashboard + settings. Profitability has no
@@ -2118,6 +2254,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { businessId, employeeId } = await createTenant({ businessName, firstName, lastName, email, password });
 
+      // Welcome / confirmation email — best-effort, never blocks signup. Fires for
+      // free and paid alike since the account exists regardless of Stripe outcome.
+      emailService
+        .sendWelcomeEmail({ ownerEmail: email, ownerName: firstName, businessName })
+        .then((r) => { if (!r?.success) console.error('signup welcome email failed:', r?.error); })
+        .catch((e) => console.error('signup welcome email threw:', e?.message));
+
       // If they chose a paid plan, prepare a Checkout URL to redirect to after signup.
       let checkoutUrl: string | undefined;
       if (planKey && planKey !== 'freemium' && isStripeConfigured()) {
@@ -2155,10 +2298,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/auth/login - Create server-side session with employee ID or email+password
+  // Login throttle (2026-07-14 audit L3). In-memory sliding window — no store
+  // dependency; the app runs 2 instances so the effective ceiling is up to 2×
+  // per limit, which still reduces an unthrottled bcrypt oracle to a useless
+  // guessing rate. Per-IP catches spray-across-accounts; per-identifier catches
+  // a distributed attack on one account. A successful login clears its
+  // identifier key so a user who finally remembers their password isn't locked.
+  const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+  const LOGIN_MAX_PER_IP = 30;
+  const LOGIN_MAX_PER_IDENTIFIER = 10;
+  const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+  const bumpLoginKey = (key: string, max: number): boolean => {
+    const now = Date.now();
+    // Lazy prune so the map can't grow unbounded across the window
+    if (loginAttempts.size > 10_000) {
+      for (const [k, v] of loginAttempts) if (v.resetAt <= now) loginAttempts.delete(k);
+    }
+    const entry = loginAttempts.get(key);
+    if (!entry || entry.resetAt <= now) {
+      loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+      return true;
+    }
+    entry.count += 1;
+    return entry.count <= max;
+  };
+
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
       const { employeeId, email, password } = req.body;
       let employee;
+
+      const ip = req.ip || req.socket.remoteAddress || 'unknown';
+      const identifier = (typeof email === 'string' && email.trim().toLowerCase())
+        || (typeof employeeId === 'string' && employeeId)
+        || '';
+      const ipOk = bumpLoginKey(`ip:${ip}`, LOGIN_MAX_PER_IP);
+      const idOk = !identifier || bumpLoginKey(`id:${identifier}`, LOGIN_MAX_PER_IDENTIFIER);
+      if (!ipOk || !idOk) {
+        console.warn(`[SECURITY] Login throttled (ip: ${ip})`);
+        return res.status(429).json({
+          success: false,
+          message: 'Too many login attempts. Try again in a few minutes.'
+        });
+      }
 
       // Email+password authentication
       if (email && password) {
@@ -2242,16 +2424,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const loginPermsSet = await getEmployeePermissions(employee).catch(() => new Set<string>());
       let loginPlanKey = 'freemium';
       let loginEntitlements: string[] = [];
-      if (employee.businessId && TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
-        loginPlanKey = 'business';
-        loginEntitlements = ['plan:crew', 'plan:business'];
-      } else if (employee.businessId) {
+      if (employee.businessId) {
+        // resolveEntitlements handles the comped Treemarkables case (full
+        // Business tier + every add-on) — no special-casing here.
         try {
           const ent = await resolveEntitlements(employee.businessId);
           loginPlanKey = ent.planKey;
           loginEntitlements = Array.from(ent.entitlements);
         } catch { /* fail-open: empty entitlements */ }
       }
+
+      // Successful login: reset this identifier's throttle window.
+      if (identifier) loginAttempts.delete(`id:${identifier}`);
 
       // Regenerate session ID on login so any stale cookie in the browser
       // is always replaced by a fresh Set-Cookie. Also defends against
@@ -2302,6 +2486,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               role: employee.role,
               phone: employee.phone,
               status: employee.status,
+              // Tenant discriminator — client-side tenant gating (e.g. the
+              // platform-operator Settings tiles) keys off this.
+              businessId: employee.businessId ?? null,
               permissions: Array.from(loginPermsSet),
               planKey: loginPlanKey,
               entitlements: loginEntitlements,
@@ -2345,16 +2532,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const permsSet = await getEmployeePermissions(employee);
       const tier = employee.roleTierId ? await storage.getRoleTier(employee.roleTierId) : null;
 
-      // Subscription entitlements for plan-based UI gating. Treemarkables (platform
-      // owner) is comped → full Business-tier access; otherwise resolve from the live
-      // subscription. Mirrors the server feature gates so the UI matches enforcement.
+      // Subscription entitlements for plan-based UI gating. resolveEntitlements
+      // handles the comped Treemarkables case (full Business tier + every add-on).
+      // Mirrors the server feature gates so the UI matches enforcement.
       const __entBizId = req.session.businessId;
       let planKey = 'freemium';
       let entitlements: string[] = [];
-      if (__entBizId && TREEMARKABLES_BUSINESS_IDS.includes(__entBizId)) {
-        planKey = 'business';
-        entitlements = ['plan:crew', 'plan:business'];
-      } else if (__entBizId) {
+      if (__entBizId) {
         try {
           const ent = await resolveEntitlements(__entBizId);
           planKey = ent.planKey;
@@ -2372,6 +2556,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: employee.role,
           phone: employee.phone,
           status: employee.status,
+          // Tenant discriminator — client-side tenant gating (e.g. the
+          // platform-operator Settings tiles) keys off this.
+          businessId: employee.businessId ?? null,
           roleTierId: employee.roleTierId ?? null,
           roleTier: tier
             ? { id: tier.id, key: tier.key, name: tier.name, description: tier.description }
@@ -2555,7 +2742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.send(`User-agent: *
 Allow: /
 
-Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
+Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
     } catch (error) {
       console.error('Error serving robots.txt:', error);
@@ -3763,6 +3950,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
             }${sigHtml}</div>`;
             emailService.sendEmail({
               to: lowerEmail,
+              fromName: bizSettings.businessName || undefined, // From shows the tenant's business name; blank → platform default
               subject: emailSubject,
               text: emailBodyTextWithSig,
               html: emailBodyHtml,
@@ -3830,6 +4018,140 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       res.status(500).json({ 
         success: false, 
         message: 'Sorry, there was an error processing your request. Please try again.' 
+      });
+    }
+  });
+
+  // Public mulch order (session-less, /mulch marketing page). Same conversation-first
+  // anti-spam posture as /api/contact (#317): the order lands in the Inbox as an open
+  // conversation — NO auto-created job card or customer record — and the operator
+  // converts it via "Create Job from Lead". Mounted under /api/public so the anonymous
+  // POST runs as owner, then self-scopes every write via runWithBusiness (same class
+  // as /api/invoices/:id/request-service).
+  app.post('/api/public/mulch-order', async (req: Request, res: Response) => {
+    try {
+      const { name, phone, email, address, accessNotes, qty, website } = req.body ?? {};
+
+      const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+
+      // Honeypot: hidden "website" field real users never see — fake success for bots.
+      if (typeof website === 'string' && website.trim() !== '') {
+        console.log(`[mulch-spam] Honeypot tripped by ${clientIp}`);
+        return res.json({ success: true });
+      }
+
+      // Shares the contact form's per-IP budget — same anonymous-visitor class.
+      const rlNow = Date.now();
+      const rlEntry = contactFormRateLimit.get(clientIp);
+      if (rlEntry && rlNow < rlEntry.resetTime) {
+        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
+          console.log(`[mulch-spam] Rate limit hit by ${clientIp}`);
+          return res.status(429).json({
+            success: false,
+            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
+          });
+        }
+        rlEntry.count++;
+      } else {
+        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
+      }
+
+      const trimmedName = typeof name === 'string' ? name.trim() : '';
+      const trimmedAddress = typeof address === 'string' ? address.trim() : '';
+      const cleanPhone = (typeof phone === 'string' ? phone : '').trim().replace(/[-\s]/g, '');
+      const lowerEmail = (typeof email === 'string' ? email : '').trim().toLowerCase();
+      const quantity = Math.round(Number(qty));
+
+      if (!trimmedName || !trimmedAddress || (!cleanPhone && !lowerEmail)
+          || !Number.isFinite(quantity) || quantity < 4 || quantity > 50) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide your name, delivery address, a phone or email, and a quantity between 4 and 50 m³.'
+        });
+      }
+
+      // Server-side pricing — never trust client-computed totals.
+      const MULCH_PRICE_PER_M3 = 35;
+      const MULCH_DELIVERY_FEE = 80;
+      const mulchCost = quantity * MULCH_PRICE_PER_M3;
+      const orderGst = (mulchCost + MULCH_DELIVERY_FEE) * 0.15;
+      const orderTotal = mulchCost + MULCH_DELIVERY_FEE + orderGst;
+      const fmtNzd = (n: number) => `$${n.toFixed(2)}`;
+
+      // Resolve the owning tenant the same way /api/contact does: the canonical
+      // settings row (the marketing site's tenant).
+      let mulchBusinessId: string | undefined;
+      try {
+        mulchBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+      } catch (bizErr) {
+        console.error('[mulch-order] Failed to resolve business for tenant stamping:', bizErr);
+      }
+
+      let conversationId: string | undefined;
+      await runWithBusiness(mulchBusinessId, async () => {
+        // Link a matching existing customer, but only when the submitted name
+        // plausibly matches the record — shared/imported numbers must not file a
+        // new order under someone else's name (same guard as /api/contact).
+        let customer: any;
+        try {
+          let matched: any;
+          if (cleanPhone) matched = await storage.findCustomerByPhone(cleanPhone);
+          if (!matched && lowerEmail) matched = await storage.findCustomerByEmail(lowerEmail);
+          const na = trimmedName.toLowerCase().replace(/\s+/g, ' ');
+          const nb = (matched?.name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+          if (matched && na && nb && (na === nb || na.includes(nb) || nb.includes(na))) {
+            customer = matched;
+          }
+        } catch (custErr) {
+          console.error('[mulch-order] Customer match failed:', custErr);
+        }
+
+        const conversation = await storage.createConversation({
+          customerId: customer?.id,
+          title: `Mulch order: ${quantity} m³ Aged Mulch — ${trimmedName}`,
+          status: 'open',
+          priority: 'high',
+          source: 'web_form',
+          tags: ['mulch-order', 'website'],
+        });
+        conversationId = conversation.id;
+
+        const orderMessage = [
+          'Mulch order via website',
+          '',
+          `Name: ${trimmedName}`,
+          `Phone: ${cleanPhone || 'Not provided'}`,
+          `Email: ${lowerEmail || 'Not provided'}`,
+          `Delivery address: ${trimmedAddress}`,
+          typeof accessNotes === 'string' && accessNotes.trim() ? `Access notes: ${accessNotes.trim()}` : null,
+          '',
+          `Quantity: ${quantity} m³ Aged Mulch @ $${MULCH_PRICE_PER_M3}/m³ ex GST`,
+          `Mulch: ${fmtNzd(mulchCost)}`,
+          `Delivery: ${fmtNzd(MULCH_DELIVERY_FEE)}`,
+          `GST (15%): ${fmtNzd(orderGst)}`,
+          `Total (incl. GST): ${fmtNzd(orderTotal)}`,
+        ].filter((line) => line !== null).join('\n');
+
+        await storage.createConversationMessage({
+          conversationId: conversation.id,
+          type: 'message',
+          content: orderMessage,
+          direction: 'inbound',
+          fromName: trimmedName,
+          fromContact: lowerEmail || cleanPhone,
+          platform: 'web_form',
+        });
+
+        await notificationHelper.createConversationNotification(conversation);
+      });
+
+      console.log(`[mulch-order] Order received: ${quantity} m³ from ${trimmedName} → conversation ${conversationId}`);
+      res.json({ success: true, conversationId });
+    } catch (error) {
+      console.error('[mulch-order] Error processing mulch order:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Sorry, something went wrong. Please try again or call us.'
       });
     }
   });
@@ -4217,9 +4539,42 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.get('/api/customers', async (req: Request, res: Response) => {
     try {
-      const { search } = req.query;
+      const { search, limit, offset, filter, sort } = req.query;
+
+      // Paginated mode (Clients page): presence of `limit` opts in, so the
+      // many existing full-list consumers (dropdown pickers, name joins) keep
+      // the legacy behaviour below untouched.
+      if (limit !== undefined) {
+        const parsedLimit = Math.min(Math.max(parseInt(limit as string) || 25, 1), 200);
+        const parsedOffset = Math.max(parseInt(offset as string) || 0, 0);
+        const validFilters = ['all', 'active', 'historical', 'customers', 'potential_expenses', 'vip'] as const;
+        const validSorts = ['name', 'email', 'recent'] as const;
+        const parsedFilter = validFilters.includes(filter as any) ? (filter as typeof validFilters[number]) : 'all';
+        const parsedSort = validSorts.includes(sort as any) ? (sort as typeof validSorts[number]) : 'name';
+
+        const [page, stats] = await Promise.all([
+          storage.getCustomersPage({
+            limit: parsedLimit,
+            offset: parsedOffset,
+            search: typeof search === 'string' ? search : undefined,
+            filter: parsedFilter,
+            sortBy: parsedSort,
+          }),
+          storage.getCustomerStats(),
+        ]);
+
+        return res.json({
+          success: true,
+          data: page.customers,
+          total: page.total,
+          limit: parsedLimit,
+          offset: parsedOffset,
+          stats,
+        });
+      }
+
       let customers;
-      
+
       if (search && typeof search === 'string') {
         customers = await storage.searchCustomers(search);
         // Filter out inactive customers from search results too
@@ -8345,33 +8700,110 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   }
 
   // ---- Loom-style auto-captions -------------------------------------------
+  // Readability guardrails. Whisper segments continuous speech poorly — with
+  // no pauses to break on it can return the ENTIRE transcript as one segment,
+  // which (pre-guard) became a single cue blanketing the whole video. Any
+  // segment over these limits gets re-chunked before rendering.
+  const MAX_CUE_SECONDS = 10;
+  const MAX_CUE_CHARS = 200;
+  const TARGET_CUE_CHARS = 84; // ~two 42-char caption lines
+
+  type CaptionCue = { start: number; end: number; text: string };
+
   // Format a seconds value as a WebVTT timestamp: HH:MM:SS.mmm.
   function secondsToVttTimestamp(totalSeconds: number): string {
     const safe = Number.isFinite(totalSeconds) && totalSeconds > 0 ? totalSeconds : 0;
-    const hours = Math.floor(safe / 3600);
-    const minutes = Math.floor((safe % 3600) / 60);
-    const seconds = Math.floor(safe % 60);
-    const millis = Math.round((safe - Math.floor(safe)) * 1000);
+    // Work in whole ms so 1.9996s carries to 00:00:02.000, not the invalid .1000.
+    const totalMs = Math.round(safe * 1000);
+    const hours = Math.floor(totalMs / 3600000);
+    const minutes = Math.floor((totalMs % 3600000) / 60000);
+    const seconds = Math.floor((totalMs % 60000) / 1000);
+    const millis = totalMs % 1000;
     const pad = (n: number, width = 2) => String(n).padStart(width, '0');
     return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(millis, 3)}`;
   }
 
-  // Build a WebVTT document from Whisper verbose_json segments. Each segment
-  // becomes one cue; we drop empty/whitespace-only text and clamp end>start so
-  // the browser's <track> parser never rejects the file.
-  function segmentsToVtt(segments: Array<{ start: number; end: number; text: string }>): string {
-    const cues: string[] = ['WEBVTT', ''];
-    for (const seg of segments) {
-      const text = (seg.text || '').trim();
+  // Regroup Whisper word timestamps into readable cues: break when a cue
+  // would overflow the length/duration caps, on a silence gap, or after a
+  // sentence once the cue is long enough to be worth its own screen time.
+  function buildCuesFromWords(
+    words: Array<{ start?: number; end?: number; word?: string }>,
+  ): CaptionCue[] {
+    const cues: CaptionCue[] = [];
+    let current: { start: number; end: number; parts: string[]; chars: number } | null = null;
+    const flush = () => {
+      if (current && current.parts.length) {
+        cues.push({ start: current.start, end: current.end, text: current.parts.join(' ') });
+      }
+      current = null;
+    };
+    for (const w of words) {
+      const text = (w.word || '').trim();
       if (!text) continue;
-      const start = seg.start ?? 0;
-      let end = seg.end ?? start;
-      if (end <= start) end = start + 0.5; // guard against zero/negative-length cues
-      cues.push(`${secondsToVttTimestamp(start)} --> ${secondsToVttTimestamp(end)}`);
-      cues.push(text);
-      cues.push('');
+      const start = typeof w.start === 'number' ? w.start : current?.end ?? 0;
+      const end = typeof w.end === 'number' && w.end > start ? w.end : start;
+      if (current) {
+        const wouldOverflow =
+          current.chars + 1 + text.length > TARGET_CUE_CHARS ||
+          end - current.start > MAX_CUE_SECONDS;
+        const silenceGap = start - current.end > 2;
+        const sentenceDone =
+          /[.!?]$/.test(current.parts[current.parts.length - 1] || '') && current.chars >= 40;
+        if (wouldOverflow || silenceGap || sentenceDone) flush();
+      }
+      if (!current) current = { start, end, parts: [], chars: 0 };
+      current.parts.push(text);
+      current.chars += (current.parts.length > 1 ? 1 : 0) + text.length;
+      current.end = Math.max(current.end, end);
     }
-    return cues.join('\n');
+    flush();
+    return cues;
+  }
+
+  // Fallback when word timestamps are unavailable: cut the oversized segment's
+  // text on word boundaries and spread its time span across the chunks
+  // proportional to their length. Approximate timing, but readable.
+  function splitSegmentIntoCues(seg: CaptionCue): CaptionCue[] {
+    const duration = Math.max(seg.end - seg.start, 0);
+    const chunks: string[] = [];
+    let buf = '';
+    for (const word of seg.text.split(/\s+/).filter(Boolean)) {
+      const candidate = buf ? `${buf} ${word}` : word;
+      if (buf && (candidate.length > TARGET_CUE_CHARS || (/[.!?]$/.test(buf) && buf.length >= 40))) {
+        chunks.push(buf);
+        buf = word;
+      } else {
+        buf = candidate;
+      }
+    }
+    if (buf) chunks.push(buf);
+    const totalChars = chunks.reduce((n, c) => n + c.length, 0) || 1;
+    let cursor = seg.start;
+    return chunks.map((text, i) => {
+      const start = cursor;
+      const end = i === chunks.length - 1 ? seg.end : cursor + duration * (text.length / totalChars);
+      cursor = end;
+      return { start, end, text };
+    });
+  }
+
+  // Build a WebVTT document from caption cues. Drops empty/whitespace-only
+  // text, clamps end>start so the browser's <track> parser never rejects the
+  // file, and caps on-screen time per cue so no single cue blankets playback.
+  function cuesToVtt(cueList: CaptionCue[]): string {
+    const lines: string[] = ['WEBVTT', ''];
+    for (const cue of cueList) {
+      const text = (cue.text || '').trim();
+      if (!text) continue;
+      const start = cue.start ?? 0;
+      let end = cue.end ?? start;
+      if (end <= start) end = start + 0.5; // guard against zero/negative-length cues
+      if (end - start > MAX_CUE_SECONDS) end = start + MAX_CUE_SECONDS;
+      lines.push(`${secondsToVttTimestamp(start)} --> ${secondsToVttTimestamp(end)}`);
+      lines.push(text);
+      lines.push('');
+    }
+    return lines.join('\n');
   }
 
   // Fire-and-forget caption generation, mirroring generateVideoThumbnail:
@@ -8406,19 +8838,23 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       await extractAudio(videoTmpPath, audioTmpPath);
 
       // verbose_json + segment granularity gives us timed cues (plain 'text'
-      // would lose the timestamps captions need). Same domain bias prompt as
-      // the quote-gen pass so NZ species aren't mangled in the captions.
+      // would lose the timestamps captions need). Word granularity is the
+      // repair kit: when Whisper collapses continuous speech into one giant
+      // segment, word timestamps let us re-cut it accurately. Same domain
+      // bias prompt as the quote-gen pass so NZ species aren't mangled.
       const transcription: any = await openai.audio.transcriptions.create({
         file: fs.createReadStream(audioTmpPath),
         model: 'whisper-1',
         language: 'en',
         prompt: buildWhisperBias((await storage.getBusinessSettingsForBusiness(video.businessId))?.tradeVocabulary),
         response_format: 'verbose_json',
-        timestamp_granularities: ['segment'],
+        timestamp_granularities: ['segment', 'word'],
       });
 
       const segments: Array<{ start: number; end: number; text: string }> =
         Array.isArray(transcription?.segments) ? transcription.segments : [];
+      const words: Array<{ start?: number; end?: number; word?: string }> =
+        Array.isArray(transcription?.words) ? transcription.words : [];
       if (segments.length === 0) {
         await storage.updateVideo(videoId, {
           captionsStatus: 'error',
@@ -8427,13 +8863,51 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         return;
       }
 
-      const vtt = segmentsToVtt(segments);
+      // Normal segments pass through untouched; oversized ones get re-cut
+      // from their word timestamps (or split proportionally without them).
+      const cues: CaptionCue[] = [];
+      for (const seg of segments) {
+        const text = (seg.text || '').trim();
+        if (!text) continue;
+        const start = seg.start ?? 0;
+        const end = Math.max(seg.end ?? start, start);
+        if (end - start <= MAX_CUE_SECONDS && text.length <= MAX_CUE_CHARS) {
+          cues.push({ start, end, text });
+          continue;
+        }
+        const segWords = words.filter(
+          (w) => typeof w.start === 'number' && w.start >= start - 0.1 && w.start <= end + 0.1,
+        );
+        cues.push(
+          ...(segWords.length > 1 ? buildCuesFromWords(segWords) : splitSegmentIntoCues({ start, end, text })),
+        );
+      }
+
+      if (cues.length === 0) {
+        await storage.updateVideo(videoId, {
+          captionsStatus: 'error',
+          captionsError: 'No speech detected in video',
+        });
+        return;
+      }
+      // Still over the char cap after splitting means an unsplittable blob
+      // (no spaces or usable timestamps) — record an error rather than
+      // storing a wall of text the players would pin over the whole video.
+      if (cues.some((c) => c.text.length > MAX_CUE_CHARS)) {
+        await storage.updateVideo(videoId, {
+          captionsStatus: 'error',
+          captionsError: 'Transcript could not be split into readable captions',
+        });
+        return;
+      }
+
+      const vtt = cuesToVtt(cues);
       await storage.updateVideo(videoId, {
         captionsVtt: vtt,
         captionsStatus: 'ready',
         captionsError: null,
       });
-      console.log(`💬 Video captions generated: ${videoId} (${segments.length} cues)`);
+      console.log(`💬 Video captions generated: ${videoId} (${cues.length} cues)`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Caption generation failed';
       console.warn(`Could not generate captions for video ${videoId}:`, err);
@@ -8452,9 +8926,15 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   }
 
   // Stream a video (public, range-aware so the <video> player can seek).
+  // ?download=1 forces a save-file download instead of in-page playback;
+  // ?name=<title> names the saved file (sanitized in videoStorage).
   app.get('/objects/videos/:filename', async (req: Request, res: Response) => {
     try {
-      await videoStorage.streamVideo(`/objects/videos/${req.params.filename}`, req, res);
+      const wantsDownload = req.query.download === '1' || req.query.download === 'true';
+      const downloadName = wantsDownload
+        ? (typeof req.query.name === 'string' && req.query.name) || req.params.filename
+        : undefined;
+      await videoStorage.streamVideo(`/objects/videos/${req.params.filename}`, req, res, { downloadName });
     } catch (error) {
       console.error('Error serving video:', error);
       if (!res.headersSent) res.status(500).json({ error: 'Error serving video' });
@@ -8489,6 +8969,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       const video = await storage.getVideo(req.params.id);
       if (!video) {
         return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      // Regenerating captions on a global knowledge video rewrites shared
+      // platform content (and bills Whisper) — gate to publishers, same as
+      // PATCH/DELETE /api/videos/:id.
+      if (video.kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
       }
       // Clear so generateVideoCaptions doesn't short-circuit on a ready/cached row.
       await storage.updateVideo(req.params.id, {
@@ -8909,6 +9395,13 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         return res.status(404).json({ success: false, message: 'Video not found' });
       }
 
+      // Transcribing a global knowledge video persists transcript/description
+      // onto shared platform content — gate to publishers, same as
+      // PATCH/DELETE /api/videos/:id.
+      if (video.kind === 'knowledge' && !isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage knowledge videos.' });
+      }
+
       // Idempotent fast-path: if we've already transcribed this video, return the
       // cached result instead of re-billing OpenAI on every retry/refresh.
       // Skipped when ?force=1.
@@ -9077,7 +9570,9 @@ Return only the cleaned job description.`;
 
   // Help articles (subscriber-facing /help page). See INFLOW_HELP_PLAN.md.
   // GET routes are subscriber-readable (no auth gate here, matching the videos
-  // pattern); POST/PATCH/DELETE are owner-only via requireAdmin.
+  // pattern). Articles are GLOBAL platform content shown to every subscriber,
+  // so writes need more than requireAdmin (that's any tenant's admin) — they
+  // are also gated to the content-publisher allowlist, same as knowledge videos.
 
   // List articles, grouped by category. Subscribers see published only;
   // admins (via ?includeUnpublished=true) can see drafts for the authoring UI.
@@ -9129,6 +9624,9 @@ Return only the cleaned job description.`;
 
   app.post('/api/help/articles', requireAdmin, async (req: Request, res: Response) => {
     try {
+      if (!isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage help articles.' });
+      }
       const parsed = schema.insertHelpArticleSchema.parse(req.body);
       const article = await storage.createHelpArticle(parsed);
       res.json({ success: true, data: article });
@@ -9140,6 +9638,9 @@ Return only the cleaned job description.`;
 
   app.patch('/api/help/articles/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
+      if (!isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage help articles.' });
+      }
       const parsed = schema.updateHelpArticleSchema.parse(req.body);
       const article = await storage.updateHelpArticle(req.params.id, parsed);
       res.json({ success: true, data: article });
@@ -9151,6 +9652,9 @@ Return only the cleaned job description.`;
 
   app.delete('/api/help/articles/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
+      if (!isContentPublisher(currentBusinessId())) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage help articles.' });
+      }
       await storage.deleteHelpArticle(req.params.id);
       res.json({ success: true });
     } catch (error) {
@@ -9476,6 +9980,64 @@ Draft the reply now.`;
     }
   });
 
+  // Rewrite a rough job description into a tidy, professional version. Returns
+  // a suggestion only — the client shows it as a preview and the user chooses
+  // whether to replace their text (never auto-applied).
+  app.post('/api/ai/polish-description', async (req: Request, res: Response) => {
+    try {
+      const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      if (!text) {
+        return res.status(400).json({ success: false, message: 'Description text is required' });
+      }
+      if (text.length > 8000) {
+        return res.status(400).json({ success: false, message: 'Description is too long to tidy up' });
+      }
+
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'polish_description');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
+      const __idPolish = getBusinessIdentity(await storage.getBusinessSettings());
+
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const aiResponse = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'system',
+            content: `You rewrite rough job descriptions for ${__idPolish.name}, a New Zealand ${__idPolish.discipline} business. The rewritten description sits on the job card and can flow through to customer-facing quotes and proposals.
+
+Rules:
+- Keep every factual detail from the original: quantities, measurements, species/materials, locations, access notes, prices, names, dates. Never invent details that aren't there.
+- Restructure for clarity: if the work has multiple parts, break it into short "• " bullet lines (one task per line). A single simple task stays as one or two clean sentences — no bullets needed.
+- Professional but plainspoken NZ trade voice — clear and direct, not corporate or flowery.
+- Fix spelling, grammar and capitalisation. NZ English spelling.
+- Plain text only: no markdown (no **, #, or - bullets), no emoji. Bullets use the "• " character only.
+- Similar length to the original or shorter — this is a tidy-up, not an expansion.
+
+Return only the rewritten description, nothing else.`,
+          },
+          { role: 'user', content: text },
+        ],
+      });
+
+      const polished = (aiResponse.choices[0].message.content || '').trim();
+      if (!polished) {
+        return res.status(502).json({ success: false, message: 'AI returned an empty rewrite' });
+      }
+
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'polish_description' });
+
+      return res.json({ success: true, data: { polished } });
+    } catch (error) {
+      console.error('Error polishing description:', error);
+      const cause = error instanceof Error ? error.message : String(error);
+      return res.status(500).json({ success: false, message: `Failed to tidy up description: ${cause}` });
+    }
+  });
+
   // Validate if gross margin calculation is complete
   app.get('/api/jobs/:id/gross-margin/validate', async (req: Request, res: Response) => {
     try {
@@ -9606,6 +10168,213 @@ Draft the reply now.`;
     }
   });
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // Supplier-invoice INGESTION (Phase 1) — suppliers email bills to a
+  // per-supplier address; Resend → webhook → extract → validate → triage queue.
+  // Logic lives in server/services/supplierInvoiceIngest.ts; these are thin.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Resend `email.received` for the bills.* receiving domain. Separate route +
+  // separate signing secret from /api/webhooks/resend-events (outbound
+  // telemetry) and /api/webhooks/email (customer replies). Must answer fast:
+  // no parsing here — record + policy-check + hand off.
+  app.post('/api/webhooks/inbound-invoice', async (req: Request, res: Response) => {
+    try {
+      // This is a public write path into a financial ledger — signature
+      // verification is not optional. Fail closed in production.
+      const secret = process.env.RESEND_INBOUND_WEBHOOK_SECRET;
+      if (secret) {
+        const svixId        = req.headers['svix-id'] as string;
+        const svixTimestamp = req.headers['svix-timestamp'] as string;
+        const svixSignature = req.headers['svix-signature'] as string;
+        if (!svixId || !svixTimestamp || !svixSignature) {
+          return res.status(401).json({ success: false, message: 'Missing webhook signature headers' });
+        }
+        try {
+          const wh = new SvixWebhook(secret);
+          const rawBody = (req as any).rawBody as Buffer | undefined;
+          wh.verify(rawBody ? rawBody.toString('utf-8') : JSON.stringify(req.body), {
+            'svix-id': svixId, 'svix-timestamp': svixTimestamp, 'svix-signature': svixSignature,
+          });
+        } catch {
+          console.warn('🧾 inbound-invoice webhook: invalid Svix signature — rejecting');
+          return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
+        }
+      } else if (process.env.NODE_ENV === 'production') {
+        console.error('⚠️ RESEND_INBOUND_WEBHOOK_SECRET not set in production — rejecting inbound-invoice webhook');
+        return res.status(401).json({ success: false, message: 'Webhook verification not configured' });
+      } else {
+        console.warn('⚠️ RESEND_INBOUND_WEBHOOK_SECRET not set — inbound-invoice webhook unverified (dev only)');
+      }
+
+      const event = req.body || {};
+      if (event.type !== 'email.received') {
+        return res.status(200).json({ received: true, ignored: event.type });
+      }
+      const data = event.data || {};
+      if (!data.email_id) return res.status(200).json({ received: true, ignored: 'no_email_id' });
+      const outcome = await supplierIngest.receiveInboundEmail({
+        email_id: String(data.email_id),
+        from: String(data.from || ''),
+        to: Array.isArray(data.to) ? data.to.map(String) : (data.to ? [String(data.to)] : []),
+        subject: data.subject ? String(data.subject) : undefined,
+      });
+      console.log(`🧾 inbound-invoice webhook: ${data.email_id} → ${outcome.action}${'reason' in outcome ? ` (${outcome.reason})` : ''}`);
+      return res.status(200).json({ received: true, ...outcome });
+    } catch (error) {
+      console.error('🧾 inbound-invoice webhook error:', error);
+      // 200 so Resend doesn't hammer retries on a bug; the row (if written) is
+      // picked up by the boot sweep.
+      return res.status(200).json({ received: true, error: 'processing_error' });
+    }
+  });
+
+  // ── Supplier connections (Settings › Suppliers) ───────────────────────────
+  app.get('/api/supplier-connections', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const data = await supplierIngest.listSupplierConnections(businessId);
+      res.json({ success: true, data: data.connections, catchAllAddress: data.catchAllAddress, inboundDomain: supplierIngest.getInboundDomain() });
+    } catch (error) {
+      console.error('Error listing supplier connections:', error);
+      res.status(500).json({ success: false, message: 'Error listing supplier connections' });
+    }
+  });
+
+  app.post('/api/supplier-connections', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const supplierName = String(req.body?.supplierName || '').trim();
+      if (!supplierName) return res.status(400).json({ success: false, message: 'Supplier name is required' });
+      const created = await supplierIngest.createSupplierConnection(businessId, supplierName);
+      res.json({ success: true, data: created });
+    } catch (error) {
+      console.error('Error creating supplier connection:', error);
+      res.status(500).json({ success: false, message: 'Error creating supplier connection' });
+    }
+  });
+
+  app.post('/api/supplier-connections/:id/confirm-sender', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const result = await supplierIngest.confirmConnectionSender(businessId, req.params.id);
+      if (!result) return res.status(404).json({ success: false, message: 'Supplier not found' });
+      res.json({ success: true, data: result.connection, released: result.released });
+    } catch (error) {
+      console.error('Error confirming supplier sender:', error);
+      res.status(500).json({ success: false, message: 'Error confirming sender' });
+    }
+  });
+
+  app.patch('/api/supplier-connections/:id', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const updates: Partial<schema.SupplierConnection> = { updatedAt: new Date() };
+      if (req.body?.status !== undefined) {
+        const st = String(req.body.status);
+        if (!['active', 'paused', 'pending_first_email'].includes(st)) return res.status(400).json({ success: false, message: 'Invalid status' });
+        updates.status = st;
+      }
+      if (req.body?.supplierName !== undefined) {
+        const name = String(req.body.supplierName).trim();
+        if (!name) return res.status(400).json({ success: false, message: 'Supplier name is required' });
+        updates.supplierName = name;
+      }
+      if (req.body?.extractionHint !== undefined) updates.extractionHint = req.body.extractionHint ? String(req.body.extractionHint) : null;
+      const [row] = await ownerDb.update(schema.supplierConnections).set(updates)
+        .where(and(eq(schema.supplierConnections.id, req.params.id), eq(schema.supplierConnections.businessId, businessId)))
+        .returning();
+      if (!row) return res.status(404).json({ success: false, message: 'Supplier not found' });
+      res.json({ success: true, data: row });
+    } catch (error) {
+      console.error('Error updating supplier connection:', error);
+      res.status(500).json({ success: false, message: 'Error updating supplier connection' });
+    }
+  });
+
+  // ── Triage queue ──────────────────────────────────────────────────────────
+  app.get('/api/supplier-invoices', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const { rows, nextCursor } = await supplierIngest.listTriageInvoices(businessId, {
+        status: typeof req.query.status === 'string' ? req.query.status : undefined,
+        cursor: typeof req.query.cursor === 'string' ? req.query.cursor : undefined,
+        limit: req.query.limit ? parseInt(String(req.query.limit)) : undefined,
+      });
+      res.json({ success: true, data: rows, nextCursor });
+    } catch (error) {
+      console.error('Error listing supplier invoices:', error);
+      res.status(500).json({ success: false, message: 'Error listing supplier invoices' });
+    }
+  });
+
+  // Failed + quarantined inbound documents (separate tab, not mixed into review).
+  app.get('/api/inbound-documents', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const rows = await supplierIngest.listInboundDocuments(businessId, {
+        status: typeof req.query.status === 'string' ? req.query.status : undefined,
+        limit: req.query.limit ? parseInt(String(req.query.limit)) : undefined,
+      });
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('Error listing inbound documents:', error);
+      res.status(500).json({ success: false, message: 'Error listing inbound documents' });
+    }
+  });
+
+  app.get('/api/supplier-invoices/:id', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const detail = await supplierIngest.getInvoiceDetail(businessId, req.params.id);
+      if (!detail) return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+      res.json({ success: true, data: detail });
+    } catch (error) {
+      console.error('Error fetching supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error fetching supplier invoice' });
+    }
+  });
+
+  app.post('/api/supplier-invoices/:id/assign', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const jobId = String(req.body?.jobId || '').trim();
+      if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
+      const result = await supplierIngest.assignInvoiceToJob({ businessId, invoiceId: req.params.id, jobId, userId: req.session.employeeId });
+      if ('error' in result) {
+        if (result.error === 'not_found') return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+        if (result.error === 'job_not_found') return res.status(404).json({ success: false, message: 'Job not found' });
+        return res.status(409).json({ success: false, message: `Cannot assign an invoice in status "${result.status}"` });
+      }
+      res.json({ success: true, data: { status: result.status, jobId } });
+    } catch (error) {
+      console.error('Error assigning supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error assigning supplier invoice' });
+    }
+  });
+
+  app.post('/api/supplier-invoices/:id/reject', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const reason = req.body?.reason ? String(req.body.reason).slice(0, 500) : null;
+      const row = await supplierIngest.rejectInvoice(businessId, req.params.id, reason);
+      if (!row) return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error rejecting supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error rejecting supplier invoice' });
+    }
+  });
+
   // Upload a supplier invoice (image or PDF), store it in GCS, and run GPT-5
   // over it to extract the fields. Returns the extracted data + stored document
   // reference — nothing is persisted to supplier_invoices until the user
@@ -9710,6 +10479,19 @@ Draft the reply now.`;
   app.patch('/api/supplier-invoices/:id', async (req: Request, res: Response) => {
     try {
       const b = req.body || {};
+      // Triage-queue corrections (header + `lines`) go through the ingestion
+      // service so the arithmetic validation + dedupe hash are recomputed. The
+      // manual job-card editor keeps sending the legacy keys below.
+      const CORRECTION_KEYS = ['lines', 'subtotalExGst', 'gstAmount', 'totalIncGst', 'poOrJobReference', 'customerAccountRef', 'branch', 'documentType'];
+      if (CORRECTION_KEYS.some((k) => k in b)) {
+        const businessId = req.session.businessId;
+        if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+        const result = await supplierIngest.applyInvoiceCorrections(businessId, req.params.id, b);
+        if (!result) return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+        if ('error' in result) return res.status(409).json({ success: false, message: 'Another invoice with this number and total is already in the queue', duplicateId: result.duplicateId });
+        const detail = await supplierIngest.getInvoiceDetail(businessId, req.params.id);
+        return res.json({ success: true, data: detail, validation: result.validation });
+      }
       const updates: any = {};
       if (b.supplierName !== undefined) updates.supplierName = String(b.supplierName).trim();
       if (b.invoiceNumber !== undefined) updates.invoiceNumber = b.invoiceNumber ? String(b.invoiceNumber) : null;
@@ -9764,6 +10546,9 @@ Draft the reply now.`;
       const supplierInvoice = await storage.getSupplierInvoice(req.params.id);
       if (!supplierInvoice) {
         return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+      }
+      if (!supplierInvoice.jobId) {
+        return res.status(400).json({ success: false, message: 'Supplier invoice is not assigned to a job yet' });
       }
       const job = await storage.getJob(supplierInvoice.jobId);
       if (!job) {
@@ -10555,14 +11340,9 @@ Draft the reply now.`;
         validationErrors.push('proposal has no description text — the customer would see an empty job description');
       }
 
-      const selectedLineItems = lineItems.filter(li => li.selected);
-      if (selectedLineItems.length === 0) {
-        validationErrors.push('proposal has no selected line items');
-      }
-
-      if (subtotal <= 0) {
-        validationErrors.push('proposal total is $0');
-      }
+      // No line-item / $0-total check here: pricing is sometimes written in the
+      // description text instead of line items (e.g. day-rate quotes), so a
+      // priceless proposal is a legitimate send.
 
       if (validationErrors.length > 0) {
         console.warn(`⚠️  Blocked send for proposal ${proposalId}: ${validationErrors.join('; ')}`);
@@ -10600,7 +11380,7 @@ Draft the reply now.`;
       const customerPhone = customer?.phone || job?.jobContactPhone || '';
       
       // Generate proposal acceptance URL - goes directly to acceptance page
-      const proposalAcceptUrl = `${baseUrl}/proposal/${proposalId}/accept`;
+      const proposalAcceptUrl = proposalAcceptLink(proposalId, { base: baseUrl });
       
       const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const htmlContent = renderBrandedEmail({
@@ -10627,7 +11407,8 @@ Draft the reply now.`;
         subject,
         html: htmlContent,
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our services.'}`,
-        jobNumber: job?.jobNumber // Reply-to will be job-{number}@jobs.treemarkables.co.nz
+        jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
+        jobNumber: job?.jobNumber // Fallback if no id (legacy numeric alias)
       });
 
       if (!emailResult.success) {
@@ -10807,14 +11588,9 @@ Draft the reply now.`;
         validationErrors.push('quote has no description text — the PDF would have an empty job description');
       }
 
-      const selectedLineItems = lineItems.filter(li => li.selected !== false);
-      if (selectedLineItems.length === 0) {
-        validationErrors.push('quote has no selected line items');
-      }
-
-      if (subtotal <= 0) {
-        validationErrors.push('quote total is $0');
-      }
+      // No line-item / $0-total check here: pricing is sometimes written in the
+      // description text instead of line items (e.g. day-rate quotes), so a
+      // priceless quote is a legitimate send.
 
       if (validationErrors.length > 0) {
         console.warn(`⚠️  Blocked send for quote ${proposalId}: ${validationErrors.join('; ')}`);
@@ -10834,7 +11610,7 @@ Draft the reply now.`;
       // ?type=quote hint labels it as a quote before data loads). Replies still
       // land in the job inbox via emailService's reply-to, so the
       // "I accept quote Q-*" webhook fallback keeps working.
-      const quoteAcceptUrl = `${APP_URL}/proposal/${proposalId}/accept?type=quote`;
+      const quoteAcceptUrl = proposalAcceptLink(proposalId, { base: APP_URL, quote: true });
 
       const customerName = customer?.name || 'Valued Customer';
       const bodyLead = message && message.trim().length > 0
@@ -11028,11 +11804,22 @@ Draft the reply now.`;
       
       if (validatedInvoiceData && !effectiveInvoiceId) {
         try {
+          // invoices.amount is EX-GST everywhere (renderers add 15% on top).
+          // The client sends both `amount` (ex-GST subtotal) and `totalAmount`
+          // (inc-GST). Storing totalAmount here put an inc-GST figure into an
+          // ex-GST field, so the pay-online checkout added GST on top of a
+          // GST-inclusive total — customers were overcharged by exactly 15%.
+          const exGstAmount = (() => {
+            const amt = parseFloat(validatedInvoiceData.amount?.toString() || '');
+            if (Number.isFinite(amt) && amt > 0) return amt;
+            const incGst = parseFloat(validatedInvoiceData.totalAmount?.toString() || '');
+            return Number.isFinite(incGst) ? Math.round((incGst / 1.15) * 100) / 100 : 0;
+          })();
           const newInvoice = await storage.createInvoice({
             jobId: validatedInvoiceData.jobId || jobId,
             customerId: validatedInvoiceData.customerId || customerId,
             invoiceNumber: validatedInvoiceData.invoiceNumber,
-            amount: validatedInvoiceData.totalAmount,
+            amount: exGstAmount.toString(),
             dueDate: validatedInvoiceData.dueDate ? new Date(validatedInvoiceData.dueDate) : undefined,
             issueDate: validatedInvoiceData.issueDate ? new Date(validatedInvoiceData.issueDate) : undefined,
             status: 'sent', // Mark as sent since we're sending it now
@@ -11196,7 +11983,7 @@ Draft the reply now.`;
 
         // Customer-facing link is always the app domain (CLAUDE.md), regardless of tenant.
         const onlineInvoiceUrl = invoiceDetails?.id
-          ? `${APP_URL}/invoice/${invoiceDetails.id}/view`
+          ? invoiceViewLink(invoiceDetails.id, { base: APP_URL })
           : APP_URL;
 
         // Per-invoice billing-name override (saved on the invoice) beats the job-level
@@ -11423,12 +12210,16 @@ Draft the reply now.`;
 
       // Send email using the emailService
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
+      // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const emailResult = await emailService.sendEmail({
         to: to,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject: subject,
         text: emailBody,
         html: emailHtml,
-        jobNumber: job?.jobNumber, // Reply-to will be job-{number}@jobs.treemarkables.co.nz
+        jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
+        jobNumber: job?.jobNumber, // Fallback if no id (legacy numeric alias)
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
@@ -11437,6 +12228,24 @@ Draft the reply now.`;
         console.log(`📧 Email sent to ${to} for job ${job?.jobNumber || jobId}${
           embeddedPhotoCount > 0 ? ` with ${embeddedPhotoCount} embedded photo(s)` : ''
         }${emailResult.messageId ? ` (Message ID: ${emailResult.messageId})` : ''}`);
+
+        // Stamp the invoice as sent. The dedicated /api/invoices/:id/send-email
+        // endpoint does this, but most invoice emails go out through this
+        // generic composer endpoint, which previously left a pre-existing
+        // invoice 'pending' forever. status/sentDate drive downstream surfaces
+        // (job-card header price override, billing badge). Never downgrade a
+        // paid/overdue invoice; a failure here never blocks the send response.
+        if (invoice?.id) {
+          try {
+            const keepStatus = invoice.status === 'paid' || invoice.status === 'overdue';
+            await storage.updateInvoice(invoice.id, {
+              ...(keepStatus ? {} : { status: 'sent' }),
+              sentDate: invoice.sentDate || new Date(),
+            } as any);
+          } catch (invoiceStampError) {
+            console.warn('Failed to stamp invoice as sent:', invoiceStampError);
+          }
+        }
 
         // Create job diary entry for the email
         if (jobId) {
@@ -11548,7 +12357,22 @@ Draft the reply now.`;
       // Log successful SMS for audit trail
       console.log(`📱 SMS sent successfully to ${phone}`);
       console.log(`📱 Message: ${message}`);
-      
+
+      // Stamp the invoice as sent when this SMS carried one — mirrors the
+      // email path so an SMS'd invoice also flips 'pending' → 'sent' and
+      // drives the same downstream surfaces (job-card price, billing badge).
+      if (invoice?.id) {
+        try {
+          const keepStatus = invoice.status === 'paid' || invoice.status === 'overdue';
+          await storage.updateInvoice(invoice.id, {
+            ...(keepStatus ? {} : { status: 'sent' }),
+            sentDate: invoice.sentDate || new Date(),
+          } as any);
+        } catch (invoiceStampError) {
+          console.warn('Failed to stamp invoice as sent:', invoiceStampError);
+        }
+      }
+
       // Save phone number to job contact and customer so reply matching works
       if (jobId && job && !job.jobContactPhone) {
         try {
@@ -11871,16 +12695,30 @@ Draft the reply now.`;
   // Configure in Twilio console: "A CALL COMES IN" → Webhook → /api/webhooks/twilio-answer
   // ----------------------------------------
 
-  // Serve recordings from persistent Object Storage
-  app.get('/api/recordings/:filename', async (req: Request, res: Response) => {
+  // Serve recordings from persistent Object Storage. Session + tenant-ownership
+  // gated: the GCS download bypasses the DB entirely, so RLS can't protect it —
+  // without this check any leaked/shared link replays customer call audio
+  // forever. Ownership = an RLS-scoped row in calls/call_records pointing at
+  // this file, so a tenant can only stream recordings its own call rows reference.
+  app.get('/api/recordings/:filename', requireSession, async (req: Request, res: Response) => {
     try {
       const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
       if (!privateDir) {
         return res.status(500).json({ error: 'Object storage not configured' });
       }
       const filename = req.params.filename;
-      if (!filename || filename.includes('..')) {
+      if (!filename || filename.includes('..') || filename.includes('/')) {
         return res.status(400).json({ error: 'Invalid filename' });
+      }
+      const servingUrl = `/api/recordings/${filename}`;
+      const [ownedCall] = await db.select({ id: schema.calls.id })
+        .from(schema.calls).where(eq(schema.calls.recordingUrl, servingUrl)).limit(1);
+      if (!ownedCall) {
+        const [ownedRecord] = await db.select({ id: schema.callRecords.id })
+          .from(schema.callRecords).where(eq(schema.callRecords.recordingUrl, servingUrl)).limit(1);
+        if (!ownedRecord) {
+          return res.status(404).json({ error: 'Recording not found' });
+        }
       }
       const objectPath = `${privateDir}/recordings/${filename}`;
       const parts = objectPath.replace(/^\//, '').split('/');
@@ -13112,7 +13950,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     if (!env.TWILIO_TWIML_APP_SID.set) recommendations.push('Set TWILIO_TWIML_APP_SID to enable outgoing calls from the iOS app');
     if (!env.TWILIO_PUSH_CREDENTIAL_SID.set) recommendations.push('Set TWILIO_PUSH_CREDENTIAL_SID (a VoIP Push Credential in Twilio Console → Voice → Push Credentials, backed by an Apple VoIP Services APNs certificate) so the iOS app can RECEIVE incoming calls');
     if (twilioPhoneNumber && !twilioPhoneNumber.voiceUrlMatchesExpected) {
-      recommendations.push(`Update Twilio console voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'})`);
+      recommendations.push(`Update Twilio voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'}) — POST /api/twilio/admin/configure-incoming sets it`);
     }
     if (twilioTwimlApp && !twilioTwimlApp.error && !twilioTwimlApp.voiceUrlMatchesExpected) {
       recommendations.push(`TwiML App voice URL should be ${expectedWebhooks.outgoing} for web-dialer outgoing calls (currently: ${twilioTwimlApp.voiceUrl || 'unset'}) — POST /api/twilio/admin/configure-outgoing sets it`);
@@ -13185,6 +14023,60 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     } catch (error: any) {
       console.error('❌ Failed to configure TwiML App voice URL:', error);
       return res.status(500).json({ success: false, message: error?.message || 'Failed to update TwiML App' });
+    }
+  });
+
+  // One-click setup for the INCOMING number's webhooks — points the Twilio
+  // number's voice URL and status callback at APP_URL, so a domain move (e.g.
+  // treemarkables → inflowapp) is a single authenticated POST instead of a
+  // manual console edit. Deliberately leaves smsUrl alone: inbound SMS lives
+  // with SMS Everyone, and repointing the Twilio number's SMS webhook is a
+  // separate behavioural decision, not part of a domain rename. Verified by
+  // the diagnostic's voiceUrlMatchesExpected flag.
+  app.post('/api/twilio/admin/configure-incoming', async (req: Request, res: Response) => {
+    const secret = req.headers['x-webhook-secret'];
+    const secretOk = !!secret && secret === process.env.HERO_WEBHOOK_SECRET;
+    let sessionOk = false;
+    if (!secretOk && req.session.employeeId) {
+      try {
+        const emp = await storage.getEmployee(req.session.employeeId);
+        sessionOk = !!emp && emp.role === 'admin';
+      } catch {
+        sessionOk = false;
+      }
+    }
+    if (!secretOk && !sessionOk) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    try {
+      const phoneNumber = process.env.TWILIO_PHONE_NUMBER;
+      if (!phoneNumber) {
+        return res.status(400).json({ success: false, message: 'TWILIO_PHONE_NUMBER not set' });
+      }
+      const client = await getTwilioClient();
+      const list = await client.incomingPhoneNumbers.list({ phoneNumber, limit: 1 });
+      const num = list[0];
+      if (!num) {
+        return res.status(404).json({ success: false, message: `No incoming number found in Twilio account for ${phoneNumber}` });
+      }
+      const previous = { voiceUrl: num.voiceUrl, statusCallback: num.statusCallback };
+      const updated = await client.incomingPhoneNumbers(num.sid).update({
+        voiceUrl: `${APP_URL}/api/webhooks/twilio-answer`,
+        voiceMethod: 'POST',
+        statusCallback: `${APP_URL}/api/webhooks/twilio-voice`,
+        statusCallbackMethod: 'POST',
+      });
+      console.log(`✅ Incoming number ${phoneNumber} voice URL set to ${updated.voiceUrl} (was ${previous.voiceUrl})`);
+      return res.json({
+        success: true,
+        sid: updated.sid,
+        previous,
+        voiceUrl: updated.voiceUrl,
+        statusCallback: updated.statusCallback,
+      });
+    } catch (error: any) {
+      console.error('❌ Failed to configure incoming number webhooks:', error);
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to update incoming number' });
     }
   });
 
@@ -13724,6 +14616,26 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Ex-GST subtotal for an invoice, computed EXACTLY like the customer-facing
+  // surfaces (InvoiceView totals + the PDF): sum the `items` JSONB line totals
+  // (item.total with item.amount as the legacy field name), falling back to
+  // invoice.amount only when there are no line items. Every caller that
+  // charges or states a total MUST go through this so the amount charged can
+  // never diverge from the amount displayed.
+  function invoiceSubtotalExGst(invoice: any): number {
+    const items: any[] = Array.isArray(invoice?.items) ? invoice.items : [];
+    let subtotal = 0;
+    for (const item of items) {
+      const raw = item?.total ?? item?.amount ?? 0;
+      const n = typeof raw === 'string' ? parseFloat(raw) : raw;
+      if (Number.isFinite(n)) subtotal += n;
+    }
+    if (subtotal === 0) {
+      subtotal = parseFloat(invoice?.amount || '0') || 0;
+    }
+    return subtotal;
+  }
+
   // Public: create a Stripe Checkout session to pay an invoice online. Mirrors
   // the proposal deposit-checkout endpoint. Charges the GST-inclusive
   // outstanding balance (invoice total computed the same way as the email /
@@ -13758,16 +14670,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       // Total = subtotal (line items, or invoice.amount fallback) + 15% GST.
-      // Mirrors send-email + InvoiceView so we charge exactly what the
-      // customer sees.
-      const dbLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoice.id));
-      let subtotal = 0;
-      for (const li of dbLineItems) {
-        subtotal += parseFloat(li.totalPrice || '0') || 0;
-      }
-      if (subtotal === 0) {
-        subtotal = parseFloat((invoice as any).amount || '0') || 0;
-      }
+      // Subtotal comes from the invoice's `items` JSONB — the SAME source
+      // InvoiceView and the PDF render from — so we charge exactly what the
+      // customer sees. (The invoice_line_items table has no writers; reading
+      // it always fell back to invoice.amount, which on some invoices holds
+      // the GST-inclusive total → customers were charged GST twice.)
+      const subtotal = invoiceSubtotalExGst(invoice);
       const total = Math.round((subtotal * 1.15) * 100) / 100;
 
       // Subtract anything already paid against this invoice (succeeded, non-refund).
@@ -13798,8 +14706,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         process.env.NODE_ENV === 'production'
           ? APP_URL
           : `${req.protocol}://${req.get('host')}`;
-      const successUrl = `${origin}/invoice/${invoice.id}/view?payment=success&session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${origin}/invoice/${invoice.id}/view?payment=cancelled`;
+      const successUrl = invoiceViewLink(invoice.id, { base: origin, query: 'payment=success&session_id={CHECKOUT_SESSION_ID}' });
+      const cancelUrl = invoiceViewLink(invoice.id, { base: origin, query: 'payment=cancelled' });
 
       const session = await createInvoiceCheckoutSession({
         invoiceId: invoice.id,
@@ -13845,17 +14753,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       const baseUrl = APP_URL;
       const customerName = customer?.name || 'Valued Customer';
-      const invoiceViewUrl = `${baseUrl}/invoice/${invoiceId}/view`;
+      const invoiceViewUrl = invoiceViewLink(invoiceId, { base: baseUrl });
 
-      // Calculate total from line items table or fall back to invoice.amount
-      const dbLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoiceId));
-      let subtotal = 0;
-      for (const li of dbLineItems) {
-        subtotal += parseFloat(li.totalPrice || '0');
-      }
-      if (subtotal === 0) {
-        subtotal = parseFloat((invoice as any).amount || '0');
-      }
+      // Calculate total from the invoice's items JSONB (same source as
+      // InvoiceView / the PDF / payment-checkout) or fall back to invoice.amount
+      const subtotal = invoiceSubtotalExGst(invoice);
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
@@ -14222,6 +15124,25 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // De-dupe, cap defensively
       const employeeIds = Array.from(new Set(requested)).slice(0, 50);
 
+      // Optional backdated clock-in — the crew arrived earlier and forgot to
+      // press the button. Bounded to today-ish so a typo can't create a
+      // multi-day timer that lands as a huge labour entry on stop.
+      let startedAt: Date | undefined;
+      if (req.body?.startedAt) {
+        const parsed = new Date(req.body.startedAt);
+        if (isNaN(parsed.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid start time' });
+        }
+        const ageMs = Date.now() - parsed.getTime();
+        if (ageMs < -2 * 60_000) {
+          return res.status(400).json({ success: false, message: 'Start time cannot be in the future' });
+        }
+        if (ageMs > 20 * 3_600_000) {
+          return res.status(400).json({ success: false, message: 'Start time is too far in the past' });
+        }
+        startedAt = parsed;
+      }
+
       const started: any[] = [];
       const switchedJobIds = new Set<string>();
       for (const employeeId of employeeIds) {
@@ -14233,7 +15154,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           await finalizeTimer(running);          // stop-and-switch
           switchedJobIds.add(running.jobId);
         }
-        started.push(await storage.startTimer(jobId, employeeId));
+        started.push(await storage.startTimer(jobId, employeeId, startedAt));
       }
 
       res.json({
@@ -15017,10 +15938,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const endOfDay = fromZonedTime(`${todayStr}T23:59:59`, 'Pacific/Auckland');
 
       // Get all data
-      const [leads, jobsResult, calls] = await Promise.all([
-        storage.getLeads(),
+      const [leads, jobsResult, calls, allInvoices] = await Promise.all([
+        // Pipeline leads, not the legacy lead-submission stub (returns []).
+        storage.getAllPipelineLeads(),
         storage.getAllJobs({ limit: 999999 }),
-        storage.getCallRecords()
+        storage.getCallRecords(),
+        storage.getAllInvoices()
       ]);
       const jobs = jobsResult.jobs;
 
@@ -15057,9 +15980,17 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         return callDate >= startOfDay && callDate <= endOfDay;
       });
 
-      // Calculate today's revenue from completed and invoiced jobs
-      const todayRevenue = todayJobsCompleted.reduce((sum, job) => {
-        return sum + (job.invoiceTotal || 0);
+      // Today's revenue = invoices ISSUED today, ex-GST. Anchoring on the
+      // invoice (not the job) matches how /api/revenue-stats and
+      // /api/dashboard-stats recognise revenue. The previous version summed
+      // `job.invoiceTotal`, which is not a column on jobs — it was always
+      // undefined, so this tile read $0 for every tenant.
+      const todayRevenue = allInvoices.reduce((sum, inv) => {
+        if (inv.status === 'cancelled') return sum;
+        const anchor = inv.issueDate ? new Date(inv.issueDate) :
+                       inv.createdAt ? new Date(inv.createdAt) : null;
+        if (!anchor || anchor < startOfDay || anchor > endOfDay) return sum;
+        return sum + invoiceRevenueExGst(inv);
       }, 0);
 
       res.json({
@@ -16582,6 +17513,87 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // ── Public job photo timeline (CompanyCam-style share link) ───────────────
+
+  // Get-or-create the job's shareable timeline link (session side).
+  app.post('/api/jobs/:jobId/timeline-link', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+      let link = await storage.getTimelineLinkForJob(job.id);
+      if (!link) {
+        const token = require('crypto').randomBytes(32).toString('hex');
+        link = await storage.createTimelineLink(job.id, token);
+      }
+      res.json({
+        success: true,
+        data: { url: `${APP_URL}/timeline/${link.token}`, token: link.token, isEnabled: link.isEnabled },
+      });
+    } catch (error) {
+      console.error('Error creating timeline link:', error);
+      res.status(500).json({ success: false, message: 'Error creating timeline link' });
+    }
+  });
+
+  // Public feed — session-less, token-gated. Runs reads inside the owning
+  // tenant's context (session-less = owner connection, so reads must
+  // self-scope). Only non-private diary photo entries are exposed.
+  app.get('/api/public/timeline/:token', async (req: Request, res: Response) => {
+    try {
+      const link = await storage.getTimelineLinkByToken(req.params.token);
+      if (!link || !link.isEnabled) {
+        return res.status(404).json({ success: false, message: 'Timeline not found' });
+      }
+
+      const payload = await runWithBusiness(link.businessId ?? undefined, async () => {
+        // Session-less = owner connection; every read here self-scopes (by the
+        // token row's jobId / businessId) rather than trusting ALS context.
+        const job = await storage.getJob(link.jobId);
+        if (!job) return null;
+        if (link.businessId && job.businessId && job.businessId !== link.businessId) return null;
+        const settings = await storage.getBusinessSettingsForBusiness(link.businessId ?? job.businessId);
+        const identity = getBusinessIdentity(settings);
+        const brand = getBrandColors(settings);
+        const entries = await storage.getJobDiaryEntriesByJob(link.jobId);
+
+        const feed = [...entries]
+          .filter((e: any) => !e.isPrivate &&
+            ((Array.isArray(e.photos) && e.photos.length > 0) || e.photoUrl))
+          .sort((a: any, b: any) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+          .map((e: any) => {
+            const photos: string[] = Array.isArray(e.photos) && e.photos.length > 0
+              ? e.photos
+              : (e.photoUrl ? [e.photoUrl] : []);
+            // Prefer the caption (description) unless it's the generic default.
+            const generic = /^photo added$|^\d+ photos added$/i.test((e.description || '').trim());
+            return {
+              id: e.id,
+              caption: generic ? '' : (e.description || '').trim(),
+              author: e.authorName || '',
+              createdAt: e.createdAt,
+              photos,
+            };
+          });
+
+        return {
+          business: { name: identity.name, headerColor: brand.headerColor, accentColor: brand.accentColor },
+          job: { jobNumber: job.jobNumber ?? null, title: job.title ?? null },
+          entries: feed,
+        };
+      });
+
+      if (!payload) return res.status(404).json({ success: false, message: 'Timeline not found' });
+      res.json({ success: true, data: payload });
+    } catch (error) {
+      console.error('Error fetching public timeline:', error);
+      res.status(500).json({ success: false, message: 'Error fetching timeline' });
+    }
+  });
+
   // Get photos for a job
   app.get('/api/jobs/:jobId/photos', async (req: Request, res: Response) => {
     try {
@@ -16683,6 +17695,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      installPdfTextSanitizer(doc);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="photo-report-job-${job.jobNumber ?? job.id}.pdf"`);
       doc.pipe(res);
@@ -16867,148 +17880,6 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // ========================================
   // ENHANCED PHOTO MANAGEMENT API ENDPOINTS
   // ========================================
-
-  // Enhanced photo upload with metadata and GPS
-  app.post('/api/photos/upload', imageUpload.array('photos', 10), async (req: Request, res: Response) => {
-    try {
-      const uploadData = photoUploadSchema.parse(req.body);
-      
-      if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
-        return res.status(400).json({ success: false, message: 'No photos provided' });
-      }
-
-      const uploadedPhotos = [];
-      const timestamp = Date.now();
-
-      for (let i = 0; i < req.files.length; i++) {
-        const file = req.files[i] as Express.Multer.File;
-        const fileExtension = path.extname(file.originalname);
-        const newFileName = `${uploadData.jobId || uploadData.customerId || 'general'}_${uploadData.type}_${timestamp}_${i}${fileExtension}`;
-        const newPath = path.join(photosDir, newFileName);
-        
-        // Move file to permanent location
-        fs.renameSync(file.path, newPath);
-        
-        // Create photo record in database
-        const photoData = {
-          ...uploadData,
-          url: `/photos/${newFileName}`,
-          filename: newFileName,
-          originalName: file.originalname,
-          mimeType: file.mimetype,
-          fileSize: file.size,
-          capturedAt: new Date(),
-          sequenceOrder: i,
-          isPublic: true,  // Make photos public by default so they appear in listings
-          isFeatured: false,  // Can be updated later
-        };
-
-        // Add GPS data if provided
-        if (req.body.gpsLatitude && req.body.gpsLongitude) {
-          photoData.gpsLatitude = parseFloat(req.body.gpsLatitude);
-          photoData.gpsLongitude = parseFloat(req.body.gpsLongitude);
-          photoData.gpsAccuracy = req.body.gpsAccuracy ? parseFloat(req.body.gpsAccuracy) : null;
-          photoData.gpsAddress = req.body.gpsAddress || null;
-        }
-
-        const photo = await storage.createPhoto(photoData);
-        uploadedPhotos.push(photo);
-        console.log(`Created photo with ID: ${photo.id}, isPublic: ${photo.isPublic}, jobId: ${photo.jobId}`);
-      }
-
-      res.json({
-        success: true,
-        message: `Successfully uploaded ${uploadedPhotos.length} photos`,
-        photos: uploadedPhotos
-      });
-    } catch (error) {
-      // Clean up uploaded files on error
-      if (req.files && Array.isArray(req.files)) {
-        req.files.forEach((file: any) => {
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-          }
-        });
-      }
-      
-      console.error('Error uploading photos:', error);
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : 'Error uploading photos',
-      });
-    }
-  });
-
-  // Get public/featured photos (MUST come before :photoId route)
-  app.get('/api/photos/public', async (req: Request, res: Response) => {
-    try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
-      const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
-      
-      const photos = await storage.getPublicPhotos(limit, offset);
-      console.log(`Retrieved ${photos.length} public photos`);
-      res.json({ success: true, photos });
-    } catch (error) {
-      console.error('Error retrieving public photos:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving public photos',
-      });
-    }
-  });
-
-  // Get featured photos
-  app.get('/api/photos/featured', async (req: Request, res: Response) => {
-    try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-      const photos = await storage.getFeaturedPhotos(limit);
-      console.log(`Retrieved ${photos.length} featured photos`);
-      res.json({ success: true, photos });
-    } catch (error) {
-      console.error('Error retrieving featured photos:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving featured photos',
-      });
-    }
-  });
-
-  // Get photo by ID (MUST come after specific routes)
-  app.get('/api/photos/:photoId', async (req: Request, res: Response) => {
-    try {
-      const { photoId } = req.params;
-      const photo = await storage.getPhoto(photoId);
-      
-      if (!photo) {
-        return res.status(404).json({ success: false, message: 'Photo not found' });
-      }
-
-      res.json({ success: true, photo });
-    } catch (error) {
-      console.error('Error retrieving photo:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving photo',
-      });
-    }
-  });
-
-  // Update photo metadata
-  app.patch('/api/photos/:photoId', async (req: Request, res: Response) => {
-    try {
-      const { photoId } = req.params;
-      const updates = updatePhotoSchema.parse(req.body);
-
-      const photo = await storage.updatePhoto(photoId, updates);
-      res.json({ success: true, photo });
-    } catch (error) {
-      console.error('Error updating photo:', error);
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : 'Error updating photo',
-      });
-    }
-  });
 
   // ── Photo annotations (CompanyCam-style markup) ─────────────────────────
   // Keyed by the served photo URL, not photos.id — most photos in this app
@@ -17214,86 +18085,6 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       });
     }
   });
-
-  // Delete photo
-  app.delete('/api/photos/:photoId', async (req: Request, res: Response) => {
-    try {
-      const { photoId } = req.params;
-      const photo = await storage.getPhoto(photoId);
-      
-      if (!photo) {
-        return res.status(404).json({ success: false, message: 'Photo not found' });
-      }
-
-      // Delete physical file
-      try {
-        const fileName = path.basename(photo.url);
-        const filePath = path.join(photosDir, fileName);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      } catch (fileError) {
-        console.warn('Could not delete physical file:', fileError);
-      }
-
-      await storage.deletePhoto(photoId);
-      res.json({ success: true, message: 'Photo deleted successfully' });
-    } catch (error) {
-      console.error('Error deleting photo:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error deleting photo',
-      });
-    }
-  });
-
-  // Get photos by job with filters
-  app.get('/api/jobs/:jobId/photos/enhanced', async (req: Request, res: Response) => {
-    try {
-      const { jobId } = req.params;
-      const { type, category } = req.query as { type?: string; category?: string };
-      
-      const photos = await storage.getPhotosByJob(jobId, { type, category });
-      res.json({ success: true, photos });
-    } catch (error) {
-      console.error('Error retrieving job photos:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving job photos',
-      });
-    }
-  });
-
-  // Get customer photos
-  app.get('/api/customers/:customerId/photos', async (req: Request, res: Response) => {
-    try {
-      const { customerId } = req.params;
-      const photos = await storage.getPhotosByCustomer(customerId);
-      res.json({ success: true, photos });
-    } catch (error) {
-      console.error('Error retrieving customer photos:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving customer photos',
-      });
-    }
-  });
-
-  // Get before/after photo pairs
-  app.get('/api/jobs/:jobId/before-after-pairs', async (req: Request, res: Response) => {
-    try {
-      const { jobId } = req.params;
-      const pairs = await storage.getBeforeAfterPairs(jobId);
-      res.json({ success: true, pairs });
-    } catch (error) {
-      console.error('Error retrieving before/after pairs:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error retrieving before/after pairs',
-      });
-    }
-  });
-
 
   // Search photos with advanced filters
   app.post('/api/photos/search', async (req: Request, res: Response) => {
@@ -17579,12 +18370,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // ========================================
 
   // Get all employees
-  app.get('/api/employees', async (req: Request, res: Response) => {
+  app.get('/api/employees', requireSession, async (req: Request, res: Response) => {
     try {
       const employees = await storage.getAllEmployees();
       res.json({
         success: true,
-        data: employees
+        data: employees.map(sanitizeEmployee)
       });
     } catch (error) {
       console.error('Error fetching employees:', error);
@@ -17597,12 +18388,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Get active employees only
-  app.get('/api/employees/active', async (req: Request, res: Response) => {
+  app.get('/api/employees/active', requireSession, async (req: Request, res: Response) => {
     try {
       const employees = await storage.getActiveEmployees();
       res.json({
         success: true,
-        data: employees
+        data: employees.map(sanitizeEmployee)
       });
     } catch (error) {
       console.error('Error fetching active employees:', error);
@@ -17615,7 +18406,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Get single employee
-  app.get('/api/employees/:id', async (req: Request, res: Response) => {
+  app.get('/api/employees/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const employee = await storage.getEmployee(req.params.id);
       if (!employee) {
@@ -17626,7 +18417,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
       res.json({
         success: true,
-        data: employee
+        data: sanitizeEmployee(employee)
       });
     } catch (error) {
       console.error('Error fetching employee:', error);
@@ -17672,7 +18463,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const employee = await storage.createEmployee(validatedData);
       res.json({
         success: true,
-        data: employee,
+        data: sanitizeEmployee(employee),
         message: 'Employee created successfully'
       });
     } catch (error) {
@@ -17742,7 +18533,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const employee = await storage.updateEmployee(req.params.id, dataToUpdate);
       res.json({
         success: true,
-        data: employee,
+        data: sanitizeEmployee(employee),
         message: 'Employee updated successfully'
       });
     } catch (error) {
@@ -18514,6 +19305,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
             const emailResult = await emailService.sendEmail({
               to: clientEmail,
+              fromName: __bizName || undefined, // From matches the "{business} Team" sign-off; blank → platform default
               subject: emailSubject,
               html: emailBody,
               text: `Hi ${clientName}, your job is scheduled for ${scheduleDate} at ${startTimeStr}.\n\nWe look forward to completing your job.\n\nThanks,\n${__signoff}`
@@ -19584,8 +20376,84 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // jobs scheduled for the NZ calendar day. Read-only; computed from existing
   // storage, business-scoped via the same RLS connection as every other route.
   // ========================================
+
+  // ── Jobs near me (GPS-suggested job) ───────────────────────────────────────
+  // Crew geolocates from the Today page; we geocode today's scheduled jobs
+  // (Nominatim, NZ-scoped, cached per address for the process lifetime — the
+  // same service the site-map uses) and return them sorted by distance.
+  const nearMeGeocodeCache = new Map<string, { lat: number; lng: number } | null>();
+  async function geocodeNZAddressCached(address: string): Promise<{ lat: number; lng: number } | null> {
+    const key = address.trim().toLowerCase();
+    if (nearMeGeocodeCache.has(key)) return nearMeGeocodeCache.get(key)!;
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=nz&q=${encodeURIComponent(address)}`;
+      const resp = await fetch(url, { headers: { 'User-Agent': 'InflowApp/1.0 (job distance sort)' } });
+      const results = resp.ok ? await resp.json() : [];
+      const hit = Array.isArray(results) && results[0]
+        ? { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) }
+        : null;
+      const value = hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lng) ? hit : null;
+      nearMeGeocodeCache.set(key, value);
+      return value;
+    } catch (err) {
+      console.warn('near-me geocode failed:', address, err);
+      return null; // transient — deliberately NOT cached
+    }
+  }
+  const haversineKm = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+    const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(bLat - aLat), dLng = toRad(bLng - aLng);
+    const h = Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+
+  // NOTE: path deliberately NOT under /api/jobs/* — GET /api/jobs/:id is
+  // registered earlier and would swallow "near-me" as an :id.
+  app.get('/api/near-me/jobs', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const lat = parseFloat(String(req.query.lat));
+      const lng = parseFloat(String(req.query.lng));
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return res.status(400).json({ success: false, message: 'lat and lng are required' });
+      }
+
+      const todayStr = getNZDateString(new Date());
+      const { jobs } = await storage.getAllJobs({ limit: 100000, excludeArchived: true });
+      const candidates = jobs
+        .filter((j: any) => jobRunsOnNZDate(j, todayStr) && j.address)
+        .slice(0, 25); // Nominatim courtesy cap — today's list is short in practice
+
+      const out: any[] = [];
+      for (const j of candidates) {
+        const coords = await geocodeNZAddressCached(j.address);
+        if (!coords) continue;
+        out.push({
+          id: j.id,
+          jobNumber: j.jobNumber ?? null,
+          title: j.title || j.jobNumber || 'Job',
+          address: j.address,
+          scheduledStartTime: j.scheduledStartTime ?? null,
+          distanceKm: Math.round(haversineKm(lat, lng, coords.lat, coords.lng) * 10) / 10,
+        });
+      }
+      out.sort((a, b) => a.distanceKm - b.distanceKm);
+
+      res.json({ success: true, data: out });
+    } catch (error) {
+      console.error('Error computing jobs near me:', error);
+      res.status(500).json({ success: false, message: 'Error computing jobs near me' });
+    }
+  });
+
   app.get('/api/today-overview', async (req: Request, res: Response) => {
     try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
       // Use the real current instant; getNZDateString converts it to the NZ
       // calendar day exactly once. (Do NOT use getNZNow() here — it returns a
       // tz-shifted Date, and converting that to NZ again double-shifts and rolls
@@ -19654,12 +20522,62 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           (a.scheduledStartTime || '99:99').localeCompare(b.scheduledStartTime || '99:99')
         );
 
+      // Everything diaried on today's jobs since NZ midnight, in one query.
+      // Diary rows are the de-facto activity log (photo uploads, notes, timer
+      // stops, milestones all write one) with a denormalized authorName.
+      const jobIds = jobsToday.map(j => j.id);
+      const nzMidnightUtc = nzTimeToUTC(todayStr, '00:00');
+      const diaryToday = (await storage.getJobDiaryEntriesForJobsSince(jobIds, nzMidnightUtc))
+        .filter(e => e.createdAt && getNZDateString(e.createdAt) === todayStr);
+
+      const activityByJob = new Map<string, Array<{
+        id: string; type: string; timestamp: string; actorName: string;
+        title: string; summary: string | null; photos: string[]; timeSpent: number | null;
+      }>>();
+      for (const e of diaryToday) {
+        const photos = [...(e.photos ?? [])];
+        if (e.photoUrl && !photos.includes(e.photoUrl)) photos.push(e.photoUrl);
+        const list = activityByJob.get(e.jobId) ?? [];
+        list.push({
+          id: e.id,
+          type: e.entryType,
+          timestamp: e.createdAt!.toISOString(),
+          actorName: e.authorName,
+          title: e.title,
+          summary: e.description ? e.description.slice(0, 140) : null,
+          photos,
+          timeSpent: e.timeSpent ?? null,
+        });
+        activityByJob.set(e.jobId, list);
+      }
+
+      // Live clock-ins on today's jobs — drives the "on site now" badges.
+      const jobIdSet = new Set(jobIds);
+      const runningTimers = (await storage.getAllActiveTimers()).filter(t => jobIdSet.has(t.jobId));
+      const enrichedTimers = await enrichTimers(runningTimers);
+      const timersByJob = new Map<string, Array<{ employeeId: string; employeeName: string; startedAt: string }>>();
+      for (const t of enrichedTimers) {
+        const list = timersByJob.get(t.jobId) ?? [];
+        list.push({
+          employeeId: t.employeeId,
+          employeeName: t.employeeName,
+          startedAt: t.startedAt instanceof Date ? t.startedAt.toISOString() : String(t.startedAt),
+        });
+        timersByJob.set(t.jobId, list);
+      }
+
+      const jobsTodayWithActivity = jobsToday.map(j => ({
+        ...j,
+        activity: (activityByJob.get(j.id) ?? []).slice(0, 30),
+        liveTimers: timersByJob.get(j.id) ?? [],
+      }));
+
       res.json({
         success: true,
         data: {
           date: todayStr,
           fleet,
-          jobsToday,
+          jobsToday: jobsTodayWithActivity,
           counts: {
             needsAttention: fleet.filter(f => f.severity === 'overdue' || f.severity === 'critical').length,
             dueSoon: fleet.filter(f => f.severity === 'warning' || f.severity === 'info').length,
@@ -20835,9 +21753,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         message.includes('leave the team a review')
       );
       
-      // Send email using the service - don't override from, let Resend config handle it
+      // Send email using the service - address stays on the shared verified domain
+      // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const emailResult = await emailService.sendEmail({
         to,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         text: message,
         html: `<p>${message.replace(/\n/g, '<br>')}</p>`,
@@ -21030,17 +21951,52 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         console.error('📬 Missing email_id in Resend event');
         return res.status(400).json({ error: 'Missing email_id' });
       }
-      
-      // Store the event
-      await storage.createEmailEvent({
-        messageId: messageId,
-        eventType: event.type,
-        recipient: Array.isArray(data?.to) ? data.to[0] : data?.to,
-        timestamp: data?.created_at ? new Date(data.created_at) : new Date(),
-        userAgent: data?.click?.user_agent || data?.open?.user_agent,
-        ipAddress: data?.click?.ip_address || data?.open?.ip_address,
-        linkUrl: data?.click?.link,
-        rawPayload: event
+
+      // Resolve the sending tenant so the event row is stamped to the business
+      // that sent the email. This webhook has no session, so withTenant() would
+      // leave business_id to the column DEFAULT (the legacy tenant) and every
+      // other tenant's email-activity reads would come back empty under RLS.
+      // Every sender records the Resend message id in a job-diary entry's
+      // metadata.sendgridMessageId, so that entry's business_id is the tenant.
+      let eventBusinessId: string | undefined;
+      try {
+        const [senderEntry] = await db
+          .select({ businessId: schema.jobDiaryEntries.businessId })
+          .from(schema.jobDiaryEntries)
+          .where(sql`${schema.jobDiaryEntries.metadata} ->> 'sendgridMessageId' = ${messageId}`)
+          .limit(1);
+        eventBusinessId = senderEntry?.businessId ?? undefined;
+
+        // Fallback (e.g. an email.sent event racing the diary write): the
+        // recipient's customer record — but only when the address belongs to
+        // exactly one tenant, since customers can be shared across businesses.
+        if (!eventBusinessId) {
+          const recipientEmail = Array.isArray(data?.to) ? data.to[0] : data?.to;
+          if (recipientEmail) {
+            const owners = await db
+              .selectDistinct({ businessId: customers.businessId })
+              .from(customers)
+              .where(eq(customers.email, recipientEmail))
+              .limit(2);
+            if (owners.length === 1) eventBusinessId = owners[0].businessId ?? undefined;
+          }
+        }
+      } catch (resolveErr) {
+        console.warn('📬 Could not resolve tenant for Resend event — storing with default stamping:', resolveErr);
+      }
+
+      // Store the event, stamped to the resolved tenant (unresolved → default)
+      await runWithBusiness(eventBusinessId, async () => {
+        await storage.createEmailEvent({
+          messageId: messageId,
+          eventType: event.type,
+          recipient: Array.isArray(data?.to) ? data.to[0] : data?.to,
+          timestamp: data?.created_at ? new Date(data.created_at) : new Date(),
+          userAgent: data?.click?.user_agent || data?.open?.user_agent,
+          ipAddress: data?.click?.ip_address || data?.open?.ip_address,
+          linkUrl: data?.click?.link,
+          rawPayload: event
+        });
       });
       
       console.log(`📬 Stored ${event.type} event for message ${messageId}`);
@@ -21089,7 +22045,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           ? `Email to ${recipientEmail} for ${jobLabel} was not delivered${bounceDetail}. Check the address and resend.${subjectSnippet}`
           : `${recipientEmail} marked your email as spam for ${jobLabel}. Consider using a different address.${subjectSnippet}`;
 
-        const actionUrl = matchedJob ? `/jobs/${matchedJob.id}` : '/invoices';
+        // Matched → the job's diary (where the bounce entry is written below);
+        // jobs open via /dispatch?job=, not a /jobs/:id route (which doesn't
+        // exist). Unmatched → the comms inbox, not /invoices (a bounce for a
+        // non-invoice email dumped the operator onto an unrelated list).
+        const actionUrl = matchedJob ? `/dispatch?job=${matchedJob.id}&tab=diary` : '/inbox';
 
         // Stamp the bounce/complaint notification + diary entry to the matched job's
         // tenant (owner-pathed webhook, no session). Unmatched events carry no tenant
@@ -22496,7 +23456,28 @@ Transcription: ${transcriptText}`;
           });
         }
       } else {
-        // SendGrid multipart/form-data webhook - apply multer middleware.
+        // SendGrid Inbound Parse (multipart/form-data) — and, implicitly, ANY
+        // request that isn't the verified Resend JSON shape. Parse posts carry
+        // no signature, so authenticate with a shared-secret URL token instead
+        // (?token= on the Parse destination URL, INBOUND_EMAIL_PARSE_TOKEN in
+        // the env). Without this gate a forged multipart POST injects supplier
+        // bills, flips proposals via "ACCEPT QUOTE", and writes diary entries.
+        // Fail closed in production: the inbound MX for jobs.* is Cloudflare
+        // Email Routing (→ Gmail poll) and Resend inbound is the JSON branch
+        // above, so no legitimate traffic reaches this branch until SendGrid
+        // Parse is deliberately configured with the token.
+        const parseToken = process.env.INBOUND_EMAIL_PARSE_TOKEN;
+        if (parseToken) {
+          if (req.query.token !== parseToken) {
+            console.error(`🔐 Inbound email webhook: bad Parse token — rejecting`);
+            return res.status(401).json({ success: false, message: 'Invalid webhook token' });
+          }
+        } else if (process.env.NODE_ENV === 'production') {
+          console.error(`⚠️ Non-Resend inbound email POST with no INBOUND_EMAIL_PARSE_TOKEN configured — rejecting`);
+          return res.status(401).json({ success: false, message: 'Webhook verification not configured' });
+        } else {
+          console.warn(`⚠️ INBOUND_EMAIL_PARSE_TOKEN not set - inbound Parse POST not verified (dev only)`);
+        }
         // .any() (rather than .none()) so file attachments land in req.files.
         // SendGrid posts attachments as fields named attachment1, attachment2, ...
         // with dynamic names, which is exactly what .any() handles.
@@ -22839,6 +23820,7 @@ Transcription: ${transcriptText}`;
                 title: `Email Reply — ${actualFromName || actualFromEmail}`,
                 body: previewText,
                 clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
+                collapseId: `email-reply-${diaryEntry?.id || job.id}`,
                 data: { type: 'email_reply', jobId: job.id, jobNumber: String(job.jobNumber) },
               });
             } catch (pushErr) {
@@ -22871,7 +23853,9 @@ Transcription: ${transcriptText}`;
       if (!jobFound && jobNumberMatch) {
         const jobNumber = jobNumberMatch[1];
         console.log(`🔍 Looking up job by number: ${jobNumber}`);
-        const job = await storage.getJobByJobNumber(jobNumber);
+        // Pass the sender so a job number shared across tenants (per-tenant
+        // numbering) can still resolve to the job whose customer sent the reply.
+        const job = await storage.getJobByJobNumber(jobNumber, actualFromEmail || undefined);
         
         if (job) {
           console.log(`✅ Found job ${job.jobNumber} - creating diary entry`);
@@ -22957,6 +23941,7 @@ Transcription: ${transcriptText}`;
                   title: `Email Reply — ${actualFromName || actualFromEmail}`,
                   body: previewText,
                   clickAction: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
+                  collapseId: `email-reply-${diaryEntry?.id || job.id}`,
                   data: { type: 'email_reply', jobId: job.id, jobNumber: String(job.jobNumber) },
                 });
               } catch (pushErr) {
@@ -23107,8 +24092,15 @@ Transcription: ${transcriptText}`;
             targetJob = await storage.getJobByJobNumber(jobNumberMatch[1]);
           }
           if (!targetJob && quoteNumberMatch) {
+            // Quote numbers are unique per business, not globally. This inbound
+            // handler runs session-less (sees all tenants), so only accept an
+            // UNAMBIGUOUS quote-number match — otherwise the UUID/job-number
+            // matchers above should have already resolved the right tenant.
             const jobs = await storage.getAllJobs({ quoteNumber: quoteNumberMatch[1] });
-            if (jobs && jobs.length > 0) targetJob = jobs[0];
+            if (jobs && jobs.length === 1) targetJob = jobs[0];
+            else if (jobs && jobs.length > 1) {
+              console.warn(`Quote number ${quoteNumberMatch[1]} matches multiple tenants — skipping quote-number match`);
+            }
           }
 
           if (targetJob) {
@@ -23140,13 +24132,18 @@ Transcription: ${transcriptText}`;
                 },
               });
               try {
-                const notificationHelper = await import('./services/notificationHelper.js');
-                await notificationHelper.createNotification({
+                // NOTE: this used to call notificationHelper.createNotification(),
+                // which does not exist — it threw on EVERY email quote-acceptance
+                // and was swallowed by the catch below, so the owner never got a
+                // quote_accepted bell entry (same latent bug the UUID reply path
+                // had). Use storage.createNotification like every other path.
+                await storage.createNotification({
                   type: 'quote_accepted',
                   title: `Quote ${acceptedNumber} accepted`,
                   message: `${actualFromName || actualFromEmail} accepted quote ${acceptedNumber} for Job #${targetJob.jobNumber}`,
                   jobId: targetJob.id,
                   priority: 'high',
+                  isRead: false,
                   actionUrl: `/dispatch?job=${targetJob.id}&tab=diary`,
                   metadata: { proposalId: quoteProposal.id, quoteNumber: acceptedNumber },
                 });
@@ -23259,10 +24256,31 @@ Transcription: ${transcriptText}`;
       // If no job found, create/update conversation (original behavior)
       if (!jobFound) {
         console.log(`💬 No job reference found - checking for existing conversation`);
+
+        // Reference-less email: nothing above resolved a tenant, so without a
+        // context these writes take the business_id column DEFAULT (the legacy
+        // tenant) and the conversation match + admin push run cross-tenant.
+        // Resolve the owning tenant from the recipient address(es) via
+        // tenant_channels (same as the Gmail-poller fallback). Unresolved →
+        // undefined → behaviour identical to before.
+        const recipientAddresses: string[] =
+          (typeof to === 'string' ? to.match(/[\w.+'-]+@[\w.-]+\.\w+/g) : null) ?? [];
+        let channelBusinessId: string | undefined;
+        for (const addr of recipientAddresses) {
+          channelBusinessId = await resolveBusinessIdByChannel('email', addr);
+          if (channelBusinessId) break;
+        }
+        if (channelBusinessId) {
+          console.log(`📧 Reference-less email scoped to tenant ${channelBusinessId} via recipient channel`);
+        } else if (recipientAddresses.length > 0) {
+          console.warn(`📧 Reference-less email recipient(s) not in tenant_channels (${recipientAddresses.join(', ')}) — falling back to default-tenant behaviour`);
+        }
+
+        await runWithBusiness(channelBusinessId, async () => {
         // Check if conversation exists for this email contact
         let conversation = await notificationHelper.findExistingOpenConversation(actualFromEmail);
         const isNewConversation = !conversation;
-        
+
         if (!conversation) {
           // Create new conversation
           conversation = await storage.createConversation({
@@ -23273,7 +24291,7 @@ Transcription: ${transcriptText}`;
             lastMessageBy: 'customer',
             lastMessageAt: new Date()
           });
-          
+
           // Create notification bell entry for new email conversation
           await notificationHelper.createConversationNotification(conversation);
           console.log(`✅ Created new conversation for email from ${actualFromEmail}: ${conversation.id}`);
@@ -23285,7 +24303,7 @@ Transcription: ${transcriptText}`;
             inboundMessageId || undefined,
           );
         }
-        
+
         // Create message in conversation
         await storage.createConversationMessage({
           conversationId: conversation.id,
@@ -23298,7 +24316,7 @@ Transcription: ${transcriptText}`;
           platform: 'email',
           isRead: false
         });
-        
+
         // Update conversation
         await storage.updateConversation(conversation.id, {
           lastMessageAt: new Date(),
@@ -23318,6 +24336,7 @@ Transcription: ${transcriptText}`;
         };
         await storage.createNotification(notificationData);
         console.log(`🔔 Notification created for conversation ${conversation.id}`);
+        }); // runWithBusiness(channelBusinessId) — scope reference-less email writes + push targeting
       }
       
       res.json({ success: true, message: 'Email received and processed' });
@@ -23757,8 +24776,11 @@ Transcription: ${transcriptText}`;
       if (messagePlatform === 'email') {
         // Send email using EmailService
         try {
+          // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+          const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
           const emailResult = await emailService.sendEmail({
             to: recipientContact,
+            fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
             subject: lastInboundMessage.subject ? `Re: ${lastInboundMessage.subject}` : 'Response to your enquiry',
             text: content,
             html: content.replace(/\n/g, '<br>')
@@ -26272,12 +27294,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   app.post('/api/proposals/:id/accept', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { selectedChoices } = req.body || {};
+      const { selectedChoices, selectedOptionalItems } = req.body || {};
       console.log('🚀 ACCEPT PROPOSAL REQUEST RECEIVED - Proposal ID:', id);
       console.log('📋 Request method:', req.method);
       console.log('🔐 Session ID:', req.session?.id);
       console.log('👤 Employee ID:', req.session?.employeeId);
-      console.log('🎯 Selected choices:', selectedChoices);
+      console.log('🎯 Selected choices:', selectedChoices, 'optional items:', selectedOptionalItems);
       
       // Get the proposal
       const proposal = await storage.getProposal(id);
@@ -26330,114 +27352,96 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         return res.status(400).json({ success: false, message: 'Proposal has expired' });
       }
 
-      // If customer selected different choices, update the proposal sections
-      let updatedSections = proposal.sections;
+      // Recompute totals from the stored line items, honouring the customer's
+      // optional-item and choice selections (keyed by proposal_line_items row
+      // ids — the same ids the public endpoint serves to the accept page).
+      // Optional items — the per-item isOptional flag OR any item in an
+      // 'optional'/'multipleChoice' section — count ONLY when the customer
+      // explicitly selected them: their stored `selected` flag defaults to
+      // true, so trusting it silently added unchosen options to the total.
       let updatedTotalAmount: number = parseFloat(proposal.totalAmount?.toString() || '0');
       let updatedSubtotal: number = parseFloat(proposal.subtotal?.toString() || '0');
+      let updatedGst: number | undefined;
+      try {
+        const [acceptSections, acceptLineItems] = await Promise.all([
+          storage.getProposalSectionsByProposal(id),
+          storage.getProposalLineItemsByProposal(id),
+        ]);
+        const interactiveSectionIds = new Set(
+          acceptSections
+            .filter((s: any) => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+            .map((s: any) => s.id),
+        );
+        const optSel: Record<string, boolean> =
+          selectedOptionalItems && typeof selectedOptionalItems === 'object' ? selectedOptionalItems : {};
+        const choiceSel: Record<string, string> =
+          selectedChoices && typeof selectedChoices === 'object' ? selectedChoices : {};
+        const acceptTaxRate = (parseFloat(proposal.taxRate?.toString() || '15') || 15) / 100;
 
-      // When no choices are made, recompute from actual DB line items (more reliable than cached proposal.subtotal)
-      if (!selectedChoices || Object.keys(selectedChoices).length === 0) {
-        try {
-          const acceptLineItems = await storage.getProposalLineItemsByProposal(id);
-          const acceptTaxRate = parseFloat(proposal.taxRate?.toString() || '15') / 100;
-          const acceptDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
-          let computedSubtotal = 0;
-          for (const item of acceptLineItems) {
-            if (item.selected !== false) {
-              const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
-              computedSubtotal += item.priceIncludesTax ? price / (1 + acceptTaxRate) : price;
+        let computedSubtotal = 0;
+        const itemUpdates: Array<{ id: string; selected: boolean; selectedChoiceId: string | null }> = [];
+        for (const item of acceptLineItems) {
+          const toggleable = item.isOptional === true || interactiveSectionIds.has(item.sectionId || '');
+          const isSelected = toggleable ? optSel[item.id] === true : item.selected !== false;
+
+          // Validate any customer-picked choice against the item's stored choices
+          let selectedChoiceId: string | null = item.selectedChoiceId ?? null;
+          let choices: any[] = [];
+          if (item.pricingType === 'choice') {
+            choices = await storage.getProposalLineItemChoicesByLineItem(item.id);
+            if (choiceSel[item.id]) {
+              if (choices.some((c: any) => c.id === choiceSel[item.id])) {
+                selectedChoiceId = choiceSel[item.id];
+              } else {
+                console.log(`⚠️ Invalid choice ${choiceSel[item.id]} for item ${item.id}, keeping original`);
+              }
             }
           }
-          // discountAmount is the pre-computed dollar discount (see CREATE/PUT).
-          const acceptDiscountValue = acceptDiscountAmt;
-          const acceptSubtotalAfterDiscount = Math.max(0, computedSubtotal - acceptDiscountValue);
-          const acceptGst = acceptSubtotalAfterDiscount * acceptTaxRate;
-          updatedSubtotal = Math.round(computedSubtotal * 100) / 100;
-          updatedTotalAmount = Math.round((acceptSubtotalAfterDiscount + acceptGst) * 100) / 100;
-          console.log(`💰 Accept: recomputed from line items: subtotal=${updatedSubtotal}, total=${updatedTotalAmount}`);
-        } catch (err) {
-          console.error('⚠️ Accept: failed to recompute from line items, using cached values:', err);
+
+          // Persist the customer's picks so later reads (PDF, re-renders,
+          // invoicing) agree with the accepted totals.
+          if ((toggleable && isSelected !== (item.selected !== false))
+            || selectedChoiceId !== (item.selectedChoiceId ?? null)) {
+            itemUpdates.push({ id: item.id, selected: isSelected, selectedChoiceId });
+          }
+
+          if (!isSelected) continue;
+          let itemPrice = 0;
+          if (item.pricingType === 'choice' && choices.length > 0) {
+            const chosen = choices.find((c: any) => c.id === selectedChoiceId)
+              ?? choices.find((c: any) => c.isDefault)
+              ?? choices[0];
+            itemPrice = (parseFloat(chosen.price?.toString() || '0') || 0)
+              * (parseFloat(item.quantity?.toString() || '1') || 1);
+          } else if (item.pricingType === 'fixed' && item.fixedPrice) {
+            itemPrice = parseFloat(item.fixedPrice.toString()) || 0;
+          } else {
+            itemPrice = parseFloat(item.totalPrice?.toString() || '0') || 0;
+          }
+          computedSubtotal += item.priceIncludesTax ? itemPrice / (1 + acceptTaxRate) : itemPrice;
         }
-      }
-      
-      if (selectedChoices && Object.keys(selectedChoices).length > 0 && Array.isArray(proposal.sections)) {
-        console.log('🎯 Applying customer-selected choices to proposal...');
-        
-        // Update sections with selected choices (validate choice IDs)
-        updatedSections = proposal.sections.map((section: any) => ({
-          ...section,
-          lineItems: (section.lineItems || []).map((item: any) => {
-            if (selectedChoices[item.id] && item.pricingType === 'choice') {
-              // Validate that the selected choice exists
-              const validChoice = (item.choices || []).find((c: any) => c.id === selectedChoices[item.id]);
-              if (validChoice) {
-                console.log(`🎯 Updating line item ${item.id} with choice ${selectedChoices[item.id]}`);
-                return {
-                  ...item,
-                  selectedChoiceId: selectedChoices[item.id]
-                };
-              } else {
-                console.log(`⚠️ Invalid choice ${selectedChoices[item.id]} for item ${item.id}, keeping original`);
-              }
-            }
-            return item;
-          })
-        }));
-        
-        // Recalculate totals based on selected choices (matching ProposalTemplate logic)
-        let subtotalExGst = 0;
-        let gstAmount = 0;
-        const gstRate = 0.15;
-        
-        updatedSections.forEach((section: any) => {
-          (section.lineItems || []).forEach((item: any) => {
-            if (item.selected) {
-              let itemPrice = 0;
-              if (item.pricingType === 'choice' && item.selectedChoiceId) {
-                const selectedChoice = (item.choices || []).find((c: any) => c.id === item.selectedChoiceId);
-                if (selectedChoice) {
-                  itemPrice = Number(selectedChoice.price) * Number(item.quantity);
-                }
-              } else if (item.pricingType === 'fixed' && item.fixedPrice) {
-                itemPrice = Number(item.fixedPrice);
-              } else {
-                itemPrice = Number(item.totalPrice);
-              }
-              
-              // Handle priceIncludesTax flag (matching ProposalTemplate logic)
-              const isInclusive = item.priceIncludesTax || false;
-              
-              if (isInclusive) {
-                // Price includes GST - extract the ex-GST amount
-                const exGst = itemPrice / (1 + gstRate);
-                subtotalExGst += exGst;
-                gstAmount += itemPrice - exGst;
-              } else {
-                // Price is ex-GST
-                subtotalExGst += itemPrice;
-                gstAmount += itemPrice * gstRate;
-              }
-            }
-          });
-        });
-        
-        // Apply discount (discount reduces the taxable amount - matching ProposalTemplate logic)
-        const discountAmount = Number(proposal.discountAmount || 0);
-        const subtotalAfterDiscount = Math.max(0, subtotalExGst - discountAmount);
-        
-        // GST is calculated on the discounted amount (less GST)
-        const gstOnDiscounted = subtotalAfterDiscount * gstRate;
-        const totalAmount = subtotalAfterDiscount + gstOnDiscounted;
-        
-        // Round to 2 decimal places (matching UI formatting)
-        updatedSubtotal = Math.round(subtotalExGst * 100) / 100;
-        updatedTotalAmount = Math.round(totalAmount * 100) / 100;
-        const roundedGst = Math.round(gstOnDiscounted * 100) / 100;
-        console.log(`💰 Recalculated totals: subtotal=${updatedSubtotal}, discount=${discountAmount}, subtotalAfterDiscount=${Math.round(subtotalAfterDiscount * 100) / 100}, gst=${roundedGst}, total=${updatedTotalAmount}`);
+
+        // discountAmount is the pre-computed dollar discount (see CREATE/PUT).
+        const acceptDiscountValue = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
+        const acceptSubtotalAfterDiscount = Math.max(0, computedSubtotal - acceptDiscountValue);
+        const acceptGst = acceptSubtotalAfterDiscount * acceptTaxRate;
+        updatedSubtotal = Math.round(computedSubtotal * 100) / 100;
+        updatedGst = Math.round(acceptGst * 100) / 100;
+        updatedTotalAmount = Math.round((acceptSubtotalAfterDiscount + acceptGst) * 100) / 100;
+        console.log(`💰 Accept: recomputed from line items: subtotal=${updatedSubtotal}, discount=${acceptDiscountValue}, gst=${updatedGst}, total=${updatedTotalAmount} (${itemUpdates.length} selection updates)`);
+
+        for (const u of itemUpdates) {
+          await storage.updateProposalLineItem(u.id, {
+            selected: u.selected,
+            selectedChoiceId: u.selectedChoiceId,
+          } as any);
+        }
+      } catch (err) {
+        console.error('⚠️ Accept: failed to recompute from line items, using cached values:', err);
       }
       
       // Deposit gate. If this proposal requires an upfront payment, persist
-      // the updated sections/totals and stop here — the customer UI will
+      // the updated totals and stop here — the customer UI will
       // open Stripe Checkout via /api/proposals/:id/deposit-checkout and
       // the webhook will run finalizeProposalAcceptance() on payment.
       const depositAmount = computeDepositAmount(
@@ -26450,9 +27454,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const pendingProposal = await storage.updateProposal(id, {
           status: 'accepted_pending_deposit',
           acceptedDate: new Date(),
-          sections: updatedSections,
           totalAmount: updatedTotalAmount,
           subtotal: updatedSubtotal,
+          ...(updatedGst !== undefined ? { gstAmount: updatedGst } : {}),
         } as any);
         console.log(`⏸️ Proposal ${proposal.proposalNumber} acceptance pending deposit of ${depositAmount}`);
         return res.json({
@@ -26473,9 +27477,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const updatedProposal = await storage.updateProposal(id, {
         status: 'accepted',
         acceptedDate: new Date(),
-        sections: updatedSections,
         totalAmount: updatedTotalAmount,
         subtotal: updatedSubtotal,
+        ...(updatedGst !== undefined ? { gstAmount: updatedGst } : {}),
       } as any);
 
       // Owner-pathed public accept link (no session) → bind the proposal's tenant so
@@ -26564,8 +27568,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         process.env.NODE_ENV === 'production'
           ? APP_URL
           : `${req.protocol}://${req.get('host')}`;
-      const successUrl = `${origin}/proposal/${proposal.id}/accept?deposit=success&session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${origin}/proposal/${proposal.id}/accept?deposit=cancelled`;
+      const successUrl = proposalAcceptLink(proposal.id, { base: origin, query: 'deposit=success&session_id={CHECKOUT_SESSION_ID}' });
+      const cancelUrl = proposalAcceptLink(proposal.id, { base: origin, query: 'deposit=cancelled' });
 
       const session = await createDepositCheckoutSession({
         proposalId: proposal.id,
@@ -26822,6 +27826,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             await ownerDb.update(schema.businessSettings)
               .set({ stripeConnectChargesEnabled: !!acct.charges_enabled })
               .where(eq(schema.businessSettings.stripeConnectAccountId, acct.id));
+            // Matched by Stripe account id, so we don't know which business's
+            // settings row changed — drop the whole settings cache namespace
+            // (rare event, tiny cache).
+            cacheDeletePrefix('bs:');
           } catch (e: any) {
             console.error('Stripe Connect account.updated sync failed:', e?.message);
           }
@@ -27172,6 +28180,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const __updBiz = (await storage.getBusinessSettings())?.businessName || '';
         await emailService.sendEmail({
           to: msg.recipientEmail,
+          fromName: __updBiz || undefined, // From shows the tenant's business name; blank → platform default
           subject: __updBiz ? `Update from ${__updBiz}` : 'Update',
           html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
           text: msg.message,
@@ -27936,65 +28945,77 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // =====================================
-  // ServiceM8 Integration API Routes
+  // ServiceM8 migration (per-tenant, API-key) — Settings → Import & Migration.
+  // Replaces the dead single-tenant /api/servicem8/* routes (their
+  // servicem8Service was never defined, so every call 500'd).
   // =====================================
 
-  // GET /api/servicem8/test - Test ServiceM8 API connection
-  app.get('/api/servicem8/test', async (req: Request, res: Response) => {
+  // Resolve the key to use: an explicitly typed one wins; the masked sentinel
+  // or an empty body falls back to the tenant's stored key.
+  async function resolveServiceM8Key(bodyKey: unknown): Promise<string | null> {
+    const typed = typeof bodyKey === 'string' ? bodyKey.trim() : '';
+    if (typed && typed !== '••••••••') return typed;
+    const settings = await storage.getBusinessSettings();
+    const stored = (settings?.servicem8ApiKey ?? '').trim();
+    return stored || null;
+  }
+
+  // POST /api/import/servicem8/test - Validate a ServiceM8 API key
+  app.post('/api/import/servicem8/test', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const result = await servicem8Service.testConnection();
-      res.json(result);
+      const apiKey = await resolveServiceM8Key(req.body?.apiKey);
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'Enter your ServiceM8 API key first.' });
+      }
+      const result = await testServiceM8Connection(apiKey);
+      res.json({ success: result.ok, message: result.message });
     } catch (error) {
       console.error('ServiceM8 test connection error:', error);
+      res.status(500).json({ success: false, message: 'Failed to test the ServiceM8 connection' });
+    }
+  });
+
+  // POST /api/import/servicem8/run - Kick off a BACKGROUND import of the
+  // tenant's ServiceM8 clients + jobs and return immediately (a full account
+  // takes minutes — holding the request open just hits the edge's ~100s
+  // timeout as a Cloudflare 524). The UI polls /status. Idempotent per run;
+  // overlapping runs are refused (409) so the dedup snapshot stays valid.
+  app.post('/api/import/servicem8/run', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+      const typedKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+      const apiKey = await resolveServiceM8Key(req.body?.apiKey);
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'Enter your ServiceM8 API key first.' });
+      }
+      // Persist a newly typed key only after a successful run, so re-runs
+      // don't need it re-entered. (Settings API already masks it on read.)
+      const persistKey = typedKey && typedKey !== '••••••••' ? typedKey : undefined;
+      const { started } = await startServiceM8Import(businessId, apiKey, persistKey);
+      if (!started) {
+        return res.status(409).json({ success: false, message: 'An import is already running — wait for it to finish.' });
+      }
+      res.status(202).json({ success: true, data: { started: true } });
+    } catch (error) {
+      console.error('ServiceM8 import error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to test ServiceM8 connection'
+        message: error instanceof Error ? error.message : 'Failed to start the ServiceM8 import',
       });
     }
   });
 
-  // POST /api/servicem8/import/customers - Import customers from ServiceM8
-  app.post('/api/servicem8/import/customers', async (req: Request, res: Response) => {
+  // GET /api/import/servicem8/status - Progress of the current/last background run.
+  app.get('/api/import/servicem8/status', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const result = await servicem8Service.importCustomers();
-      res.json(result);
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
+      const progress = await getServiceM8ImportStatus(businessId);
+      res.json({ success: true, data: progress ?? { running: false, phase: 'idle' } });
     } catch (error) {
-      console.error('ServiceM8 customers import error:', error);
-      res.status(500).json({
-        success: false,
-        imported: 0,
-        errors: ['Failed to import customers from ServiceM8']
-      });
-    }
-  });
-
-  // POST /api/servicem8/update/customer-names - Update existing customer names with improved ServiceM8 data
-  app.post('/api/servicem8/update/customer-names', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.updateExistingCustomerNames();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 customer names update error:', error);
-      res.status(500).json({
-        success: false,
-        updated: 0,
-        errors: ['Failed to update customer names from ServiceM8']
-      });
-    }
-  });
-
-  // POST /api/servicem8/import/jobs - Import jobs from ServiceM8
-  app.post('/api/servicem8/import/jobs', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.importJobs();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 jobs import error:', error);
-      res.status(500).json({
-        success: false,
-        imported: 0,
-        errors: ['Failed to import jobs from ServiceM8']
-      });
+      console.error('ServiceM8 import status error:', error);
+      res.status(500).json({ success: false, message: 'Failed to read import status' });
     }
   });
 
@@ -28248,7 +29269,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // POST /api/jobs/import-servicem8 - Import jobs from ServiceM8 CSV file
-  app.post('/api/jobs/import-servicem8', async (req: Request, res: Response) => {
+  // Admin-gated like its import siblings — bulk job creation must not depend
+  // on RLS alone to stop an anonymous caller.
+  app.post('/api/jobs/import-servicem8', requireAdmin, async (req: Request, res: Response) => {
     try {
       const { jobs } = req.body;
       
@@ -28459,39 +29482,6 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       });
     }
   });
-
-  // POST /api/servicem8/import/all - Import all data from ServiceM8
-  app.post('/api/servicem8/import/all', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.importAll();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 full import error:', error);
-      res.status(500).json({
-        success: false,
-        customers: { imported: 0, errors: [] },
-        jobs: { imported: 0, errors: [] },
-        message: 'Failed to import data from ServiceM8'
-      });
-    }
-  });
-
-  // POST /api/servicem8/sync - Sync existing data with complete ServiceM8 information
-  app.post('/api/servicem8/sync', async (req: Request, res: Response) => {
-    try {
-      const result = await servicem8Service.syncExistingData();
-      res.json(result);
-    } catch (error) {
-      console.error('ServiceM8 sync error:', error);
-      res.status(500).json({
-        success: false,
-        customers: { updated: 0, errors: [] },
-        jobs: { updated: 0, errors: [] },
-        message: 'Failed to sync data with ServiceM8'
-      });
-    }
-  });
-
 
   // Materials and Services API
   app.get("/api/materials-services", async (req: Request, res: Response) => {
@@ -29272,8 +30262,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       
       if (data.sentVia === 'email' || data.sentVia === 'both') {
         if (data.customerEmail) {
+          // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+          const __reviewBiz = (await storage.getBusinessSettings())?.businessName || '';
           await emailService.sendEmail({
             to: data.customerEmail,
+            fromName: __reviewBiz || undefined, // From shows the tenant's business name; blank → platform default
             subject: 'How was our service?',
             html: `
               <p>Hi ${data.customerName},</p>
@@ -29281,7 +30274,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
               <p>We'd love to hear about your experience! Please take a moment to leave us a review:</p>
               <p><a href="${reviewLink}" style="background-color: #4CAF50; color: white; padding: 14px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Leave a Review</a></p>
               <p>Your feedback helps us improve our services.</p>
-              <p>Best regards,<br>Treemarkables Team</p>
+              <p>Best regards,<br>${__reviewBiz ? `${__reviewBiz} Team` : 'The Team'}</p>
             `
           });
         }
@@ -31373,6 +32366,11 @@ Transcription: ${transcriptText}`;
       if (!token) {
         return res.status(400).json({ success: false, message: 'Token is required' });
       }
+      // deviceInfo arrives as a string from the Capacitor bridge ('iOS
+      // Capacitor') but as a {userAgent, platform} object from the browser
+      // preferences page — normalize before storing in the text column.
+      const deviceInfoStr: string | null =
+        typeof deviceInfo === 'string' ? deviceInfo : deviceInfo ? JSON.stringify(deviceInfo) : null;
 
       // Check if token already exists
       const existingToken = await storage.getFcmTokenByToken(token);
@@ -31391,6 +32389,9 @@ Transcription: ${transcriptText}`;
             await storage.updateFcmToken(existingToken.id, { isActive: true });
           }
         }
+        if ((deviceInfoStr || '').startsWith('iOS')) {
+          await deactivateOlderIosAppTokens(employeeId, token, existingToken.createdAt ? new Date(existingToken.createdAt) : null);
+        }
         return res.json({ success: true, message: 'Token registered' });
       }
 
@@ -31398,9 +32399,16 @@ Transcription: ${transcriptText}`;
       await storage.createFcmToken({
         employeeId,
         token,
-        deviceInfo: deviceInfo || null,
+        deviceInfo: deviceInfoStr,
         isActive: true
       });
+      // The bridged-native path registers here with deviceInfo 'iOS Capacitor'
+      // — apply the same one-device-one-token retirement the native endpoint
+      // does, or every reinstall leaves another live token behind (seen in
+      // prod: one employee at 8 tokens, 5 of them dead-but-erroring).
+      if ((deviceInfoStr || '').startsWith('iOS')) {
+        await deactivateOlderIosAppTokens(employeeId, token, null);
+      }
 
       // Create default notification preferences if they don't exist
       const existingPrefs = await storage.getNotificationPreferences(employeeId);
@@ -31422,22 +32430,23 @@ Transcription: ${transcriptText}`;
   // the old ones keep delivering through APNs until Apple notices the
   // uninstall, so an employee accumulates active tokens and every push fans
   // out N times to the same phone (seen as triple "rescheduled" alerts after
-  // the June-11 delete-and-reinstall cycle). Whenever a native token checks
-  // in, retire any OLDER active native tokens for that employee — the app
-  // re-registers its current token on every launch, so a genuinely live
-  // second device reactivates itself the next time it's opened.
-  async function deactivateOlderNativeTokens(employeeId: string, currentToken: string, currentCreatedAt: Date | null) {
+  // the June-11 delete-and-reinstall cycle). Whenever an iOS app token checks
+  // in — via the native Swift endpoint ('iOS Native …') OR the web bridge
+  // path ('iOS Capacitor') — retire any OLDER active iOS tokens for that
+  // employee. The app re-registers its current token on every launch, so a
+  // genuinely live second device reactivates itself the next time it's opened.
+  async function deactivateOlderIosAppTokens(employeeId: string, currentToken: string, currentCreatedAt: Date | null) {
     try {
       const activeTokens = await storage.getActiveFcmTokens(employeeId);
       for (const t of activeTokens) {
         if (t.token === currentToken) continue;
-        if (!(t.deviceInfo || '').startsWith('iOS Native')) continue;
+        if (!(t.deviceInfo || '').startsWith('iOS')) continue;
         if (currentCreatedAt && t.createdAt && new Date(t.createdAt) >= currentCreatedAt) continue;
         await storage.updateFcmToken(t.id, { isActive: false });
-        console.log(`🧹 Deactivated older native FCM token ${t.token.substring(0, 12)}… for employee ${employeeId}`);
+        console.log(`🧹 Deactivated older iOS FCM token ${t.token.substring(0, 12)}… for employee ${employeeId}`);
       }
     } catch (err) {
-      console.error('Error deactivating older native FCM tokens:', err);
+      console.error('Error deactivating older iOS FCM tokens:', err);
     }
   }
 
@@ -31469,7 +32478,7 @@ Transcription: ${transcriptText}`;
         if (!existingToken.isActive) {
           await storage.updateFcmToken(existingToken.id, { isActive: true });
         }
-        await deactivateOlderNativeTokens(employeeId, token, existingToken.createdAt ? new Date(existingToken.createdAt) : null);
+        await deactivateOlderIosAppTokens(employeeId, token, existingToken.createdAt ? new Date(existingToken.createdAt) : null);
         console.log(`✅ Native FCM token already registered for employee ${employeeId}`);
         return res.json({ success: true, message: 'Token already registered' });
       }
@@ -31483,7 +32492,7 @@ Transcription: ${transcriptText}`;
       });
       // A brand-new token means this device just (re)installed — every other
       // active native token for this employee predates it.
-      await deactivateOlderNativeTokens(employeeId, token, null);
+      await deactivateOlderIosAppTokens(employeeId, token, null);
 
       // Create default notification preferences if they don't exist
       const existingPrefs = await storage.getNotificationPreferences(employeeId);
@@ -31785,6 +32794,262 @@ Transcription: ${transcriptText}`;
     } catch (error) {
       console.error('Error deleting tree marker:', error);
       res.status(500).json({ success: false, message: 'Failed to delete tree marker' });
+    }
+  });
+
+  // ========================================
+  // HAZARD TREE PINS — site-persistent register (WIP)
+  // Distinct from tree_markers (job overlay). Dark unless HAZARD_TREE_PINS=true.
+  // See HAZARD_TREE_PINS_PLAN.md. Do not hang this off tree_markers.
+  // ========================================
+
+  app.get("/api/hazard-pins/enabled", requireSession, (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        enabled: HAZARD_TREE_PINS_ENABLED,
+        riskRatings: TREE_PIN_RISK_RATINGS,
+        workTypes: TREE_PIN_WORK_TYPES,
+      },
+    });
+  });
+
+  app.get("/api/customers/:id/sites", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const sites = await storage.getCustomerSites(req.params.id);
+      res.json({ success: true, data: sites });
+    } catch (error) {
+      console.error("Error fetching customer sites:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch sites" });
+    }
+  });
+
+  app.post("/api/customers/:id/sites", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const parsed = insertCustomerSiteSchema.safeParse({
+        ...req.body,
+        customerId: req.params.id,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid site",
+          errors: parsed.error.errors,
+        });
+      }
+      const site = await storage.createCustomerSite(parsed.data);
+      res.json({ success: true, data: site });
+    } catch (error) {
+      console.error("Error creating customer site:", error);
+      res.status(500).json({ success: false, message: "Failed to create site" });
+    }
+  });
+
+  app.get("/api/customers/:id/tree-pins", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const pins = await storage.getTreePinsByCustomer(req.params.id);
+      res.json({ success: true, data: pins });
+    } catch (error) {
+      console.error("Error fetching tree pins:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch tree pins" });
+    }
+  });
+
+  app.post("/api/customers/:id/tree-pins", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const parsed = createTreePinRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          success: false,
+          message: "GPS, risk rating, and recommended work type are required",
+          errors: parsed.error.errors,
+        });
+      }
+      const body = parsed.data;
+      let linkJobId: string | undefined;
+      if (body.jobId) {
+        const job = await storage.getJob(body.jobId);
+        if (!job) {
+          return res.status(400).json({ success: false, message: "Job not found" });
+        }
+        if (job.customerId !== req.params.id) {
+          return res.status(400).json({
+            success: false,
+            message: "Job is not linked to this customer",
+          });
+        }
+        linkJobId = job.id;
+      }
+      let siteId = body.siteId;
+      if (siteId) {
+        const sites = await storage.getCustomerSites(req.params.id);
+        if (!sites.some((s) => s.id === siteId)) {
+          return res.status(400).json({ success: false, message: "Site does not belong to this customer" });
+        }
+      } else {
+        const site = await storage.ensureDefaultCustomerSite(req.params.id);
+        siteId = site.id;
+      }
+      const pin = await storage.createTreePin({
+        customerId: req.params.id,
+        siteId,
+        latitude: String(body.latitude),
+        longitude: String(body.longitude),
+        gpsAccuracy: body.gpsAccuracy ?? null,
+        riskRating: body.riskRating,
+        recommendedWorkType: body.recommendedWorkType.trim(),
+        status: "assessed",
+        notes: body.notes ?? null,
+        species: body.species ?? null,
+        sizeNotes: body.sizeNotes ?? null,
+        accessNotes: body.accessNotes ?? null,
+        createdBy: req.session.employeeId ?? null,
+      });
+      if (linkJobId) {
+        await storage.createTreePinWorkLink({ pinId: pin.id, jobId: linkJobId });
+      }
+      res.json({ success: true, data: pin });
+    } catch (error) {
+      console.error("Error creating tree pin:", error);
+      res.status(500).json({ success: false, message: "Failed to create tree pin" });
+    }
+  });
+
+  app.get("/api/hazard-pins/:id", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const pin = await storage.getTreePin(req.params.id);
+      if (!pin) {
+        return res.status(404).json({ success: false, message: "Pin not found" });
+      }
+      res.json({ success: true, data: pin });
+    } catch (error) {
+      console.error("Error fetching tree pin:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch tree pin" });
+    }
+  });
+
+  // NOTE: multer/busboy callbacks run outside the request's ALS tenant context,
+  // so this handler rides the OWNER connection. RLS does not scope the pin read
+  // (explicit ownership check) and withTenant() cannot stamp the update
+  // (businessId passed from the parent pin). Same pattern as site-map images.
+  app.post(
+    "/api/hazard-pins/:id/photos",
+    requireSession,
+    requireHazardTreePins,
+    imageUpload.fields([
+      { name: "photos", maxCount: TREE_PIN_MAX_PHOTOS },
+      { name: "photo", maxCount: 1 },
+    ]),
+    async (req, res) => {
+      try {
+        const pin = await storage.getTreePin(req.params.id);
+        if (
+          !pin ||
+          pin.archivedAt ||
+          (pin.businessId && req.session.businessId && pin.businessId !== req.session.businessId)
+        ) {
+          return res.status(404).json({ success: false, message: "Pin not found" });
+        }
+        const filesMap = req.files as
+          | { photos?: Express.Multer.File[]; photo?: Express.Multer.File[] }
+          | undefined;
+        const files = [...(filesMap?.photos ?? []), ...(filesMap?.photo ?? [])];
+        const images = files.filter((f) => (f.mimetype || "").toLowerCase().startsWith("image/"));
+        if (images.length === 0) {
+          return res.status(400).json({ success: false, message: "No photos provided" });
+        }
+        const existingCount = pin.photoUrls?.length ?? 0;
+        if (existingCount + images.length > TREE_PIN_MAX_PHOTOS) {
+          return res.status(400).json({
+            success: false,
+            message: `A pin can hold at most ${TREE_PIN_MAX_PHOTOS} photos`,
+          });
+        }
+        const photoStorage = new PhotoStorageService();
+        const photoUrls: string[] = [];
+        for (const file of images) {
+          try {
+            const { url } = await photoStorage.uploadPhoto(
+              file.buffer,
+              file.originalname || `hazard-pin-${pin.id}-${Date.now()}.jpg`,
+              file.mimetype,
+            );
+            photoUrls.push(url);
+          } catch (uploadErr) {
+            console.error("Error uploading hazard pin photo to GCS:", uploadErr);
+          }
+        }
+        if (photoUrls.length === 0) {
+          return res.status(500).json({
+            success: false,
+            message: "Failed to upload any photos to storage",
+          });
+        }
+        const updated = await storage.appendTreePinPhotos(
+          pin.id,
+          photoUrls,
+          pin.businessId ?? req.session.businessId,
+        );
+        res.json({ success: true, data: updated, photos: photoUrls });
+      } catch (error) {
+        console.error("Error uploading hazard pin photos:", error);
+        res.status(500).json({ success: false, message: "Failed to upload photos" });
+      }
+    },
+  );
+
+  app.get("/api/jobs/:id/tree-pins", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: "Job not found" });
+      }
+      const pins = await storage.getTreePinsByJob(req.params.id);
+      res.json({ success: true, data: pins });
+    } catch (error) {
+      console.error("Error fetching job tree pins:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch tree pins" });
+    }
+  });
+
+  // Link an existing customer pin onto this job (tree_pin_work_links).
+  app.post("/api/jobs/:id/tree-pins/:pinId/link", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: "Job not found" });
+      }
+      const pin = await storage.getTreePin(req.params.pinId);
+      if (!pin || pin.archivedAt) {
+        return res.status(404).json({ success: false, message: "Pin not found" });
+      }
+      if (!job.customerId || pin.customerId !== job.customerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Pin is not on this job's customer",
+        });
+      }
+      const link = await storage.createTreePinWorkLink({ pinId: pin.id, jobId: job.id });
+      res.json({ success: true, data: link });
+    } catch (error) {
+      console.error("Error linking tree pin to job:", error);
+      res.status(500).json({ success: false, message: "Failed to link pin" });
     }
   });
 
@@ -32890,6 +34155,46 @@ If you cannot find a value, use null. Do not guess.`
     } catch (e) { ssErr(res, e, 'Failed to fetch topics'); }
   });
 
+  // Custom topic CRUD. Built-in library rows are platform content: readable by every
+  // tenant, never editable through the API (RLS write policies enforce the same).
+  const topicInsert = schema.insertToolboxTalkTopicSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const topicUpdate = topicInsert.partial();
+
+  app.post('/api/toolbox-talk-topics', async (req: Request, res: Response) => {
+    try {
+      const data = topicInsert.parse(req.body);
+      const [row] = await db.insert(schema.toolboxTalkTopics)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create topic'); }
+  });
+
+  app.put('/api/toolbox-talk-topics/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.toolboxTalkTopics).where(eq(schema.toolboxTalkTopics.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Topic not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in topics cannot be edited — duplicate one to customize it.' });
+      const data = topicUpdate.parse(req.body);
+      const [row] = await db.update(schema.toolboxTalkTopics)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.toolboxTalkTopics.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update topic'); }
+  });
+
+  app.delete('/api/toolbox-talk-topics/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.toolboxTalkTopics).where(eq(schema.toolboxTalkTopics.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Topic not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in topics cannot be removed.' });
+      // Soft delete: past talks may reference the topic id.
+      await db.update(schema.toolboxTalkTopics)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.toolboxTalkTopics.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove topic'); }
+  });
+
   app.get('/api/toolbox-talks', async (req: Request, res: Response) => {
     try {
       const { status } = req.query;
@@ -32969,6 +34274,45 @@ If you cannot find a value, use null. Do not guess.`
         .where(and(...conditions)).orderBy(schema.prestartChecklistTemplates.sortOrder);
       res.json({ success: true, data: templates });
     } catch (e) { ssErr(res, e, 'Failed to fetch templates'); }
+  });
+
+  // Custom pre-start template CRUD (built-ins read-only, same contract as topics).
+  const prestartTemplateInsert = schema.insertPrestartTemplateSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const prestartTemplateUpdate = prestartTemplateInsert.partial();
+
+  app.post('/api/prestart-templates', async (req: Request, res: Response) => {
+    try {
+      const data = prestartTemplateInsert.parse(req.body);
+      const [row] = await db.insert(schema.prestartChecklistTemplates)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create template'); }
+  });
+
+  app.put('/api/prestart-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.prestartChecklistTemplates).where(eq(schema.prestartChecklistTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be edited — duplicate one to customize it.' });
+      const data = prestartTemplateUpdate.parse(req.body);
+      const [row] = await db.update(schema.prestartChecklistTemplates)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.prestartChecklistTemplates.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update template'); }
+  });
+
+  app.delete('/api/prestart-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.prestartChecklistTemplates).where(eq(schema.prestartChecklistTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be removed.' });
+      // Soft delete: completed checklists hold an FK to their template.
+      await db.update(schema.prestartChecklistTemplates)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.prestartChecklistTemplates.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove template'); }
   });
 
   app.get('/api/prestart-checklists', async (req: Request, res: Response) => {
@@ -33111,6 +34455,45 @@ If you cannot find a value, use null. Do not guess.`
     } catch (e) { ssErr(res, e, 'Failed to fetch competency types'); }
   });
 
+  // Custom competency-type CRUD (built-ins read-only, same contract as topics).
+  const competencyTypeInsert = schema.insertCompetencyTypeSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const competencyTypeUpdate = competencyTypeInsert.partial();
+
+  app.post('/api/competency-types', async (req: Request, res: Response) => {
+    try {
+      const data = competencyTypeInsert.parse(req.body);
+      const [row] = await db.insert(schema.competencyTypes)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create competency type'); }
+  });
+
+  app.put('/api/competency-types/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.competencyTypes).where(eq(schema.competencyTypes.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Competency type not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in competency types cannot be edited.' });
+      const data = competencyTypeUpdate.parse(req.body);
+      const [row] = await db.update(schema.competencyTypes)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.competencyTypes.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update competency type'); }
+  });
+
+  app.delete('/api/competency-types/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.competencyTypes).where(eq(schema.competencyTypes.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Competency type not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in competency types cannot be removed.' });
+      // Soft delete: employee competencies may reference the type id.
+      await db.update(schema.competencyTypes)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.competencyTypes.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove competency type'); }
+  });
+
   app.get('/api/employee-competencies', async (req: Request, res: Response) => {
     try {
       const { employeeId, expiringOnly } = req.query;
@@ -33159,6 +34542,63 @@ If you cannot find a value, use null. Do not guess.`
         .where(eq(schema.swmsTemplates.isActive, true)).orderBy(schema.swmsTemplates.sortOrder, schema.swmsTemplates.name);
       res.json({ success: true, data: templates });
     } catch (e) { ssErr(res, e, 'Failed to fetch SWMS templates'); }
+  });
+
+  // Custom SWMS-template CRUD (built-ins read-only, same contract as topics).
+  const swmsTemplateInsert = schema.insertSwmsTemplateSchema.omit({ businessId: true, key: true, isBuiltIn: true });
+  const swmsTemplateUpdate = swmsTemplateInsert.partial();
+
+  app.post('/api/swms-templates', async (req: Request, res: Response) => {
+    try {
+      const data = swmsTemplateInsert.parse(req.body);
+      const [row] = await db.insert(schema.swmsTemplates)
+        .values(withTenant({ ...data, sortOrder: data.sortOrder ?? 100 })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create SWMS template'); }
+  });
+
+  // Copy any visible template (typically a built-in) into an editable custom one.
+  app.post('/api/swms-templates/:id/duplicate', async (req: Request, res: Response) => {
+    try {
+      const [source] = await db.select().from(schema.swmsTemplates).where(eq(schema.swmsTemplates.id, req.params.id));
+      if (!source) return res.status(404).json({ success: false, message: 'Template not found' });
+      const [row] = await db.insert(schema.swmsTemplates)
+        .values(withTenant({
+          name: `${source.name} (copy)`,
+          category: source.category,
+          activityDescription: source.activityDescription,
+          defaultPpe: source.defaultPpe ?? [],
+          steps: source.steps ?? [],
+          sortOrder: 100,
+        })).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to duplicate SWMS template'); }
+  });
+
+  app.put('/api/swms-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.swmsTemplates).where(eq(schema.swmsTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be edited — duplicate one to customize it.' });
+      const data = swmsTemplateUpdate.parse(req.body);
+      const [row] = await db.update(schema.swmsTemplates)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.swmsTemplates.id, req.params.id)).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to update SWMS template'); }
+  });
+
+  app.delete('/api/swms-templates/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.swmsTemplates).where(eq(schema.swmsTemplates.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Template not found' });
+      if (existing.isBuiltIn) return res.status(403).json({ success: false, message: 'Built-in templates cannot be removed.' });
+      // Soft delete keeps the contract consistent with the other safety libraries.
+      await db.update(schema.swmsTemplates)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(schema.swmsTemplates.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove SWMS template'); }
   });
 
   app.get('/api/swms', async (req: Request, res: Response) => {
@@ -33341,7 +34781,7 @@ If you cannot find a value, use null. Do not guess.`
   const nearMissReportUpdate = nearMissReportInsert.partial();
 
   // GET /api/near-miss-reports
-  app.get('/api/near-miss-reports', async (req: Request, res: Response) => {
+  app.get('/api/near-miss-reports', requireSession, async (req: Request, res: Response) => {
     try {
       const { status, severity, category, dateFrom, dateTo, reporterUserId } = req.query;
       const conditions = [];
@@ -33363,7 +34803,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // GET /api/near-miss-reports/:id
-  app.get('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+  app.get('/api/near-miss-reports/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33387,7 +34827,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-reports
-  app.post('/api/near-miss-reports', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-reports', requireSession, async (req: Request, res: Response) => {
     try {
       const reportNumber = await generateNearMissReportNumber();
       const parsed = nearMissReportInsert.parse(req.body);
@@ -33400,7 +34840,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // PUT /api/near-miss-reports/:id
-  app.put('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+  app.put('/api/near-miss-reports/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33415,7 +34855,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-reports/:id/submit
-  app.post('/api/near-miss-reports/:id/submit', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-reports/:id/submit', requireSession, async (req: Request, res: Response) => {
     try {
       const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33434,7 +34874,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // DELETE /api/near-miss-reports/:id
-  app.delete('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+  app.delete('/api/near-miss-reports/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33450,7 +34890,7 @@ If you cannot find a value, use null. Do not guess.`
   // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
   // the report read rides the owner connection (hence the ownership check) and the
   // attachment insert is stamped from the parent report via runWithBusiness.
-  app.post('/api/near-miss-reports/:id/attachments', nearMissUpload.single('file'), async (req: Request, res: Response) => {
+  app.post('/api/near-miss-reports/:id/attachments', requireSession, nearMissUpload.single('file'), async (req: Request, res: Response) => {
     try {
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -33477,7 +34917,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // DELETE /api/near-miss-attachments/:id
-  app.delete('/api/near-miss-attachments/:id', async (req: Request, res: Response) => {
+  app.delete('/api/near-miss-attachments/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [attachment] = await db.select().from(schema.nearMissAttachments).where(eq(schema.nearMissAttachments.id, req.params.id));
       if (!attachment) return res.status(404).json({ success: false, message: 'Attachment not found' });
@@ -33490,7 +34930,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-reports/:id/witnesses
-  app.post('/api/near-miss-reports/:id/witnesses', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-reports/:id/witnesses', requireSession, async (req: Request, res: Response) => {
     try {
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33516,7 +34956,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-witnesses/:id/sign
-  app.post('/api/near-miss-witnesses/:id/sign', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-witnesses/:id/sign', requireSession, async (req: Request, res: Response) => {
     try {
       const [witness] = await db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.id, req.params.id));
       if (!witness) return res.status(404).json({ success: false, message: 'Witness record not found' });
@@ -33556,7 +34996,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-witnesses/:id/decline
-  app.post('/api/near-miss-witnesses/:id/decline', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-witnesses/:id/decline', requireSession, async (req: Request, res: Response) => {
     try {
       const [witness] = await db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.id, req.params.id));
       if (!witness) return res.status(404).json({ success: false, message: 'Witness record not found' });
@@ -33568,7 +35008,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/near-miss-reports/:id/actions
-  app.post('/api/near-miss-reports/:id/actions', async (req: Request, res: Response) => {
+  app.post('/api/near-miss-reports/:id/actions', requireSession, async (req: Request, res: Response) => {
     try {
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33582,7 +35022,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // PUT /api/near-miss-actions/:id
-  app.put('/api/near-miss-actions/:id', async (req: Request, res: Response) => {
+  app.put('/api/near-miss-actions/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [existing] = await db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Action not found' });
@@ -33606,7 +35046,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // DELETE /api/near-miss-actions/:id
-  app.delete('/api/near-miss-actions/:id', async (req: Request, res: Response) => {
+  app.delete('/api/near-miss-actions/:id', requireSession, async (req: Request, res: Response) => {
     try {
       const [existing] = await db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Action not found' });
@@ -33618,7 +35058,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // GET /api/near-miss-reports/:id/pdf
-  app.get('/api/near-miss-reports/:id/pdf', async (req: Request, res: Response) => {
+  app.get('/api/near-miss-reports/:id/pdf', requireSession, async (req: Request, res: Response) => {
     try {
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -33633,6 +35073,7 @@ If you cannot find a value, use null. Do not guess.`
       } catch { /* fallback to userId */ }
 
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      installPdfTextSanitizer(doc);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="near-miss-${report.reportNumber}.pdf"`);
       doc.pipe(res);
@@ -33847,8 +35288,10 @@ If you cannot find a value, use null. Do not guess.`
       // Convert newlines to <br> for HTML rendering — template stores plain text
       const htmlBody = rawBody.replace(/\n/g, '<br>');
 
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings()); // authed route → RLS-scoped to this tenant
       const result = await emailService.sendEmail({
         to: customer.email,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         html: htmlBody,
         text: rawBody,

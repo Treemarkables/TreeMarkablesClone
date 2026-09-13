@@ -70,8 +70,22 @@ class GmailReplyService {
       const imap = new Imap(this.imapConfig);
       let settled = false;
       const settle = (fn: () => void) => {
-        if (!settled) { settled = true; fn(); }
+        if (!settled) { settled = true; clearTimeout(watchdog); fn(); }
       };
+
+      // Session-wide watchdog: connTimeout/authTimeout only cover the connect
+      // phase. A session that stalls after auth (fetch never emits 'end', dead
+      // socket) leaves this promise pending forever, which wedges the poller's
+      // isPolling latch and silently skips every future poll until the next
+      // deploy (Aug 2026 incident). Destroying the connection settles the
+      // promise so the poll counts as a failure and the next one can run;
+      // unmarked emails are re-scanned and deduped by messageId.
+      const WATCHDOG_MS = 4 * 60 * 1000;
+      const watchdog = setTimeout(() => {
+        console.error(`📧 IMAP poll watchdog fired after ${WATCHDOG_MS / 1000}s — destroying hung connection`);
+        try { imap.destroy(); } catch (_) {}
+        settle(() => reject(new Error(`IMAP poll exceeded ${WATCHDOG_MS / 1000}s watchdog — hung connection destroyed`)));
+      }, WATCHDOG_MS);
 
       // Use .on (not .once) so that every error event is caught — IMAP can emit
       // multiple error events during its lifecycle (connect phase, fetch phase,
@@ -293,10 +307,13 @@ class GmailReplyService {
           const isJobNumber = /^\d+$/.test(jobIdentifier);
           
           if (isJobNumber) {
-            // Find job by job number
-            job = await db.query.jobs.findFirst({
-              where: eq(jobs.jobNumber, jobIdentifier)
-            });
+            // Find job by job number. Numbers are unique per business, and this
+            // poller runs session-less (sees all tenants) — getJobByJobNumber
+            // accepts an unambiguous match, and when several tenants share the
+            // number it resolves by the sender's email (the reply's From must
+            // be the matched job's customer). UUID aliases are unaffected.
+            const { storage } = await import('../storage.js');
+            job = (await storage.getJobByJobNumber(jobIdentifier, email.from)) ?? null;
           } else {
             // Find job by UUID (database ID)
             job = await db.query.jobs.findFirst({
@@ -317,11 +334,15 @@ class GmailReplyService {
             if (customer) {
               console.log(`📧 ✅ Found job #${job.jobNumber} for customer: ${customer.name}`);
             } else {
-              console.log(`📧 ⚠️ Found job #${jobNumber} but customer not found`);
+              // NOTE: these logs used to reference an undefined `jobNumber`
+              // variable — a ReferenceError that killed the WHOLE email (no
+              // diary entry, no conversation fallback) whenever the alias
+              // didn't resolve to a job+customer.
+              console.log(`📧 ⚠️ Found job for alias ${jobIdentifier} but customer not found`);
               job = null; // Reset job if customer not found
             }
           } else {
-            console.log(`📧 ⚠️ No job found with number ${jobNumber}`);
+            console.log(`📧 ⚠️ No unambiguous job found for alias ${jobIdentifier}`);
           }
         }
       }
@@ -754,6 +775,42 @@ class GmailReplyService {
       return true; // Successfully processed
     } catch (error) {
       console.error('📧 Error processing email reply:', error);
+      // FAIL-SAFE: never let a customer email die silently. A processing bug
+      // here used to mean the reply existed only in Gmail (Aug 2026 incident) —
+      // raise a bell alert so a broken pipeline is noticed in hours, not weeks.
+      // Deduped by Message-ID so the every-minute re-poll of the same failing
+      // email alerts once. Stamped to the default (platform operator) tenant,
+      // since at this point the owning tenant may be exactly what we failed to
+      // work out.
+      try {
+        if (email.messageId) {
+          const { storage } = await import('../storage.js');
+          const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          const recent = await storage.getNotificationsCreatedSince(since);
+          const alreadyAlerted = recent.some(
+            (n) =>
+              n.type === 'email_processing_failed' &&
+              (n.metadata as any)?.emailMessageId === email.messageId,
+          );
+          if (!alreadyAlerted) {
+            await storage.createNotification({
+              title: 'Customer email failed to process',
+              message: `Reply from ${email.from} ("${email.subject}") could not be filed to a job or conversation — check server logs.`,
+              type: 'email_processing_failed',
+              priority: 'high',
+              metadata: {
+                emailMessageId: email.messageId,
+                from: email.from,
+                to: email.to,
+                error: String((error as Error)?.message || error),
+              },
+            });
+            console.log(`🔔 Raised email-processing-failure alert for messageId ${email.messageId}`);
+          }
+        }
+      } catch (alertErr) {
+        console.error('📧 Failed to raise email-processing alert:', alertErr);
+      }
       return false; // Failed to process
     }
   }

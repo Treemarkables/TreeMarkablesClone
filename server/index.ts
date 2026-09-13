@@ -13,6 +13,11 @@ import { requireApiAuth } from "./tenancy/requireApiAuth";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
 import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
+import {
+  createTreemarkablesDocumentBrandMiddleware,
+  requestIsTreemarkablesDocumentHost,
+  applyTreemarkablesDocumentHead,
+} from "./treemarkablesDocumentBrand";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
@@ -20,6 +25,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
+import { sweepStaleInboundDocuments } from "./services/supplierInvoiceIngest";
 import { attachVoiceAgentWss } from "./services/voiceAgent";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
@@ -99,6 +105,11 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
 });
 
+// www.treemarkables.co.nz / treemarkables.co.nz: first HTML byte is Treemarkables
+// branded (title/meta/icons/og). Does not change the React UI, does not 301 app
+// paths, and is a no-op on Inflow hosts. See server/treemarkablesDocumentBrand.ts.
+app.use(createTreemarkablesDocumentBrandMiddleware());
+
 // Legacy-domain redirect. Customer document links already sent out (invoices,
 // proposals, quotes, etc.) point at the old app host. The app now lives at
 // APP_URL (app.inflowapp.co.nz). 301 the customer-facing paths to the new host
@@ -174,7 +185,12 @@ if (!isDevelopment && !process.env.SESSION_SECRET) {
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
-    resave: true,
+    // resave:false — connect-pg-simple implements `touch`, so express-session
+    // keeps the session fresh (and rolling expiry works) without rewriting the
+    // whole row when nothing changed. resave:true forced a session-table WRITE to
+    // Sydney on every request even for pure reads — a wasted cross-region round
+    // trip on the busiest path in the app.
+    resave: false,
     saveUninitialized: false,
     rolling: true,
     name: 'treemarkables.sid',
@@ -315,6 +331,23 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
 
     log(`Serving SPA fallback: ${req.originalUrl} -> index.html`, "static");
 
+    if (requestIsTreemarkablesDocumentHost(req)) {
+      try {
+        const html = fs.readFileSync(indexPath, "utf8");
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.send(applyTreemarkablesDocumentHead(html, req.path || "/"));
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log(`Error serving branded index.html: ${message}`, "error");
+        res.status(500).json({
+          error: "Failed to serve application",
+          details: message
+        });
+        return;
+      }
+    }
+
     res.sendFile(indexPath, (err) => {
       if (err) {
         log(`Error serving index.html: ${err.message}`, "error");
@@ -440,6 +473,18 @@ function startNotificationQueueWorker() {
 
       for (const notification of pendingNotifications) {
         try {
+          // Staff pushes deferred by the configurable delivery window
+          // (see server/services/notificationWindow.ts). deliverQueuedPush
+          // re-checks prefs + assignment freshness; a false return means
+          // "deliberately skipped", which still counts as processed.
+          if (notification.notificationType === 'push') {
+            const { deliverQueuedPush } = await import("./services/notificationHelper");
+            const delivered = await deliverQueuedPush(notification);
+            await storage.markNotificationSent(notification.id);
+            log(`[Notification Queue] Queued push ${notification.id} ${delivered ? 'delivered' : 'skipped (prefs off, unassigned, or no active tokens)'}`, "startup");
+            continue;
+          }
+
           if (notification.recipientEmail && (notification.notificationType === 'email' || notification.notificationType === 'both')) {
             await emailService.sendEmail({
               to: notification.recipientEmail,
@@ -529,6 +574,10 @@ function startNotificationQueueWorker() {
     } catch (e) {
       console.error("[schema] boot migrations failed (continuing):", e);
     }
+    // Re-queue any inbound supplier-invoice documents a previous instance left
+    // mid-flight (the claim is an atomic status transition, so this is safe on
+    // both app instances).
+    void sweepStaleInboundDocuments().then((n) => { if (n) log(`🧾 re-queued ${n} stale inbound invoice document(s)`, "startup"); });
 
     let devServer: http.Server | undefined;
     try {
@@ -776,6 +825,9 @@ The {businessName} Team';
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminders_enabled BOOLEAN DEFAULT true;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminder_offsets JSONB DEFAULT '[30, 7]'::jsonb;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS job_reply_forward_email TEXT;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_enabled BOOLEAN DEFAULT true;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_start TEXT DEFAULT '07:00';
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_end TEXT DEFAULT '18:00';
         CREATE TABLE IF NOT EXISTS equipment_compliance_reminders (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           business_id VARCHAR,
@@ -837,6 +889,25 @@ The {businessName} Team';
         DO $$ BEGIN
           IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
             GRANT SELECT, INSERT, UPDATE, DELETE ON job_site_maps TO app_tenant;
+          END IF;
+        END $$;
+        -- Public job photo timeline links (token-gated customer feed). Mirrors
+        -- migrations/manual/20260711_job_timeline_links.sql.
+        CREATE TABLE IF NOT EXISTS job_timeline_links (
+          business_id VARCHAR,
+          job_id VARCHAR PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+          token VARCHAR(64) NOT NULL UNIQUE,
+          is_enabled BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        ALTER TABLE job_timeline_links ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON job_timeline_links;
+        CREATE POLICY tenant_isolation ON job_timeline_links
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON job_timeline_links TO app_tenant;
           END IF;
         END $$;
         -- Heal rows inserted before 2026-07-10 with business_id NULL: the multer
@@ -1181,6 +1252,39 @@ The {businessName} Team';
           ('powerline', 'Powerline-adjacent tree work', 'Environmental', 'Tree work near overhead electrical conductors', '{"Helmet","Eye protection","Hearing protection","Hi-vis","Insulated where required","Safety boots","Gloves"}',
             '[{"stepNumber":1,"taskStep":"Confirm voltage & permits","hazards":["Electrocution"],"controls":["Treat all lines as live","Confirm voltage & NZECP 34 distance","Obtain network operator permit if inside zone"],"riskRating":5},{"stepNumber":2,"taskStep":"Work to safe distances","hazards":["Contact with conductor","Conductive limbs/tools"],"controls":["Maintain minimum approach distance","No metal tools or wet ropes in the zone","Stop work if distances cannot be kept"],"riskRating":5}]', true, 5)
         ON CONFLICT (key) DO NOTHING;
+      `);
+
+      // Safety library tables: tenants can now add their own rows alongside the
+      // built-in seeds, so RLS needs a split policy — everyone reads the built-ins
+      // (is_built_in, business_id NULL), writes touch only your own rows. A plain
+      // tenant_isolation policy hides the seed rows from every tenant (NULL never
+      // equals current_setting). These tables also carried the legacy TM-id column
+      // DEFAULT (two of them NOT NULL), which mis-stamps every seed and every
+      // context-less insert as Treemarkables — same class as the multer/ALS bug —
+      // so the default/NOT NULL go, and seeds get un-stamped back to global.
+      // Mirrors migrations/manual/20260712_safety_library_rls.sql.
+      await pool.query(`
+        DO $$
+        DECLARE t TEXT;
+        BEGIN
+          FOREACH t IN ARRAY ARRAY['swms_templates','toolbox_talk_topics','prestart_checklist_templates','competency_types'] LOOP
+            EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS business_id VARCHAR', t);
+            EXECUTE format('ALTER TABLE %I ALTER COLUMN business_id DROP DEFAULT', t);
+            EXECUTE format('ALTER TABLE %I ALTER COLUMN business_id DROP NOT NULL', t);
+            EXECUTE format('UPDATE %I SET business_id = NULL WHERE is_built_in = true AND business_id IS NOT NULL', t);
+            EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_read ON %I', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_write ON %I', t);
+            EXECUTE format(
+              'CREATE POLICY tenant_read ON %I FOR SELECT USING (is_built_in = true OR business_id = nullif(current_setting(''app.current_business'', true), ''''))', t);
+            EXECUTE format(
+              'CREATE POLICY tenant_write ON %I USING (business_id = nullif(current_setting(''app.current_business'', true), '''')) WITH CHECK (business_id = nullif(current_setting(''app.current_business'', true), ''''))', t);
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+              EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO app_tenant', t);
+            END IF;
+          END LOOP;
+        END $$;
       `);
 
       // --- Per-business GST number (trade-gen Phase A) ---

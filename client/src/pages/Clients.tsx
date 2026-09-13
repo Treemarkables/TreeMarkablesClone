@@ -35,7 +35,7 @@ import {
   Check,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -62,11 +62,18 @@ import type { Customer } from "@shared/schema";
 import { CustomerCSVUpload } from "@/components/CustomerCSVUpload";
 import { useAuth } from "@/contexts/AuthContext";
 
-interface ApiResponse<T> {
+interface CustomersPageResponse {
   success: boolean;
-  data: T[];
-  message?: string;
-  count?: number;
+  data: Customer[];
+  total: number;
+  limit: number;
+  offset: number;
+  stats?: {
+    total: number;
+    active: number;
+    historical: number;
+    lifetimeValueTotal: number;
+  };
 }
 
 const editCustomerSchema = z.object({
@@ -126,11 +133,16 @@ function MultiEmailInput({ value, onChange }: { value: string; onChange: (v: str
 
 export default function Clients() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortBy, setSortBy] = useState("name");
   const [activeTab, setActiveTab] = useState("list");
-  const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(
-    new Set(),
-  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
+  // Selection keeps the full customer object so bulk delete / merge keep
+  // working when the selection spans multiple pages.
+  const [selectedCustomers, setSelectedCustomers] = useState<
+    Map<string, Customer>
+  >(new Map());
   const [filterType, setFilterType] = useState<
     "all" | "active" | "historical" | "customers" | "potential_expenses" | "vip"
   >("all");
@@ -148,77 +160,46 @@ export default function Clients() {
   const queryClient = useQueryClient();
   const { isAdmin } = useAuth();
 
-  // Fetch active customers
-  const { data: activeCustomersResponse, isLoading: activeLoading } = useQuery<
-    ApiResponse<Customer>
-  >({
-    queryKey: ["/api/customers"],
+  // Debounce the search input so we don't fire a server request on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch only the current page — the server handles search (across the whole
+  // customer base), filtering, sorting, and pagination.
+  const customersApiParams = new URLSearchParams({
+    limit: String(perPage),
+    offset: String((currentPage - 1) * perPage),
+    filter: filterType,
+    sort: sortBy,
+  });
+  if (debouncedSearch.trim()) {
+    customersApiParams.set("search", debouncedSearch.trim());
+  }
+
+  const { data: customersResponse, isLoading } = useQuery<CustomersPageResponse>({
+    // Two-part key so invalidations of ["/api/customers"] (mutations + SSE
+    // broadcasts) prefix-match every page of this query.
+    queryKey: ["/api/customers", `?${customersApiParams.toString()}`],
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
-  // Fetch historical customers
-  const { data: historicalCustomersResponse, isLoading: historicalLoading } =
-    useQuery<ApiResponse<Customer>>({
-      queryKey: ["/api/customers/historical"],
-    });
+  const customers = customersResponse?.data || [];
+  const totalCount = customersResponse?.total ?? 0;
+  const stats = customersResponse?.stats;
+  const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
+  const startIndex = (currentPage - 1) * perPage;
+  const endIndex = startIndex + customers.length;
 
-  // Combine all customers
-  const activeCustomers = activeCustomersResponse?.data || [];
-  const historicalCustomers = historicalCustomersResponse?.data || [];
-  const allCustomers = [...activeCustomers, ...historicalCustomers];
-  const isLoading = activeLoading || historicalLoading;
-
-  // Function to identify potential expense companies
-  const isPotentialExpenseCompany = (customer: Customer): boolean => {
-    const name = customer.name.toLowerCase();
-    const expenseKeywords = [
-      "equipment",
-      "supply",
-      "supplies",
-      "hardware",
-      "rental",
-      "hire",
-      "machinery",
-      "tools",
-      "parts",
-      "warehouse",
-      "wholesale",
-      "distribution",
-      "fuel",
-      "gas",
-      "materials",
-      "steel",
-      "timber",
-      "lumber",
-      "concrete",
-      "aggregate",
-      "transport",
-      "logistics",
-      "delivery",
-      "freight",
-      "haulage",
-      "maintenance",
-      "repair",
-      "service center",
-      "garage",
-      "workshop",
-      "automotive",
-      "spare parts",
-      "industrial",
-      "chemical",
-      "safety",
-      "ppe",
-      "protective",
-      "insurance",
-      "accountant",
-      "accounting",
-      "legal",
-      "solicitor",
-      "consultant",
-      "office supplies",
-    ];
-
-    return expenseKeywords.some((keyword) => name.includes(keyword));
-  };
+  // Clamp the page when the result set shrinks (e.g. after a filter change)
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   // Form for editing customer
   const editForm = useForm<z.infer<typeof editCustomerSchema>>({
@@ -242,10 +223,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/customers/historical"],
-      });
-      setSelectedCustomers(new Set());
+      setSelectedCustomers(new Map());
     },
     onError: (error: any) => {
       toast({
@@ -263,8 +241,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers/historical"] });
-      setSelectedCustomers(new Set());
+      setSelectedCustomers(new Map());
       setShowMergeDialog(false);
       setPrimaryMergeId(null);
     },
@@ -284,9 +261,6 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/customers/historical"],
-      });
     },
     onError: (error: any) => {
       toast({
@@ -310,9 +284,6 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/customers/historical"],
-      });
       setShowEditDialog(false);
       setEditingCustomer(null);
       editForm.reset();
@@ -343,9 +314,6 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/customers/historical"],
-      });
     },
     onError: (error: any) => {
       toast({
@@ -357,21 +325,23 @@ export default function Clients() {
   });
 
   // Selection handlers
-  const handleSelectCustomer = (customerId: string, checked: boolean) => {
-    const newSelected = new Set(selectedCustomers);
+  const handleSelectCustomer = (customer: Customer, checked: boolean) => {
+    const newSelected = new Map(selectedCustomers);
     if (checked) {
-      newSelected.add(customerId);
+      newSelected.set(customer.id, customer);
     } else {
-      newSelected.delete(customerId);
+      newSelected.delete(customer.id);
     }
     setSelectedCustomers(newSelected);
   };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedCustomers(new Set(filteredCustomers.map((c) => c.id)));
+      const newSelected = new Map(selectedCustomers);
+      customers.forEach((c) => newSelected.set(c.id, c));
+      setSelectedCustomers(newSelected);
     } else {
-      setSelectedCustomers(new Set());
+      setSelectedCustomers(new Map());
     }
   };
 
@@ -382,7 +352,7 @@ export default function Clients() {
         `Are you sure you want to delete ${selectedCustomers.size} selected customers? This action cannot be undone.`,
       )
     ) {
-      deleteCustomersMutation.mutate(Array.from(selectedCustomers));
+      deleteCustomersMutation.mutate(Array.from(selectedCustomers.keys()));
     }
   };
 
@@ -393,7 +363,7 @@ export default function Clients() {
 
   const handleConfirmMerge = () => {
     if (!primaryMergeId) return;
-    const duplicateIds = Array.from(selectedCustomers).filter(id => id !== primaryMergeId);
+    const duplicateIds = Array.from(selectedCustomers.keys()).filter(id => id !== primaryMergeId);
     mergeCustomersMutation.mutate({ primaryId: primaryMergeId, duplicateIds });
   };
 
@@ -446,59 +416,6 @@ export default function Clients() {
     setSelectedCustomerId(null);
   };
 
-  // Filter and sort customers
-  const filteredCustomers = allCustomers
-    .filter((customer) => {
-      const matchesSearch =
-        customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (customer.email || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        (customer.phone || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        (customer.mobile || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
-
-      const isHistorical = customer.isActive === false;
-      const isActive = customer.isActive !== false;
-
-      const matchesFilter = (() => {
-        switch (filterType) {
-          case "active":
-            return isActive;
-          case "historical":
-            return isHistorical;
-          case "customers":
-            return !isPotentialExpenseCompany(customer);
-          case "potential_expenses":
-            return isPotentialExpenseCompany(customer);
-          case "vip":
-            return !!customer.isVipMember;
-          default:
-            return true;
-        }
-      })();
-
-      return matchesSearch && matchesFilter;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "email":
-          return (a.email || "").localeCompare(b.email || "");
-        case "recent":
-          return (
-            new Date(b.createdAt || 0).getTime() -
-            new Date(a.createdAt || 0).getTime()
-          );
-        default:
-          return 0;
-      }
-    });
-
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -532,7 +449,9 @@ export default function Clients() {
   };
 
   const selectedCustomerDetails = selectedCustomerId
-    ? allCustomers.find((c) => c.id === selectedCustomerId)
+    ? (customers.find((c) => c.id === selectedCustomerId) ??
+      selectedCustomers.get(selectedCustomerId) ??
+      null)
     : null;
 
   return (
@@ -584,7 +503,7 @@ export default function Clients() {
                     <p className="text-sm font-medium text-gray-600">
                       Total Customers
                     </p>
-                    <p className="text-2xl font-bold">{allCustomers.length}</p>
+                    <p className="text-2xl font-bold">{stats?.total ?? 0}</p>
                   </div>
                   <Users className="w-8 h-8 text-blue-600" />
                 </div>
@@ -599,7 +518,7 @@ export default function Clients() {
                       Active Customers
                     </p>
                     <p className="text-2xl font-bold">
-                      {activeCustomers.length}
+                      {stats?.active ?? 0}
                     </p>
                   </div>
                   <Users className="w-8 h-8 text-green-600" />
@@ -615,7 +534,7 @@ export default function Clients() {
                       Historical
                     </p>
                     <p className="text-2xl font-bold">
-                      {historicalCustomers.length}
+                      {stats?.historical ?? 0}
                     </p>
                   </div>
                   <Archive className="w-8 h-8 text-orange-600" />
@@ -631,15 +550,7 @@ export default function Clients() {
                       Total Revenue
                     </p>
                     <p className="text-2xl font-bold">
-                      $
-                      {allCustomers
-                        .reduce(
-                          (sum, customer) =>
-                            sum +
-                            (parseFloat(customer.lifetimeValue || "0") || 0),
-                          0,
-                        )
-                        .toLocaleString()}
+                      ${Math.round(stats?.lifetimeValueTotal ?? 0).toLocaleString()}
                     </p>
                   </div>
                   <DollarSign className="w-8 h-8 text-amber-600" />
@@ -664,9 +575,10 @@ export default function Clients() {
 
               <Select
                 value={filterType}
-                onValueChange={(value) =>
-                  setFilterType(value as typeof filterType)
-                }
+                onValueChange={(value) => {
+                  setFilterType(value as typeof filterType);
+                  setCurrentPage(1);
+                }}
               >
                 <SelectTrigger
                   className="w-full sm:w-48"
@@ -687,7 +599,13 @@ export default function Clients() {
                 </SelectContent>
               </Select>
 
-              <Select value={sortBy} onValueChange={setSortBy}>
+              <Select
+                value={sortBy}
+                onValueChange={(value) => {
+                  setSortBy(value);
+                  setCurrentPage(1);
+                }}
+              >
                 <SelectTrigger
                   className="w-full sm:w-48"
                   data-testid="select-sort"
@@ -713,7 +631,7 @@ export default function Clients() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setSelectedCustomers(new Set())}
+                    onClick={() => setSelectedCustomers(new Map())}
                     data-testid="button-clear-selection"
                   >
                     Clear Selection
@@ -768,7 +686,7 @@ export default function Clients() {
                   </Card>
                 ))}
               </div>
-            ) : filteredCustomers.length === 0 ? (
+            ) : customers.length === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Users className="w-12 h-12 text-gray-400 mb-4" />
@@ -785,18 +703,18 @@ export default function Clients() {
             ) : (
               <div className="space-y-4">
                 {/* Select All Header */}
-                {filteredCustomers.length > 0 && (
+                {customers.length > 0 && (
                   <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
                     <Checkbox
                       checked={
-                        selectedCustomers.size === filteredCustomers.length &&
-                        filteredCustomers.length > 0
+                        customers.length > 0 &&
+                        customers.every((c) => selectedCustomers.has(c.id))
                       }
                       onCheckedChange={handleSelectAll}
                       data-testid="checkbox-select-all"
                     />
                     <span className="text-sm font-medium">
-                      Select All ({filteredCustomers.length})
+                      Select All on Page ({customers.length})
                     </span>
                     {filterType === "potential_expenses" && (
                       <Badge variant="destructive" className="ml-auto">
@@ -809,11 +727,10 @@ export default function Clients() {
 
                 {/* Customer List */}
                 <div className="grid gap-4">
-                  {filteredCustomers.map((customer) => {
+                  {customers.map((customer) => {
                     const tier = getCustomerTier(
                       parseFloat(customer.lifetimeValue || "0") || 0,
                     );
-                    const isExpense = isPotentialExpenseCompany(customer);
                     const isSelected = selectedCustomers.has(customer.id);
 
                     return (
@@ -830,7 +747,7 @@ export default function Clients() {
                                 checked={isSelected}
                                 onCheckedChange={(checked) =>
                                   handleSelectCustomer(
-                                    customer.id,
+                                    customer,
                                     checked as boolean,
                                   )
                                 }
@@ -953,6 +870,114 @@ export default function Clients() {
                       </Card>
                     );
                   })}
+                </div>
+
+                {/* Pagination info and controls */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t">
+                  <div className="space-y-1">
+                    {totalCount > 0 && (
+                      <p
+                        className="text-sm text-muted-foreground"
+                        data-testid="text-customers-showing"
+                      >
+                        Showing {startIndex + 1}–{endIndex} of{" "}
+                        {totalCount.toLocaleString()}
+                        {debouncedSearch.trim() ? " results" : " customers"}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 mt-2">
+                      <label className="text-xs text-muted-foreground">
+                        Customers per page:
+                      </label>
+                      <Select
+                        value={perPage.toString()}
+                        onValueChange={(value) => {
+                          setPerPage(parseInt(value));
+                          setCurrentPage(1);
+                        }}
+                      >
+                        <SelectTrigger
+                          className="w-full sm:w-20 h-8 text-xs"
+                          data-testid="select-customers-per-page"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="25">25</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-2 overflow-x-auto max-w-full">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPage((prev) => Math.max(prev - 1, 1))
+                        }
+                        disabled={currentPage === 1}
+                        data-testid="button-prev-page"
+                      >
+                        Previous
+                      </Button>
+
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                          const pageNum =
+                            currentPage <= 3 ? i + 1 : currentPage - 2 + i;
+                          if (pageNum > totalPages) return null;
+
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={
+                                pageNum === currentPage ? "default" : "ghost"
+                              }
+                              size="sm"
+                              onClick={() => setCurrentPage(pageNum)}
+                              className="w-8 flex-shrink-0"
+                              data-testid={`button-page-${pageNum}`}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+
+                        {totalPages > 5 && currentPage < totalPages - 2 && (
+                          <>
+                            <span className="text-muted-foreground flex-shrink-0">
+                              ...
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setCurrentPage(totalPages)}
+                              className="w-8 flex-shrink-0"
+                              data-testid={`button-page-${totalPages}`}
+                            >
+                              {totalPages}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                        }
+                        disabled={currentPage === totalPages}
+                        data-testid="button-next-page"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1335,9 +1360,8 @@ export default function Clients() {
               Choose which record to keep. All jobs, invoices, quotes, and history from the other records will be moved to the primary record, and the duplicates will be deleted.
             </p>
             <div className="space-y-2">
-              {Array.from(selectedCustomers).map((id) => {
-                const customer = allCustomers.find(c => c.id === id);
-                if (!customer) return null;
+              {Array.from(selectedCustomers.values()).map((customer) => {
+                const id = customer.id;
                 const isPrimary = primaryMergeId === id;
                 return (
                   <div

@@ -1,0 +1,30 @@
+# Typecheck gate for PRs, scoped to changed files only.
+#
+# The repo has ~1000 legacy tsc errors and deploys via esbuild (no type
+# checking), so this fails a PR only when a file the PR touched has a type
+# error — see scripts/typecheckChanged.mjs. Advisory infrastructure only:
+# it does not block the DO autodeploy (that triggers on push to main), it
+# just surfaces a red X on the PR before merging.
+name: typecheck
+
+on:
+  pull_request:
+
+jobs:
+  typecheck-changed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck changed files
+        run: node scripts/typecheckChanged.mjs origin/${{ github.base_ref }}

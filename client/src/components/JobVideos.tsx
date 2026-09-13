@@ -35,6 +35,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X, ChevronDown, Sparkles, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
+import { formatNZTime } from "@shared/dateUtils";
 
 interface JobVideosProps {
   jobId: string;
@@ -461,6 +462,11 @@ export function JobVideos({ jobId }: JobVideosProps) {
                     </span>
                     <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
                   </button>
+                )}
+                {v.createdAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Uploaded {formatNZTime(v.createdAt, "datetime")}
+                  </p>
                 )}
                 <video
                   src={v.url}

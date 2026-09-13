@@ -53,6 +53,7 @@ import {
   Mic,
   Navigation,
   ScrollText,
+  Link2,
   FileImage,
   Calendar as CalendarIcon,
   TrendingUp,
@@ -62,8 +63,10 @@ import {
   Trash2,
   ListOrdered,
   Loader2,
+  RotateCcw,
 } from "lucide-react";
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
+import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -103,6 +106,7 @@ import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { OnMyWayDialog } from "@/components/OnMyWayDialog";
 import { ProgressRecapDialog } from "@/components/ProgressRecapDialog";
+import { ShareTimelineDialog } from "@/components/ShareTimelineDialog";
 import { openPhotoReport } from "@/lib/openPhotoReport";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 
@@ -151,6 +155,10 @@ export interface JobCardDesktopProps {
     /** True while the send-to-Xero request is in flight — drives the
      *  menu item's "Sending…" state so a click gives visible feedback. */
     sendToXeroPending?: boolean;
+    /** Opens the parent's void-first confirmation dialog; only rendered
+     *  when the job is already synced (xeroStatus === "sent"). */
+    resetXeroSync?: () => void;
+    resetXeroSyncPending?: boolean;
   };
   /**
    * Called after Duplicate Job succeeds. Parent (GlobalJobCard) typically
@@ -286,6 +294,7 @@ export function JobCardDesktop({
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showOnMyWay, setShowOnMyWay] = useState(false);
   const [showProgressRecap, setShowProgressRecap] = useState(false);
+  const [showShareTimeline, setShowShareTimeline] = useState(false);
   const { toast } = useToast();
   const { webCallAvailable, startCall } = useWebCall();
 
@@ -333,12 +342,32 @@ export function JobCardDesktop({
   const status = (job?.status as string | undefined) ?? "lead";
   const badge = getJobStatusBadge(status);
 
+  // Once this job has an invoice that counts (issued, or any draft after the
+  // job is won — see invoicedJobValueExGst), the header price follows the
+  // invoice (ex-GST) instead of the quoted line items, so adjustments made
+  // at invoicing time — e.g. a discount — show on the job card.
+  // Same query key + envelope shape as GlobalJobCard so the cache is shared
+  // and InvoiceBuilder's ["/api/invoices"] invalidations refresh this too.
+  const { data: jobInvoicesResp } = useQuery<{ success?: boolean; data?: Array<Record<string, unknown>> }>({
+    queryKey: ["/api/invoices", jobId],
+    queryFn: async () => {
+      const response = await fetch(`/api/invoices?jobId=${jobId}`);
+      if (!response.ok) throw new Error("Failed to fetch invoices");
+      return response.json();
+    },
+    enabled: !!jobId,
+    staleTime: 30_000,
+  });
+  const invoicedValue = invoicedJobValueExGst(jobInvoicesResp?.data, status);
+
   // Canonical job-price hierarchy (mirrors StaffSchedule.getJobPrice / PR #24):
-  // line items (ex-GST) → job.subtotal → job.totalIncludingGst / 1.15 →
-  // job.totalAmount / 1.15. The totalIncludingGst step matters: jobs whose
-  // value lives only in total_including_gst (subtotal + totalAmount both 0)
+  // issued invoices → line items (ex-GST) → job.subtotal →
+  // job.totalIncludingGst / 1.15 → job.totalAmount / 1.15. The
+  // totalIncludingGst step matters: jobs whose value lives only in
+  // total_including_gst (subtotal + totalAmount both 0)
   // otherwise render as $0.00 here while the roster shows the real figure.
   const jobValue = (() => {
+    if (invoicedValue != null) return invoicedValue;
     const toNum = (v: unknown): number => {
       if (v == null) return 0;
       const n = typeof v === "string" ? parseFloat(v) : (v as number);
@@ -416,7 +445,7 @@ export function JobCardDesktop({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-100 text-sm font-semibold text-slate-700 disabled:opacity-40"
+      className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-secondary text-sm font-semibold text-foreground disabled:opacity-40"
       data-testid={`job-card-desktop-action-${label.toLowerCase().replace(/\s+/g, "-")}`}
     >
       <span className={`w-8 h-8 rounded-xl ${tileBg} ${tileFg} grid place-items-center`}>
@@ -487,18 +516,18 @@ export function JobCardDesktop({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-100 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-muted flex items-center justify-center p-4"
       data-testid="job-card-desktop"
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose();
       }}
     >
-      <div className="bg-slate-50 rounded-2xl shadow-xl border border-slate-200 w-full max-w-[1480px] h-[92vh] flex flex-col overflow-hidden">
+      <div className="bg-background rounded-2xl shadow-xl border border-border w-full max-w-[1480px] h-[92vh] flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
-        <div className="bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between gap-4 flex-shrink-0">
-          <div className="flex items-baseline gap-3 min-w-0">
-            <h2 className="text-[22px] font-extrabold tracking-tight text-slate-900 truncate">
+        <div className="bg-card px-6 py-4 border-b border-border flex items-center justify-between gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <h2 className="text-[22px] font-extrabold tracking-tight text-foreground truncate">
               Job {jobNumber ?? ""}
             </h2>
             <span
@@ -507,11 +536,11 @@ export function JobCardDesktop({
             >
               {badge.label}
             </span>
-            <span className="text-[16px] font-bold text-slate-900 flex-shrink-0" data-testid="job-card-desktop-price">
+            <span className="text-[13px] font-bold bg-primary text-brand-lime px-2.5 py-1 rounded-full flex-shrink-0" data-testid="job-card-desktop-price">
               {formatNzd(jobValue)}
             </span>
             {customerSummary && (
-              <span className="text-[12px] text-slate-500 truncate">· {customerSummary}</span>
+              <span className="text-[12px] text-muted-foreground truncate">· {customerSummary}</span>
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -519,7 +548,7 @@ export function JobCardDesktop({
               size="sm"
               onClick={onSave}
               disabled={isSaving || !onSave}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-5 h-9"
+              className="bg-primary text-brand-lime font-bold px-5 h-9 rounded-full"
               data-testid="btn-save-job"
             >
               {isSaving ? "Saving..." : "Save"}
@@ -528,7 +557,7 @@ export function JobCardDesktop({
               type="button"
               onClick={handleClose}
               aria-label="Close"
-              className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 grid place-items-center hover:bg-slate-200"
+              className="w-9 h-9 rounded-full bg-secondary text-muted-foreground grid place-items-center hover:bg-border"
             >
               <XIcon className="w-4 h-4" />
             </button>
@@ -554,16 +583,16 @@ export function JobCardDesktop({
             onPointerMove={onPointerMoveHandle}
             onPointerUp={onPointerUpHandle}
             onKeyDown={onKeyDownHandle}
-            className="absolute top-0 bottom-0 -ml-1 w-2 cursor-col-resize z-10 hover:bg-blue-500/15 focus:bg-blue-500/15 outline-none group"
+            className="absolute top-0 bottom-0 -ml-1 w-2 cursor-col-resize z-10 hover:bg-brand-lime/30 focus:bg-brand-lime/30 outline-none group"
             style={{ left: `${splitPct}%` }}
             data-testid="split-handle"
           >
-            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-9 rounded-full bg-slate-300 group-hover:bg-blue-500 group-focus:bg-blue-500" />
+            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-9 rounded-full bg-border group-hover:bg-brand-lime-border group-focus:bg-brand-lime-border" />
           </div>
 
           {/* LEFT — tab strip + body */}
-          <div className="border-r border-slate-200 flex flex-col min-w-0 min-h-0">
-            <div className="bg-white border-b border-slate-200 px-6 flex gap-7 flex-shrink-0">
+          <div className="border-r border-border flex flex-col min-w-0 min-h-0">
+            <div className="bg-card border-b border-border px-4 flex items-center gap-1.5 flex-shrink-0">
               {TABS.filter((t) => {
                 // Back Costing is only meaningful once work has happened —
                 // hide it on lead/quote so the tab strip stays focused on
@@ -583,17 +612,14 @@ export function JobCardDesktop({
                     key={t.id}
                     type="button"
                     onClick={() => setActiveTab(t.id)}
-                    className={`relative py-3 text-[15px] font-semibold ${on ? "text-slate-900" : "text-slate-500"}`}
+                    className={`flex items-center gap-1.5 my-2 px-3.5 py-1.5 rounded-full text-[14px] font-semibold ${on ? "bg-brand-lime text-brand-lime-foreground border border-brand-lime-border" : "text-muted-foreground hover:text-foreground"}`}
                     data-testid={`job-card-desktop-tab-${t.id}`}
                   >
                     {t.label}
-                    {on && (
-                      <span className="absolute -bottom-px left-[-4px] right-[-4px] h-0.5 bg-blue-600 rounded-full" />
-                    )}
                   </button>
                 );
               })}
-              <span className="ml-auto py-3 text-[11px] uppercase tracking-wide font-bold text-slate-400 self-center">
+              <span className="ml-auto py-3 text-[11px] uppercase tracking-wide font-bold text-muted-foreground/70 self-center">
                 Diary always visible →
               </span>
             </div>
@@ -624,7 +650,7 @@ export function JobCardDesktop({
               parent can open its document modals when a diary entry
               referencing one is tapped. Undefined is safe — JobDiarySection
               no-ops the click. */}
-          <div className="bg-white min-w-0 min-h-0 overflow-hidden flex flex-col">
+          <div className="bg-card min-w-0 min-h-0 overflow-hidden flex flex-col">
             {/* Job Videos sits above the diary feed — same vertical order as
                 the legacy GlobalJobCard layout. Collapsed by default; expand
                 to upload a walkthrough and (post-upload) opt into the AI
@@ -657,18 +683,18 @@ export function JobCardDesktop({
             need parent wiring (the document modals live in GlobalJobCard)
             — they fall back to a "not wired up" toast on the unusual path
             where no actions prop is supplied. */}
-        <div className="bg-white border-t border-slate-200 px-6 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="bg-card border-t border-border px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
-            {actionBtn("Photo", Camera, "bg-purple-100", "text-purple-600", handlePhoto)}
-            {actionBtn("Call", Phone, "bg-emerald-100", "text-emerald-600", handleCall, !phoneForCall && !actions?.call)}
-            {actionBtn("SMS", MessageSquare, "bg-blue-100", "text-blue-600", handleSms)}
-            {actionBtn("Email", Mail, "bg-amber-100", "text-amber-600", handleEmail)}
-            {actionBtn("On way", Navigation, "bg-orange-100", "text-orange-600", () => setShowOnMyWay(true), !phoneForCall)}
+            {actionBtn("Photo", Camera, "bg-primary", "text-primary-foreground", handlePhoto)}
+            {actionBtn("Call", Phone, "bg-primary", "text-primary-foreground", handleCall, !phoneForCall && !actions?.call)}
+            {actionBtn("SMS", MessageSquare, "bg-primary", "text-primary-foreground", handleSms)}
+            {actionBtn("Email", Mail, "bg-primary", "text-primary-foreground", handleEmail)}
+            {actionBtn("On way", Navigation, "bg-primary", "text-primary-foreground", () => setShowOnMyWay(true), !phoneForCall)}
           </div>
           <div className="flex items-center gap-2">
-            {actionBtn("Quote", FileText, "bg-amber-100", "text-amber-600", handleQuote)}
-            {actionBtn("Invoice", CreditCard, "bg-emerald-100", "text-emerald-600", handleInvoice)}
-            {actionBtn("Proposal", FilePen, "bg-red-100", "text-red-600", handleProposal)}
+            {actionBtn("Quote", FileText, "bg-brand-lime", "text-brand-lime-foreground", handleQuote)}
+            {actionBtn("Invoice", CreditCard, "bg-brand-lime", "text-brand-lime-foreground", handleInvoice)}
+            {actionBtn("Proposal", FilePen, "bg-brand-lime", "text-brand-lime-foreground", handleProposal)}
 
             {/* More menu — items render only if their handler is supplied,
                 so the menu shrinks gracefully if the parent doesn't wire
@@ -678,10 +704,10 @@ export function JobCardDesktop({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-100 text-sm font-semibold text-slate-700"
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-secondary text-sm font-semibold text-foreground"
                   data-testid="job-card-desktop-action-more"
                 >
-                  <span className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 grid place-items-center">
+                  <span className="w-8 h-8 rounded-xl bg-secondary text-muted-foreground grid place-items-center">
                     <MoreHorizontal className="w-4 h-4" />
                   </span>
                   More
@@ -690,19 +716,19 @@ export function JobCardDesktop({
               <DropdownMenuContent align="end" className="w-56">
                 {actions?.speechToQuote && (
                   <DropdownMenuItem onClick={actions.speechToQuote} data-testid="more-speech-to-quote">
-                    <Mic className="w-4 h-4 mr-2 text-purple-600" />
+                    <Mic className="w-4 h-4 mr-2 text-muted-foreground" />
                     Speech to Quote
                   </DropdownMenuItem>
                 )}
                 {actions?.schedule && (
                   <DropdownMenuItem onClick={actions.schedule} data-testid="more-schedule">
-                    <CalendarIcon className="w-4 h-4 mr-2 text-blue-600" />
+                    <CalendarIcon className="w-4 h-4 mr-2 text-muted-foreground" />
                     Schedule
                   </DropdownMenuItem>
                 )}
                 {actions?.profitTracker && (
                   <DropdownMenuItem onClick={actions.profitTracker} data-testid="more-profit-tracker">
-                    <TrendingUp className="w-4 h-4 mr-2 text-emerald-600" />
+                    <TrendingUp className="w-4 h-4 mr-2 text-muted-foreground" />
                     Profit Tracker
                   </DropdownMenuItem>
                 )}
@@ -714,10 +740,17 @@ export function JobCardDesktop({
                   Progress Recap
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  onClick={() => setShowShareTimeline(true)}
+                  data-testid="more-share-timeline"
+                >
+                  <Link2 className="w-4 h-4 mr-2 text-muted-foreground" />
+                  Share Timeline
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={() => openPhotoReport(jobId)}
                   data-testid="more-photo-report"
                 >
-                  <FileImage className="w-4 h-4 mr-2 text-slate-600" />
+                  <FileImage className="w-4 h-4 mr-2 text-muted-foreground" />
                   Photo Report
                 </DropdownMenuItem>
                 {actions?.sendToXero && (
@@ -731,17 +764,27 @@ export function JobCardDesktop({
                     data-testid="more-send-to-xero"
                   >
                     {actions?.sendToXeroPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 text-blue-600 animate-spin" />
+                      <Loader2 className="w-4 h-4 mr-2 text-muted-foreground animate-spin" />
                     ) : job?.xeroStatus === "sent" ? (
-                      <CheckCircle className="w-4 h-4 mr-2 text-emerald-600" />
+                      <CheckCircle className="w-4 h-4 mr-2 text-muted-foreground" />
                     ) : (
-                      <Send className="w-4 h-4 mr-2 text-blue-600" />
+                      <Send className="w-4 h-4 mr-2 text-muted-foreground" />
                     )}
                     {actions?.sendToXeroPending
                       ? "Sending to Xero..."
                       : job?.xeroStatus === "sent"
                         ? "Sent to Xero"
                         : "Send to Xero"}
+                  </DropdownMenuItem>
+                )}
+                {actions?.resetXeroSync && job?.xeroStatus === "sent" && (
+                  <DropdownMenuItem
+                    onClick={actions.resetXeroSync}
+                    disabled={actions?.resetXeroSyncPending}
+                    data-testid="more-reset-xero-sync"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2 text-muted-foreground" />
+                    Reset Xero Sync
                   </DropdownMenuItem>
                 )}
                 {(actions?.speechToQuote || actions?.schedule || actions?.profitTracker || actions?.sendToXero) && (
@@ -752,7 +795,7 @@ export function JobCardDesktop({
                   disabled={queueJob.isPending}
                   data-testid="more-queue-job"
                 >
-                  <ListOrdered className="w-4 h-4 mr-2 text-indigo-600" />
+                  <ListOrdered className="w-4 h-4 mr-2 text-muted-foreground" />
                   {jobInQueue ? "Remove from Queue" : "Queue Job"}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -760,7 +803,7 @@ export function JobCardDesktop({
                   disabled={markComplete.isPending}
                   data-testid="more-mark-complete"
                 >
-                  <CheckCircle className="w-4 h-4 mr-2 text-emerald-600" />
+                  <CheckCircle className="w-4 h-4 mr-2 text-muted-foreground" />
                   {markComplete.isPending ? "Marking…" : "Mark Complete"}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -768,7 +811,7 @@ export function JobCardDesktop({
                   disabled={duplicateJob.isPending}
                   data-testid="more-duplicate"
                 >
-                  <Copy className="w-4 h-4 mr-2 text-blue-600" />
+                  <Copy className="w-4 h-4 mr-2 text-muted-foreground" />
                   {duplicateJob.isPending ? "Duplicating…" : "Duplicate Job"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -836,6 +879,13 @@ export function JobCardDesktop({
           address={(job?.address as string | undefined) || (customer?.address as string | undefined)}
         />
       )}
+      {showShareTimeline && (
+        <ShareTimelineDialog
+          isOpen={showShareTimeline}
+          onClose={() => setShowShareTimeline(false)}
+          jobId={jobId}
+        />
+      )}
 
       {/* Queue-reason picker — opened from the Queue Job menu item when
           the job isn't already in the queue. Mirrors JobCardMobile +
@@ -852,7 +902,7 @@ export function JobCardDesktop({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ListOrdered className="h-5 w-5 text-indigo-500" />
+              <ListOrdered className="h-5 w-5 text-muted-foreground" />
               Add to Dispatch Queue
             </DialogTitle>
             <DialogDescription>
