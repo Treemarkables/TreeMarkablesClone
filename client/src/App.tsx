@@ -1538,6 +1538,19 @@ function Router() {
       <Route path="/dispatch-board">
         {() => <Redirect to="/dispatch" />}
       </Route>
+      {/* There is no standalone job page — a job opens as a card on the dispatch
+          board via ?job=. Alias /jobs/:id so links and notification deep-links
+          built that way (in-app links, older bell rows) land on the job instead
+          of the 404 page; any extra params (e.g. ?tab=) are carried across. */}
+      <Route path="/jobs/:id">
+        {(params) => (
+          <Redirect
+            to={`/dispatch?job=${encodeURIComponent(params.id)}${
+              window.location.search ? "&" + window.location.search.slice(1) : ""
+            }`}
+          />
+        )}
+      </Route>
       <Route path="/calendar">
         <ProtectedRoute>
           <SidebarLayout>

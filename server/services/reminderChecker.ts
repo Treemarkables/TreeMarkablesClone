@@ -325,14 +325,14 @@ async function checkOutstandingRoleTasks(): Promise<void> {
         isRead: false,
         userId: employeeId,
         jobId: job.id,
-        actionUrl: `/jobs/${job.id}`,
+        actionUrl: `/dispatch?job=${job.id}`,
         metadata: { roleKey, itemIds: outstanding.map(t => t.itemId) },
       });
 
       await notificationHelper.notifyEmployee(employeeId, {
         title: `${outstanding.length} ${label} task${outstanding.length === 1 ? '' : 's'} still unticked`,
         body: `Job #${job.jobNumber}: ${outstanding.map(t => t.label).join(' · ')}`,
-        clickAction: `/jobs/${job.id}`,
+        clickAction: `/dispatch?job=${job.id}`,
         collapseId: `role-tasks-${job.id}-${employeeId}-${todayNZ}`,
       });
       console.log(`[ReminderChecker] Role-task reminder: Job #${job.jobNumber} → ${employeeId} (${label})`);
