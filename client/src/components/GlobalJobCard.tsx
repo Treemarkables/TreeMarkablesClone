@@ -210,6 +210,38 @@ import { Link } from "wouter";
 // on `!form.getValues("address")`, otherwise the customer-pick auto-fill
 // silently no-ops because the form field already holds the placeholder.
 const PLACEHOLDER_ADDRESS_RE = /^\s*address not specified\s*$/i;
+
+// The five job-level contact fields, as a group. While a job has none of them
+// set, the form displays the customer record's details instead (see
+// jobHasOwnContact in the load effect). That fallback is display-only: the
+// instant ONE of these fields is persisted the job counts as having its own
+// contact and the fallback is suppressed, so the other four go blank. Saving
+// the whole visible group together keeps the screen and the database in step.
+const JOB_CONTACT_FIELDS = [
+  "jobContactFirstName",
+  "jobContactLastName",
+  "jobContactEmail",
+  "jobContactPhone",
+  "jobContactMobile",
+] as const;
+
+// Add the still-unsaved siblings of any edited jobContact* field to the
+// outgoing patch, so promoting the customer-record fallback onto the job
+// doesn't blank the values the user can see. Mutates and returns `patch`.
+function promoteFallbackJobContact(
+  patch: Record<string, any>,
+  formValues: Record<string, any>,
+): Record<string, any> {
+  if (!JOB_CONTACT_FIELDS.some((f) => f in patch)) return patch;
+  for (const field of JOB_CONTACT_FIELDS) {
+    if (field in patch) continue;
+    const value = formValues[field];
+    if (typeof value === "string" && value.trim() !== "") {
+      patch[field] = value;
+    }
+  }
+  return patch;
+}
 function isMeaningfulAddress(value: string | null | undefined): boolean {
   if (!value) return false;
   const trimmed = value.trim();
@@ -812,6 +844,11 @@ export function GlobalJobCard({
   const hasUserChangedRef = useRef(false);
   const lastLoadedJobIdRef = useRef<string | null>(null); // Track which job was loaded to prevent isDirty blocking initial load
   const originalLoadedDataRef = useRef<Record<string, any>>({}); // Store original loaded values to detect real changes on manual save
+  // True while the job carries NO jobContact* of its own and the form is
+  // therefore showing the customer record's details as a display-only
+  // fallback (see the load effect below). Used to promote that fallback onto
+  // the job the first time the user edits any contact field.
+  const jobContactIsFallbackRef = useRef(false);
   const currentJobIdRef = useRef<string | null>(null); // For clipboard paste handler
   const replaceLineItemsRef = useRef<typeof replaceLineItems | null>(null); // Stable ref to avoid dep-array re-fires
 
@@ -1706,6 +1743,7 @@ export function GlobalJobCard({
         editingJob.jobContactPhone ||
         editingJob.jobContactMobile
       );
+      jobContactIsFallbackRef.current = !jobHasOwnContact;
 
       const resetData = {
         // Core job data
@@ -2117,6 +2155,19 @@ export function GlobalJobCard({
           }
           if (clearFields.length > 0) {
             changedData._clearFields = clearFields;
+          }
+
+          // Job had no contact of its own, so the contact fields on screen came
+          // from the customer record. Persist them alongside the edited field —
+          // otherwise the first contact edit flips the job to "has own contact",
+          // the fallback stops applying, and the rest of the contact appears to
+          // wipe itself (typing an email blanked the name and phone).
+          if (jobContactIsFallbackRef.current) {
+            const before = Object.keys(changedData).length;
+            promoteFallbackJobContact(changedData, formData as any);
+            if (Object.keys(changedData).length !== before) {
+              jobContactIsFallbackRef.current = false;
+            }
           }
 
           console.log("💾 Auto-saving ONLY changed fields...", {
@@ -4526,6 +4577,15 @@ The Treemarkables Team`;
         }
         if (clearFields.length > 0) {
           changedData._clearFields = clearFields;
+        }
+
+        // Same fallback promotion as the auto-save path above.
+        if (jobContactIsFallbackRef.current) {
+          const before = Object.keys(changedData).length;
+          promoteFallbackJobContact(changedData, formData as any);
+          if (Object.keys(changedData).length !== before) {
+            jobContactIsFallbackRef.current = false;
+          }
         }
 
         if (formData.isNewCustomer) {
