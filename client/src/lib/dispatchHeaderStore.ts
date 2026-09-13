@@ -114,13 +114,22 @@ export function useOnlyUnconfirmed(): [boolean, (v: boolean) => void] {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 // Note: `"scheduled"` here is a FILTER value, not a job status. The job
-// status `'scheduled'` was retired 2026-05 — the "Scheduled" chip now
-// filters for work_orders that have a scheduledDate set on the calendar.
+// status `'scheduled'` was retired 2026-05 — the "Scheduled" chip filters
+// for work_orders with a current-or-future booking, and "Unscheduled"
+// (value kept as `work_order`) is its complement: work_orders that still
+// need a calendar slot, including ones whose booking is entirely past.
+// The Dispatch Queue "Queue" chip was removed 2026-07 — queue-style holds are
+// modelled as Lanes now (e.g. a "Queue work order" lane via the Lanes filter),
+// and queued jobs must stay visible under All / Unscheduled / Scheduled.
+// "Work Order" (`work_order_all`) is the union of Unscheduled + Scheduled:
+// every job with status work_order regardless of booking state. Because the
+// board excludes completed/invoiced jobs, this chip is the review view for
+// accepted work that hasn't been invoiced yet.
 export const DISPATCH_STATUS_FILTERS = [
-  { value: "lead",       label: "Lead" },
-  { value: "queue",      label: "Queue" },
-  { value: "quote",      label: "Quote" },
-  { value: "mulch",      label: "Mulch" },
-  { value: "work_order", label: "W/O" },
-  { value: "scheduled",  label: "Scheduled" },
+  { value: "lead",           label: "Lead" },
+  { value: "quote",          label: "Quote" },
+  { value: "mulch",          label: "Mulch" },
+  { value: "work_order_all", label: "Work Order" },
+  { value: "work_order",     label: "Unscheduled" },
+  { value: "scheduled",      label: "Scheduled" },
 ] as const;

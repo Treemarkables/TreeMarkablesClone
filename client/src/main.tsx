@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/react";
 import App from "./App";
 import "./index.css";
 import { isReloadUnsafe } from "./lib/foregroundReloadGuard";
+import { isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
 
 // Sentry frontend init — disabled when VITE_SENTRY_DSN is unset so local
 // development without a DSN doesn't spam Sentry.
@@ -39,24 +40,22 @@ if (SENTRY_DSN) {
   });
 }
 
-// v14 - Auto-recover from stale cached JS bundles
-// When a new deployment happens, old cached index.html references old JS filenames.
-// Those files return 404 → "Failed to fetch dynamically imported module" error.
-// This handler detects that and forces a full hard reload to get the fresh HTML + JS.
+// v15 - Auto-recover from stale or unfetchable JS chunks.
+// Stale cached index.html referencing deleted chunk hashes AND transient asset
+// failures during a deploy rollout both surface here. requestStaleBundleReload
+// reloads immediately on the first failure, then retries with spaced delays
+// (riding out a rollout) before giving up — so a permanently missing chunk
+// can't cause an endless reload loop.
 window.addEventListener('error', (event) => {
   const msg = event.message || '';
   const isChunkError = (
-    msg.includes('Failed to fetch dynamically imported module') ||
-    msg.includes('Importing a module script failed') ||
-    msg.includes('Loading chunk') ||
-    msg.includes('ChunkLoadError') ||
+    isChunkLoadErrorMessage(msg) ||
     (event.filename && event.filename.includes('/assets/') && msg.includes('SyntaxError'))
   );
 
   if (isChunkError) {
-    console.warn('⚠️ Stale JS bundle detected — forcing reload to get fresh version');
-    // Use location.replace so the back button still works
-    window.location.replace(window.location.href);
+    console.warn('⚠️ Stale JS bundle detected — reloading to get fresh version');
+    requestStaleBundleReload();
   }
 });
 
@@ -64,17 +63,11 @@ window.addEventListener('error', (event) => {
 window.addEventListener('unhandledrejection', (event) => {
   const reason = event.reason;
   const msg = reason?.message || String(reason) || '';
-  const isChunkError = (
-    msg.includes('Failed to fetch dynamically imported module') ||
-    msg.includes('Importing a module script failed') ||
-    msg.includes('Loading chunk') ||
-    msg.includes('ChunkLoadError')
-  );
 
-  if (isChunkError) {
-    console.warn('⚠️ Stale JS chunk import failed — forcing reload to get fresh version');
+  if (isChunkLoadErrorMessage(msg)) {
+    console.warn('⚠️ Stale JS chunk import failed — reloading to get fresh version');
     event.preventDefault();
-    window.location.replace(window.location.href);
+    requestStaleBundleReload();
   }
 });
 
@@ -108,45 +101,34 @@ async function hasNewDeployShipped(): Promise<boolean> {
   }
 }
 
-// Reload on foreground when EITHER we've been backgrounded a while OR a new
-// build has shipped. In Capacitor (iOS WKWebView) and PWAs the page otherwise
-// only refetches HTML on a manual full reload, so users sit on stale code
-// indefinitely.
+// Reload on foreground ONLY when a new build has actually shipped. In
+// Capacitor (iOS WKWebView) and PWAs the page otherwise only refetches HTML on
+// a manual full reload, so users sit on stale code indefinitely after a deploy.
+// Time away alone is NOT a reason to reload — an unconditional
+// backgrounded-too-long reload made every app-open after a break white-flash
+// and refetch the whole bundle, which users read as the app "restarting".
+// hasNewDeployShipped is one cheap no-store fetch of index.html; if it can't
+// tell (offline/transient), we stay on the current code and check again next
+// foreground.
 //
 // The catch: a foreground reload IS destructive when the user has in-progress
 // work on screen. Locking the phone mid-edit and returning would otherwise wipe
 // anything not yet auto-saved (the job-card auto-save history makes this a real
-// data-loss path, and it's exactly when the >5min threshold fires). So we ask
-// the reload-guard registry first — if any surface is mid-edit (e.g. an open
-// job card), we skip this reload entirely and retry on the next foreground,
-// once the work is closed. Picking up fresh code can always wait; eating an
-// edit cannot.
-const STALE_RELOAD_THRESHOLD_MS = 5 * 60 * 1000;
-let lastVisibleAt = Date.now();
+// data-loss path). So we ask the reload-guard registry first — if any surface
+// is mid-edit (e.g. an open job card), we skip this reload entirely and retry
+// on the next foreground, once the work is closed. Picking up fresh code can
+// always wait; eating an edit cannot.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    lastVisibleAt = Date.now();
-    return;
-  }
   if (document.visibilityState !== 'visible') return;
 
-  if (isReloadUnsafe()) {
-    console.warn('↻ Foreground reload skipped — in-progress work open. Will retry once it closes.');
-    return;
-  }
-
-  const elapsed = Date.now() - lastVisibleAt;
-  if (elapsed > STALE_RELOAD_THRESHOLD_MS) {
-    console.warn(`↻ App backgrounded for ${Math.round(elapsed / 1000)}s — reloading to get fresh code`);
-    window.location.reload();
-    return;
-  }
-  // Even after a brief away, pick up a fresh deploy on return.
   hasNewDeployShipped().then((isStale) => {
-    if (isStale) {
-      console.warn('↻ New build detected on foreground — reloading to get fresh code');
-      window.location.reload();
+    if (!isStale) return;
+    if (isReloadUnsafe()) {
+      console.warn('↻ New build shipped but in-progress work open — will reload once it closes.');
+      return;
     }
+    console.warn('↻ New build detected on foreground — reloading to get fresh code');
+    window.location.reload();
   });
 });
 

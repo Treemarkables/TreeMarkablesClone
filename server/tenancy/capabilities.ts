@@ -52,7 +52,6 @@ export const CAPABILITY_CATALOG: Capability[] = [
   { key: "dispatch.manage", module: "Jobs", label: "Reassign dispatch", kind: "action", requires: "plan:crew" },
   { key: "jobTemplates.manage", module: "Jobs", label: "Manage job templates", kind: "action", requires: "plan:crew" },
   { key: "dailyBriefing.view", module: "Jobs", label: "View daily briefing", kind: "view", requires: null },
-  { key: "aiDispatch.use", module: "Jobs", label: "AI Smart Dispatch", kind: "action", requires: "addon:ai" },
 
   // ── Quoting & Proposals ────────────────────────────────────────────
   { key: "quotes.view", module: "Quoting", label: "View quotes", kind: "view", requires: null },

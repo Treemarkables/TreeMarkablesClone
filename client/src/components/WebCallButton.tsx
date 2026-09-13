@@ -35,10 +35,11 @@ export function WebCallButton() {
           size="icon"
           aria-label="Make a call"
           data-testid="web-call-button"
-          className="text-black"
+          className="h-14 w-14 text-green [&_svg]:size-6"
           disabled={callState !== "idle"}
         >
-          <Phone className="h-5 w-5" />
+          {/* fill-current turns the outline glyph into a solid green icon */}
+          <Phone className="fill-current" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72">

@@ -58,6 +58,7 @@ import { toZonedTime } from "date-fns-tz";
 import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
 import { ProposalTemplate } from "./ProposalTemplate";
+import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 
 interface EmailComposerModalProps {
   isOpen: boolean;
@@ -67,7 +68,7 @@ interface EmailComposerModalProps {
   invoiceData?: any;
   quoteData?: any;
   proposalData?: any;
-  templateType?: "invoice" | "quote" | "proposal";
+  templateType?: "invoice" | "quote" | "proposal" | "general";
   customEmail?: string;
   defaultCc?: string;
 }
@@ -469,7 +470,7 @@ export function EmailComposerModal({
         .replace(
           /{invoiceLink}/g,
           invoiceData?.id
-            ? `${baseUrl}/invoice/${invoiceData.id}/view`
+            ? invoiceViewLink(invoiceData.id, { base: baseUrl })
             : "View invoice in your customer portal",
         )
         .replace(
@@ -481,7 +482,7 @@ export function EmailComposerModal({
         .replace(
           /{proposalLink}/g,
           proposalData?.id
-            ? `${baseUrl}/proposal/${proposalData.id}`
+            ? proposalAcceptLink(proposalData.id, { base: baseUrl })
             : "View proposal in your customer portal",
         )
         .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")
@@ -764,6 +765,9 @@ export function EmailComposerModal({
           queryKey: ["/api/jobs", job.id, "diary"],
         });
       }
+      // An emailed invoice gets stamped status='sent' server-side — refresh
+      // invoice caches so the job-card header price picks it up.
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
 
       onClose();
     },
@@ -854,7 +858,7 @@ export function EmailComposerModal({
       .replace(
         /{invoiceLink}/g,
         invoiceData?.id
-          ? `${baseUrl}/invoice/${invoiceData.id}/view`
+          ? invoiceViewLink(invoiceData.id, { base: baseUrl })
           : "View invoice in your customer portal",
       )
       .replace(
@@ -866,7 +870,7 @@ export function EmailComposerModal({
       .replace(
         /{proposalLink}/g,
         proposalData?.id
-          ? `${baseUrl}/proposal/${proposalData.id}`
+          ? proposalAcceptLink(proposalData.id, { base: baseUrl })
           : "View proposal in your customer portal",
       )
       .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")

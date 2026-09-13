@@ -50,7 +50,9 @@ import {
   Trash2,
   Upload,
   Download,
+  ArrowLeft,
 } from "lucide-react";
+import { Link } from "wouter";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -511,6 +513,18 @@ export default function MaterialsServices() {
 
   return (
     <div className="flex flex-col h-full p-6 space-y-6">
+      <Button
+        variant="ghost"
+        size="sm"
+        asChild
+        className="self-start -ml-2"
+        data-testid="button-back-to-settings"
+      >
+        <Link href="/settings" className="flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Settings
+        </Link>
+      </Button>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

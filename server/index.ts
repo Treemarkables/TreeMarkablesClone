@@ -13,6 +13,11 @@ import { requireApiAuth } from "./tenancy/requireApiAuth";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
 import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
+import {
+  createTreemarkablesDocumentBrandMiddleware,
+  requestIsTreemarkablesDocumentHost,
+  applyTreemarkablesDocumentHead,
+} from "./treemarkablesDocumentBrand";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
@@ -20,6 +25,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
+import { sweepStaleInboundDocuments } from "./services/supplierInvoiceIngest";
 import { attachVoiceAgentWss } from "./services/voiceAgent";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
@@ -99,6 +105,11 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
 });
 
+// www.treemarkables.co.nz / treemarkables.co.nz: first HTML byte is Treemarkables
+// branded (title/meta/icons/og). Does not change the React UI, does not 301 app
+// paths, and is a no-op on Inflow hosts. See server/treemarkablesDocumentBrand.ts.
+app.use(createTreemarkablesDocumentBrandMiddleware());
+
 // Legacy-domain redirect. Customer document links already sent out (invoices,
 // proposals, quotes, etc.) point at the old app host. The app now lives at
 // APP_URL (app.inflowapp.co.nz). 301 the customer-facing paths to the new host
@@ -114,14 +125,32 @@ app.get('/health', (_req, res) => {
 const LEGACY_APP_HOST = 'app.treemarkables.co.nz';
 const REDIRECT_PATH_PREFIXES = ['/proposal', '/invoice', '/quote', '/watch', '/review', '/customer-portal'];
 const APP_HOST = (() => { try { return new URL(APP_URL).host; } catch { return ''; } })();
+// Full cutover switch: when LEGACY_HOST_REDIRECT_ALL=true (set in DO once the
+// owner is ready), EVERY browser page-load on the legacy app host 301s to
+// APP_URL — not just the customer-link prefixes. Deliberately excluded even
+// then:
+//   - /api/*     — Twilio/Stripe/etc. webhooks still point at the old host
+//                  (Stripe treats a 301 as delivery failure), and an already-
+//                  open SPA tab keeps its session working mid-flight.
+//   - /objects/* — media referenced from old emails/documents.
+//   - non-GET/HEAD — form posts etc. must not lose their bodies to a redirect.
+// ⚠️ Flipping this also moves the iOS shell (which still loads the old host,
+// see capacitor allowNavigation) — sessions are per-host, so users get the
+// login screen once. Coordinate with a native rebuild or accept the re-login.
+const REDIRECT_ALL = (process.env.LEGACY_HOST_REDIRECT_ALL || '').trim().toLowerCase() === 'true';
 app.use((req, res, next) => {
-  if (
-    APP_HOST &&
-    APP_HOST !== LEGACY_APP_HOST &&
-    req.hostname === LEGACY_APP_HOST &&
-    REDIRECT_PATH_PREFIXES.some((p) => req.path === p || req.path.startsWith(p + '/'))
-  ) {
-    return res.redirect(301, `${APP_URL}${req.originalUrl}`);
+  if (APP_HOST && APP_HOST !== LEGACY_APP_HOST && req.hostname === LEGACY_APP_HOST) {
+    const isCustomerLink = REDIRECT_PATH_PREFIXES.some(
+      (p) => req.path === p || req.path.startsWith(p + '/'),
+    );
+    const isFullCutoverPath =
+      REDIRECT_ALL &&
+      (req.method === 'GET' || req.method === 'HEAD') &&
+      !req.path.startsWith('/api') &&
+      !req.path.startsWith('/objects');
+    if (isCustomerLink || isFullCutoverPath) {
+      return res.redirect(301, `${APP_URL}${req.originalUrl}`);
+    }
   }
   next();
 });
@@ -156,7 +185,12 @@ if (!isDevelopment && !process.env.SESSION_SECRET) {
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
-    resave: true,
+    // resave:false — connect-pg-simple implements `touch`, so express-session
+    // keeps the session fresh (and rolling expiry works) without rewriting the
+    // whole row when nothing changed. resave:true forced a session-table WRITE to
+    // Sydney on every request even for pure reads — a wasted cross-region round
+    // trip on the busiest path in the app.
+    resave: false,
     saveUninitialized: false,
     rolling: true,
     name: 'treemarkables.sid',
@@ -266,6 +300,18 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
     fallthrough: true,
     redirect: false,
     index: false,
+    setHeaders: (res, filePath) => {
+      // Vite content-hashes everything under /assets/ (index-C5HqaHu6.js), so
+      // those files are safe to cache forever — a new build gets new names.
+      // Without this they ship with the express.static default (max-age=0),
+      // so every visit refetches every chunk and any transient server blip
+      // during a deploy rollout becomes a visible "Failed to fetch dynamically
+      // imported module" crash. index.html / sw.js / manifest are NOT under
+      // /assets/ and keep their no-store headers from the middleware above.
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
   }));
 
   appInstance.use("*", (req, res, next) => {
@@ -284,6 +330,23 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
     res.setHeader('Expires', '0');
 
     log(`Serving SPA fallback: ${req.originalUrl} -> index.html`, "static");
+
+    if (requestIsTreemarkablesDocumentHost(req)) {
+      try {
+        const html = fs.readFileSync(indexPath, "utf8");
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.send(applyTreemarkablesDocumentHead(html, req.path || "/"));
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log(`Error serving branded index.html: ${message}`, "error");
+        res.status(500).json({
+          error: "Failed to serve application",
+          details: message
+        });
+        return;
+      }
+    }
 
     res.sendFile(indexPath, (err) => {
       if (err) {
@@ -410,6 +473,18 @@ function startNotificationQueueWorker() {
 
       for (const notification of pendingNotifications) {
         try {
+          // Staff pushes deferred by the configurable delivery window
+          // (see server/services/notificationWindow.ts). deliverQueuedPush
+          // re-checks prefs + assignment freshness; a false return means
+          // "deliberately skipped", which still counts as processed.
+          if (notification.notificationType === 'push') {
+            const { deliverQueuedPush } = await import("./services/notificationHelper");
+            const delivered = await deliverQueuedPush(notification);
+            await storage.markNotificationSent(notification.id);
+            log(`[Notification Queue] Queued push ${notification.id} ${delivered ? 'delivered' : 'skipped (prefs off, unassigned, or no active tokens)'}`, "startup");
+            continue;
+          }
+
           if (notification.recipientEmail && (notification.notificationType === 'email' || notification.notificationType === 'both')) {
             await emailService.sendEmail({
               to: notification.recipientEmail,
@@ -499,6 +574,10 @@ function startNotificationQueueWorker() {
     } catch (e) {
       console.error("[schema] boot migrations failed (continuing):", e);
     }
+    // Re-queue any inbound supplier-invoice documents a previous instance left
+    // mid-flight (the claim is an atomic status transition, so this is safe on
+    // both app instances).
+    void sweepStaleInboundDocuments().then((n) => { if (n) log(`🧾 re-queued ${n} stale inbound invoice document(s)`, "startup"); });
 
     let devServer: http.Server | undefined;
     try {
@@ -746,6 +825,9 @@ The {businessName} Team';
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminders_enabled BOOLEAN DEFAULT true;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminder_offsets JSONB DEFAULT '[30, 7]'::jsonb;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS job_reply_forward_email TEXT;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_enabled BOOLEAN DEFAULT true;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_start TEXT DEFAULT '07:00';
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_end TEXT DEFAULT '18:00';
         CREATE TABLE IF NOT EXISTS equipment_compliance_reminders (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           business_id VARCHAR,
@@ -770,6 +852,117 @@ The {businessName} Team';
             GRANT SELECT, INSERT, UPDATE, DELETE ON equipment_compliance_reminders TO app_tenant;
           END IF;
         END $$;
+        -- tree_markers drifted from shared/schema.ts: the bootstrap DDL never had
+        -- business_id and no RLS policy exists, so under the blanket app_tenant GRANT
+        -- it was cross-tenant readable/writable. Mirrors
+        -- migrations/manual/20260709_tree_markers_business_id_rls.sql.
+        ALTER TABLE tree_markers ADD COLUMN IF NOT EXISTS business_id VARCHAR;
+        UPDATE tree_markers tm SET business_id = j.business_id
+          FROM jobs j WHERE tm.job_id = j.id AND tm.business_id IS NULL;
+        ALTER TABLE tree_markers ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON tree_markers;
+        CREATE POLICY tenant_isolation ON tree_markers
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON tree_markers TO app_tenant;
+          END IF;
+        END $$;
+        -- Site-map photo mode: markers can live on an uploaded image instead
+        -- of the satellite map (council jobs where the card address is the
+        -- billing address, not the site). Mirrors
+        -- migrations/manual/20260710_site_map_photo_mode.sql.
+        ALTER TABLE tree_markers ADD COLUMN IF NOT EXISTS surface TEXT NOT NULL DEFAULT 'map';
+        CREATE TABLE IF NOT EXISTS job_site_maps (
+          business_id VARCHAR,
+          job_id VARCHAR PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+          image_url TEXT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        ALTER TABLE job_site_maps ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON job_site_maps;
+        CREATE POLICY tenant_isolation ON job_site_maps
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON job_site_maps TO app_tenant;
+          END IF;
+        END $$;
+        -- Public job photo timeline links (token-gated customer feed). Mirrors
+        -- migrations/manual/20260711_job_timeline_links.sql.
+        CREATE TABLE IF NOT EXISTS job_timeline_links (
+          business_id VARCHAR,
+          job_id VARCHAR PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+          token VARCHAR(64) NOT NULL UNIQUE,
+          is_enabled BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        ALTER TABLE job_timeline_links ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON job_timeline_links;
+        CREATE POLICY tenant_isolation ON job_timeline_links
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON job_timeline_links TO app_tenant;
+          END IF;
+        END $$;
+        -- Heal rows inserted before 2026-07-10 with business_id NULL: the multer
+        -- upload route lost the ALS tenant context (busboy callbacks run in the
+        -- socket's async scope), so withTenant() never stamped them and they were
+        -- invisible to tenant-scoped reads. The route now stamps explicitly from
+        -- the job row; this backfill makes the already-uploaded photos visible.
+        UPDATE job_site_maps jsm SET business_id = j.business_id
+          FROM jobs j WHERE jsm.job_id = j.id AND jsm.business_id IS NULL;
+        -- Live job timers (clock in/out). Stopping a timer writes into
+        -- jobs.staff_time_entries. Mirrors
+        -- migrations/manual/20260710_active_timers.sql.
+        CREATE TABLE IF NOT EXISTS active_timers (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          business_id VARCHAR,
+          job_id VARCHAR NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+          employee_id VARCHAR NOT NULL UNIQUE,
+          started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        ALTER TABLE active_timers ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON active_timers;
+        CREATE POLICY tenant_isolation ON active_timers
+          USING (business_id = nullif(current_setting('app.current_business', true), ''))
+          WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''));
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+            GRANT SELECT, INSERT, UPDATE, DELETE ON active_timers TO app_tenant;
+          END IF;
+        END $$;
+        -- Heal job-child rows created behind multer with the wrong tenant stamp:
+        -- busboy's stream callbacks run in the socket's async context, so those
+        -- upload handlers lost the ALS tenant context — withTenant() stamped
+        -- nothing and inserts took the column DEFAULT (Treemarkables'
+        -- business_id): correct for TM by accident, wrong AND invisible under RLS
+        -- for every other tenant. The routes now stamp from the job row; these
+        -- idempotent updates restamp any child row that disagrees with its parent
+        -- job. Mirrors migrations/manual/20260710_multer_child_rows_backfill.sql.
+        UPDATE job_diary_entries d SET business_id = j.business_id
+          FROM jobs j WHERE d.job_id = j.id AND d.business_id IS DISTINCT FROM j.business_id;
+        UPDATE photos p SET business_id = j.business_id
+          FROM jobs j WHERE p.job_id = j.id AND p.business_id IS DISTINCT FROM j.business_id;
+        UPDATE notifications n SET business_id = j.business_id
+          FROM jobs j WHERE n.job_id = j.id AND n.business_id IS DISTINCT FROM j.business_id;
+        UPDATE job_quoting_process_completions q SET business_id = j.business_id
+          FROM jobs j WHERE q.job_id = j.id AND q.business_id IS DISTINCT FROM j.business_id;
+        -- Round 2: the remaining multer instances (video/audio/csv/logo/near-miss
+        -- uploads) shared the same ALS loss. Job-linked videos take their job's
+        -- tenant (knowledge videos are business_id NULL by design and have no
+        -- job_id, so the join skips them); near-miss attachments take their parent
+        -- report's. Mirrors migrations/manual/20260710_multer_child_rows_backfill.sql.
+        UPDATE videos v SET business_id = j.business_id
+          FROM jobs j WHERE v.job_id = j.id AND v.business_id IS DISTINCT FROM j.business_id;
+        UPDATE near_miss_attachments a SET business_id = r.business_id
+          FROM near_miss_reports r WHERE a.report_id = r.id AND a.business_id IS DISTINCT FROM r.business_id;
         CREATE TABLE IF NOT EXISTS role_checklist_tasks (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           role_key VARCHAR NOT NULL,
@@ -1059,6 +1252,39 @@ The {businessName} Team';
           ('powerline', 'Powerline-adjacent tree work', 'Environmental', 'Tree work near overhead electrical conductors', '{"Helmet","Eye protection","Hearing protection","Hi-vis","Insulated where required","Safety boots","Gloves"}',
             '[{"stepNumber":1,"taskStep":"Confirm voltage & permits","hazards":["Electrocution"],"controls":["Treat all lines as live","Confirm voltage & NZECP 34 distance","Obtain network operator permit if inside zone"],"riskRating":5},{"stepNumber":2,"taskStep":"Work to safe distances","hazards":["Contact with conductor","Conductive limbs/tools"],"controls":["Maintain minimum approach distance","No metal tools or wet ropes in the zone","Stop work if distances cannot be kept"],"riskRating":5}]', true, 5)
         ON CONFLICT (key) DO NOTHING;
+      `);
+
+      // Safety library tables: tenants can now add their own rows alongside the
+      // built-in seeds, so RLS needs a split policy — everyone reads the built-ins
+      // (is_built_in, business_id NULL), writes touch only your own rows. A plain
+      // tenant_isolation policy hides the seed rows from every tenant (NULL never
+      // equals current_setting). These tables also carried the legacy TM-id column
+      // DEFAULT (two of them NOT NULL), which mis-stamps every seed and every
+      // context-less insert as Treemarkables — same class as the multer/ALS bug —
+      // so the default/NOT NULL go, and seeds get un-stamped back to global.
+      // Mirrors migrations/manual/20260712_safety_library_rls.sql.
+      await pool.query(`
+        DO $$
+        DECLARE t TEXT;
+        BEGIN
+          FOREACH t IN ARRAY ARRAY['swms_templates','toolbox_talk_topics','prestart_checklist_templates','competency_types'] LOOP
+            EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS business_id VARCHAR', t);
+            EXECUTE format('ALTER TABLE %I ALTER COLUMN business_id DROP DEFAULT', t);
+            EXECUTE format('ALTER TABLE %I ALTER COLUMN business_id DROP NOT NULL', t);
+            EXECUTE format('UPDATE %I SET business_id = NULL WHERE is_built_in = true AND business_id IS NOT NULL', t);
+            EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_read ON %I', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_write ON %I', t);
+            EXECUTE format(
+              'CREATE POLICY tenant_read ON %I FOR SELECT USING (is_built_in = true OR business_id = nullif(current_setting(''app.current_business'', true), ''''))', t);
+            EXECUTE format(
+              'CREATE POLICY tenant_write ON %I USING (business_id = nullif(current_setting(''app.current_business'', true), '''')) WITH CHECK (business_id = nullif(current_setting(''app.current_business'', true), ''''))', t);
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_tenant') THEN
+              EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO app_tenant', t);
+            END IF;
+          END LOOP;
+        END $$;
       `);
 
       // --- Per-business GST number (trade-gen Phase A) ---

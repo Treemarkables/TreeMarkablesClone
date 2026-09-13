@@ -9,6 +9,8 @@ export interface TwilioVoicePluginInterface {
   hangup(): Promise<void>;
   mute(options: { muted: boolean }): Promise<void>;
   setSpeaker(options: { on: boolean }): Promise<void>;
+  sendDigits(options: { digits: string }): Promise<void>;
+  showAudioRoutePicker(): Promise<void>;
   addListener(
     event: string,
     handler: (data: Record<string, string>) => void,
@@ -33,6 +35,28 @@ export interface CallEvent {
   // foreground flag is the reliable signal for app-open calls, while visibility
   // covers answering a backgrounded/locked call then opening the app.
   foreground?: string;
+  // "audioRoute" event payload — the native side's ground truth for where iOS
+  // is actually playing call audio. `outputs` is the live route (e.g. "Speaker",
+  // "Receiver"), `onSpeaker` whether that route is the built-in speaker, and
+  // `speakerSelected` what the user asked for; a sustained mismatch is the
+  // speaker bug. Device logs are unreadable on the owner's setup, so the
+  // in-app call screen displaying these IS the diagnostic channel.
+  context?: string;
+  outputs?: string;
+  onSpeaker?: string;
+  speakerSelected?: string;
+  category?: string;
+  mode?: string;
+  options?: string;
+  // Native app version "1.0(37)" — the webview loads from the production
+  // server, so the UI version and the installed native build can differ;
+  // this disambiguates which native code produced an event.
+  nativeBuild?: string;
+  // "callConnected" timing (incoming calls only): ms from the CallKit answer
+  // action to media connected / to audio-session activation. Splits the
+  // "silence after answering" wait into app-side vs network-side time.
+  answerToConnectMs?: string;
+  answerToActivateMs?: string;
 }
 
 export interface TwilioVoiceOptions {
@@ -45,6 +69,7 @@ export interface TwilioVoiceOptions {
   onCallFailed?: (data: CallEvent) => void;
   onRegistered?: (data: CallEvent) => void;
   onRegistrationError?: (data: CallEvent) => void;
+  onAudioRoute?: (data: CallEvent) => void;
 }
 
 export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
@@ -56,9 +81,13 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
   const fetchTokenAndRegister = useCallback(async () => {
     if (!isNative) return;
     try {
+      // Tell the server which platform we are so it can pick the right Twilio
+      // push credential (APNs for iOS, FCM for Android).
       const res = await fetch("/api/twilio/token", {
         method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: Capacitor.getPlatform() }),
       });
       const bodyText = await res.text();
       if (!res.ok) {
@@ -116,6 +145,7 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
       ["callFailed", "onCallFailed"],
       ["registered", "onRegistered"],
       ["registrationError", "onRegistrationError"],
+      ["audioRoute", "onAudioRoute"],
     ];
 
     const setup = async () => {
@@ -182,19 +212,45 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
     [isNative],
   );
 
+  // These three RETHROW after logging (unlike mute/hangup): a bridge-level
+  // rejection ("method not implemented") was silently swallowed here for
+  // months while the stale .m CAP_PLUGIN method list dropped setSpeaker —
+  // callers must be able to surface the failure on screen.
   const setSpeaker = useCallback(
     async (on: boolean) => {
       if (!isNative) return;
       try {
         await TwilioVoice.setSpeaker({ on });
       } catch (err) {
-        // The iOS native plugin doesn't implement setSpeaker; swallow so a
-        // failed toggle doesn't surface as an unhandled promise rejection.
         console.warn("[TwilioVoice] setSpeaker failed:", err);
+        throw err instanceof Error ? err : new Error(String(err));
       }
     },
     [isNative],
   );
+
+  const sendDigits = useCallback(
+    async (digits: string) => {
+      if (!isNative) return;
+      try {
+        await TwilioVoice.sendDigits({ digits });
+      } catch (err) {
+        console.warn("[TwilioVoice] sendDigits failed:", err);
+        throw err instanceof Error ? err : new Error(String(err));
+      }
+    },
+    [isNative],
+  );
+
+  const showAudioRoutePicker = useCallback(async () => {
+    if (!isNative) return;
+    try {
+      await TwilioVoice.showAudioRoutePicker();
+    } catch (err) {
+      console.warn("[TwilioVoice] showAudioRoutePicker failed:", err);
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+  }, [isNative]);
 
   return {
     isNative,
@@ -203,6 +259,8 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
     hangup,
     mute,
     setSpeaker,
+    sendDigits,
+    showAudioRoutePicker,
     refetchToken: fetchTokenAndRegister,
   };
 }

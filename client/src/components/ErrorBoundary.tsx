@@ -2,6 +2,11 @@ import { Component, ReactNode } from 'react';
 import * as Sentry from '@sentry/react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
+import {
+  isChunkLoadError,
+  canAttemptReload,
+  requestStaleBundleReload,
+} from '@/lib/staleChunkReload';
 
 interface Props {
   children: ReactNode;
@@ -14,29 +19,8 @@ interface State {
   recovering: boolean;
 }
 
-// A lazy()/dynamic-import that 404s after a deploy (old index.html points at
-// JS chunk hashes that no longer exist) throws one of these messages. Phrasing
-// is browser-specific: Chrome "Failed to fetch dynamically imported module",
-// iOS/Safari "Importing a module script failed", Firefox/webpack "Loading
-// chunk"/"ChunkLoadError".
-function isChunkLoadError(error: Error | null | undefined): boolean {
-  const msg = error?.message || '';
-  const name = error?.name || '';
-  return (
-    name === 'ChunkLoadError' ||
-    msg.includes('Failed to fetch dynamically imported module') ||
-    msg.includes('error loading dynamically imported module') ||
-    msg.includes('Importing a module script failed') ||
-    msg.includes('Loading chunk') ||
-    msg.includes('ChunkLoadError')
-  );
-}
-
 export class ErrorBoundary extends Component<Props, State> {
   private capturedComponentStack: string = '';
-  // sessionStorage key holding the timestamp of our last stale-bundle reload,
-  // so a genuinely-missing chunk can't put us in an endless reload loop.
-  private static readonly RELOAD_GUARD_KEY = 'chunkReloadAt';
 
   constructor(props: Props) {
     super(props);
@@ -44,38 +28,14 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
-    // recovering === "we're about to hard-reload", so render a calm "Updating"
-    // screen instead of the scary error card for that split second.
-    return { hasError: true, error, recovering: ErrorBoundary.willReload(error) };
-  }
-
-  // Whether a stale-bundle reload is warranted: a chunk error that we haven't
-  // already tried to reload from in the last 20s (read-only — no side effects).
-  private static willReload(error: Error): boolean {
-    if (!isChunkLoadError(error)) return false;
-    try {
-      const last = Number(
-        sessionStorage.getItem(ErrorBoundary.RELOAD_GUARD_KEY) || '0',
-      );
-      return Date.now() - last >= 20000;
-    } catch (_) {
-      return true;
-    }
-  }
-
-  // Hard-reload once to pull the fresh index.html + chunk hashes when a lazy
-  // import fails because the bundle is stale. Returns true if a reload was
-  // kicked off (caller should skip error reporting — it's not a real bug).
-  private recoverFromStaleBundle(error: Error): boolean {
-    if (!ErrorBoundary.willReload(error)) return false;
-    try {
-      sessionStorage.setItem(ErrorBoundary.RELOAD_GUARD_KEY, String(Date.now()));
-    } catch (_) {
-      // sessionStorage unavailable (private mode / webview) — reload anyway,
-      // the browser's own loop protection is the backstop.
-    }
-    window.location.reload();
-    return true;
+    // recovering === "a stale-bundle reload is coming (possibly after a short
+    // delay while a deploy finishes rolling out)", so render a calm "Updating"
+    // screen instead of the scary error card until it lands.
+    return {
+      hasError: true,
+      error,
+      recovering: isChunkLoadError(error) && canAttemptReload(),
+    };
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
@@ -87,9 +47,11 @@ export class ErrorBoundary extends Component<Props, State> {
     // Stale-bundle recovery FIRST. These import failures surface through
     // Suspense into this boundary, so the global window 'error' /
     // 'unhandledrejection' handlers in main.tsx never see them — we have to
-    // trigger the reload here. Skip Sentry/server logging for them: it's a
-    // deploy artifact, not a code bug.
-    if (this.recoverFromStaleBundle(error)) {
+    // trigger the reload here. Skip Sentry/server logging while retrying:
+    // it's a deploy artifact, not a code bug. If the retry ladder is
+    // exhausted ('gave-up'), fall through and report — a chunk that's still
+    // missing after several spaced reloads is a real problem worth logging.
+    if (isChunkLoadError(error) && requestStaleBundleReload() === 'reloading') {
       return;
     }
 
@@ -135,6 +97,12 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleRetry = () => {
+    // React lazy() caches a failed import's rejection, so re-rendering after a
+    // chunk error just re-throws — only a full reload can fetch the chunk.
+    if (isChunkLoadError(this.state.error)) {
+      window.location.reload();
+      return;
+    }
     this.capturedComponentStack = '';
     this.setState({ hasError: false, error: null, recovering: false });
   };

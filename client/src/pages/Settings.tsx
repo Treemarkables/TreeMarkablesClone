@@ -40,6 +40,7 @@ import {
   BookOpen,
   Search,
   Rocket,
+  Database,
   type LucideIcon
 } from "lucide-react";
 import { Link } from "wouter";
@@ -125,6 +126,20 @@ const settingsSections: SettingSection[] = [
         description: "Phone numbers and emails that route calls, texts and replies to you",
         icon: Plug,
         path: "/settings/channels"
+      },
+      {
+        id: "suppliers",
+        title: "Suppliers",
+        description: "Per-supplier email addresses so invoices land in your queue already read and checked",
+        icon: Receipt,
+        path: "/settings/suppliers"
+      },
+      {
+        id: "import",
+        title: "Import & Migration",
+        description: "Bring your customers and jobs across from ServiceM8 or CSV",
+        icon: Database,
+        path: "/settings/import"
       }
     ]
   },
@@ -208,7 +223,7 @@ const settingsSections: SettingSection[] = [
       {
         id: "equipment-register",
         title: "Equipment Register",
-        description: "Assign licence requirements to equipment for AI Smart Dispatch",
+        description: "Assign licence requirements to equipment",
         icon: Wrench,
         path: "/settings/equipment-register"
       }
@@ -386,6 +401,13 @@ const settingsSections: SettingSection[] = [
         description: "Set up and review any subscriber's account during onboarding",
         icon: Users,
         path: "/admin/subscribers"
+      },
+      {
+        id: "help-content",
+        title: "Help Content",
+        description: "Publish how-to videos and articles shown to every subscriber",
+        icon: BookOpen,
+        path: "/admin/help"
       }
     ]
   }
@@ -394,6 +416,7 @@ const settingsSections: SettingSection[] = [
 // Maps each setting to its 3D illustration in client/public/settings-icons/.
 // Kept separate from the option id so several settings can share an illustration.
 const SETTING_IMAGES: Record<string, string> = {
+  "help-content": "doc-templates",
   "voice-agent": "calls",
   "ai-knowledge": "preferences",
   company: "company",
@@ -444,6 +467,10 @@ export default function Settings() {
           if (option.id === "role-checklist-tasks" && !roleChecklistEnabled) return false;
           // Concierge subscriber management is platform-operator only (same allowlist).
           if (option.id === "subscribers" && !roleChecklistEnabled) return false;
+          // Global help-content authoring (/admin/help) — same operator gate. The
+          // server separately allowlists publishers (INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS),
+          // so other publisher tenants (e.g. the demo tenant) reach it by URL.
+          if (option.id === "help-content" && !roleChecklistEnabled) return false;
           if (!q) return true;
           return (
             option.title.toLowerCase().includes(q) ||

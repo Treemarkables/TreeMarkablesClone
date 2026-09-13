@@ -28,8 +28,12 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Inflow uses the camera so you can take photos of customer messages, job sites, and quotes to attach to leads.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Inflow uses your location to sort today's jobs by distance from you.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Inflow needs microphone access for voice calls with customers.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Inflow saves job photos and videos to your Photos library when you tap Save.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Inflow needs photo library access so you can attach screenshots of customer messages and job-site photos to leads.</string>
 	<key>UIBackgroundModes</key>
@@ -49,8 +53,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

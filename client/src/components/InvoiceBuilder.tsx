@@ -125,6 +125,11 @@ export function InvoiceBuilder({
   const [editableNotes, setEditableNotes] = useState("");
   const [customDueDate, setCustomDueDate] = useState<string>("");
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
+  // When true, entered unit prices are treated as GST-inclusive. Invoices are
+  // stored ex-GST everywhere downstream (invoice.amount, item rate/amount —
+  // see InvoiceView/PDF which add 15% on top), so inclusive entries are
+  // divided by 1.15 at save time rather than teaching every consumer a mode.
+  const [gstInclusive, setGstInclusive] = useState(false);
   // Which line item is currently expanded for editing. null = all rows
   // collapsed (compact display). Click a row to expand its editor.
   const [editingInvoiceItemId, setEditingInvoiceItemId] = useState<string | null>(null);
@@ -451,7 +456,13 @@ export function InvoiceBuilder({
     setEditableAddress(
       job.billingAddress || job.address || customer.address || "",
     );
-    // Build contact name: prefer billing name override, then existing invoice name, then job contact name
+    // Build contact name: prefer billing name override, then the job's CURRENT
+    // contact, then the name stored on the existing invoice. The invoice's
+    // contactName is a point-in-time snapshot from when it was created — when
+    // the user switches the job to a different saved contact (multi-contact
+    // orgs like councils), reopening the invoice must follow the job, not the
+    // stale snapshot. Deliberate per-invoice overrides belong on the Billing
+    // tab (billingNameOverride / billingContactEmail), which still win.
     const jobContactName =
       job.jobContactFirstName && job.jobContactLastName
         ? `${job.jobContactFirstName} ${job.jobContactLastName}`
@@ -460,16 +471,17 @@ export function InvoiceBuilder({
       existingInvoices.length > 0 ? existingInvoices[0]?.contactName : null;
     setEditableContactName(
       job.billingNameOverride ||
-      existingInvoiceContactName ||
       jobContactName ||
+      existingInvoiceContactName ||
       customer.name ||
       "",
     );
-    // Email: prefer billing contact email override, then existing invoice email, then job contact email, then customer email
+    // Email: same ordering rationale — billing override, then the job's
+    // current contact email, then the existing invoice's, then the customer's.
     setEditableEmail(
       job.billingContactEmail ||
-      (existingInvoices.length > 0 ? existingInvoices[0]?.email : null) ||
       (job as any).jobContactEmail ||
+      (existingInvoices.length > 0 ? existingInvoices[0]?.email : null) ||
       customer.email ||
       "",
     );
@@ -610,18 +622,39 @@ export function InvoiceBuilder({
       setEditableEmail("");
       setCustomDueDate("");
       setInitializedJobId(null);
+      setGstInclusive(false);
     }
   }, [isOpen]);
 
-  // Calculate totals
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  // Convert an entered line item to the ex-GST values that get stored.
+  // Identity in exclusive mode; in inclusive mode strips the 15% GST.
+  const toStoredExGst = (item: InvoiceLineItem): InvoiceLineItem =>
+    gstInclusive
+      ? {
+          ...item,
+          unitPrice: round2(item.unitPrice / 1.15),
+          total: round2(item.total / 1.15),
+        }
+      : item;
+
+  // Calculate totals. Subtotal is always ex-GST (what gets stored as
+  // invoice.amount); in inclusive mode the entered sum IS the total.
   const calculateTotals = () => {
-    const subtotal = lineItems.reduce(
+    const entered = lineItems.reduce(
       (sum, item) => sum + (item.total || 0),
       0,
     );
-    const gst = subtotal * 0.15;
-    const total = subtotal + gst;
-    return { subtotal, gst, total };
+    if (gstInclusive) {
+      const subtotal = lineItems.reduce(
+        (sum, item) => sum + round2((item.total || 0) / 1.15),
+        0,
+      );
+      return { subtotal, gst: entered - subtotal, total: entered };
+    }
+    const gst = entered * 0.15;
+    return { subtotal: entered, gst, total: entered + gst };
   };
 
   // Update line item
@@ -680,6 +713,9 @@ export function InvoiceBuilder({
 
     if (extractedItems.length > 0) {
       setLineItems(extractedItems);
+      // Quote/proposal prices are ex-GST — reinterpreting them as inclusive
+      // would silently shrink the invoice.
+      setGstInclusive(false);
     } else {
       toast({
         title: "No Items Found",
@@ -727,7 +763,7 @@ export function InvoiceBuilder({
     setIsCreating(true);
 
     try {
-      const formattedLineItems = filledLineItems.map((item) => ({
+      const formattedLineItems = filledLineItems.map(toStoredExGst).map((item) => ({
         description: item.description,
         quantity: item.quantity,
         rate: item.unitPrice,
@@ -843,7 +879,8 @@ export function InvoiceBuilder({
       console.log("🔄 Updating invoice:", existingInvoiceId);
 
       // Format line items for database (using rate/amount instead of unitPrice/total)
-      const formattedLineItems = filledItems.map((item) => ({
+      const storedItems = filledItems.map(toStoredExGst);
+      const formattedLineItems = storedItems.map((item) => ({
         description: item.description,
         quantity: item.quantity.toString(),
         rate: item.unitPrice,
@@ -851,7 +888,7 @@ export function InvoiceBuilder({
       }));
 
       // Calculate new amount from line items
-      const subtotal = filledItems.reduce((sum, item) => sum + item.total, 0);
+      const subtotal = storedItems.reduce((sum, item) => sum + item.total, 0);
 
       const updateData = {
         address: editableAddress,
@@ -1258,7 +1295,7 @@ export function InvoiceBuilder({
           <DialogHeader className="sticky top-0 z-20 bg-background -mx-4 px-1.5 pt-2 pb-2 sm:-mx-6 sm:px-6 sm:pt-4 sm:pb-3 border-b space-y-2">
             {/* ── Toolbar — mirrors the proposal/quote builder ── */}
             <div className="flex items-stretch sm:items-center justify-between gap-1.5 sm:gap-2">
-              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-none">
+              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-initial">
                 <BuilderToolbarButton
                   icon={ArrowLeft}
                   label="Back"
@@ -1294,7 +1331,7 @@ export function InvoiceBuilder({
                   className="bg-indigo-600 hover:bg-indigo-700"
                 />
               </div>
-              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 flex-1 sm:flex-none">
+              <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 flex-1 sm:flex-initial min-w-0">
                 <BuilderToolbarButton
                   icon={X}
                   label="Close"
@@ -1437,20 +1474,41 @@ export function InvoiceBuilder({
                     (category, qty, unit price). The "Search or add new..." row
                     at the bottom expands the editor for a brand-new item. */}
                 <div>
-                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+                  <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-border">
                     <Label className="text-sm font-medium">Line items</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={importFromQuoteOrProposal}
-                      disabled={loadingProposals || loadingQuotes}
-                      data-testid="button-import-from-quote"
-                      className="h-7 text-xs"
-                    >
-                      <FileDown className="h-3.5 w-3.5 mr-1" />
-                      Import from quote
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={gstInclusive ? "inclusive" : "exclusive"}
+                        onValueChange={(v) => setGstInclusive(v === "inclusive")}
+                      >
+                        <SelectTrigger
+                          className="h-7 w-auto gap-1 text-xs"
+                          data-testid="select-gst-mode"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="exclusive">
+                            Prices exclude GST
+                          </SelectItem>
+                          <SelectItem value="inclusive">
+                            Prices include GST
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={importFromQuoteOrProposal}
+                        disabled={loadingProposals || loadingQuotes}
+                        data-testid="button-import-from-quote"
+                        className="h-7 text-xs"
+                      >
+                        <FileDown className="h-3.5 w-3.5 mr-1" />
+                        Import from quote
+                      </Button>
+                    </div>
                   </div>
 
                   <div>
@@ -1801,6 +1859,7 @@ export function InvoiceBuilder({
                               {item.category?.startsWith("labor")
                                 ? "Rate/hr"
                                 : "Unit Price"}
+                              {gstInclusive ? " (incl GST)" : ""}
                             </Label>
                             <Input
                               type="number"
@@ -1820,7 +1879,7 @@ export function InvoiceBuilder({
                           </div>
                           <div>
                             <Label className="text-xs text-muted-foreground mb-1 block">
-                              Total
+                              Total{gstInclusive ? " (incl GST)" : ""}
                             </Label>
                             <div className="h-9 flex items-center px-3 bg-muted rounded-md text-sm font-semibold">
                               ${item.total.toFixed(2)}
@@ -1865,7 +1924,9 @@ export function InvoiceBuilder({
                     {/* Totals footer — single source of truth for totals */}
                     <div className="border-t border-border bg-muted/40 px-4 py-3 space-y-1">
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal</span>
+                        <span className="text-muted-foreground">
+                          Subtotal (excl GST)
+                        </span>
                         <span className="font-medium tabular-nums">${subtotal.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
@@ -2173,7 +2234,7 @@ export function InvoiceBuilder({
                         Date.now() + invoicePaymentDays * 24 * 60 * 60 * 1000,
                       ).toISOString(),
                       issueDate: new Date().toISOString(),
-                      items: lineItems.map((item) => ({
+                      items: lineItems.map(toStoredExGst).map((item) => ({
                         description: item.description,
                         quantity: item.quantity,
                         rate: item.unitPrice,
@@ -2189,8 +2250,9 @@ export function InvoiceBuilder({
                     jobNumber={job.jobNumber}
                     billingName={editableContactName || job.billingNameOverride || undefined}
                     contactName={editableContactName}
+                    contactEmail={editableEmail}
                     template={invoiceTemplate}
-                    lineItems={lineItems}
+                    lineItems={lineItems.map(toStoredExGst)}
                     description={editableDescription}
                     sectionConfig={Array.isArray(invoiceTemplate.sectionConfig) ? invoiceTemplate.sectionConfig as InvoiceSectionConfig[] : undefined}
                   />

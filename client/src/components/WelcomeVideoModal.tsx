@@ -104,8 +104,8 @@ export default function WelcomeVideoModal({
           </div>
           <DialogTitle>Send welcome video to {customerName}?</DialogTitle>
           <DialogDescription>
-            {customerName} just confirmed they'd like to schedule. They're a
-            new customer — want to send the welcome video email now?
+            {customerName} is a new customer — want to send them the welcome
+            video email now?
           </DialogDescription>
         </DialogHeader>
         <div className="flex justify-end gap-2 mt-4">

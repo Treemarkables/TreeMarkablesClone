@@ -1,6 +1,12 @@
 // Firebase Cloud Messaging service using Firebase Admin SDK
 import admin from 'firebase-admin';
 
+export interface FcmSendResult {
+  ok: boolean;
+  // FCM error code (e.g. 'messaging/third-party-auth-error') when ok is false.
+  errorCode?: string;
+}
+
 class FirebaseMessagingService {
   private initialized = false;
 
@@ -41,7 +47,18 @@ class FirebaseMessagingService {
     collapseId?: string;
     data?: Record<string, string>;
   }, deviceLabel?: string): Promise<boolean> {
-    if (!this.init()) return false;
+    return (await this.sendToDeviceDetailed(token, notification, deviceLabel)).ok;
+  }
+
+  async sendToDeviceDetailed(token: string, notification: {
+    title: string;
+    body: string;
+    icon?: string;
+    clickAction?: string;
+    collapseId?: string;
+    data?: Record<string, string>;
+  }, deviceLabel?: string): Promise<FcmSendResult> {
+    if (!this.init()) return { ok: false, errorCode: 'not-configured' };
 
     try {
       const dataPayload: Record<string, string> = { ...(notification.data || {}) };
@@ -86,7 +103,7 @@ class FirebaseMessagingService {
       console.log(
         `✅ FCM notification sent: id=${result} type=${dataPayload.type || '?'} clickAction=${dataPayload.clickAction || '(none)'} jobId=${dataPayload.jobId || '(none)'} device=${deviceLabel || '?'} token=…${token.slice(-8)}`,
       );
-      return true;
+      return { ok: true };
     } catch (error: unknown) {
       const err = error as { code?: string; message?: string };
 
@@ -101,7 +118,7 @@ class FirebaseMessagingService {
         } catch (cleanupErr) {
           console.error('❌ Failed to deactivate stale FCM token:', cleanupErr);
         }
-        return false;
+        return { ok: false, errorCode: err.code };
       }
 
       // messaging/third-party-auth-error = Firebase was rejected when forwarding
@@ -115,11 +132,11 @@ class FirebaseMessagingService {
         console.error(
           `❌ FCM third-party-auth-error (push-gateway credential rejected — check Firebase APNs key / Web Push cert): device=${deviceLabel || '?'} token=…${token.slice(-8)} — ${err.message}`,
         );
-        return false;
+        return { ok: false, errorCode: err.code };
       }
 
       console.error(`❌ FCM send failed: ${err.code} device=${deviceLabel || '?'} token=…${token.slice(-8)} — ${err.message}`);
-      return false;
+      return { ok: false, errorCode: err.code };
     }
   }
 

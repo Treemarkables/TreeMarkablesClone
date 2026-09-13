@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
+  ImageOverlay,
   Marker,
   Popup,
   useMapEvents,
@@ -15,7 +16,18 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { MapPin, Plus, Trash2, Save, X, TreePine, Loader2 } from "lucide-react";
+import {
+  MapPin,
+  Plus,
+  Trash2,
+  Save,
+  X,
+  TreePine,
+  Loader2,
+  Upload,
+  Image as ImageIcon,
+  Globe,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -41,6 +53,23 @@ interface TreeMarker {
   notes: string | null;
   markerType: string;
   color: string;
+  // 'map' = geographic coords; 'image' = normalized 0..1 coords on the job's
+  // uploaded site photo (lat = y from top, lng = x from left).
+  surface?: string;
+}
+
+// Fixed CRS.Simple height for the uploaded photo; width scales by aspect.
+const IMG_PLANE_H = 1000;
+
+// A pin dropped in add-mode but not yet saved — coords are raw map-plane
+// values (converted to normalized/geo coords only at save time).
+interface PendingMarker {
+  lat: number;
+  lng: number;
+  label: string;
+  notes: string;
+  markerType: string;
+  color: string;
 }
 
 interface JobSiteMapProps {
@@ -50,6 +79,8 @@ interface JobSiteMapProps {
   className?: string;
 }
 
+// TODO: source these labels from the trade-preset vocabulary (server/trades/) so
+// non-tree trades get fitting marker types.
 const MARKER_TYPES = [
   { value: "tree", label: "Tree", color: "#22c55e" },
   { value: "stump", label: "Stump", color: "#854d0e" },
@@ -58,7 +89,10 @@ const MARKER_TYPES = [
   { value: "parking", label: "Parking", color: "#8b5cf6" },
 ];
 
-function createTreeIcon(color: string = "#22c55e"): L.DivIcon {
+// Saved and pending pins use the same 1-based number as the description list
+// under the map (and the proposal snapshot PNG). n is display-only — order
+// comes from GET /tree-markers (createdAt).
+function createNumberedIcon(color: string, n: number): L.DivIcon {
   return L.divIcon({
     className: "custom-tree-marker",
     html: `<div style="
@@ -71,13 +105,12 @@ function createTreeIcon(color: string = "#22c55e"): L.DivIcon {
       display: flex;
       align-items: center;
       justify-content: center;
-    ">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-        <path d="M12 2L7 10h10L12 2z"/>
-        <path d="M12 8L5 18h14L12 8z"/>
-        <rect x="10" y="18" width="4" height="4"/>
-      </svg>
-    </div>`,
+      color: white;
+      font-weight: 700;
+      font-size: ${n > 9 ? "11px" : "13px"};
+      font-family: sans-serif;
+      line-height: 1;
+    ">${n}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 28],
     popupAnchor: [0, -28],
@@ -101,7 +134,13 @@ function MapClickHandler({
   return null;
 }
 
-function GeocodedCenter({ address }: { address: string }) {
+function GeocodedCenter({
+  address,
+  onResult,
+}: {
+  address: string;
+  onResult?: (found: boolean) => void;
+}) {
   const map = useMap();
   const [geocoded, setGeocoded] = useState(false);
 
@@ -115,18 +154,44 @@ function GeocodedCenter({ address }: { address: string }) {
         );
         const data = await response.json();
         if (data && data.length > 0) {
-          const { lat, lon } = data[0];
-          map.setView([parseFloat(lat), parseFloat(lon)], 18);
+          const { lat, lon, boundingbox } = data[0];
+          // For house addresses Nominatim usually matches the building itself
+          // and its boundingbox is the parcel/footprint — fit to that so the
+          // view frames just the property. maxZoom clamps tiny footprints.
+          if (Array.isArray(boundingbox) && boundingbox.length === 4) {
+            const [south, north, west, east] = boundingbox.map(Number);
+            map.fitBounds(
+              [
+                [south, west],
+                [north, east],
+              ],
+              { padding: [40, 40], maxZoom: 19 },
+            );
+          } else {
+            map.setView([parseFloat(lat), parseFloat(lon)], 18);
+          }
           setGeocoded(true);
+          onResult?.(true);
+        } else {
+          onResult?.(false);
         }
       } catch (error) {
         console.error("Geocoding failed:", error);
+        onResult?.(false);
       }
     };
 
     geocodeAddress();
   }, [address, map, geocoded]);
 
+  return null;
+}
+
+function FitImageBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
+  const map = useMap();
+  useEffect(() => {
+    map.fitBounds(bounds);
+  }, [map, bounds]);
   return null;
 }
 
@@ -138,11 +203,90 @@ export function JobSiteMap({
 }: JobSiteMapProps) {
   const { toast } = useToast();
   const [isAddingMarker, setIsAddingMarker] = useState(false);
+  const [geocodeFailed, setGeocodeFailed] = useState(false);
+  const [manualView, setManualView] = useState<"satellite" | "photo" | null>(null);
+  const [imgAspect, setImgAspect] = useState<number | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: siteImageUrl } = useQuery<string | null>({
+    queryKey: ["/api/jobs", jobId, "site-map-image"],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/site-map-image`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      return data.success ? data.data.imageUrl : null;
+    },
+  });
+
+  // Photo view is the default whenever a site photo exists (council jobs:
+  // the card address is the billing address, so the satellite view is moot).
+  const view: "satellite" | "photo" =
+    manualView ?? (siteImageUrl ? "photo" : "satellite");
+
+  // Natural aspect ratio of the uploaded photo → CRS.Simple plane size.
+  useEffect(() => {
+    setImgAspect(null);
+    if (!siteImageUrl) return;
+    const img = new Image();
+    img.onload = () => {
+      if (img.naturalWidth && img.naturalHeight) {
+        setImgAspect(img.naturalWidth / img.naturalHeight);
+      }
+    };
+    img.src = siteImageUrl;
+  }, [siteImageUrl]);
+
+  const imgPlaneW = imgAspect ? IMG_PLANE_H * imgAspect : IMG_PLANE_H;
+  const imgBounds: L.LatLngBoundsExpression = [
+    [0, 0],
+    [IMG_PLANE_H, imgPlaneW],
+  ];
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await fetch(`/api/jobs/${jobId}/site-map-image`, {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        // Surface the server's reason — a bare "failed" hides whether it was
+        // auth, size, storage, or the DB, which made prod failures undiagnosable.
+        const detail = await res
+          .json()
+          .then((d) => d?.message)
+          .catch(() => null);
+        throw new Error(detail || `Upload failed (${res.status})`);
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "site-map-image"],
+      });
+      setManualView("photo");
+    } catch (err) {
+      toast({
+        title: "Upload Error",
+        description:
+          err instanceof Error && err.message
+            ? err.message
+            : "Failed to upload the site photo",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
   const [editingMarker, setEditingMarker] = useState<TreeMarker | null>(null);
-  const [newMarkerPosition, setNewMarkerPosition] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
+  // Pins dropped in add-mode, described together in one dialog before saving.
+  const [pendingMarkers, setPendingMarkers] = useState<PendingMarker[]>([]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [markerForm, setMarkerForm] = useState({
     label: "",
     notes: "",
@@ -161,40 +305,73 @@ export function JobSiteMap({
     },
   });
 
-  const createMarkerMutation = useMutation({
-    mutationFn: async (marker: {
-      latitude: number;
-      longitude: number;
-      label: string;
-      notes: string;
-      markerType: string;
-      color: string;
-    }) => {
-      return apiRequest(`/api/jobs/${jobId}/tree-markers`, {
-        method: "POST",
-        body: JSON.stringify(marker),
-        headers: { "Content-Type": "application/json" },
-      });
+  // Each view only shows its own markers — photo markers carry normalized
+  // coords that would be nonsense latitudes on the satellite map.
+  const visibleMarkers = markers.filter((m) =>
+    view === "photo" ? m.surface === "image" : m.surface !== "image",
+  );
+  // 1-based, creation order (API orderBy createdAt). Per-surface so satellite
+  // and photo lists each start at 1 — matches the snapshot PNG filter.
+  const savedCount = visibleMarkers.length;
+  const numberForMarker = (id: string): number | null => {
+    const idx = visibleMarkers.findIndex((m) => m.id === id);
+    return idx >= 0 ? idx + 1 : null;
+  };
+
+  // Photo-view positions: stored normalized (y from top, x from left) →
+  // CRS.Simple plane (lat grows upward).
+  const markerPlanePosition = (m: TreeMarker): [number, number] =>
+    view === "photo"
+      ? [
+          (1 - parseFloat(m.latitude)) * IMG_PLANE_H,
+          parseFloat(m.longitude) * imgPlaneW,
+        ]
+      : [parseFloat(m.latitude), parseFloat(m.longitude)];
+
+  const createMarkersMutation = useMutation({
+    // Sequential so the saved order matches the on-map numbering; failures
+    // are collected (not thrown) so a partial save keeps only the failed
+    // pins pending instead of re-creating the ones that went through.
+    mutationFn: async (
+      toCreate: Array<{
+        pending: PendingMarker;
+        payload: {
+          latitude: number;
+          longitude: number;
+          label: string;
+          notes: string;
+          markerType: string;
+          color: string;
+          surface: string;
+        };
+      }>,
+    ) => {
+      const failed: PendingMarker[] = [];
+      for (const { pending, payload } of toCreate) {
+        try {
+          await apiRequest("POST", `/api/jobs/${jobId}/tree-markers`, payload);
+        } catch {
+          failed.push(pending);
+        }
+      }
+      return failed;
     },
-    onSuccess: () => {
+    onSuccess: (failed) => {
       queryClient.invalidateQueries({
         queryKey: ["/api/jobs", jobId, "tree-markers"],
       });
-      setNewMarkerPosition(null);
-      setMarkerForm({
-        label: "",
-        notes: "",
-        markerType: "tree",
-        color: "#22c55e",
-      });
+      if (failed.length > 0) {
+        setPendingMarkers(failed);
+        toast({
+          title: "Error",
+          description: `${failed.length} marker${failed.length === 1 ? "" : "s"} failed to save — try saving again`,
+          variant: "destructive",
+        });
+        return;
+      }
+      setPendingMarkers([]);
+      setDetailsOpen(false);
       setIsAddingMarker(false);
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to add marker",
-        variant: "destructive",
-      });
     },
   });
 
@@ -209,11 +386,7 @@ export function JobSiteMap({
       markerType?: string;
       color?: string;
     }) => {
-      return apiRequest(`/api/tree-markers/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(updates),
-        headers: { "Content-Type": "application/json" },
-      });
+      return apiRequest("PATCH", `/api/tree-markers/${id}`, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -232,7 +405,7 @@ export function JobSiteMap({
 
   const deleteMarkerMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/tree-markers/${id}`, { method: "DELETE" });
+      return apiRequest("DELETE", `/api/tree-markers/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -250,19 +423,54 @@ export function JobSiteMap({
   });
 
   const handleMapClick = (lat: number, lng: number) => {
-    setNewMarkerPosition({ lat, lng });
+    setPendingMarkers((prev) => [
+      ...prev,
+      { lat, lng, label: "", notes: "", markerType: "tree", color: "#22c55e" },
+    ]);
   };
 
-  const handleSaveNewMarker = () => {
-    if (!newMarkerPosition) return;
-    createMarkerMutation.mutate({
-      latitude: newMarkerPosition.lat,
-      longitude: newMarkerPosition.lng,
-      label: markerForm.label,
-      notes: markerForm.notes,
-      markerType: markerForm.markerType,
-      color: markerForm.color,
+  const updatePendingMarker = (
+    index: number,
+    patch: Partial<PendingMarker>,
+  ) => {
+    setPendingMarkers((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, ...patch } : m)),
+    );
+  };
+
+  const handlePendingTypeChange = (index: number, value: string) => {
+    const type = MARKER_TYPES.find((t) => t.value === value);
+    updatePendingMarker(index, {
+      markerType: value,
+      color: type?.color || "#22c55e",
     });
+  };
+
+  const removePendingMarker = (index: number) => {
+    const next = pendingMarkers.filter((_, i) => i !== index);
+    setPendingMarkers(next);
+    if (next.length === 0) setDetailsOpen(false);
+  };
+
+  const handleSaveAllMarkers = () => {
+    if (pendingMarkers.length === 0) return;
+    createMarkersMutation.mutate(
+      pendingMarkers.map((pending) => ({
+        pending,
+        payload: {
+          // Photo view: convert the CRS.Simple position into normalized
+          // image coords.
+          latitude:
+            view === "photo" ? 1 - pending.lat / IMG_PLANE_H : pending.lat,
+          longitude: view === "photo" ? pending.lng / imgPlaneW : pending.lng,
+          label: pending.label,
+          notes: pending.notes,
+          markerType: pending.markerType,
+          color: pending.color,
+          surface: view === "photo" ? "image" : "map",
+        },
+      })),
+    );
   };
 
   const handleUpdateMarker = () => {
@@ -298,195 +506,349 @@ export function JobSiteMap({
   if (isLoading) {
     return (
       <div
-        className={`flex items-center justify-center h-64 bg-gray-100 rounded-lg ${className}`}
+        className={`flex items-center justify-center h-64 bg-muted rounded-lg ${className}`}
       >
-        <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
+  const markerPins = (
+    <>
+      {visibleMarkers.map((marker, i) => (
+        <Marker
+          key={marker.id}
+          position={markerPlanePosition(marker)}
+          icon={createNumberedIcon(marker.color, i + 1)}
+          eventHandlers={{
+            click: () => openEditDialog(marker),
+          }}
+        >
+          <Popup>
+            <div className="min-w-[150px]">
+              <p className="font-medium">
+                {i + 1}. {marker.label || "Unmarked tree"}
+              </p>
+              {marker.notes && (
+                <p className="text-sm text-gray-600 mt-1">{marker.notes}</p>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 w-full"
+                onClick={() => openEditDialog(marker)}
+              >
+                Edit
+              </Button>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+
+      {pendingMarkers.map((marker, i) => (
+        <Marker
+          key={`pending-${i}`}
+          position={[marker.lat, marker.lng]}
+          icon={createNumberedIcon(marker.color, savedCount + i + 1)}
+        />
+      ))}
+    </>
+  );
+
   return (
     <div className={`relative ${className}`}>
-      <div className="absolute top-2 right-2 z-[1000] flex gap-2">
+      <div className="flex items-center gap-1 mb-2">
+        {siteImageUrl && (
+          <>
+            <Button
+              size="sm"
+              variant={view === "photo" ? "secondary" : "ghost"}
+              onClick={() => {
+                setManualView("photo");
+                setIsAddingMarker(false);
+                setPendingMarkers([]);
+              }}
+              className="text-xs"
+            >
+              <ImageIcon className="h-3 w-3 mr-1" />
+              Site Photo
+            </Button>
+            <Button
+              size="sm"
+              variant={view === "satellite" ? "secondary" : "ghost"}
+              onClick={() => {
+                setManualView("satellite");
+                setIsAddingMarker(false);
+                setPendingMarkers([]);
+              }}
+              className="text-xs"
+            >
+              <Globe className="h-3 w-3 mr-1" />
+              Satellite
+            </Button>
+          </>
+        )}
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handlePhotoUpload}
+        />
         <Button
           size="sm"
-          variant={isAddingMarker ? "default" : "outline"}
-          onClick={() => {
-            setIsAddingMarker(!isAddingMarker);
-            setNewMarkerPosition(null);
-          }}
-          className="shadow-lg"
+          variant="ghost"
+          onClick={() => photoInputRef.current?.click()}
+          disabled={uploadingPhoto}
+          className="text-xs text-muted-foreground ml-auto"
+          title="For sites the job address doesn't cover (e.g. council jobs) — mark trees on your own aerial or plan photo"
         >
-          {isAddingMarker ? (
-            <>
-              <X className="h-4 w-4 mr-1" />
-              Cancel
-            </>
+          {uploadingPhoto ? (
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
           ) : (
-            <>
-              <Plus className="h-4 w-4 mr-1" />
-              Add Marker
-            </>
+            <Upload className="h-3 w-3 mr-1" />
           )}
+          {siteImageUrl ? "Replace Photo" : "Upload Site Photo"}
         </Button>
       </div>
 
-      {isAddingMarker && (
-        <div className="absolute top-2 left-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-lg text-sm">
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-green-600" />
-            <span>Click on the map to place a marker</span>
-          </div>
+      <div className="relative">
+        <div className="absolute top-2 right-2 z-[1000] flex gap-2">
+          {/* Floats over photo/satellite imagery, so it needs a solid fill —
+              the theme's outline variant is transparent and primary is near
+              black, both of which vanish against dark trees. */}
+          {isAddingMarker && pendingMarkers.length > 0 && (
+            <Button
+              size="sm"
+              onClick={() => setDetailsOpen(true)}
+              className="shadow-lg"
+            >
+              <Save className="h-4 w-4 mr-1" />
+              Done ({pendingMarkers.length})
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant={isAddingMarker ? "destructive" : "outline"}
+            onClick={() => {
+              setIsAddingMarker(!isAddingMarker);
+              setPendingMarkers([]);
+            }}
+            className={
+              isAddingMarker
+                ? "shadow-lg"
+                : "shadow-lg bg-white text-gray-900 border-gray-300"
+            }
+          >
+            {isAddingMarker ? (
+              <>
+                <X className="h-4 w-4 mr-1" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4 mr-1" />
+                Add Markers
+              </>
+            )}
+          </Button>
         </div>
+
+        {isAddingMarker && (
+          <div className="absolute top-2 left-2 z-[1000] bg-white/95 border border-gray-200 px-3 py-2 rounded-lg shadow-lg text-sm text-gray-900">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-green-600" />
+              <span>
+                {pendingMarkers.length === 0
+                  ? `Click on the ${view === "photo" ? "photo" : "map"} to place markers`
+                  : "Keep clicking to add more, then press Done to describe them"}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {view === "photo" ? (
+          !imgAspect ? (
+            <div className="flex items-center justify-center h-64 bg-muted rounded-lg">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <MapContainer
+              key={`photo-${siteImageUrl}`}
+              crs={L.CRS.Simple}
+              center={[IMG_PLANE_H / 2, imgPlaneW / 2]}
+              zoom={0}
+              minZoom={-2}
+              maxZoom={4}
+              style={{ height: "400px", width: "100%" }}
+              className="rounded-lg z-0 bg-muted"
+            >
+              <FitImageBounds bounds={imgBounds} />
+              <ImageOverlay url={siteImageUrl!} bounds={imgBounds} />
+              <MapClickHandler
+                onMapClick={handleMapClick}
+                isAddingMarker={isAddingMarker}
+              />
+              {markerPins}
+            </MapContainer>
+          )
+        ) : (
+          <MapContainer
+            key="satellite"
+            center={center}
+            zoom={18}
+            style={{ height: "400px", width: "100%" }}
+            className="rounded-lg z-0"
+          >
+            {/* Esri serves genuine native imagery to z20+ across NZ (LINZ-sourced;
+                verified z21 over Gisborne). Native to 20, z21 upscales so thin
+                rural coverage degrades to soft imagery instead of blank tiles. */}
+            <TileLayer
+              attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxNativeZoom={20}
+              maxZoom={21}
+            />
+            {address && (
+              <GeocodedCenter
+                address={address}
+                onResult={(found) => setGeocodeFailed(!found)}
+              />
+            )}
+            <MapClickHandler
+              onMapClick={handleMapClick}
+              isAddingMarker={isAddingMarker}
+            />
+            {markerPins}
+          </MapContainer>
+        )}
+      </div>
+
+      {view === "satellite" && geocodeFailed && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Address not found on map — pan/zoom to the property manually.
+        </p>
       )}
 
-      <MapContainer
-        center={center}
-        zoom={18}
-        style={{ height: "400px", width: "100%" }}
-        className="rounded-lg z-0"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        />
-        {address && <GeocodedCenter address={address} />}
-        <MapClickHandler
-          onMapClick={handleMapClick}
-          isAddingMarker={isAddingMarker}
-        />
-
-        {markers.map((marker) => (
-          <Marker
-            key={marker.id}
-            position={[
-              parseFloat(marker.latitude),
-              parseFloat(marker.longitude),
-            ]}
-            icon={createTreeIcon(marker.color)}
-            eventHandlers={{
-              click: () => openEditDialog(marker),
-            }}
-          >
-            <Popup>
-              <div className="min-w-[150px]">
-                <p className="font-medium">{marker.label || "Unmarked tree"}</p>
-                {marker.notes && (
-                  <p className="text-sm text-gray-600 mt-1">{marker.notes}</p>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2 w-full"
-                  onClick={() => openEditDialog(marker)}
-                >
-                  Edit
-                </Button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {newMarkerPosition && (
-          <Marker
-            position={[newMarkerPosition.lat, newMarkerPosition.lng]}
-            icon={createTreeIcon(markerForm.color)}
-          />
-        )}
-      </MapContainer>
-
-      {markers.length > 0 && (
+      {visibleMarkers.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {markers.map((marker) => (
+          {visibleMarkers.map((marker, i) => (
             <div
               key={marker.id}
-              className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-xs cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+              role="button"
+              tabIndex={0}
+              aria-label={`Marker ${i + 1}: ${marker.label || "Unmarked"}`}
+              className="flex items-center gap-1.5 px-2 py-1 bg-muted rounded text-xs cursor-pointer hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => openEditDialog(marker)}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openEditDialog(marker);
+                }
+              }}
             >
               <div
-                className="w-3 h-3 rounded-full"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
                 style={{ backgroundColor: marker.color }}
-              />
+                aria-hidden="true"
+              >
+                {i + 1}
+              </div>
               <span>{marker.label || "Unmarked"}</span>
             </div>
           ))}
         </div>
       )}
 
-      <Dialog
-        open={!!newMarkerPosition}
-        onOpenChange={() => setNewMarkerPosition(null)}
-      >
-        <DialogContent>
+      {/* Describe-all dialog: one place to type/label/note every pending pin;
+          closing it keeps the pins so more can be placed on the map. */}
+      <Dialog open={detailsOpen} onOpenChange={(open) => setDetailsOpen(open)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <TreePine className="h-5 w-5 text-green-600" />
-              Add Tree Marker
+              Describe Markers ({pendingMarkers.length})
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label>Type</Label>
-              <Select
-                value={markerForm.markerType}
-                onValueChange={handleMarkerTypeChange}
+          <div className="space-y-3 py-2">
+            {pendingMarkers.map((marker, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-border p-3 space-y-2"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MARKER_TYPES.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: type.color }}
-                        />
-                        {type.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Label</Label>
-              <Input
-                placeholder="e.g., Large oak - remove"
-                value={markerForm.label}
-                onChange={(e) =>
-                  setMarkerForm({ ...markerForm, label: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <Label>Notes</Label>
-              <Input
-                placeholder="Additional notes..."
-                value={markerForm.notes}
-                onChange={(e) =>
-                  setMarkerForm({ ...markerForm, notes: e.target.value })
-                }
-              />
-            </div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                    style={{ backgroundColor: marker.color }}
+                  >
+                    {savedCount + i + 1}
+                  </div>
+                  <Select
+                    value={marker.markerType}
+                    onValueChange={(value) => handlePendingTypeChange(i, value)}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MARKER_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: type.color }}
+                            />
+                            {type.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 text-muted-foreground"
+                    onClick={() => removePendingMarker(i)}
+                    title="Remove this marker"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Input
+                  placeholder="e.g., Large oak - remove"
+                  value={marker.label}
+                  onChange={(e) =>
+                    updatePendingMarker(i, { label: e.target.value })
+                  }
+                />
+                <Input
+                  placeholder="Additional notes..."
+                  value={marker.notes}
+                  onChange={(e) =>
+                    updatePendingMarker(i, { notes: e.target.value })
+                  }
+                />
+              </div>
+            ))}
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setNewMarkerPosition(null)}
-            >
-              Cancel
+            <Button variant="outline" onClick={() => setDetailsOpen(false)}>
+              Back to Map
             </Button>
             <Button
-              onClick={handleSaveNewMarker}
-              disabled={createMarkerMutation.isPending}
+              onClick={handleSaveAllMarkers}
+              disabled={
+                createMarkersMutation.isPending || pendingMarkers.length === 0
+              }
             >
-              {createMarkerMutation.isPending ? (
+              {createMarkersMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1" />
               ) : (
                 <Save className="h-4 w-4 mr-1" />
               )}
-              Save Marker
+              Save {pendingMarkers.length}{" "}
+              {pendingMarkers.length === 1 ? "Marker" : "Markers"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -501,6 +863,9 @@ export function JobSiteMap({
             <DialogTitle className="flex items-center gap-2">
               <TreePine className="h-5 w-5 text-green-600" />
               Edit Marker
+              {editingMarker && numberForMarker(editingMarker.id)
+                ? ` ${numberForMarker(editingMarker.id)}`
+                : ""}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">

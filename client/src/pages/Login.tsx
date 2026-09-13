@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,7 +16,14 @@ export default function Login() {
   // True once we've successfully posted a login this mount — used to gate
   // the auto-redirect so we don't yank the user away if they happen to land
   // on /login while already authenticated (e.g. via the back button).
-  const justLoggedInRef = useRef(false);
+  //
+  // Must be STATE, not a ref: the redirect effect below has to re-run when
+  // this flips. The previous ref version stranded users on /login whenever
+  // isAuthenticated was already true before they submitted (valid session
+  // cookie + PWA/bookmark landing on /login) — the login POST succeeded but
+  // isAuthenticated never changed, so the effect never fired and the ref
+  // write couldn't wake it either.
+  const [justLoggedIn, setJustLoggedIn] = useState(false);
 
   // Drive the redirect off the reactive auth state instead of calling
   // setLocation imperatively right after await login(). Previously the
@@ -26,10 +33,10 @@ export default function Login() {
   // bounced the user back to /login with no error shown — looking exactly
   // like "I had to enter my password twice."
   useEffect(() => {
-    if (justLoggedInRef.current && isAuthenticated) {
+    if (justLoggedIn && isAuthenticated) {
       setLocation('/dispatch');
     }
-  }, [isAuthenticated, setLocation]);
+  }, [justLoggedIn, isAuthenticated, setLocation]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -62,8 +69,9 @@ export default function Login() {
     try {
       const result = await login({ email, password });
       if (result?.success && result?.data) {
-        // The redirect effect above will navigate once isAuthenticated flips.
-        justLoggedInRef.current = true;
+        // The redirect effect above navigates on the next render — whether
+        // isAuthenticated flips now or was already true before the submit.
+        setJustLoggedIn(true);
       } else if (result?.success) {
         // Server said success but didn't send the employee payload — very
         // unusual, but if it ever happens we'd silently strand the user on

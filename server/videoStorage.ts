@@ -140,10 +140,37 @@ export class VideoStorageService {
     return objectStorageClient.bucket(bucketName).file(objectName);
   }
 
+  // Build a Content-Disposition value. Default is inline (browsers play the URL
+  // in-page); pass downloadName to force a save-file dialog instead. The name is
+  // sanitized here — it can come from a user-supplied query param — and always
+  // ends with the object's real extension so the saved file opens in a player.
+  private buildDisposition(videoPath: string, downloadName?: string): string {
+    if (downloadName === undefined) return "inline";
+    const extension = (videoPath.split(".").pop() || "mp4").toLowerCase();
+    // Strip control chars, path separators and quote characters; collapse whitespace.
+    let base = downloadName
+      .replace(/[\x00-\x1f\x7f/\\"';]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    if (!base) base = "video";
+    if (!base.toLowerCase().endsWith(`.${extension}`)) base = `${base}.${extension}`;
+    // ASCII fallback + RFC 5987 UTF-8 form so titles with macrons etc. survive.
+    const ascii = base.replace(/[^\x20-\x7e]/g, "_");
+    return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(base)}`;
+  }
+
   // Stream a video to the response, honoring HTTP Range requests so the browser
   // <video> player can seek/scrub (it requests byte ranges and expects 206).
-  async streamVideo(videoPath: string, req: Request, res: Response): Promise<void> {
+  // opts.downloadName switches the response to a forced download.
+  async streamVideo(
+    videoPath: string,
+    req: Request,
+    res: Response,
+    opts?: { downloadName?: string },
+  ): Promise<void> {
     const file = this.getFile(videoPath);
+    const disposition = this.buildDisposition(videoPath, opts?.downloadName);
 
     const [exists] = await file.exists();
     if (!exists) {
@@ -172,8 +199,7 @@ export class VideoStorageService {
 
       res.status(206).set({
         "Content-Type": contentType,
-        // inline → browsers play the URL in-page instead of downloading it.
-        "Content-Disposition": "inline",
+        "Content-Disposition": disposition,
         "Content-Range": `bytes ${start}-${end}/${totalSize}`,
         "Accept-Ranges": "bytes",
         "Content-Length": String(end - start + 1),
@@ -193,8 +219,7 @@ export class VideoStorageService {
     // No range header — stream the whole file but advertise range support.
     res.status(200).set({
       "Content-Type": contentType,
-      // inline → browsers play the URL in-page instead of downloading it.
-      "Content-Disposition": "inline",
+      "Content-Disposition": disposition,
       "Content-Length": String(totalSize),
       "Accept-Ranges": "bytes",
       "Cache-Control": "private, max-age=31536000",
