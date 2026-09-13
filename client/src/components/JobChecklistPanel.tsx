@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -10,6 +10,7 @@ import {
   Clock,
   Star,
   Users,
+  UserPlus,
   MessageSquare,
   Bell,
   Mail,
@@ -18,15 +19,16 @@ import {
   TreePine,
   AlertTriangle,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatNZTime, getNZDateString } from "@shared/dateUtils";
 import type { RoleChecklistTask } from "@shared/schema";
+import { ROLE_KEYS, ROLE_LABEL, type RoleKey } from "@/lib/crewRoles";
+import { RoleChips } from "@/components/crew/RoleChips";
+import { CrewPickerDialog } from "@/components/crew/CrewPickerDialog";
 
-type RoleKey = "A" | "B" | "C";
 type ChecklistIcon = React.ComponentType<{ className?: string }>;
-// Kaitiaki (C) leads, so it sits first in the buttons row and as the top role section.
-const ROLE_KEYS: RoleKey[] = ["C", "A", "B"];
 
 // Icon name → lucide component. Keep in sync with RoleChecklistSettings.tsx.
 // Unknown names fall back to Check.
@@ -64,20 +66,16 @@ interface ChecklistCompletion {
   completedByName: string | null;
 }
 
-interface AssignmentRow {
-  id: string;
-  jobId: string;
+// One person on this job today, from /api/jobs/:id/crew-today. That endpoint unions
+// rostered assignments with anyone clocked in, which is what stopped this section
+// dead-ending at "No crew assigned" while three people stood on site.
+interface CrewMember {
   employeeId: string;
-  employeeName?: string;
-  startTime?: string;
-  dayRole?: RoleKey | null;
+  employeeName: string;
+  dayRole: RoleKey | null;
+  source: "assigned" | "clocked_in" | "worked";
+  isClockedIn: boolean;
 }
-
-const ROLE_LABEL: Record<RoleKey, string> = {
-  A: "Kaiwhangai",
-  B: "Kaitirotiro",
-  C: "Kaitiaki",
-};
 
 // Fallback used while the API call is loading or if it fails. Mirrors the
 // seed data on the server so the panel never renders empty.
@@ -150,11 +148,11 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
     staleTime: 30_000,
   });
 
-  const { data: assignmentsResp, isLoading: assignmentsLoading } = useQuery<{
+  const { data: crewResp, isLoading: crewLoading } = useQuery<{
     success?: boolean;
-    data?: AssignmentRow[];
+    data?: { date: string; crew: CrewMember[] };
   }>({
-    queryKey: ["/api/jobs", jobId, "staff-assignments"],
+    queryKey: ["/api/jobs", jobId, "crew-today"],
     enabled: !isTempJob,
     staleTime: 30_000,
   });
@@ -165,29 +163,24 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
     [completions],
   );
 
-  const assignments = assignmentsResp?.data ?? [];
+  // Already collapsed to one row per person and sorted by name server-side.
+  const crew = crewResp?.data?.crew;
+  const staffOnJob = useMemo(() => crew ?? [], [crew]);
+  const crewDate = crewResp?.data?.date ?? getNZDateString(new Date());
+  const crewIds = useMemo(
+    () => new Set(staffOnJob.map((s) => s.employeeId)),
+    [staffOnJob],
+  );
 
-  // Collapse to one row per employee on this job. Pick the earliest startTime so
-  // the date for the day-role mutation lines up with when they actually start.
-  const staffOnJob = useMemo(() => {
-    const byEmp = new Map<string, AssignmentRow>();
-    for (const row of assignments) {
-      const existing = byEmp.get(row.employeeId);
-      if (!existing) {
-        byEmp.set(row.employeeId, row);
-        continue;
-      }
-      const a = row.startTime ? new Date(row.startTime).getTime() : Infinity;
-      const b = existing.startTime ? new Date(existing.startTime).getTime() : Infinity;
-      if (a < b) byEmp.set(row.employeeId, row);
-    }
-    return Array.from(byEmp.values()).sort((x, y) =>
-      (x.employeeName ?? "").localeCompare(y.employeeName ?? ""),
-    );
-  }, [assignments]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerRole, setPickerRole] = useState<RoleKey | null>(null);
+  const openPicker = (role: RoleKey | null) => {
+    setPickerRole(role);
+    setPickerOpen(true);
+  };
 
   const staffByRole = useMemo(() => {
-    const groups: Record<RoleKey, AssignmentRow[]> = { A: [], B: [], C: [] };
+    const groups: Record<RoleKey, CrewMember[]> = { A: [], B: [], C: [] };
     for (const s of staffOnJob) {
       if (s.dayRole === "A" || s.dayRole === "B" || s.dayRole === "C") {
         groups[s.dayRole].push(s);
@@ -206,7 +199,7 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
         predicate: (q) =>
           Array.isArray(q.queryKey)
           && q.queryKey[0] === "/api/jobs"
-          && q.queryKey[2] === "staff-assignments",
+          && (q.queryKey[2] === "staff-assignments" || q.queryKey[2] === "crew-today"),
       });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
     },
@@ -305,15 +298,27 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
       </div>
 
       <section data-testid="role-assignment-section">
-        <div className="flex items-center gap-2 mb-2">
-          <Users className="w-4 h-4 text-foreground" />
-          <h3 className="text-sm font-semibold text-foreground">Today's roles</h3>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Today's roles</h3>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => openPicker(null)}
+            data-testid="add-crew"
+          >
+            <UserPlus className="w-3.5 h-3.5 mr-1" />
+            Add crew
+          </Button>
         </div>
-        {assignmentsLoading ? (
+        {crewLoading ? (
           <div className="text-xs text-muted-foreground py-2">Loading crew…</div>
         ) : staffOnJob.length === 0 ? (
           <div className="text-xs text-muted-foreground py-2">
-            No crew assigned to this job yet.
+            Nobody on this job today yet — add crew, or clock someone in.
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -322,13 +327,13 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
                 key={s.employeeId}
                 staff={s}
                 disabled={setDayRole.isPending}
-                onSelect={(role) => {
-                  const date = s.startTime
-                    ? getNZDateString(s.startTime)
-                    : getNZDateString(new Date());
-                  const next = s.dayRole === role ? null : role;
-                  setDayRole.mutate({ employeeId: s.employeeId, date, dayRole: next });
-                }}
+                onSelect={(role) =>
+                  setDayRole.mutate({
+                    employeeId: s.employeeId,
+                    date: crewDate,
+                    dayRole: role,
+                  })
+                }
               />
             ))}
           </div>
@@ -346,12 +351,21 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
               items={roleItems[roleKey]}
               staffInRole={staffByRole[roleKey]}
               completionByItem={completionByItem}
+              onAssign={() => openPicker(roleKey)}
               onToggle={(itemId, completed) => toggleItem.mutate({ itemId, completed })}
               disabled={toggleItem.isPending}
             />
           ))}
         </>
       )}
+
+      <CrewPickerDialog
+        jobId={jobId}
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        existingCrewIds={crewIds}
+        defaultRole={pickerRole}
+      />
     </div>
   );
 }
@@ -361,40 +375,30 @@ function RoleAssignRow({
   disabled,
   onSelect,
 }: {
-  staff: AssignmentRow;
+  staff: CrewMember;
   disabled: boolean;
-  onSelect: (role: RoleKey) => void;
+  onSelect: (role: RoleKey | null) => void;
 }) {
-  const name = (staff.employeeName ?? "").trim() || "Unknown crew";
-  const role = staff.dayRole ?? null;
+  const name = staff.employeeName.trim() || "Unknown crew";
   return (
     <div
       className="flex items-center justify-between gap-3 px-3 py-2 bg-card border border-border rounded-md"
       data-testid={`role-assign-row-${staff.employeeId}`}
     >
-      <span className="text-sm font-medium text-foreground truncate">{name}</span>
-      <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-        {ROLE_KEYS.map((r) => {
-          const active = role === r;
-          return (
-            <button
-              key={r}
-              type="button"
-              onClick={() => onSelect(r)}
-              disabled={disabled}
-              data-testid={`role-toggle-${staff.employeeId}-${r}`}
-              aria-pressed={active}
-              className={
-                active
-                  ? "px-2.5 py-1 rounded-md text-xs font-semibold border border-foreground bg-foreground text-background disabled:opacity-60"
-                  : "px-2.5 py-1 rounded-md text-xs font-semibold border border-border bg-card text-foreground disabled:opacity-60"
-              }
-            >
-              {ROLE_LABEL[r]}
-            </button>
-          );
-        })}
-      </div>
+      <span className="flex items-center gap-2 min-w-0">
+        <span className="text-sm font-medium text-foreground truncate">{name}</span>
+        {staff.isClockedIn && (
+          <span className="text-[11px] text-emerald-600 font-medium shrink-0">
+            On the clock
+          </span>
+        )}
+      </span>
+      <RoleChips
+        value={staff.dayRole}
+        onSelect={onSelect}
+        disabled={disabled}
+        testIdPrefix={`role-toggle-${staff.employeeId}`}
+      />
     </div>
   );
 }
@@ -405,17 +409,19 @@ function RoleSection({
   staffInRole,
   completionByItem,
   onToggle,
+  onAssign,
   disabled,
 }: {
   roleKey: RoleKey;
   items: ChecklistItem[];
-  staffInRole: AssignmentRow[];
+  staffInRole: CrewMember[];
   completionByItem: Map<string, ChecklistCompletion>;
   onToggle: (itemId: string, completed: boolean) => void;
+  onAssign: () => void;
   disabled: boolean;
 }) {
   const ownerNames = staffInRole
-    .map((s) => (s.employeeName ?? "").trim())
+    .map((s) => s.employeeName.trim())
     .filter(Boolean);
   const hasOwner = ownerNames.length > 0;
 
@@ -436,7 +442,15 @@ function RoleSection({
             </span>
           ))
         ) : (
-          <span className="text-xs text-muted-foreground italic">Unassigned</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs text-muted-foreground"
+            onClick={onAssign}
+            data-testid={`role-assign-${roleKey}`}
+          >
+            Unassigned — assign
+          </Button>
         )}
       </div>
       <div className="flex flex-col gap-2.5">

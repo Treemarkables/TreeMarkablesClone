@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getNZDateString } from "@shared/dateUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -114,7 +115,7 @@ export function RecordedTimeEntries({
   });
 
   // Fetch ALL existing time entries for this job (not just today's)
-  const today = new Date().toISOString().split("T")[0];
+  const today = getNZDateString(new Date());
   const { data: timeEntriesData, refetch: refetchTimeEntries } = useQuery({
     queryKey: ["time-entries", jobId],
     queryFn: async () => {
