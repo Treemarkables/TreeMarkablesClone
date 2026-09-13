@@ -15160,7 +15160,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       await notificationHelper.notifyEmployee(employeeId, {
         title: `You're ${ROLE_LABELS[role]} on ${jobRef}`,
         body: tasks.length > 0 ? tasks.join(' · ') : 'No tasks set for this role.',
-        clickAction: `/jobs/${job.id}`,
+        clickAction: `/dispatch?job=${job.id}`,
         collapseId: `day-role-${job.id}-${employeeId}-${nzDate}`,
         data: { jobId: job.id, roleKey: role },
       });
@@ -15170,7 +15170,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       await notificationHelper.notifyEmployee(requestedBy, {
         title: `${withoutRole.length} crew on ${jobRef} have no role today`,
         body: 'Open the job card to set who is Kaitiaki, Kaiwhangai and Kaitirotiro.',
-        clickAction: `/jobs/${job.id}`,
+        clickAction: `/dispatch?job=${job.id}`,
         collapseId: `day-role-missing-${job.id}-${nzDate}`,
       });
     }
@@ -15445,7 +15445,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         void notificationHelper.notifyEmployee(requesterId, {
           title: `${jobRef} finished with ${totalOutstanding} task${totalOutstanding === 1 ? '' : 's'} unticked`,
           body: 'Open the job card to see what each role still owes.',
-          clickAction: `/jobs/${req.params.id}`,
+          clickAction: `/dispatch?job=${req.params.id}`,
           collapseId: `role-tasks-outstanding-${req.params.id}-${todayNZ}`,
         }).catch(err => console.error('Error sending outstanding-tasks digest:', err));
       }
