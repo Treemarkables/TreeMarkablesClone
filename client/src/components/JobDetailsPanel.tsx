@@ -1075,20 +1075,39 @@ function ContactsCard({
     customer?.name, customer?.email, customer?.phone, customer?.mobile,
   ]);
 
+  const contactKeys = ["firstName", "lastName", "email", "mobile", "phone"] as const;
+
   const commit = (k: "firstName" | "lastName" | "email" | "mobile" | "phone") => {
     const next = draft[k];
     const current = fields[k];
     if ((next ?? "") === (current ?? "")) return;
     const key = fieldKey(k);
     const trimmed = (next ?? "").trim();
+    const patch: Record<string, unknown> = {};
     if (trimmed === "") {
       // Intentional clear. The server's anti-wipe safeguard restores empty
       // values UNLESS the field is named in _clearFields, so without this a
       // user can never remove a contact number/email — it just reappears.
-      saveField.mutate({ [key]: null, _clearFields: [key] } as unknown as Partial<JobShape>);
+      patch[key as string] = null;
+      patch._clearFields = [key];
     } else {
-      saveField.mutate({ [key]: trimmed } as Partial<JobShape>);
+      patch[key as string] = trimmed;
     }
+    // While the job has no contact of its own, the job tab shows the CUSTOMER
+    // record's name/email/phone (see jobHasOwnContact above). That fallback is
+    // display-only and is suppressed the instant ANY jobContact* field gets a
+    // value — so saving just the edited field made everything else on screen
+    // vanish (typing the email blanked the first name, last name and phone).
+    // Promote the whole visible contact onto the job in the same write so what
+    // the user is looking at is what gets stored.
+    if (tab === "job" && !jobHasOwnContact) {
+      for (const other of contactKeys) {
+        if (other === k) continue;
+        const v = (draft[other] ?? fields[other] ?? "").trim();
+        if (v) patch[fieldKey(other) as string] = v;
+      }
+    }
+    saveField.mutate(patch as unknown as Partial<JobShape>);
   };
 
   return (
