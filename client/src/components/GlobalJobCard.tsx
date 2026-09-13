@@ -111,6 +111,7 @@ import QuoteManagement from "./QuoteManagement";
 import { RecordedTimeModal } from "./RecordedTimeModal";
 import { PhotoCaptureModal } from "./PhotoCaptureModal";
 import { SpeechToQuote } from "./SpeechToQuote";
+import { AiPolishDescription } from "./AiPolishDescription";
 import { CustomerAvatar } from "./CustomerAvatar";
 import { JobLocationMap } from "./JobLocationMap";
 import { JobSiteMapSection } from "./JobSiteMapSection";
@@ -200,6 +201,7 @@ import { formatTime12Hour, nzTimeToUTC, utcToNZTime, getNZDateString, getJobSche
 import { Calendar as DayCalendar } from "@/components/ui/calendar";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { Linkify, LinkifyMultiline } from "@/lib/linkify";
+import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
 import { Link } from "wouter";
 
 // Lead jobs auto-created on the server land with a literal
@@ -1304,6 +1306,7 @@ export function GlobalJobCard({
       return;
     const jobId = editingJob.id;
     apiRequest("POST", "/api/xero/sync-payment-status", { jobId })
+      .then((res) => res.json())
       .then((result: any) => {
         if (result?.status === "paid") {
           queryClient.invalidateQueries({ queryKey: ["/api/invoices", jobId] });
@@ -1313,7 +1316,12 @@ export function GlobalJobCard({
           );
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn(
+          `Xero payment sync failed for job ${editingJob.jobNumber}:`,
+          err,
+        );
+      });
   }, [editingJob?.id, editingJob?.xeroInvoiceId]);
 
   // Clipboard paste handler for screenshots
@@ -1542,13 +1550,16 @@ export function GlobalJobCard({
           queryKey: ["/api/customers", selectedCustomer?.id, "contacts"],
         });
         const c = response.data;
-        // Auto-pick the freshly-created contact and fill the job-contact fields
+        // Auto-pick the freshly-created contact and fill the job-contact
+        // fields. Set ALL fields (empty included), like
+        // handleSelectSavedContact — only setting truthy ones left the
+        // previous contact's phone/email showing under the new contact.
         form.setValue("customerContactId", c.id, { shouldDirty: true });
-        if (c.firstName) form.setValue("jobContactFirstName", c.firstName, { shouldDirty: true });
-        if (c.lastName) form.setValue("jobContactLastName", c.lastName, { shouldDirty: true });
-        if (c.email) form.setValue("jobContactEmail", c.email, { shouldDirty: true });
-        if (c.phone) form.setValue("jobContactPhone", c.phone, { shouldDirty: true });
-        if (c.mobile) form.setValue("jobContactMobile", c.mobile, { shouldDirty: true });
+        form.setValue("jobContactFirstName", c.firstName || "", { shouldDirty: true });
+        form.setValue("jobContactLastName", c.lastName || "", { shouldDirty: true });
+        form.setValue("jobContactEmail", c.email || "", { shouldDirty: true });
+        form.setValue("jobContactPhone", c.phone || "", { shouldDirty: true });
+        form.setValue("jobContactMobile", c.mobile || "", { shouldDirty: true });
         setShowAddContactDialog(false);
         setContactDraft({ firstName: "", lastName: "", role: "", email: "", phone: "", mobile: "" });
       }
@@ -1685,6 +1696,17 @@ export function GlobalJobCard({
       const firstName = nameParts[0] || "";
       const lastName = nameParts.slice(1).join(" ") || "";
 
+      // True when the job carries any contact of its own (e.g. a saved
+      // contact was loaded onto it) — gates the customer-record fallback
+      // below so different people's details don't get mixed.
+      const jobHasOwnContact = !!(
+        editingJob.jobContactFirstName ||
+        editingJob.jobContactLastName ||
+        editingJob.jobContactEmail ||
+        editingJob.jobContactPhone ||
+        editingJob.jobContactMobile
+      );
+
       const resetData = {
         // Core job data
         title: editingJob.title || "",
@@ -1698,15 +1720,24 @@ export function GlobalJobCard({
         totalAmount: editingJob.totalAmount || "0",
         paidAmount: editingJob.paidAmount || "0",
         notes: editingJob.notes || "",
-        // Contact fields from job data (with customer as fallback)
-        jobContactFirstName: editingJob.jobContactFirstName || firstName,
-        jobContactLastName: editingJob.jobContactLastName || lastName,
+        // Contact fields from job data. Fall back to the customer record only
+        // when the job has NO contact of its own (jobHasOwnContact) —
+        // per-field fallback mixed people together (a loaded contact without
+        // a phone showed the customer org's number, often a different
+        // person's).
+        jobContactFirstName:
+          editingJob.jobContactFirstName || (jobHasOwnContact ? "" : firstName),
+        jobContactLastName:
+          editingJob.jobContactLastName || (jobHasOwnContact ? "" : lastName),
         jobContactEmail:
-          editingJob.jobContactEmail || editingJobCustomer?.email || "",
+          editingJob.jobContactEmail ||
+          (jobHasOwnContact ? "" : editingJobCustomer?.email || ""),
         jobContactPhone:
-          editingJob.jobContactPhone || editingJobCustomer?.phone || "",
+          editingJob.jobContactPhone ||
+          (jobHasOwnContact ? "" : editingJobCustomer?.phone || ""),
         jobContactMobile:
-          editingJob.jobContactMobile || editingJobCustomer?.mobile || "",
+          editingJob.jobContactMobile ||
+          (jobHasOwnContact ? "" : editingJobCustomer?.mobile || ""),
         tenantContactFirstName: editingJob.tenantContactFirstName || "",
         tenantContactLastName: editingJob.tenantContactLastName || "",
         tenantContactEmail: editingJob.tenantContactEmail || "",
@@ -4781,11 +4812,19 @@ The Treemarkables Team`;
                   jobSubtotal > 0
                     ? jobSubtotal
                     : parseFloat(editingJob?.totalAmount || "0") / 1.15;
+                // Once an invoice has been issued, it wins — adjustments made
+                // at invoicing time (e.g. a discount) must show here. Matches
+                // JobCardDesktop / JobCardMobile.
+                const invoicedExGst = invoicedJobValueExGst(
+                  (jobInvoiceResponse as any)?.data,
+                  editingJob?.status,
+                );
                 const jobTotal =
-                  lineItemsTotal ||
-                  proposalSubtotal ||
-                  quoteExGst ||
-                  jobStoredExGst;
+                  invoicedExGst ??
+                  (lineItemsTotal ||
+                    proposalSubtotal ||
+                    quoteExGst ||
+                    jobStoredExGst);
                 const invoiceStatus = (jobInvoiceResponse as any)?.data?.[0]
                   ?.status;
                 const isPaid =
@@ -4844,7 +4883,7 @@ The Treemarkables Team`;
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 sm:h-9 px-2 sm:px-3 md:px-4 text-xs bg-orange-500 text-white hover:bg-orange-600 border-0 font-semibold transition-all"
+              className="h-7 sm:h-9 px-2 sm:px-3 md:px-4 text-xs bg-primary text-brand-lime border-0 font-semibold rounded-full transition-all"
               onClick={handleSave}
               disabled={
                 isSaving ||
@@ -8019,12 +8058,21 @@ The Treemarkables Team`;
                                           ?.total || "0",
                                       ) || 0;
 
+                                    // Issued invoices win (see the
+                                    // top-header price) so invoicing-time
+                                    // adjustments show here too.
+                                    const issuedExGst =
+                                      invoicedJobValueExGst(
+                                        (jobInvoiceResponse as any)?.data,
+                                        editingJob?.status,
+                                      );
                                     const totalExcGst =
-                                      lineItemsTotal ||
-                                      proposalSubtotal ||
-                                      quoteExGst ||
-                                      jobStoredExGst ||
-                                      invoiceExGst;
+                                      issuedExGst ??
+                                      (lineItemsTotal ||
+                                        proposalSubtotal ||
+                                        quoteExGst ||
+                                        jobStoredExGst ||
+                                        invoiceExGst);
 
                                     return (
                                       <>
@@ -10520,6 +10568,11 @@ The Treemarkables Team`;
     // previously a tap gave zero feedback until the toast (or nothing at all
     // on success, since there are no success toasts).
     sendToXeroPending: sendToXeroMutation.isPending,
+    // Opens the hoisted void-first confirmation dialog — the cards only show
+    // this when the job is already sent, but the sendToXero handler's toast
+    // points here, so it must exist on every surface the toast shows on.
+    resetXeroSync: () => setShowXeroResetConfirm(true),
+    resetXeroSyncPending: resetXeroSyncMutation.isPending,
   };
 
   // Diary doc-click handlers reused by both surfaces. Quote/invoice just
@@ -10705,6 +10758,9 @@ The Treemarkables Team`;
               jobContactLastName:
                 form.getValues("jobContactLastName") ??
                 editingJob.jobContactLastName,
+              jobContactEmail:
+                form.getValues("jobContactEmail") ??
+                editingJob.jobContactEmail,
               // Line items are managed via useFieldArray and persist on a
               // separate path from the auto-save debounce; the cached
               // editingJob.lineItems can lag the form state by seconds.
@@ -11463,6 +11519,11 @@ The Treemarkables Team`;
                 "Describe the work that needs to be done\n\nUse the 'Add Bullet' button or type • for bullet points"
               }
               data-testid="textarea-description-popup"
+            />
+            <AiPolishDescription
+              text={descriptionDraft}
+              onApply={(polished) => setDescriptionDraft(polished)}
+              className="mt-2"
             />
           </div>
           <div className="flex gap-2 pt-2">

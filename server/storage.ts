@@ -19,7 +19,7 @@ import {
   type InventoryTransaction, type InsertInventoryTransaction,
   type Material, type InsertMaterial,
   type Service, type InsertService,
-  photos, type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
+  photos, type Photo, type PhotoSearch,
   videos, type Video, type InsertVideo, type UpdateVideo, type VideoSearch,
   helpArticles, type HelpArticle, type InsertHelpArticle, type UpdateHelpArticle,
   type Invoice, type InsertInvoice, type InvoiceSection, type InsertInvoiceSection, type UpdateInvoiceSection,
@@ -82,9 +82,11 @@ import { db, ownerDb } from "./db";
 import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
 import { cacheGet, cacheSet, cacheDelete, cacheDeletePrefix } from "./perfCache";
 import { invalidateEntitlementsCache } from "./tenancy/entitlements";
-import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
+import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull, type SQL } from "drizzle-orm";
+import { EXPENSE_COMPANY_KEYWORDS } from "@shared/customerFilters";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
+import { appendUniquePhotoUrls } from "@shared/treePins";
 
 // Compute an invoice's ex-GST revenue contribution.
 //
@@ -153,6 +155,10 @@ export function jobRevenueExGst(job: { lineItems?: any; subtotal?: any; totalInc
 // modify the interface with any CRUD methods
 // you might need
 
+// Filter/sort vocabulary for the paginated customers list (Clients page).
+export type CustomerListFilter = 'all' | 'active' | 'historical' | 'customers' | 'potential_expenses' | 'vip';
+export type CustomerListSort = 'name' | 'email' | 'recent';
+
 export interface IStorage {
   // User management
   getUser(id: string): Promise<User | undefined>;
@@ -174,6 +180,14 @@ export interface IStorage {
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
   deleteCustomer(id: string): Promise<boolean>;
   getAllCustomers(): Promise<Customer[]>;
+  getCustomersPage(options: {
+    limit: number;
+    offset: number;
+    search?: string;
+    filter?: CustomerListFilter;
+    sortBy?: CustomerListSort;
+  }): Promise<{ customers: Customer[]; total: number }>;
+  getCustomerStats(): Promise<{ total: number; active: number; historical: number; lifetimeValueTotal: number }>;
   clearAllCustomers(): Promise<number>;
   searchCustomers(query: string): Promise<Customer[]>;
 
@@ -262,7 +276,7 @@ export interface IStorage {
   // Job Management
   createJob(job: InsertJob): Promise<Job>;
   getJob(id: string): Promise<Job | undefined>;
-  getJobByJobNumber(jobNumber: string): Promise<Job | undefined>;
+  getJobByJobNumber(jobNumber: string, senderEmail?: string): Promise<Job | undefined>;
   updateJob(id: string, updates: Partial<InsertJob>): Promise<Job>;
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
@@ -307,6 +321,7 @@ export interface IStorage {
   updateJobDiaryEntry(id: string, updates: Partial<InsertJobDiaryEntry>): Promise<JobDiaryEntry>;
   deleteJobDiaryEntry(id: string): Promise<boolean>;
   getJobDiaryEntriesByJob(jobId: string, limit?: number): Promise<JobDiaryEntry[]>;
+  getJobDiaryEntriesForJobsSince(jobIds: string[], since: Date): Promise<JobDiaryEntry[]>;
   getJobDiaryEntriesByType(jobId: string, entryType: string): Promise<JobDiaryEntry[]>;
   getAllJobDiaryEntries(): Promise<JobDiaryEntry[]>;
   
@@ -797,17 +812,7 @@ export interface IStorage {
   getConversationMessages(conversationId: string): Promise<ConversationMessage[]>;
   markConversationMessagesAsRead(conversationId: string, readBy: string): Promise<void>;
 
-  // Enhanced Photo Management
-  createPhoto(data: InsertPhoto): Promise<Photo>;
-  getPhoto(id: string): Promise<Photo | undefined>;
-  updatePhoto(id: string, updates: UpdatePhoto): Promise<Photo>;
-  deletePhoto(id: string): Promise<void>;
-  getPhotosByJob(jobId: string, filters?: { type?: string; category?: string }): Promise<Photo[]>;
-  getPhotosByCustomer(customerId: string): Promise<Photo[]>;
-  getPublicPhotos(limit?: number, offset?: number): Promise<Photo[]>;
-  getFeaturedPhotos(limit?: number): Promise<Photo[]>;
-  getPhotosByType(type: string, jobId?: string): Promise<Photo[]>;
-  getBeforeAfterPairs(jobId: string): Promise<Photo[][]>;
+  // Photo search (photos table rows; Library page)
   searchPhotos(filters: PhotoSearch): Promise<Photo[]>;
 
   // Job Videos (Loom replacement)
@@ -1074,11 +1079,24 @@ export interface IStorage {
   getJobSiteMapImage(jobId: string): Promise<schema.JobSiteMapImage | null>;
   upsertJobSiteMapImage(jobId: string, imageUrl: string, businessId?: string | null): Promise<schema.JobSiteMapImage>;
 
+  // Hazard-tree pin register (site-persistent; distinct from tree_markers)
+  getCustomerSites(customerId: string): Promise<schema.CustomerSite[]>;
+  createCustomerSite(site: schema.InsertCustomerSite): Promise<schema.CustomerSite>;
+  ensureDefaultCustomerSite(customerId: string): Promise<schema.CustomerSite>;
+  getTreePinsByCustomer(customerId: string): Promise<schema.TreePin[]>;
+  getTreePin(id: string): Promise<schema.TreePin | null>;
+  createTreePin(pin: schema.InsertTreePin): Promise<schema.TreePin>;
+  appendTreePinPhotos(id: string, urls: string[], businessId?: string | null): Promise<schema.TreePin>;
+  getTreePinsByJob(jobId: string): Promise<schema.TreePin[]>;
+  findTreePinWorkLink(pinId: string, jobId: string): Promise<schema.TreePinWorkLink | null>;
+  createTreePinWorkLink(link: schema.InsertTreePinWorkLink): Promise<schema.TreePinWorkLink>;
+
+
   // Live job timers (clock in/out)
   getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null>;
   getActiveTimersForJob(jobId: string): Promise<schema.ActiveTimer[]>;
   getAllActiveTimers(): Promise<schema.ActiveTimer[]>;
-  startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer>;
+  startTimer(jobId: string, employeeId: string, startedAt?: Date): Promise<schema.ActiveTimer>;
   deleteTimer(id: string): Promise<boolean>;
 
   // Public job photo timeline links
@@ -1278,6 +1296,79 @@ class DatabaseStorage implements IStorage {
 
   async getAllCustomers(): Promise<Customer[]> {
     return await db.select().from(schema.customers).orderBy(asc(schema.customers.name));
+  }
+
+  async getCustomersPage(options: {
+    limit: number;
+    offset: number;
+    search?: string;
+    filter?: CustomerListFilter;
+    sortBy?: CustomerListSort;
+  }): Promise<{ customers: Customer[]; total: number }> {
+    const conditions: SQL[] = [];
+
+    const search = options.search?.trim();
+    if (search) {
+      const term = `%${search}%`;
+      conditions.push(
+        sql`(${schema.customers.name} ILIKE ${term} OR ${schema.customers.email} ILIKE ${term} OR ${schema.customers.phone} ILIKE ${term} OR ${schema.customers.mobile} ILIKE ${term})`
+      );
+    }
+
+    switch (options.filter) {
+      case 'active':
+        // Null is_active counts as active, matching the legacy endpoints
+        conditions.push(sql`${schema.customers.isActive} IS DISTINCT FROM false`);
+        break;
+      case 'historical':
+        conditions.push(sql`${schema.customers.isActive} = false`);
+        break;
+      case 'vip':
+        conditions.push(sql`${schema.customers.isVipMember} = true`);
+        break;
+      case 'customers':
+      case 'potential_expenses': {
+        const keywordMatch = sql.join(
+          EXPENSE_COMPANY_KEYWORDS.map((keyword) => sql`${schema.customers.name} ILIKE ${`%${keyword}%`}`),
+          sql` OR `
+        );
+        conditions.push(
+          options.filter === 'potential_expenses' ? sql`(${keywordMatch})` : sql`NOT (${keywordMatch})`
+        );
+        break;
+      }
+      default:
+        break; // 'all' — no condition
+    }
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const orderBy =
+      options.sortBy === 'recent'
+        ? desc(schema.customers.createdAt)
+        : options.sortBy === 'email'
+          ? asc(schema.customers.email)
+          : asc(schema.customers.name);
+
+    const [customers, [{ count }]] = await Promise.all([
+      db.select().from(schema.customers)
+        .where(where)
+        .orderBy(orderBy)
+        .limit(options.limit)
+        .offset(options.offset),
+      db.select({ count: sql<number>`count(*)::int` }).from(schema.customers).where(where),
+    ]);
+
+    return { customers, total: count };
+  }
+
+  async getCustomerStats(): Promise<{ total: number; active: number; historical: number; lifetimeValueTotal: number }> {
+    const [row] = await db.select({
+      total: sql<number>`count(*)::int`,
+      active: sql<number>`(count(*) FILTER (WHERE ${schema.customers.isActive} IS DISTINCT FROM false))::int`,
+      historical: sql<number>`(count(*) FILTER (WHERE ${schema.customers.isActive} = false))::int`,
+      lifetimeValueTotal: sql<number>`COALESCE(SUM(${schema.customers.lifetimeValue}), 0)::float`,
+    }).from(schema.customers);
+    return row;
   }
 
   async clearAllCustomers(): Promise<number> {
@@ -1821,14 +1912,29 @@ class DatabaseStorage implements IStorage {
     return job || undefined;
   }
 
-  async getJobByJobNumber(jobNumber: string): Promise<Job | undefined> {
+  async getJobByJobNumber(jobNumber: string, senderEmail?: string): Promise<Job | undefined> {
     // Job numbers are unique per business, not globally. In-session the RLS
     // proxy scopes this to one tenant (at most one row). Session-less callers
     // (inbound email/SMS matchers run as owner) see every tenant, so an
-    // ambiguous number must never be guessed at — refuse and let the caller's
-    // other matchers (UUID, phone) do the work.
-    const rows = await db.select().from(schema.jobs).where(eq(schema.jobs.jobNumber, jobNumber)).limit(2);
+    // ambiguous number must never be guessed at. When the caller knows the
+    // sender (inbound email reply), disambiguate by the matched job's customer
+    // email; otherwise refuse and let the caller's other matchers (UUID,
+    // phone) do the work.
+    const rows = await db.select().from(schema.jobs).where(eq(schema.jobs.jobNumber, jobNumber)).limit(10);
     if (rows.length > 1) {
+      const sender = senderEmail?.trim().toLowerCase();
+      if (sender) {
+        const senderMatches: Job[] = [];
+        for (const row of rows) {
+          if (!row.customerId) continue;
+          const [cust] = await db.select().from(schema.customers).where(eq(schema.customers.id, row.customerId));
+          if (cust?.email && cust.email.trim().toLowerCase() === sender) senderMatches.push(row);
+        }
+        if (senderMatches.length === 1) {
+          console.log(`getJobByJobNumber("${jobNumber}"): multiple tenants share this number — resolved by sender email`);
+          return senderMatches[0];
+        }
+      }
       console.warn(`getJobByJobNumber("${jobNumber}"): matches multiple tenants — refusing to guess`);
       return undefined;
     }
@@ -2036,18 +2142,24 @@ class DatabaseStorage implements IStorage {
     const offset = options?.offset ?? 0;
     const excludeArchived = options?.excludeArchived ?? true;
     
-    const searchTerm = `%${query.toLowerCase()}%`;
-    
-    // Build WHERE clause conditions including customer name search via raw SQL
-    const searchConditions = or(
-      sql`LOWER(${schema.jobs.jobNumber}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.title}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.description}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.address}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.notes}) LIKE ${searchTerm}`,
-      sql`LOWER(${schema.jobs.specialInstructions}) LIKE ${searchTerm}`,
-      sql`EXISTS (SELECT 1 FROM customers WHERE customers.id = ${schema.jobs.customerId} AND (LOWER(customers.name) LIKE ${searchTerm} OR LOWER(customers.email) LIKE ${searchTerm}))`
-    );
+    // Multi-word search: each whitespace-separated token must match at least one
+    // field (tokens AND'd, fields OR'd), so "Gisborne council botanical" finds a
+    // Gisborne District Council job with "Botanical" in the address/description
+    // even though no single column contains the whole phrase.
+    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const tokenConditions = tokens.map((token) => {
+      const searchTerm = `%${token}%`;
+      return or(
+        sql`LOWER(${schema.jobs.jobNumber}) LIKE ${searchTerm}`,
+        sql`LOWER(${schema.jobs.title}) LIKE ${searchTerm}`,
+        sql`LOWER(${schema.jobs.description}) LIKE ${searchTerm}`,
+        sql`LOWER(${schema.jobs.address}) LIKE ${searchTerm}`,
+        sql`LOWER(${schema.jobs.notes}) LIKE ${searchTerm}`,
+        sql`LOWER(${schema.jobs.specialInstructions}) LIKE ${searchTerm}`,
+        sql`EXISTS (SELECT 1 FROM customers WHERE customers.id = ${schema.jobs.customerId} AND (LOWER(customers.name) LIKE ${searchTerm} OR LOWER(customers.email) LIKE ${searchTerm}))`
+      );
+    });
+    const searchConditions = and(...tokenConditions);
     
     // Add archived filter if needed
     const whereClause = excludeArchived
@@ -2096,7 +2208,25 @@ class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<boolean> {
     try {
-      // Clear every table that FK-references jobs.id before deleting the job
+      // Clear every table that FK-references jobs.id before deleting the job.
+      // Payments must go first: they reference the job AND its proposals/invoices,
+      // so deleting proposals/invoices below would violate payments FKs.
+      await db.delete(schema.payments).where(or(
+        eq(schema.payments.jobId, id),
+        inArray(schema.payments.proposalId,
+          db.select({ id: schema.proposals.id }).from(schema.proposals).where(eq(schema.proposals.jobId, id))),
+        inArray(schema.payments.invoiceId,
+          db.select({ id: schema.invoices.id }).from(schema.invoices).where(eq(schema.invoices.jobId, id))),
+      ));
+      // Conversations point at the quote they converted into — null the pointer
+      // (conversations are customer history, not job children)
+      await db.update(schema.conversations)
+        .set({ convertedToQuoteId: null })
+        .where(inArray(schema.conversations.convertedToQuoteId,
+          db.select({ id: schema.quotes.id }).from(schema.quotes).where(eq(schema.quotes.jobId, id))));
+      await db.update(schema.tasks)
+        .set({ linkedJobId: null })
+        .where(eq(schema.tasks.linkedJobId, id));
       await db.delete(schema.jobDiaryEntries).where(eq(schema.jobDiaryEntries.jobId, id));
       await db.delete(schema.proposals).where(eq(schema.proposals.jobId, id));
       await db.delete(schema.jobStaffAssignments).where(eq(schema.jobStaffAssignments.jobId, id));
@@ -2117,12 +2247,40 @@ class DatabaseStorage implements IStorage {
       await db.delete(schema.riskAssessments).where(eq(schema.riskAssessments.jobId, id));
       await db.delete(schema.safetyIncidents).where(eq(schema.safetyIncidents.jobId, id));
       await db.delete(schema.treeMarkers).where(eq(schema.treeMarkers.jobId, id));
+      await db.delete(schema.videos).where(eq(schema.videos.jobId, id));
+      await db.delete(schema.pendingOutboundMessages).where(eq(schema.pendingOutboundMessages.jobId, id));
+      const jobNearMissIds = db.select({ id: schema.nearMissReports.id })
+        .from(schema.nearMissReports).where(eq(schema.nearMissReports.jobId, id));
+      await db.delete(schema.nearMissAttachments).where(inArray(schema.nearMissAttachments.reportId, jobNearMissIds));
+      await db.delete(schema.nearMissWitnesses).where(inArray(schema.nearMissWitnesses.reportId, jobNearMissIds));
+      await db.delete(schema.nearMissActions).where(inArray(schema.nearMissActions.reportId, jobNearMissIds));
+      await db.delete(schema.nearMissReports).where(eq(schema.nearMissReports.jobId, id));
+      await db.delete(schema.toolboxTalkAttendees).where(inArray(schema.toolboxTalkAttendees.talkId,
+        db.select({ id: schema.toolboxTalks.id }).from(schema.toolboxTalks).where(eq(schema.toolboxTalks.jobId, id))));
+      await db.delete(schema.toolboxTalks).where(eq(schema.toolboxTalks.jobId, id));
+      await db.delete(schema.prestartChecklists).where(eq(schema.prestartChecklists.jobId, id));
+      const jobSwmsIds = db.select({ id: schema.swmsDocuments.id })
+        .from(schema.swmsDocuments).where(eq(schema.swmsDocuments.jobId, id));
+      await db.delete(schema.swmsSteps).where(inArray(schema.swmsSteps.swmsId, jobSwmsIds));
+      await db.delete(schema.swmsSignatures).where(inArray(schema.swmsSignatures.swmsId, jobSwmsIds));
+      await db.delete(schema.swmsDocuments).where(eq(schema.swmsDocuments.jobId, id));
+      await db.delete(schema.notifiableEvents).where(eq(schema.notifiableEvents.jobId, id));
+      // Belt-and-braces for tables whose schema declares onDelete: cascade —
+      // prod FKs are applied via manual SQL and may lack the cascade clause
+      await db.delete(schema.supplierInvoices).where(eq(schema.supplierInvoices.jobId, id));
+      await db.delete(schema.jobSiteMaps).where(eq(schema.jobSiteMaps.jobId, id));
+      await db.delete(schema.jobTimelineLinks).where(eq(schema.jobTimelineLinks.jobId, id));
+      await db.delete(schema.activeTimers).where(eq(schema.activeTimers.jobId, id));
+      await db.delete(schema.jobChecklistCompletions).where(eq(schema.jobChecklistCompletions.jobId, id));
+      await db.delete(schema.jobQuotingProcessCompletions).where(eq(schema.jobQuotingProcessCompletions.jobId, id));
 
       const result = await db.delete(schema.jobs).where(eq(schema.jobs.id, id));
       return (result.rowCount || 0) > 0;
     } catch (error) {
-      console.error('Error deleting job:', error);
-      return false;
+      console.error(`Error deleting job ${id}:`, error);
+      // Rethrow so bulkDeleteJobs surfaces the real DB error (e.g. which FK
+      // blocked the delete) instead of a generic "Failed to delete" message
+      throw error;
     }
   }
 
@@ -2799,6 +2957,15 @@ class DatabaseStorage implements IStorage {
     }
     return await base;
   }
+  async getJobDiaryEntriesForJobsSince(jobIds: string[], since: Date): Promise<JobDiaryEntry[]> {
+    if (jobIds.length === 0) return [];
+    return await db.select().from(schema.jobDiaryEntries)
+      .where(and(
+        inArray(schema.jobDiaryEntries.jobId, jobIds),
+        gte(schema.jobDiaryEntries.createdAt, since),
+      ))
+      .orderBy(desc(schema.jobDiaryEntries.createdAt));
+  }
   async getJobDiaryEntriesByType(jobId: string, entryType: string): Promise<JobDiaryEntry[]> { return []; }
   async getAllJobDiaryEntries(): Promise<JobDiaryEntry[]> { return []; }
 
@@ -2970,7 +3137,9 @@ class DatabaseStorage implements IStorage {
     const [allJobs, allCustomers, allLeads, allQuotes, allProposals, allInvoices] = await Promise.all([
       this.getJobsForAnalytics({ fromDate, toDate }),
       this.getAllCustomers(),
-      this.getLeads(),
+      // Pipeline leads, not the legacy lead-submission stub (which returns []
+      // and silently zeroed Total Leads + Conversion Rate for every tenant).
+      this.getAllPipelineLeads(),
       this.getAllQuotes(),
       this.getAllProposals(),
       this.getAllInvoices(),
@@ -5741,7 +5910,13 @@ class DatabaseStorage implements IStorage {
     offset?: number;
   }): Promise<Conversation[]> {
     const conditions: any[] = [];
-    
+
+    // Session-less callers (webhooks under runWithBusiness) ride the owner
+    // connection where RLS can't scope this — filter explicitly, like
+    // getAllEmployees. No context → unchanged (all rows).
+    const bid = currentBusinessId();
+    if (bid) conditions.push(eq(schema.conversations.businessId, bid));
+
     if (filters) {
       if (filters.status) conditions.push(eq(schema.conversations.status, filters.status));
       if (filters.priority) conditions.push(eq(schema.conversations.priority, filters.priority));
@@ -5917,16 +6092,6 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.conversations.id, conversationId));
   }
 
-  async createPhoto(data: InsertPhoto): Promise<Photo> { throw new Error("Not implemented"); }
-  async getPhoto(id: string): Promise<Photo | undefined> { return undefined; }
-  async updatePhoto(id: string, updates: UpdatePhoto): Promise<Photo> { throw new Error("Not implemented"); }
-  async deletePhoto(id: string): Promise<void> { }
-  async getPhotosByJob(jobId: string, filters?: any): Promise<Photo[]> { return []; }
-  async getPhotosByCustomer(customerId: string): Promise<Photo[]> { return []; }
-  async getPublicPhotos(limit?: number, offset?: number): Promise<Photo[]> { return []; }
-  async getFeaturedPhotos(limit?: number): Promise<Photo[]> { return []; }
-  async getPhotosByType(type: string, jobId?: string): Promise<Photo[]> { return []; }
-  async getBeforeAfterPairs(jobId: string): Promise<Photo[][]> { return []; }
   async searchPhotos(filters: PhotoSearch): Promise<Photo[]> {
     const conditions = [];
     if (filters.q) {
@@ -7713,6 +7878,114 @@ class DatabaseStorage implements IStorage {
     return row;
   }
 
+  // ─── Hazard-tree pin register (site-persistent) ───────────────────────────
+  async getCustomerSites(customerId: string): Promise<schema.CustomerSite[]> {
+    return await db.select()
+      .from(schema.customerSites)
+      .where(eq(schema.customerSites.customerId, customerId))
+      .orderBy(schema.customerSites.createdAt);
+  }
+
+  async createCustomerSite(site: schema.InsertCustomerSite): Promise<schema.CustomerSite> {
+    const [result] = await db.insert(schema.customerSites).values(withTenant(site)).returning();
+    return result;
+  }
+
+  async ensureDefaultCustomerSite(customerId: string): Promise<schema.CustomerSite> {
+    const existing = await this.getCustomerSites(customerId);
+    if (existing[0]) return existing[0];
+    const customer = await this.getCustomer(customerId);
+    return this.createCustomerSite({
+      customerId,
+      name: customer?.name || "Site",
+      address: customer?.address || null,
+    });
+  }
+
+  async getTreePinsByCustomer(customerId: string): Promise<schema.TreePin[]> {
+    return await db.select()
+      .from(schema.treePins)
+      .where(and(
+        eq(schema.treePins.customerId, customerId),
+        isNull(schema.treePins.archivedAt),
+      ))
+      .orderBy(desc(schema.treePins.createdAt));
+  }
+
+  async getTreePin(id: string): Promise<schema.TreePin | null> {
+    const [result] = await db.select()
+      .from(schema.treePins)
+      .where(eq(schema.treePins.id, id));
+    return result || null;
+  }
+
+  async createTreePin(pin: schema.InsertTreePin): Promise<schema.TreePin> {
+    const [result] = await db.insert(schema.treePins).values(withTenant(pin)).returning();
+    return result;
+  }
+
+  // Multer/busboy callbacks drop ALS tenant context, so withTenant() would
+  // stamp nothing. Read+write on ownerDb and stamp business_id from the parent
+  // pin (same class of bug as site-map image uploads).
+  async appendTreePinPhotos(
+    id: string,
+    urls: string[],
+    businessId?: string | null,
+  ): Promise<schema.TreePin> {
+    const [existing] = await ownerDb
+      .select()
+      .from(schema.treePins)
+      .where(eq(schema.treePins.id, id));
+    if (!existing) throw new Error(`Tree pin ${id} not found`);
+    const stamp = businessId ?? existing.businessId ?? currentBusinessId() ?? null;
+    const photoUrls = appendUniquePhotoUrls(existing.photoUrls, urls);
+    const [row] = await ownerDb
+      .update(schema.treePins)
+      .set({
+        photoUrls,
+        businessId: stamp,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.treePins.id, id))
+      .returning();
+    if (!row) throw new Error(`Tree pin ${id} not found`);
+    return row;
+  }
+
+  async getTreePinsByJob(jobId: string): Promise<schema.TreePin[]> {
+    const links = await db.select()
+      .from(schema.treePinWorkLinks)
+      .where(eq(schema.treePinWorkLinks.jobId, jobId));
+    if (links.length === 0) return [];
+    const pinIds = links.map((l) => l.pinId);
+    return await db.select()
+      .from(schema.treePins)
+      .where(and(
+        inArray(schema.treePins.id, pinIds),
+        isNull(schema.treePins.archivedAt),
+      ))
+      .orderBy(schema.treePins.createdAt);
+  }
+
+  async findTreePinWorkLink(pinId: string, jobId: string): Promise<schema.TreePinWorkLink | null> {
+    const [row] = await db.select()
+      .from(schema.treePinWorkLinks)
+      .where(and(
+        eq(schema.treePinWorkLinks.pinId, pinId),
+        eq(schema.treePinWorkLinks.jobId, jobId),
+      ));
+    return row ?? null;
+  }
+
+  async createTreePinWorkLink(link: schema.InsertTreePinWorkLink): Promise<schema.TreePinWorkLink> {
+    if (link.jobId) {
+      const existing = await this.findTreePinWorkLink(link.pinId, link.jobId);
+      if (existing) return existing;
+    }
+    const [result] = await db.insert(schema.treePinWorkLinks).values(withTenant(link)).returning();
+    return result;
+  }
+
   // ─── Live job timers (clock in/out) ───────────────────────────────────────
   async getActiveTimerForEmployee(employeeId: string): Promise<schema.ActiveTimer | null> {
     const [timer] = await db.select()
@@ -7731,9 +8004,9 @@ class DatabaseStorage implements IStorage {
     return await db.select().from(schema.activeTimers);
   }
 
-  async startTimer(jobId: string, employeeId: string): Promise<schema.ActiveTimer> {
+  async startTimer(jobId: string, employeeId: string, startedAt?: Date): Promise<schema.ActiveTimer> {
     const [timer] = await db.insert(schema.activeTimers)
-      .values(withTenant({ jobId, employeeId }))
+      .values(withTenant(startedAt ? { jobId, employeeId, startedAt } : { jobId, employeeId }))
       .returning();
     return timer;
   }

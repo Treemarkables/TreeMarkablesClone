@@ -85,10 +85,10 @@ export default function StumpGrinding() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "@id": "https://app.treemarkables.co.nz/stump-grinding#business",
+    "@id": "https://www.treemarkables.co.nz/stump-grinding#business",
     name: "Treemarkables Stump Grinding Services",
     description: "Professional stump grinding and removal services in Gisborne, New Zealand. Complete stump removal for residential and commercial properties with advanced grinding equipment.",
-    url: "https://app.treemarkables.co.nz/stump-grinding",
+    url: "https://www.treemarkables.co.nz/stump-grinding",
     telephone: "+64272166882",
     address: { "@type": "PostalAddress", addressLocality: "Gisborne", addressRegion: "Gisborne Region", addressCountry: "NZ" },
     geo: { "@type": "GeoCoordinates", latitude: -38.6623, longitude: 178.0176 },
@@ -106,8 +106,8 @@ export default function StumpGrinding() {
         keywords="stump grinding Gisborne, fast stump removal, tidy stump grinding, Wairoa stump removal, rural stump grinding, powerful stump grinder, book stump removal"
         ogTitle="Stump Grinding Gisborne – Fast & Tidy Stump Removal"
         ogDescription="Eliminate unsightly stumps with our powerful stump grinding service. Serving Gisborne, Wairoa and rural properties. Book your stump removal today."
-        ogImage="https://app.treemarkables.co.nz/stump-grinding.jpg"
-        canonicalUrl="https://app.treemarkables.co.nz/stump-grinding"
+        ogImage="https://www.treemarkables.co.nz/stump-grinding.jpg"
+        canonicalUrl="https://www.treemarkables.co.nz/stump-grinding"
         structuredData={structuredData}
       />
       <HeaderV2 />

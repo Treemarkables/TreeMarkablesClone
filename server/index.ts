@@ -13,6 +13,11 @@ import { requireApiAuth } from "./tenancy/requireApiAuth";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
 import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
+import {
+  createTreemarkablesDocumentBrandMiddleware,
+  requestIsTreemarkablesDocumentHost,
+  applyTreemarkablesDocumentHead,
+} from "./treemarkablesDocumentBrand";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
@@ -20,6 +25,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
+import { sweepStaleInboundDocuments } from "./services/supplierInvoiceIngest";
 import { attachVoiceAgentWss } from "./services/voiceAgent";
 
 // Security: Configure dev login access (fail-safe: disabled by default, only enabled in development)
@@ -98,6 +104,11 @@ app.set('trust proxy', 1);
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
 });
+
+// www.treemarkables.co.nz / treemarkables.co.nz: first HTML byte is Treemarkables
+// branded (title/meta/icons/og). Does not change the React UI, does not 301 app
+// paths, and is a no-op on Inflow hosts. See server/treemarkablesDocumentBrand.ts.
+app.use(createTreemarkablesDocumentBrandMiddleware());
 
 // Legacy-domain redirect. Customer document links already sent out (invoices,
 // proposals, quotes, etc.) point at the old app host. The app now lives at
@@ -320,6 +331,23 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
 
     log(`Serving SPA fallback: ${req.originalUrl} -> index.html`, "static");
 
+    if (requestIsTreemarkablesDocumentHost(req)) {
+      try {
+        const html = fs.readFileSync(indexPath, "utf8");
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.send(applyTreemarkablesDocumentHead(html, req.path || "/"));
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log(`Error serving branded index.html: ${message}`, "error");
+        res.status(500).json({
+          error: "Failed to serve application",
+          details: message
+        });
+        return;
+      }
+    }
+
     res.sendFile(indexPath, (err) => {
       if (err) {
         log(`Error serving index.html: ${err.message}`, "error");
@@ -445,6 +473,18 @@ function startNotificationQueueWorker() {
 
       for (const notification of pendingNotifications) {
         try {
+          // Staff pushes deferred by the configurable delivery window
+          // (see server/services/notificationWindow.ts). deliverQueuedPush
+          // re-checks prefs + assignment freshness; a false return means
+          // "deliberately skipped", which still counts as processed.
+          if (notification.notificationType === 'push') {
+            const { deliverQueuedPush } = await import("./services/notificationHelper");
+            const delivered = await deliverQueuedPush(notification);
+            await storage.markNotificationSent(notification.id);
+            log(`[Notification Queue] Queued push ${notification.id} ${delivered ? 'delivered' : 'skipped (prefs off, unassigned, or no active tokens)'}`, "startup");
+            continue;
+          }
+
           if (notification.recipientEmail && (notification.notificationType === 'email' || notification.notificationType === 'both')) {
             await emailService.sendEmail({
               to: notification.recipientEmail,
@@ -534,6 +574,10 @@ function startNotificationQueueWorker() {
     } catch (e) {
       console.error("[schema] boot migrations failed (continuing):", e);
     }
+    // Re-queue any inbound supplier-invoice documents a previous instance left
+    // mid-flight (the claim is an atomic status transition, so this is safe on
+    // both app instances).
+    void sweepStaleInboundDocuments().then((n) => { if (n) log(`🧾 re-queued ${n} stale inbound invoice document(s)`, "startup"); });
 
     let devServer: http.Server | undefined;
     try {
@@ -781,6 +825,9 @@ The {businessName} Team';
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminders_enabled BOOLEAN DEFAULT true;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS compliance_reminder_offsets JSONB DEFAULT '[30, 7]'::jsonb;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS job_reply_forward_email TEXT;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_enabled BOOLEAN DEFAULT true;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_start TEXT DEFAULT '07:00';
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS staff_push_window_end TEXT DEFAULT '18:00';
         CREATE TABLE IF NOT EXISTS equipment_compliance_reminders (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           business_id VARCHAR,

@@ -169,10 +169,15 @@ class NotificationService {
       if (customerInfo.email && 
           customerInfo.communicationPreferences?.emailEnabled !== false &&
           customerInfo.communicationPreferences?.jobNotifications !== false) {
+        // fromName (not a full `from` override): the noreply@treemarkables.co.nz
+        // address is NOT a verified Resend sending domain, so overriding the
+        // address fails at the API. The tenant's name over the shared verified
+        // address is the supported path (emailService.composeFrom).
+        const __srIdentity = getBusinessIdentity(await storage.getBusinessSettings());
         await emailService.sendEmail({
           to: customerInfo.email,
-          from: 'noreply@treemarkables.co.nz',
-          subject: 'Service Request Received - Treemarkables',
+          fromName: __srIdentity.name || undefined,
+          subject: `Service Request Received${__srIdentity.name ? ` - ${__srIdentity.name}` : ''}`,
           html: this.getServiceRequestConfirmationEmail(customerInfo.name, serviceRequest)
         });
       }
@@ -270,7 +275,7 @@ class NotificationService {
         const formattedDate = formatNZTime(scheduledDate, 'full');
         await emailService.sendEmail({
           to: customer.email,
-          from: 'noreply@treemarkables.co.nz',
+          fromName: __notifIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
           subject: `Job Scheduled - ${jobTitle}`,
           html: `
             <h2>Job Scheduled</h2>

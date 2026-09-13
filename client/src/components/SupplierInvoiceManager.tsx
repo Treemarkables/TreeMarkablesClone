@@ -548,6 +548,11 @@ export function SupplierInvoiceManager({ jobId }: SupplierInvoiceManagerProps) {
                         Review — emailed
                       </Badge>
                     )}
+                    {inv.source === "inbound" && inv.status === "assigned" && (
+                      <Badge className="text-[10px] bg-blue-100 text-blue-900">
+                        <Mail className="h-3 w-3 mr-0.5" /> Emailed
+                      </Badge>
+                    )}
                     {inv.rebilledAt && (
                       <Badge className="text-[10px] bg-green-100 text-green-800">
                         <Check className="h-3 w-3 mr-0.5" /> Rebilled

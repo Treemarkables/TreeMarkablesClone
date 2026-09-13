@@ -72,14 +72,10 @@ import {
   ChevronDown,
   UserPlus,
   Bell,
-  UserCog,
-  CircleDollarSign,
-  Wrench,
-  CalendarCheck,
   CalendarX,
   Reply,
 } from "lucide-react";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, startTransition } from "react";
 import {
   format,
   addDays,
@@ -97,6 +93,7 @@ import {
   getJobScheduledNZDates,
   getNZDateString,
   hasUpcomingBookingNZ,
+  formatTime12Hour,
 } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { useToast } from "@/hooks/use-toast";
@@ -176,7 +173,22 @@ interface JobAssignment {
   startTime: string;
   endTime: string;
   duration: number; // hours
-  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  // Full job-status set (matches shared/schema.ts jobs.status + legacy "work order"
+  // spelling still present in old rows). Was a stale 4-value union that made every
+  // `status === "work_order"` comparison a TS2367 error.
+  status:
+    | "lead"
+    | "quote"
+    | "mulch"
+    | "scheduled"
+    | "work_order"
+    | "work order"
+    | "in_progress"
+    | "completed"
+    | "cancelled"
+    | "invoiced"
+    | "unsuccessful"
+    | "archived";
   priority: "low" | "medium" | "high" | "urgent";
   notes?: string;
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
@@ -242,6 +254,35 @@ interface AllocationSuggestion {
 }
 
 // Unique color palette for each staff member
+// Multi-word search: split the query into whitespace-separated tokens; every
+// token must match at least one searchable field (tokens AND'd, fields OR'd).
+// "Gisborne council botanical" matches a Gisborne District Council job whose
+// address mentions Botanical even though no single field holds the whole phrase.
+const tokenizeSearchQuery = (rawQuery: string): string[] =>
+  rawQuery
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    // Strip a leading '#' so typing "#3571" matches job number "3571"
+    .map((t) => (t.startsWith("#") ? t.slice(1) : t))
+    .filter(Boolean);
+
+const jobMatchesSearchTokens = (
+  job: JobAssignment,
+  tokens: string[],
+): boolean => {
+  if (tokens.length === 0) return true;
+  const fields = [
+    job.customerName?.toLowerCase() || "",
+    job.address?.toLowerCase() || "",
+    job.serviceType?.toLowerCase() || "",
+    job.description?.toLowerCase() || "",
+    job.id?.toLowerCase() || "",
+    String(job.jobNumber ?? "").toLowerCase(),
+  ];
+  return tokens.every((token) => fields.some((field) => field.includes(token)));
+};
+
 const staffColorPalette = [
   "bg-emerald-500", // Green
   "bg-blue-500", // Blue
@@ -496,6 +537,63 @@ const timeSlots = [
   "19:00",
 ];
 
+// Isolated search input: each keystroke updates only this component's local
+// state (instant), while the board-wide query is pushed up inside a React
+// transition so the expensive full-board re-render/filter never blocks the
+// caret or swallows keystrokes. Without this, every keystroke re-rendered the
+// entire board synchronously (~300-500ms on desktop, worse on phones), which
+// is what made the search field feel unresponsive when tapped.
+interface DispatchSearchInputProps {
+  query: string;
+  onQueryChange: (value: string) => void;
+  onEnter: (value: string) => void;
+  className?: string;
+  testId: string;
+  autoFocus?: boolean;
+}
+
+function DispatchSearchInput({
+  query,
+  onQueryChange,
+  onEnter,
+  className,
+  testId,
+  autoFocus,
+}: DispatchSearchInputProps) {
+  const [text, setText] = useState(query);
+  // Last value we pushed up — distinguishes our own (possibly still-pending)
+  // transition updates from external changes (clear buttons, route-leave
+  // reset), which must overwrite the local text.
+  const lastSent = useRef(query);
+  useEffect(() => {
+    if (query !== lastSent.current) {
+      lastSent.current = query;
+      setText(query);
+    }
+  }, [query]);
+  return (
+    <Input
+      autoFocus={autoFocus}
+      autoComplete="off"
+      placeholder="Search jobs..."
+      value={text}
+      onChange={(e) => {
+        const value = e.target.value;
+        setText(value);
+        lastSent.current = value;
+        startTransition(() => onQueryChange(value));
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && text.trim()) {
+          onEnter(text);
+        }
+      }}
+      className={className}
+      data-testid={testId}
+    />
+  );
+}
+
 export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const { toast } = useToast();
   const [location] = useLocation();
@@ -653,20 +751,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       (j) => j.status === "work_order" && !j.customerConfirmed,
     ).length;
 
-  const STATUS_TAB_FILTERS = [
-    { value: "lead",       label: "Lead",      Icon: UserCog,         pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-    { value: "queue",      label: "Queue",     Icon: Inbox,           pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-    { value: "quote",      label: "Quote",     Icon: CircleDollarSign,pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-    { value: "work_order", label: "Unscheduled", Icon: CalendarX,     pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-    { value: "scheduled",  label: "Scheduled", Icon: CalendarCheck,   pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
-  ];
-
   const filterMeta: Record<string, { title: string; subtitle: string }> = {
     all: { title: "Active Jobs", subtitle: "All upcoming jobs" },
     lead: { title: "Leads", subtitle: "Enquiries & unqualified leads" },
-    queue: { title: "Dispatch Queue", subtitle: "Jobs parked and waiting" },
     quote: { title: "Quotes", subtitle: "Quote status" },
     mulch: { title: "Mulch", subtitle: "Mulch status" },
+    work_order_all: { title: "Work Orders", subtitle: "All accepted work — not yet invoiced" },
     work_order: { title: "Unscheduled", subtitle: "Work orders awaiting a booking" },
     scheduled: { title: "Scheduled", subtitle: "Booked on the calendar" },
   };
@@ -682,7 +772,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const showUnconfirmedBadge =
     jobFilters.length === 0 ||
     jobFilters.includes("scheduled") ||
-    jobFilters.includes("work_order");
+    jobFilters.includes("work_order") ||
+    jobFilters.includes("work_order_all");
 
   const QUEUE_REASONS = [
     "Weather Hold",
@@ -1054,6 +1145,26 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Fetch staff assignments for dispatch board
   const { data: staffAssignmentsData } = useQuery({
     queryKey: ["/api/staff-assignments"],
+  });
+
+  // Email templates — feed the Quick Assign dialog's proposal-email option so
+  // drop-scheduling sends the same "Proposed Booking" template as the job-card
+  // Schedule modal. Only fetched while the dialog is open.
+  const { data: emailTemplatesData } = useQuery<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      name: string;
+      category: string;
+      subject: string;
+      htmlContent: string;
+      isActive: boolean;
+      isDefault: boolean;
+    }>;
+  }>({
+    queryKey: ["/api/email-templates"],
+    enabled: !!pendingDrop,
+    staleTime: 60_000,
   });
 
   // Create customer lookup map
@@ -1604,26 +1715,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     if (isDeepSearchActive || isDeepSearchLoading) return;
 
     const handle = setTimeout(() => {
-      const rawQuery = trimmed.toLowerCase();
-      const query = rawQuery.startsWith("#") ? rawQuery.slice(1) : rawQuery;
+      const tokens = tokenizeSearchQuery(trimmed);
 
       const hasQuickHit = jobs.some((job) => {
         if (job.status === "unsuccessful" || job.status === "archived") return false;
         if (job.status === "completed" || job.status === "invoiced") return false;
-        const customerName = job.customerName?.toLowerCase() || "";
-        const address = job.address?.toLowerCase() || "";
-        const serviceType = job.serviceType?.toLowerCase() || "";
-        const description = job.description?.toLowerCase() || "";
-        const jobId = job.id?.toLowerCase() || "";
-        const jobNumber = String(job.jobNumber ?? "").toLowerCase();
-        return (
-          customerName.includes(query) ||
-          address.includes(query) ||
-          serviceType.includes(query) ||
-          description.includes(query) ||
-          jobId.includes(query) ||
-          jobNumber.includes(query)
-        );
+        return jobMatchesSearchTokens(job, tokens);
       });
 
       if (!hasQuickHit) {
@@ -1681,22 +1778,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // booking, so every work_order matches exactly one of the two. A booking
         // entirely in the past (e.g. rained off) returns to Unscheduled so it
         // can be rebooked instead of hiding under Scheduled forever.
+        // Queue holds (inQueue) are ignored here on purpose: queue-style parking is
+        // modelled as Lanes, so a queued work_order still shows under its status.
         if (jobFilters.length > 0) {
           return jobFilters.some((f) => {
-            // Queued jobs belong exclusively to the Queue filter
-            if (f === "queue") return job.inQueue === true;
-            if (job.inQueue) return false;
             if (f === "lead") return job.status === "lead";
             if (f === "quote") return job.status === "quote";
             if (f === "mulch") return job.status === "mulch";
+            if (f === "work_order_all") return job.status === "work_order";
             if (f === "work_order") return job.status === "work_order" && !hasUpcomingBookingNZ(job, todayNZ);
             if (f === "scheduled") return job.status === "work_order" && hasUpcomingBookingNZ(job, todayNZ);
             return false;
           });
         }
 
-        // No filter ("All"), no search: only the three most actionable statuses
-        if (job.inQueue) return false;
+        // No filter ("All"), no search: only the three most actionable statuses.
+        // Queued (inQueue) jobs are NOT excluded — hiding them from All made
+        // work orders "disappear" whenever a job was parked in a queue.
         return (
           job.status === "lead" ||
           job.status === "quote" ||
@@ -1714,7 +1812,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const tabSupportsFilter =
           jobFilters.length === 0 ||
           jobFilters.includes("scheduled") ||
-          jobFilters.includes("work_order");
+          jobFilters.includes("work_order") ||
+          jobFilters.includes("work_order_all");
         if (!tabSupportsFilter) return true;
         // 'scheduled' status retired 2026-05 — booked work is all work_order.
         return job.status === "work_order" && !job.customerConfirmed;
@@ -1748,25 +1847,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       .filter((job) => {
         // Apply search filter across all searchable fields including job number
         if (!isSearching) return true;
-
-        const rawQuery = searchQuery.toLowerCase().trim();
-        // Strip a leading '#' so typing "#3571" matches job number "3571"
-        const query = rawQuery.startsWith("#") ? rawQuery.slice(1) : rawQuery;
-        const customerName = job.customerName?.toLowerCase() || "";
-        const address = job.address?.toLowerCase() || "";
-        const serviceType = job.serviceType?.toLowerCase() || "";
-        const description = job.description?.toLowerCase() || "";
-        const jobId = job.id?.toLowerCase() || "";
-        const jobNumber = String(job.jobNumber ?? "").toLowerCase();
-
-        return (
-          customerName.includes(query) ||
-          address.includes(query) ||
-          serviceType.includes(query) ||
-          description.includes(query) ||
-          jobId.includes(query) ||
-          jobNumber.includes(query)
-        );
+        return jobMatchesSearchTokens(job, tokenizeSearchQuery(searchQuery));
       });
 
     // Deduplicate jobs by ID (keep the most recent assignment for each unique job)
@@ -1788,14 +1869,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const sorted = uniqueJobs.sort((a, b) => {
       // When searching, rank by relevance first
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
+        const tokens = tokenizeSearchQuery(searchQuery);
         const scoreJob = (job: JobAssignment) => {
           const name = job.customerName?.toLowerCase() || "";
-          if (name.startsWith(query)) return 4;
-          if (name.includes(query)) return 3;
+          if (tokens.every((t) => name.includes(t))) {
+            return name.startsWith(tokens[0]) ? 4 : 3;
+          }
           const addr = job.address?.toLowerCase() || "";
           const svc = job.serviceType?.toLowerCase() || "";
-          if (addr.includes(query) || svc.includes(query)) return 2;
+          if (tokens.every((t) => addr.includes(t) || svc.includes(t))) return 2;
           return 1;
         };
         const diff = scoreJob(b) - scoreJob(a);
@@ -1807,11 +1889,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       // jobs that predate the workOrderAt column — lastActivityAt gets bumped on every email,
       // note, or edit, which caused those jobs to reshuffle whenever they were touched.
       // createdAt is immutable so positions stay stable.
-      // FIFO only applies when Unscheduled is the sole active filter — mixed
-      // selections (e.g. Unscheduled + Scheduled) fall through to the activity
-      // sort below, since FIFO-by-conversion-time is meaningless for
-      // already-booked jobs.
-      if (jobFilters.length === 1 && jobFilters[0] === "work_order") {
+      // FIFO only applies when Unscheduled or Work Order is the sole active
+      // filter — mixed selections (e.g. Unscheduled + Scheduled) fall through
+      // to the activity sort below. On the Work Order view, oldest-accepted
+      // first surfaces the work that has waited longest to be invoiced.
+      if (
+        jobFilters.length === 1 &&
+        (jobFilters[0] === "work_order" || jobFilters[0] === "work_order_all")
+      ) {
         const getAcceptedTime = (job: JobAssignment): number => {
           if (job.workOrderAt) return new Date(job.workOrderAt).getTime();
           if (job.createdAt) return new Date(job.createdAt).getTime();
@@ -2208,7 +2293,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           body: JSON.stringify(updates),
         });
 
-        await fetch(`/api/jobs/${jobId}/staff-assignments`, {
+        // Same flags as GlobalJobCard.saveSchedule — the dialog's automation
+        // checkboxes drive the booking-confirmation email and reminders;
+        // staff notifications always send, matching the job-card path.
+        const assignRes = await fetch(`/api/jobs/${jobId}/staff-assignments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2218,11 +2306,142 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               endTime: endDateTime.toISOString(),
               notes: "",
             })),
-            sendNotifications: false,
-            sendClientNotification: false,
+            sendNotifications: true,
+            sendClientNotification: result.sendClientNotification,
+            scheduleBookingReminders: result.scheduleBookingReminders,
             addOnly: true,
           }),
         });
+        const assignData = await assignRes.json().catch(() => ({}));
+
+        if (result.sendClientNotification && assignData.clientEmailMissing) {
+          toast({
+            title: "No email address on file",
+            description:
+              "The confirmation email wasn't sent because this job has no client email address. Add one in the Contact Details section and try again.",
+            variant: "destructive",
+          });
+        } else if (
+          result.sendClientNotification &&
+          assignData.clientEmailFailed
+        ) {
+          toast({
+            title: "Email failed to send",
+            description:
+              "The job was scheduled but the confirmation email couldn't be delivered. Please check your email settings or send it manually.",
+            variant: "destructive",
+          });
+        }
+
+        // Fire the proposal email ("Can we schedule your job in for...") if
+        // requested — independent of sendClientNotification, same as the
+        // job-card Schedule modal.
+        if (result.sendProposalEmail) {
+          const customer = (customersData as any)?.data?.find(
+            (c: any) => c.id === (job as any).customerId,
+          );
+          const proposalFirstName =
+            (job as any).jobContactFirstName ||
+            customer?.name?.split(" ")[0] ||
+            "there";
+          const proposalCustomerName =
+            customer?.name ||
+            [(job as any).jobContactFirstName, (job as any).jobContactLastName]
+              .filter(Boolean)
+              .join(" ") ||
+            proposalFirstName;
+          const proposalEmail =
+            (job as any).jobContactEmail ||
+            (job as any).billingContactEmail ||
+            customer?.email ||
+            "";
+          // nzDateStr is the drop day as a YYYY-MM-DD NZ calendar date. Parse
+          // the parts directly so format() prints that same day — appending
+          // "T...Z" treats it as UTC and rolls forward a day once rendered in NZ.
+          const [dateY, dateM, dateD] = nzDateStr.split("-").map(Number);
+          const dateDisplay = format(
+            new Date(dateY, dateM - 1, dateD),
+            "EEEE d MMMM yyyy",
+          );
+          const timeDisplay = formatTime12Hour(startTimeStr);
+
+          // Look up a user-editable "Proposed Booking" template. Matched by
+          // name (case-insensitive, substring) so the user can name theirs
+          // anything containing "proposed booking" without further config.
+          const templates = emailTemplatesData?.data ?? [];
+          const proposalTemplate =
+            templates.find(
+              (t) => t.isActive && /proposed\s*booking/i.test(t.name),
+            ) || null;
+
+          const substitute = (text: string) =>
+            (text || "")
+              .replace(/\{firstName\}/g, proposalFirstName)
+              .replace(/\{customerName\}/g, proposalCustomerName)
+              .replace(/\{scheduledDate\}/g, dateDisplay)
+              .replace(/\{scheduledTime\}/g, timeDisplay)
+              .replace(/\{jobAddress\}/g, (job as any).address || "")
+              .replace(/\{jobNumber\}/g, (job as any).jobNumber || "")
+              .replace(
+                /\{customerPhone\}/g,
+                (job as any).jobContactPhone || customer?.phone || "",
+              )
+              .replace(/\{email\}/g, proposalEmail);
+
+          const fallbackBody = `<p>Hi ${proposalFirstName},</p>
+<p>Can we schedule your job in for <strong>${dateDisplay}</strong> at <strong>${timeDisplay}</strong>?</p>
+<p>Please note this start time is approximate and may vary slightly on the day.</p>
+<p>Let us know if that works for you.</p>`;
+
+          const proposalSubject = proposalTemplate
+            ? substitute(proposalTemplate.subject) ||
+              `Proposed booking: ${dateDisplay} at ${timeDisplay}`
+            : `Proposed booking: ${dateDisplay} at ${timeDisplay}`;
+          const proposalBody = proposalTemplate
+            ? substitute(proposalTemplate.htmlContent) || fallbackBody
+            : fallbackBody;
+
+          if (!proposalEmail) {
+            toast({
+              title: "No email address on file",
+              description:
+                "The proposal email wasn't sent because this job has no client email address.",
+              variant: "destructive",
+            });
+          } else {
+            try {
+              const proposalRes = await fetch("/api/emails/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  to: proposalEmail,
+                  subject: proposalSubject,
+                  body: proposalBody,
+                  jobId,
+                  customerId: (job as any).customerId || undefined,
+                }),
+              });
+              const proposalJson = await proposalRes.json().catch(() => ({}));
+              if (!proposalRes.ok || proposalJson?.success === false) {
+                toast({
+                  title: "Proposal email failed",
+                  description:
+                    proposalJson?.message ||
+                    "The job was scheduled but the proposal email couldn't be sent.",
+                  variant: "destructive",
+                });
+              }
+            } catch (emailErr) {
+              console.error("Proposal email error:", emailErr);
+              toast({
+                title: "Proposal email failed",
+                description:
+                  "The job was scheduled but the proposal email couldn't be sent.",
+                variant: "destructive",
+              });
+            }
+          }
+        }
 
         queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
         queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
@@ -2713,24 +2932,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         {/* Search Input - Desktop */}
                         <div className="mt-3 relative">
                           <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                          <Input
-                            placeholder="Search jobs..."
-                            value={searchQuery}
-                            autoComplete="off"
-                            onChange={(e) => {
-                              setSearchQuery(e.target.value);
+                          <DispatchSearchInput
+                            query={searchQuery}
+                            onQueryChange={(value) => {
+                              setSearchQuery(value);
                               if (isDeepSearchActive) {
                                 setIsDeepSearchActive(false);
                                 setDeepSearchResults([]);
                               }
                             }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && searchQuery.trim()) {
-                                performDeepSearch(searchQuery);
-                              }
-                            }}
+                            onEnter={performDeepSearch}
                             className="pl-8 pr-8 h-8 text-sm"
-                            data-testid="desktop-job-search-input"
+                            testId="desktop-job-search-input"
                           />
                           {isDeepSearchActive && (
                             <Button
@@ -3129,25 +3342,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                    <Input
+                    <DispatchSearchInput
                       autoFocus
-                      autoComplete="off"
-                      placeholder="Search jobs..."
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
+                      query={searchQuery}
+                      onQueryChange={(value) => {
+                        setSearchQuery(value);
                         if (isDeepSearchActive) {
                           setIsDeepSearchActive(false);
                           setDeepSearchResults([]);
                         }
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && searchQuery.trim()) {
-                          performDeepSearch(searchQuery);
-                        }
-                      }}
+                      onEnter={performDeepSearch}
                       className="pl-9 pr-9 h-9 text-sm rounded-xl"
-                      data-testid="mobile-job-search-input"
+                      testId="mobile-job-search-input"
                     />
                     {searchQuery && (
                       <Button
@@ -3692,12 +3899,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       {pendingDrop && (
         <QuickAssignDialog
           open
+          jobId={pendingDrop.jobId}
           jobLabel={pendingDrop.jobLabel}
           customerName={pendingDrop.customerName}
           address={pendingDrop.address}
+          dateNZ={pendingDrop.date.toLocaleDateString("en-CA", {
+            timeZone: "Pacific/Auckland",
+          })}
           droppedHour={pendingDrop.hour}
           droppedEmployeeId={pendingDrop.employeeId}
           employees={employees}
+          staffAssignments={(staffAssignmentsData as any)?.data ?? []}
           defaultDurationHours={pendingDrop.defaultDurationHours}
           isSubmitting={isConfirmingDrop}
           onCancel={() => {

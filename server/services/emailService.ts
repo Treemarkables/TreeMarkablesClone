@@ -20,7 +20,8 @@ interface EmailParams {
   html?: string;
   cc?: string | string[]; // CC email address(es)
   replyTo?: string; // Email address for customer replies (explicit override)
-  jobNumber?: string; // Job number for automatic job-specific reply-to address
+  jobId?: string; // Job UUID for the reply-to alias — preferred over jobNumber: globally unique, so inbound matching can never be ambiguous across tenants
+  jobNumber?: string; // Job number for automatic job-specific reply-to address (legacy fallback — numbers are only unique per tenant)
   templateId?: string;
   dynamicTemplateData?: Record<string, any>;
   attachments?: Array<{
@@ -151,6 +152,14 @@ class EmailService {
       // Use job-specific reply-to addresses when jobNumber is provided (Cloudflare Email Routing active)
       // Cloudflare forwards job-{number}@jobs.treemarkables.co.nz → accounts@treemarkables.nz → Gmail IMAP
       let replyToAddress = params.replyTo; // Explicit override if provided
+      if (!replyToAddress && params.jobId) {
+        // Prefer the UUID alias: job numbers are only unique PER TENANT since
+        // per-tenant numbering, so a numeric alias can be ambiguous on the way
+        // back in (the Aug 2026 lost-replies incident). The UUID can't be.
+        // Both inbound matchers (Gmail poller + /api/webhooks/email) already
+        // accept job-{uuid}@ aliases.
+        replyToAddress = this.formatJobReplyAddress(params.jobId); // e.g., job-8004ff8a-...@jobs.treemarkables.co.nz
+      }
       if (!replyToAddress && params.jobNumber) {
         replyToAddress = this.formatJobReplyAddress(params.jobNumber); // e.g., job-3447@jobs.treemarkables.co.nz
       }
