@@ -2029,6 +2029,45 @@ export const insertJobDayRoleSchema = createInsertSchema(jobDayRoles).omit({
 export type JobDayRole = typeof jobDayRoles.$inferSelect;
 export type InsertJobDayRole = z.infer<typeof insertJobDayRoleSchema>;
 
+// Snapshot of how much of their ROLE checklist a person finished on one job,
+// written once when the job closes.
+//
+// Why snapshot rather than recompute on read: role_checklist_tasks is editable
+// from Settings, so the denominator moves. Adding a task next month would
+// retroactively drop every historical job below 100%, and disabling one would
+// make them all jump. Freezing itemsExpected (and the ids behind it) at close is
+// what keeps a completion-rate trend honest.
+//
+// One row per (jobId, employeeId) — checklist completions are per job, not per
+// day, so a multi-day job snapshots once. roleKey is the role that person held on
+// the job's completion date.
+export const jobRoleCompletions = pgTable("job_role_completions", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  employeeId: varchar("employee_id").notNull(),
+  nzDate: text("nz_date").notNull(), // NZ calendar date the job closed on
+  roleKey: text("role_key").notNull(), // 'A' Kaiwhangai | 'B' Kaitirotiro | 'C' Kaitiaki
+  itemsDone: integer("items_done").notNull(),
+  itemsExpected: integer("items_expected").notNull(),
+  // The enabled item ids at close, so a later audit can see WHICH task was skipped
+  // rather than only how many.
+  expectedItemIds: jsonb("expected_item_ids").$type<string[]>(),
+  doneItemIds: jsonb("done_item_ids").$type<string[]>(),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  jobEmployeeUnique: unique("job_role_completions_job_employee_uniq").on(table.jobId, table.employeeId),
+  employeeIdx: index("job_role_completions_employee_idx").on(table.employeeId),
+  dateIdx: index("job_role_completions_date_idx").on(table.nzDate),
+}));
+
+export const insertJobRoleCompletionSchema = createInsertSchema(jobRoleCompletions).omit({
+  id: true,
+  createdAt: true,
+});
+export type JobRoleCompletion = typeof jobRoleCompletions.$inferSelect;
+export type InsertJobRoleCompletion = z.infer<typeof insertJobRoleCompletionSchema>;
+
 // Job Template Schema  
 export const jobTemplates = pgTable("job_templates", {
   businessId: varchar("business_id"),

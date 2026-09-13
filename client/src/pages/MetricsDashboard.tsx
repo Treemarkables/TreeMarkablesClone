@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
 import { useQuery } from "@tanstack/react-query";
@@ -30,6 +36,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
+import { ROLE_LABEL, isRoleKey } from "@/lib/crewRoles";
 import {
   Tooltip as UITooltip,
   TooltipContent,
@@ -191,6 +198,30 @@ interface CrewEfficiencyData {
   };
 }
 
+interface RoleCompletionEmployee {
+  employeeId: string;
+  employeeName: string;
+  roleKeys: string[];
+  jobsCounted: number;
+  jobsFullyComplete: number;
+  /** % of jobs where their whole role checklist was finished. */
+  completionRate: number;
+  itemsDone: number;
+  itemsExpected: number;
+  /** % of individual tasks done — softer than completionRate, shows near-misses. */
+  taskRate: number;
+}
+
+interface RoleCompletionData {
+  employees: RoleCompletionEmployee[];
+  totals: {
+    jobsCounted: number;
+    jobsFullyComplete: number;
+    completionRate: number;
+  };
+  period: { from: string | null; to: string | null };
+}
+
 interface StaffWorkDaysEmployee {
   employeeId: string;
   employeeName: string;
@@ -258,6 +289,7 @@ export default function MetricsDashboard() {
     useState(false);
   const [crewEfficiencyCollapsed, setCrewEfficiencyCollapsed] = useState(false);
   const [staffWorkDaysCollapsed, setStaffWorkDaysCollapsed] = useState(false);
+  const [roleCompletionCollapsed, setRoleCompletionCollapsed] = useState(false);
   const [showAdvancedMetrics, setShowAdvancedMetrics] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [customReportDialog, setCustomReportDialog] = useState(false);
@@ -848,6 +880,31 @@ export default function MetricsDashboard() {
     },
     enabled: Boolean(dateRange?.from && dateRange?.to),
     retry: false,
+    staleTime: 30000,
+  });
+
+  // Role completion - how often each person finishes their role checklist.
+  // Reads snapshots frozen at job close, so editing the task lists in Settings
+  // doesn't rewrite past jobs.
+  const {
+    data: roleCompletion,
+    isLoading: roleCompletionLoading,
+  } = useQuery<RoleCompletionData>({
+    queryKey: ["/api/metrics/role-completion", dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append("startDate", dateRange.from);
+      if (dateRange?.to) params.append("endDate", dateRange.to);
+      return fetch(`/api/metrics/role-completion?${params}`)
+        .then((res) => res.json())
+        .then((res) => {
+          if (!res.success) throw new Error(res.message);
+          return res.data;
+        });
+    },
+    // Same tenant gate as the checklist itself — no point polling for roles a
+    // tenant doesn't have.
+    enabled: roleChecklistEnabled && Boolean(dateRange?.from && dateRange?.to),
     staleTime: 30000,
   });
 
@@ -2276,6 +2333,102 @@ export default function MetricsDashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Role Checklist Completion Section */}
+          {roleChecklistEnabled
+            && !roleCompletionLoading
+            && roleCompletion
+            && roleCompletion.employees.length > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Role checklist completion
+                  </h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRoleCompletionCollapsed(!roleCompletionCollapsed)}
+                    data-testid="button-toggle-role-completion"
+                  >
+                    {roleCompletionCollapsed ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronUp className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+
+                <Card className={roleCompletionCollapsed ? "hidden md:block" : ""}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">
+                      {roleCompletion.totals.jobsFullyComplete} of{" "}
+                      {roleCompletion.totals.jobsCounted} role lists finished
+                      {" · "}
+                      {roleCompletion.totals.completionRate}%
+                    </CardTitle>
+                    <CardDescription>
+                      Measured against the task list as it stood when each job
+                      closed, so changing the lists in Settings doesn't move past
+                      results. Only people who held a role are counted.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-left text-muted-foreground">
+                            <th className="py-2 pr-4 font-medium">Staff</th>
+                            <th className="py-2 pr-4 font-medium">Roles</th>
+                            <th className="py-2 pr-4 font-medium text-right">Jobs</th>
+                            <th className="py-2 pr-4 font-medium text-right">Finished</th>
+                            <th className="py-2 pr-4 font-medium text-right">Tasks done</th>
+                            <th className="py-2 font-medium text-right">Rate</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {roleCompletion.employees.map((e) => (
+                            <tr
+                              key={e.employeeId}
+                              className="border-b border-border/60 last:border-0"
+                              data-testid={`role-completion-row-${e.employeeId}`}
+                            >
+                              <td className="py-2 pr-4 font-medium">{e.employeeName}</td>
+                              <td className="py-2 pr-4 text-muted-foreground">
+                                {e.roleKeys
+                                  .filter(isRoleKey)
+                                  .map((r) => ROLE_LABEL[r])
+                                  .join(", ") || "—"}
+                              </td>
+                              <td className="py-2 pr-4 text-right tabular-nums">
+                                {e.jobsCounted}
+                              </td>
+                              <td className="py-2 pr-4 text-right tabular-nums">
+                                {e.jobsFullyComplete}
+                              </td>
+                              <td className="py-2 pr-4 text-right tabular-nums text-muted-foreground">
+                                {e.itemsDone}/{e.itemsExpected}
+                              </td>
+                              <td
+                                className={`py-2 text-right tabular-nums font-semibold ${
+                                  e.completionRate >= 90
+                                    ? "text-green-600"
+                                    : e.completionRate >= 70
+                                      ? "text-blue-600"
+                                      : "text-orange-600"
+                                }`}
+                              >
+                                {e.completionRate}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
           {/* Job Estimation Accuracy Section */}
           {!manHoursLoading &&
