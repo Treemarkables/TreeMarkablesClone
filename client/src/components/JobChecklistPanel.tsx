@@ -264,6 +264,25 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
     },
   });
 
+  // Per-person completion, measured against THEIR role's checklist. Completions are
+  // recorded per (job, item), not per person, so two people sharing a role see the
+  // same number — the question a role checklist answers is "is the Kaitiaki list
+  // done", not "who tapped it first". Nobody without a role gets a percentage.
+  const progressByEmployee = useMemo(() => {
+    const byEmployee = new Map<string, { done: number; total: number; percent: number }>();
+    for (const s of staffOnJob) {
+      if (!s.dayRole) continue;
+      const items = roleItems[s.dayRole] ?? [];
+      const done = items.filter((i) => completionByItem.has(i.id)).length;
+      byEmployee.set(s.employeeId, {
+        done,
+        total: items.length,
+        percent: items.length === 0 ? 0 : Math.round((done / items.length) * 100),
+      });
+    }
+    return byEmployee;
+  }, [staffOnJob, roleItems, completionByItem]);
+
   const completedCount = allItemIds.filter((id) => completionByItem.has(id)).length;
   const totalCount = allItemIds.length;
   const percent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
@@ -419,6 +438,7 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
               <RoleAssignRow
                 key={s.employeeId}
                 staff={s}
+                progress={progressByEmployee.get(s.employeeId) ?? null}
                 disabled={setDayRole.isPending}
                 onSelect={(role) =>
                   setDayRole.mutate({
@@ -479,33 +499,54 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
 
 function RoleAssignRow({
   staff,
+  progress,
   disabled,
   onSelect,
 }: {
   staff: CrewMember;
+  /** Null when they hold no role — there's nothing to be a percentage of. */
+  progress: { done: number; total: number; percent: number } | null;
   disabled: boolean;
   onSelect: (role: RoleKey | null) => void;
 }) {
   const name = staff.employeeName.trim() || "Unknown crew";
   return (
     <div
-      className="flex items-center justify-between gap-3 px-3 py-2 bg-card border border-border rounded-md"
+      className="px-3 py-2 bg-card border border-border rounded-md"
       data-testid={`role-assign-row-${staff.employeeId}`}
     >
-      <span className="flex items-center gap-2 min-w-0">
-        <span className="text-sm font-medium text-foreground truncate">{name}</span>
-        {staff.isClockedIn && (
-          <span className="text-[11px] text-emerald-600 font-medium shrink-0">
-            On the clock
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="text-sm font-medium text-foreground truncate">{name}</span>
+          {staff.isClockedIn && (
+            <span className="text-[11px] text-emerald-600 font-medium shrink-0">
+              On the clock
+            </span>
+          )}
+        </span>
+        <RoleChips
+          value={staff.dayRole}
+          onSelect={onSelect}
+          disabled={disabled}
+          testIdPrefix={`role-toggle-${staff.employeeId}`}
+        />
+      </div>
+      {progress && progress.total > 0 && (
+        <div
+          className="flex items-center gap-2 mt-2"
+          data-testid={`role-progress-${staff.employeeId}`}
+        >
+          <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green transition-all duration-300"
+              style={{ width: `${progress.percent}%` }}
+            />
+          </div>
+          <span className="text-[11px] font-semibold text-muted-foreground shrink-0 tabular-nums">
+            {progress.done} of {progress.total} · {progress.percent}%
           </span>
-        )}
-      </span>
-      <RoleChips
-        value={staff.dayRole}
-        onSelect={onSelect}
-        disabled={disabled}
-        testIdPrefix={`role-toggle-${staff.employeeId}`}
-      />
+        </div>
+      )}
     </div>
   );
 }
