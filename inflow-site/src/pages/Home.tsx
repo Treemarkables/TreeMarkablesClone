@@ -215,60 +215,8 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Pricing teaser */}
-      <section className="bg-ink-50">
-        <Container className="py-20 md:py-28">
-          <div className="flex flex-col items-center">
-            <div className="max-w-2xl text-center">
-              <span className="eyebrow">Pricing</span>
-              <h2 className="heading-section text-4xl md:text-5xl mt-4">
-                Start free. Scale when you grow.
-              </h2>
-              <p className="mt-5 text-ink-500 text-lg leading-relaxed mx-auto max-w-prose">
-                Begin with 30 days free, then pay by jobs per month — never per seat. On paid plans, bring your whole crew on without watching the meter.
-              </p>
-              <div className="mt-7">
-                <LinkButton href="/pricing" variant="primary" size="lg">
-                  See pricing
-                </LinkButton>
-              </div>
-            </div>
-
-            <div className="mt-12 w-full max-w-4xl grid sm:grid-cols-3 gap-4 text-center">
-              {[
-                { name: "Freemium", line: "Small teams — 30 days free", price: "$0", meta: "15 jobs / mo · 3 users" },
-                { name: "Crew", line: "Growing teams", price: "$89", highlight: true, meta: "150 jobs / mo · unlimited users" },
-                { name: "Business", line: "Multi-crew ops", price: "$150", meta: "Unlimited jobs · unlimited users" },
-              ].map((t) => (
-                <div
-                  key={t.name}
-                  className={`rounded-2xl p-6 border ${
-                    t.highlight
-                      ? "bg-ink-900 text-paper border-ink-900"
-                      : "bg-paper border-ink-100"
-                  }`}
-                >
-                  <div className={`text-xs uppercase tracking-[0.18em] ${t.highlight ? "text-lime" : "text-ink-400"}`}>
-                    {t.name}
-                  </div>
-                  <div className={`mt-2 text-sm ${t.highlight ? "text-ink-300" : "text-ink-500"}`}>
-                    {t.line}
-                  </div>
-                  <div className={`mt-6 text-2xl font-semibold ${t.highlight ? "" : "text-ink-700"}`}>
-                    {t.price}
-                  </div>
-                  <div className={`text-xs mt-1 ${t.highlight ? "text-ink-300" : "text-ink-500"}`}>
-                    {t.price === "$0" ? "free for 30 days" : "/ mo + GST, NZD"}
-                  </div>
-                  <div className={`text-xs mt-3 pt-3 border-t ${t.highlight ? "border-ink-700 text-ink-300" : "border-ink-100 text-ink-500"}`}>
-                    {t.meta}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Container>
-      </section>
+      {/* Pricing teaser removed while pricing is hidden pre-launch — restore from git
+          history (Home.tsx, "Pricing teaser" section) alongside the /pricing route. */}
 
       {/* CTA band */}
       <section className="bg-ink-900 text-paper">

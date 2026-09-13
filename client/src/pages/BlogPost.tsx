@@ -182,24 +182,24 @@ export default function BlogPost() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
-    "@id": `https://app.treemarkables.co.nz/blog/${slug}#article`,
+    "@id": `https://www.treemarkables.co.nz/blog/${slug}#article`,
     "headline": post.title,
     "description": post.excerpt,
-    "image": `https://app.treemarkables.co.nz${post.image}`,
+    "image": `https://www.treemarkables.co.nz${post.image}`,
     "author": {
       "@type": "Organization",
       "name": "Treemarkables",
-      "url": "https://app.treemarkables.co.nz"
+      "url": "https://www.treemarkables.co.nz"
     },
     "publisher": {
       "@type": "Organization",
       "name": "Treemarkables",
-      "url": "https://app.treemarkables.co.nz"
+      "url": "https://www.treemarkables.co.nz"
     },
     "datePublished": "2025-09-14",
     "dateModified": "2025-09-14",
-    "mainEntityOfPage": `https://app.treemarkables.co.nz/blog/${slug}`,
-    "url": `https://app.treemarkables.co.nz/blog/${slug}`,
+    "mainEntityOfPage": `https://www.treemarkables.co.nz/blog/${slug}`,
+    "url": `https://www.treemarkables.co.nz/blog/${slug}`,
     "articleSection": "Tree Care",
     "keywords": ["tree pruning", "Gisborne", "arborist", "tree care", "property maintenance"],
     "about": {
@@ -216,8 +216,8 @@ export default function BlogPost() {
         keywords="tree pruning Gisborne, arborist advice, tree care tips, property maintenance, storm protection"
         ogTitle={post.title}
         ogDescription={post.excerpt}
-        ogImage={`https://app.treemarkables.co.nz${post.image}`}
-        canonicalUrl={`https://app.treemarkables.co.nz/blog/${slug}`}
+        ogImage={`https://www.treemarkables.co.nz${post.image}`}
+        canonicalUrl={`https://www.treemarkables.co.nz/blog/${slug}`}
         structuredData={structuredData}
       />
       <Header />

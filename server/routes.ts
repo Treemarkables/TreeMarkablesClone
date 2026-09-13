@@ -32,7 +32,7 @@ import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db, ownerDb } from "./db";
 import { eq, desc, sql, inArray, and, gte, lt, lte, ne } from "drizzle-orm";
-import { invoices, invoiceLineItems, customers, jobs, documentTemplates } from "@shared/schema";
+import { invoices, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
   insertCustomerSchema, insertCustomerContactSchema, updateCustomerContactSchema,
@@ -68,8 +68,11 @@ import {
   // Document Template Management
   insertDocumentTemplateSchema,
   // Review Management
-  insertReviewRequestSchema, insertReviewSubmissionSchema
+  insertReviewRequestSchema, insertReviewSubmissionSchema,
+  createTreePinRequestSchema, insertCustomerSiteSchema,
 } from "@shared/schema";
+import { HAZARD_TREE_PINS_ENABLED, requireHazardTreePins } from "./hazardPins";
+import { TREE_PIN_RISK_RATINGS, TREE_PIN_WORK_TYPES, TREE_PIN_MAX_PHOTOS } from "@shared/treePins";
 import multer from "multer";
 import Papa from "papaparse";
 import twilio from "twilio";
@@ -101,6 +104,7 @@ import {
 } from "./stripe";
 import * as billing from "./billing";
 import * as usageMeter from "./services/usageMeter";
+import * as supplierIngest from "./services/supplierInvoiceIngest";
 import { createTenant } from "./onboarding";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import {
@@ -1160,6 +1164,49 @@ async function requireApiKey(req: Request, res: Response, next: express.NextFunc
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// WinAnsi text sanitizing for PDFKit's built-in fonts (Helvetica etc.).
+// Those fonts write text into the content stream as UNPADDED hex byte strings:
+// a TAB (0x09 → "9") is a single hex digit, which nibble-shifts every byte
+// after it and renders the rest of the line as mojibake ("%Ï6V7Föæ…" — seen
+// on proposals with bullet lists pasted from Notes/Word, whose lines are
+// "●<TAB>text"). Non-WinAnsi chars (●, ✔, macron vowels in Māori place names)
+// also come out as junk glyphs. Every string is routed through here via
+// installPdfTextSanitizer below.
+// ---------------------------------------------------------------------------
+const WINANSI_EXTRA_CHARS = new Set(
+  '€‚ƒ„…†‡ˆ‰Š‹ŒŽ' +
+  '‘’“”•–—˜™š›œžŸ'
+);
+function toPdfSafeText(input: unknown): string {
+  const text = input == null ? '' : String(input);
+  if (!text) return '';
+  // Common non-WinAnsi bullet/checkbox glyphs → the WinAnsi bullet (U+2022)
+  const pre = text.replace(
+    /[●○▪■◦‣⁃∙・✓✔✅☑☒]/g,
+    '•'
+  );
+  let out = '';
+  for (const ch of pre) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (ch === '\n' || ch === '\r') { out += ch; continue; }
+    if (code < 0x20) { out += '  '; continue; } // tabs + stray control chars
+    if (code <= 0xff || WINANSI_EXTRA_CHARS.has(ch)) { out += ch; continue; }
+    // Accented letters outside Latin-1 (ā, Ō, …) keep the base letter;
+    // anything still unmappable (emoji, dingbats) is dropped.
+    const base = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (base && (base.codePointAt(0) ?? 0x100) <= 0xff) out += base;
+  }
+  return out;
+}
+// Wraps doc.text once per document so every draw call in a generator is
+// sanitized — routes.ts has ~100 call sites across 4 PDF generators, so the
+// choke point beats decorating each one.
+function installPdfTextSanitizer(doc: { text: (...args: unknown[]) => unknown }): void {
+  const rawText = doc.text.bind(doc);
+  doc.text = (text: unknown, ...rest: unknown[]) => rawText(toPdfSafeText(text), ...rest);
+}
+
 // Shared proposal/quote PDF generation helper — used by the GET /pdf route
 // and the send-quote-email handler. When proposal.templateUsed === 'quote',
 // the rendered document uses "QUOTE" header and email-reply acceptance copy.
@@ -1227,8 +1274,24 @@ async function generateProposalPDFBuffer(
     }
   }
 
+  // Optional items — the per-item isOptional flag, or any item in an
+  // 'optional'/'multipleChoice' section — are customer-selectable extras.
+  // Before acceptance nothing has been chosen, so they're listed (marked
+  // "optional") but excluded from the totals, matching the online proposal
+  // page. After acceptance each item's `selected` flag holds the customer's
+  // actual picks (stamped by the accept endpoint).
+  const pdfInteractiveSectionIds = new Set(
+    sections
+      .filter((s: any) => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+      .map((s: any) => s.id),
+  );
+  const pdfIsAccepted = proposal.status === 'accepted' || proposal.status === 'accepted_pending_deposit';
+  const pdfItemIsOptional = (item: any) =>
+    item.isOptional === true || pdfInteractiveSectionIds.has(item.sectionId || '');
+
   let subtotal = 0;
   for (const item of lineItems) {
+    if (!pdfIsAccepted && pdfItemIsOptional(item)) continue;
     if (item.selected !== false) {
       subtotal += parseFloat(item.totalPrice || '0');
     }
@@ -1257,6 +1320,7 @@ async function generateProposalPDFBuffer(
   const __pdfLogo = await getCompanyLogoBytes(proposal.businessId);
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDoc({ size: 'A4', margin: 50 });
+    installPdfTextSanitizer(doc);
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(Buffer.from(c)));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -1309,7 +1373,12 @@ async function generateProposalPDFBuffer(
     // Section photos (proposal_sections.images, pre-fetched above) render as a
     // two-up grid under the section's text, mirroring the online viewer.
     for (const section of sections) {
-      const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+      // Pre-acceptance, optional items are always listed (marked below) even
+      // though they don't count toward the totals; post-acceptance only the
+      // customer's actual picks survive the selected filter.
+      const items = (sectionLineItems.get(section.id) || []).filter((i: any) =>
+        !pdfIsAccepted && pdfItemIsOptional(i) ? true : i.selected !== false,
+      );
       const sectionContent = (section.content || '').trim();
       const sectionImages: Buffer[] = (Array.isArray((section as any).images) ? (section as any).images : [])
         .map((u: string) => sectionPhotoBuffers.get(u))
@@ -1363,8 +1432,9 @@ async function generateProposalPDFBuffer(
         for (const item of items) {
           const itemTotal = parseFloat(item.totalPrice || '0');
           const rowY = doc.y;
+          const optionalMark = !pdfIsAccepted && pdfItemIsOptional(item) ? ' (optional - select online)' : '';
           doc.fontSize(9).font('Helvetica').fillColor('#111827')
-            .text(item.description || '', col.desc, rowY, { width: 300 });
+            .text(`${item.description || ''}${optionalMark}`, col.desc, rowY, { width: 300 });
           const rowH = doc.y - rowY;
           doc.text(`${item.quantity || 1}`, col.qty, rowY, { width: 40, align: 'right' });
           doc.text(item.unit || '', col.unit, rowY, { width: 40, align: 'right' });
@@ -1503,8 +1573,21 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
       sectionLineItems.get(item.sectionId)!.push(item);
     }
   }
+  // Same optional-item rules as the PDF: pre-acceptance, customer-selectable
+  // items (isOptional flag or optional/multipleChoice sections) are listed but
+  // excluded from totals; post-acceptance the stamped `selected` flags rule.
+  const summaryInteractiveSectionIds = new Set(
+    sections
+      .filter((s: any) => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+      .map((s: any) => s.id),
+  );
+  const summaryIsAccepted = proposal.status === 'accepted' || proposal.status === 'accepted_pending_deposit';
+  const summaryItemIsOptional = (item: any) =>
+    item.isOptional === true || summaryInteractiveSectionIds.has(item.sectionId || '');
+
   let subtotal = 0;
   for (const item of lineItems) {
+    if (!summaryIsAccepted && summaryItemIsOptional(item)) continue;
     if (item.selected !== false) subtotal += parseFloat(item.totalPrice || '0');
   }
   // Apply the proposal-level discount (stored in dollars) so the summary's
@@ -1520,13 +1603,16 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
 
   let htmlItems = '';
   for (const section of sections) {
-    const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+    const items = (sectionLineItems.get(section.id) || []).filter((i: any) =>
+      !summaryIsAccepted && summaryItemIsOptional(i) ? true : i.selected !== false,
+    );
     if (items.length === 0) continue;
     htmlItems += `<h3 style="color:#374151;margin:12px 0 6px">${section.title}</h3>`;
     htmlItems += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
     items.forEach((item: any) => {
       const p = parseFloat(item.totalPrice || '0');
-      htmlItems += `<tr><td style="padding:4px 8px">${item.description}</td><td style="padding:4px 8px;text-align:right">$${p.toFixed(2)}</td></tr>`;
+      const optionalMark = !summaryIsAccepted && summaryItemIsOptional(item) ? ' <em>(optional — select online)</em>' : '';
+      htmlItems += `<tr><td style="padding:4px 8px">${item.description}${optionalMark}</td><td style="padding:4px 8px;text-align:right">$${p.toFixed(2)}</td></tr>`;
     });
     htmlItems += '</table>';
   }
@@ -1641,6 +1727,7 @@ async function generateInvoicePDFBuffer(
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
+    installPdfTextSanitizer(doc);
     const chunks: Buffer[] = [];
 
     doc.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
@@ -2655,7 +2742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.send(`User-agent: *
 Allow: /
 
-Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
+Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       }
     } catch (error) {
       console.error('Error serving robots.txt:', error);
@@ -3863,6 +3950,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
             }${sigHtml}</div>`;
             emailService.sendEmail({
               to: lowerEmail,
+              fromName: bizSettings.businessName || undefined, // From shows the tenant's business name; blank → platform default
               subject: emailSubject,
               text: emailBodyTextWithSig,
               html: emailBodyHtml,
@@ -4451,9 +4539,42 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.get('/api/customers', async (req: Request, res: Response) => {
     try {
-      const { search } = req.query;
+      const { search, limit, offset, filter, sort } = req.query;
+
+      // Paginated mode (Clients page): presence of `limit` opts in, so the
+      // many existing full-list consumers (dropdown pickers, name joins) keep
+      // the legacy behaviour below untouched.
+      if (limit !== undefined) {
+        const parsedLimit = Math.min(Math.max(parseInt(limit as string) || 25, 1), 200);
+        const parsedOffset = Math.max(parseInt(offset as string) || 0, 0);
+        const validFilters = ['all', 'active', 'historical', 'customers', 'potential_expenses', 'vip'] as const;
+        const validSorts = ['name', 'email', 'recent'] as const;
+        const parsedFilter = validFilters.includes(filter as any) ? (filter as typeof validFilters[number]) : 'all';
+        const parsedSort = validSorts.includes(sort as any) ? (sort as typeof validSorts[number]) : 'name';
+
+        const [page, stats] = await Promise.all([
+          storage.getCustomersPage({
+            limit: parsedLimit,
+            offset: parsedOffset,
+            search: typeof search === 'string' ? search : undefined,
+            filter: parsedFilter,
+            sortBy: parsedSort,
+          }),
+          storage.getCustomerStats(),
+        ]);
+
+        return res.json({
+          success: true,
+          data: page.customers,
+          total: page.total,
+          limit: parsedLimit,
+          offset: parsedOffset,
+          stats,
+        });
+      }
+
       let customers;
-      
+
       if (search && typeof search === 'string') {
         customers = await storage.searchCustomers(search);
         // Filter out inactive customers from search results too
@@ -9859,6 +9980,64 @@ Draft the reply now.`;
     }
   });
 
+  // Rewrite a rough job description into a tidy, professional version. Returns
+  // a suggestion only — the client shows it as a preview and the user chooses
+  // whether to replace their text (never auto-applied).
+  app.post('/api/ai/polish-description', async (req: Request, res: Response) => {
+    try {
+      const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      if (!text) {
+        return res.status(400).json({ success: false, message: 'Description text is required' });
+      }
+      if (text.length > 8000) {
+        return res.status(400).json({ success: false, message: 'Description is too long to tidy up' });
+      }
+
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'polish_description');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
+      const __idPolish = getBusinessIdentity(await storage.getBusinessSettings());
+
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const aiResponse = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'system',
+            content: `You rewrite rough job descriptions for ${__idPolish.name}, a New Zealand ${__idPolish.discipline} business. The rewritten description sits on the job card and can flow through to customer-facing quotes and proposals.
+
+Rules:
+- Keep every factual detail from the original: quantities, measurements, species/materials, locations, access notes, prices, names, dates. Never invent details that aren't there.
+- Restructure for clarity: if the work has multiple parts, break it into short "• " bullet lines (one task per line). A single simple task stays as one or two clean sentences — no bullets needed.
+- Professional but plainspoken NZ trade voice — clear and direct, not corporate or flowery.
+- Fix spelling, grammar and capitalisation. NZ English spelling.
+- Plain text only: no markdown (no **, #, or - bullets), no emoji. Bullets use the "• " character only.
+- Similar length to the original or shorter — this is a tidy-up, not an expansion.
+
+Return only the rewritten description, nothing else.`,
+          },
+          { role: 'user', content: text },
+        ],
+      });
+
+      const polished = (aiResponse.choices[0].message.content || '').trim();
+      if (!polished) {
+        return res.status(502).json({ success: false, message: 'AI returned an empty rewrite' });
+      }
+
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'polish_description' });
+
+      return res.json({ success: true, data: { polished } });
+    } catch (error) {
+      console.error('Error polishing description:', error);
+      const cause = error instanceof Error ? error.message : String(error);
+      return res.status(500).json({ success: false, message: `Failed to tidy up description: ${cause}` });
+    }
+  });
+
   // Validate if gross margin calculation is complete
   app.get('/api/jobs/:id/gross-margin/validate', async (req: Request, res: Response) => {
     try {
@@ -9989,6 +10168,213 @@ Draft the reply now.`;
     }
   });
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // Supplier-invoice INGESTION (Phase 1) — suppliers email bills to a
+  // per-supplier address; Resend → webhook → extract → validate → triage queue.
+  // Logic lives in server/services/supplierInvoiceIngest.ts; these are thin.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Resend `email.received` for the bills.* receiving domain. Separate route +
+  // separate signing secret from /api/webhooks/resend-events (outbound
+  // telemetry) and /api/webhooks/email (customer replies). Must answer fast:
+  // no parsing here — record + policy-check + hand off.
+  app.post('/api/webhooks/inbound-invoice', async (req: Request, res: Response) => {
+    try {
+      // This is a public write path into a financial ledger — signature
+      // verification is not optional. Fail closed in production.
+      const secret = process.env.RESEND_INBOUND_WEBHOOK_SECRET;
+      if (secret) {
+        const svixId        = req.headers['svix-id'] as string;
+        const svixTimestamp = req.headers['svix-timestamp'] as string;
+        const svixSignature = req.headers['svix-signature'] as string;
+        if (!svixId || !svixTimestamp || !svixSignature) {
+          return res.status(401).json({ success: false, message: 'Missing webhook signature headers' });
+        }
+        try {
+          const wh = new SvixWebhook(secret);
+          const rawBody = (req as any).rawBody as Buffer | undefined;
+          wh.verify(rawBody ? rawBody.toString('utf-8') : JSON.stringify(req.body), {
+            'svix-id': svixId, 'svix-timestamp': svixTimestamp, 'svix-signature': svixSignature,
+          });
+        } catch {
+          console.warn('🧾 inbound-invoice webhook: invalid Svix signature — rejecting');
+          return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
+        }
+      } else if (process.env.NODE_ENV === 'production') {
+        console.error('⚠️ RESEND_INBOUND_WEBHOOK_SECRET not set in production — rejecting inbound-invoice webhook');
+        return res.status(401).json({ success: false, message: 'Webhook verification not configured' });
+      } else {
+        console.warn('⚠️ RESEND_INBOUND_WEBHOOK_SECRET not set — inbound-invoice webhook unverified (dev only)');
+      }
+
+      const event = req.body || {};
+      if (event.type !== 'email.received') {
+        return res.status(200).json({ received: true, ignored: event.type });
+      }
+      const data = event.data || {};
+      if (!data.email_id) return res.status(200).json({ received: true, ignored: 'no_email_id' });
+      const outcome = await supplierIngest.receiveInboundEmail({
+        email_id: String(data.email_id),
+        from: String(data.from || ''),
+        to: Array.isArray(data.to) ? data.to.map(String) : (data.to ? [String(data.to)] : []),
+        subject: data.subject ? String(data.subject) : undefined,
+      });
+      console.log(`🧾 inbound-invoice webhook: ${data.email_id} → ${outcome.action}${'reason' in outcome ? ` (${outcome.reason})` : ''}`);
+      return res.status(200).json({ received: true, ...outcome });
+    } catch (error) {
+      console.error('🧾 inbound-invoice webhook error:', error);
+      // 200 so Resend doesn't hammer retries on a bug; the row (if written) is
+      // picked up by the boot sweep.
+      return res.status(200).json({ received: true, error: 'processing_error' });
+    }
+  });
+
+  // ── Supplier connections (Settings › Suppliers) ───────────────────────────
+  app.get('/api/supplier-connections', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const data = await supplierIngest.listSupplierConnections(businessId);
+      res.json({ success: true, data: data.connections, catchAllAddress: data.catchAllAddress, inboundDomain: supplierIngest.getInboundDomain() });
+    } catch (error) {
+      console.error('Error listing supplier connections:', error);
+      res.status(500).json({ success: false, message: 'Error listing supplier connections' });
+    }
+  });
+
+  app.post('/api/supplier-connections', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const supplierName = String(req.body?.supplierName || '').trim();
+      if (!supplierName) return res.status(400).json({ success: false, message: 'Supplier name is required' });
+      const created = await supplierIngest.createSupplierConnection(businessId, supplierName);
+      res.json({ success: true, data: created });
+    } catch (error) {
+      console.error('Error creating supplier connection:', error);
+      res.status(500).json({ success: false, message: 'Error creating supplier connection' });
+    }
+  });
+
+  app.post('/api/supplier-connections/:id/confirm-sender', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const result = await supplierIngest.confirmConnectionSender(businessId, req.params.id);
+      if (!result) return res.status(404).json({ success: false, message: 'Supplier not found' });
+      res.json({ success: true, data: result.connection, released: result.released });
+    } catch (error) {
+      console.error('Error confirming supplier sender:', error);
+      res.status(500).json({ success: false, message: 'Error confirming sender' });
+    }
+  });
+
+  app.patch('/api/supplier-connections/:id', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const updates: Partial<schema.SupplierConnection> = { updatedAt: new Date() };
+      if (req.body?.status !== undefined) {
+        const st = String(req.body.status);
+        if (!['active', 'paused', 'pending_first_email'].includes(st)) return res.status(400).json({ success: false, message: 'Invalid status' });
+        updates.status = st;
+      }
+      if (req.body?.supplierName !== undefined) {
+        const name = String(req.body.supplierName).trim();
+        if (!name) return res.status(400).json({ success: false, message: 'Supplier name is required' });
+        updates.supplierName = name;
+      }
+      if (req.body?.extractionHint !== undefined) updates.extractionHint = req.body.extractionHint ? String(req.body.extractionHint) : null;
+      const [row] = await ownerDb.update(schema.supplierConnections).set(updates)
+        .where(and(eq(schema.supplierConnections.id, req.params.id), eq(schema.supplierConnections.businessId, businessId)))
+        .returning();
+      if (!row) return res.status(404).json({ success: false, message: 'Supplier not found' });
+      res.json({ success: true, data: row });
+    } catch (error) {
+      console.error('Error updating supplier connection:', error);
+      res.status(500).json({ success: false, message: 'Error updating supplier connection' });
+    }
+  });
+
+  // ── Triage queue ──────────────────────────────────────────────────────────
+  app.get('/api/supplier-invoices', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const { rows, nextCursor } = await supplierIngest.listTriageInvoices(businessId, {
+        status: typeof req.query.status === 'string' ? req.query.status : undefined,
+        cursor: typeof req.query.cursor === 'string' ? req.query.cursor : undefined,
+        limit: req.query.limit ? parseInt(String(req.query.limit)) : undefined,
+      });
+      res.json({ success: true, data: rows, nextCursor });
+    } catch (error) {
+      console.error('Error listing supplier invoices:', error);
+      res.status(500).json({ success: false, message: 'Error listing supplier invoices' });
+    }
+  });
+
+  // Failed + quarantined inbound documents (separate tab, not mixed into review).
+  app.get('/api/inbound-documents', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const rows = await supplierIngest.listInboundDocuments(businessId, {
+        status: typeof req.query.status === 'string' ? req.query.status : undefined,
+        limit: req.query.limit ? parseInt(String(req.query.limit)) : undefined,
+      });
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('Error listing inbound documents:', error);
+      res.status(500).json({ success: false, message: 'Error listing inbound documents' });
+    }
+  });
+
+  app.get('/api/supplier-invoices/:id', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const detail = await supplierIngest.getInvoiceDetail(businessId, req.params.id);
+      if (!detail) return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+      res.json({ success: true, data: detail });
+    } catch (error) {
+      console.error('Error fetching supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error fetching supplier invoice' });
+    }
+  });
+
+  app.post('/api/supplier-invoices/:id/assign', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const jobId = String(req.body?.jobId || '').trim();
+      if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
+      const result = await supplierIngest.assignInvoiceToJob({ businessId, invoiceId: req.params.id, jobId, userId: req.session.employeeId });
+      if ('error' in result) {
+        if (result.error === 'not_found') return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+        if (result.error === 'job_not_found') return res.status(404).json({ success: false, message: 'Job not found' });
+        return res.status(409).json({ success: false, message: `Cannot assign an invoice in status "${result.status}"` });
+      }
+      res.json({ success: true, data: { status: result.status, jobId } });
+    } catch (error) {
+      console.error('Error assigning supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error assigning supplier invoice' });
+    }
+  });
+
+  app.post('/api/supplier-invoices/:id/reject', async (req: Request, res: Response) => {
+    try {
+      const businessId = req.session.businessId;
+      if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+      const reason = req.body?.reason ? String(req.body.reason).slice(0, 500) : null;
+      const row = await supplierIngest.rejectInvoice(businessId, req.params.id, reason);
+      if (!row) return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error rejecting supplier invoice:', error);
+      res.status(500).json({ success: false, message: 'Error rejecting supplier invoice' });
+    }
+  });
+
   // Upload a supplier invoice (image or PDF), store it in GCS, and run GPT-5
   // over it to extract the fields. Returns the extracted data + stored document
   // reference — nothing is persisted to supplier_invoices until the user
@@ -10093,6 +10479,19 @@ Draft the reply now.`;
   app.patch('/api/supplier-invoices/:id', async (req: Request, res: Response) => {
     try {
       const b = req.body || {};
+      // Triage-queue corrections (header + `lines`) go through the ingestion
+      // service so the arithmetic validation + dedupe hash are recomputed. The
+      // manual job-card editor keeps sending the legacy keys below.
+      const CORRECTION_KEYS = ['lines', 'subtotalExGst', 'gstAmount', 'totalIncGst', 'poOrJobReference', 'customerAccountRef', 'branch', 'documentType'];
+      if (CORRECTION_KEYS.some((k) => k in b)) {
+        const businessId = req.session.businessId;
+        if (!req.session.employeeId || !businessId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+        const result = await supplierIngest.applyInvoiceCorrections(businessId, req.params.id, b);
+        if (!result) return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+        if ('error' in result) return res.status(409).json({ success: false, message: 'Another invoice with this number and total is already in the queue', duplicateId: result.duplicateId });
+        const detail = await supplierIngest.getInvoiceDetail(businessId, req.params.id);
+        return res.json({ success: true, data: detail, validation: result.validation });
+      }
       const updates: any = {};
       if (b.supplierName !== undefined) updates.supplierName = String(b.supplierName).trim();
       if (b.invoiceNumber !== undefined) updates.invoiceNumber = b.invoiceNumber ? String(b.invoiceNumber) : null;
@@ -10147,6 +10546,9 @@ Draft the reply now.`;
       const supplierInvoice = await storage.getSupplierInvoice(req.params.id);
       if (!supplierInvoice) {
         return res.status(404).json({ success: false, message: 'Supplier invoice not found' });
+      }
+      if (!supplierInvoice.jobId) {
+        return res.status(400).json({ success: false, message: 'Supplier invoice is not assigned to a job yet' });
       }
       const job = await storage.getJob(supplierInvoice.jobId);
       if (!job) {
@@ -10938,14 +11340,9 @@ Draft the reply now.`;
         validationErrors.push('proposal has no description text — the customer would see an empty job description');
       }
 
-      const selectedLineItems = lineItems.filter(li => li.selected);
-      if (selectedLineItems.length === 0) {
-        validationErrors.push('proposal has no selected line items');
-      }
-
-      if (subtotal <= 0) {
-        validationErrors.push('proposal total is $0');
-      }
+      // No line-item / $0-total check here: pricing is sometimes written in the
+      // description text instead of line items (e.g. day-rate quotes), so a
+      // priceless proposal is a legitimate send.
 
       if (validationErrors.length > 0) {
         console.warn(`⚠️  Blocked send for proposal ${proposalId}: ${validationErrors.join('; ')}`);
@@ -11010,7 +11407,8 @@ Draft the reply now.`;
         subject,
         html: htmlContent,
         text: `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our services.'}`,
-        jobNumber: job?.jobNumber // Reply-to will be job-{number}@jobs.treemarkables.co.nz
+        jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
+        jobNumber: job?.jobNumber // Fallback if no id (legacy numeric alias)
       });
 
       if (!emailResult.success) {
@@ -11190,14 +11588,9 @@ Draft the reply now.`;
         validationErrors.push('quote has no description text — the PDF would have an empty job description');
       }
 
-      const selectedLineItems = lineItems.filter(li => li.selected !== false);
-      if (selectedLineItems.length === 0) {
-        validationErrors.push('quote has no selected line items');
-      }
-
-      if (subtotal <= 0) {
-        validationErrors.push('quote total is $0');
-      }
+      // No line-item / $0-total check here: pricing is sometimes written in the
+      // description text instead of line items (e.g. day-rate quotes), so a
+      // priceless quote is a legitimate send.
 
       if (validationErrors.length > 0) {
         console.warn(`⚠️  Blocked send for quote ${proposalId}: ${validationErrors.join('; ')}`);
@@ -11411,11 +11804,22 @@ Draft the reply now.`;
       
       if (validatedInvoiceData && !effectiveInvoiceId) {
         try {
+          // invoices.amount is EX-GST everywhere (renderers add 15% on top).
+          // The client sends both `amount` (ex-GST subtotal) and `totalAmount`
+          // (inc-GST). Storing totalAmount here put an inc-GST figure into an
+          // ex-GST field, so the pay-online checkout added GST on top of a
+          // GST-inclusive total — customers were overcharged by exactly 15%.
+          const exGstAmount = (() => {
+            const amt = parseFloat(validatedInvoiceData.amount?.toString() || '');
+            if (Number.isFinite(amt) && amt > 0) return amt;
+            const incGst = parseFloat(validatedInvoiceData.totalAmount?.toString() || '');
+            return Number.isFinite(incGst) ? Math.round((incGst / 1.15) * 100) / 100 : 0;
+          })();
           const newInvoice = await storage.createInvoice({
             jobId: validatedInvoiceData.jobId || jobId,
             customerId: validatedInvoiceData.customerId || customerId,
             invoiceNumber: validatedInvoiceData.invoiceNumber,
-            amount: validatedInvoiceData.totalAmount,
+            amount: exGstAmount.toString(),
             dueDate: validatedInvoiceData.dueDate ? new Date(validatedInvoiceData.dueDate) : undefined,
             issueDate: validatedInvoiceData.issueDate ? new Date(validatedInvoiceData.issueDate) : undefined,
             status: 'sent', // Mark as sent since we're sending it now
@@ -11806,12 +12210,16 @@ Draft the reply now.`;
 
       // Send email using the emailService
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
+      // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const emailResult = await emailService.sendEmail({
         to: to,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject: subject,
         text: emailBody,
         html: emailHtml,
-        jobNumber: job?.jobNumber, // Reply-to will be job-{number}@jobs.treemarkables.co.nz
+        jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
+        jobNumber: job?.jobNumber, // Fallback if no id (legacy numeric alias)
         ...(emailAttachments.length > 0 && { attachments: emailAttachments })
       });
 
@@ -11820,6 +12228,24 @@ Draft the reply now.`;
         console.log(`📧 Email sent to ${to} for job ${job?.jobNumber || jobId}${
           embeddedPhotoCount > 0 ? ` with ${embeddedPhotoCount} embedded photo(s)` : ''
         }${emailResult.messageId ? ` (Message ID: ${emailResult.messageId})` : ''}`);
+
+        // Stamp the invoice as sent. The dedicated /api/invoices/:id/send-email
+        // endpoint does this, but most invoice emails go out through this
+        // generic composer endpoint, which previously left a pre-existing
+        // invoice 'pending' forever. status/sentDate drive downstream surfaces
+        // (job-card header price override, billing badge). Never downgrade a
+        // paid/overdue invoice; a failure here never blocks the send response.
+        if (invoice?.id) {
+          try {
+            const keepStatus = invoice.status === 'paid' || invoice.status === 'overdue';
+            await storage.updateInvoice(invoice.id, {
+              ...(keepStatus ? {} : { status: 'sent' }),
+              sentDate: invoice.sentDate || new Date(),
+            } as any);
+          } catch (invoiceStampError) {
+            console.warn('Failed to stamp invoice as sent:', invoiceStampError);
+          }
+        }
 
         // Create job diary entry for the email
         if (jobId) {
@@ -11931,7 +12357,22 @@ Draft the reply now.`;
       // Log successful SMS for audit trail
       console.log(`📱 SMS sent successfully to ${phone}`);
       console.log(`📱 Message: ${message}`);
-      
+
+      // Stamp the invoice as sent when this SMS carried one — mirrors the
+      // email path so an SMS'd invoice also flips 'pending' → 'sent' and
+      // drives the same downstream surfaces (job-card price, billing badge).
+      if (invoice?.id) {
+        try {
+          const keepStatus = invoice.status === 'paid' || invoice.status === 'overdue';
+          await storage.updateInvoice(invoice.id, {
+            ...(keepStatus ? {} : { status: 'sent' }),
+            sentDate: invoice.sentDate || new Date(),
+          } as any);
+        } catch (invoiceStampError) {
+          console.warn('Failed to stamp invoice as sent:', invoiceStampError);
+        }
+      }
+
       // Save phone number to job contact and customer so reply matching works
       if (jobId && job && !job.jobContactPhone) {
         try {
@@ -13509,7 +13950,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     if (!env.TWILIO_TWIML_APP_SID.set) recommendations.push('Set TWILIO_TWIML_APP_SID to enable outgoing calls from the iOS app');
     if (!env.TWILIO_PUSH_CREDENTIAL_SID.set) recommendations.push('Set TWILIO_PUSH_CREDENTIAL_SID (a VoIP Push Credential in Twilio Console → Voice → Push Credentials, backed by an Apple VoIP Services APNs certificate) so the iOS app can RECEIVE incoming calls');
     if (twilioPhoneNumber && !twilioPhoneNumber.voiceUrlMatchesExpected) {
-      recommendations.push(`Update Twilio console voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'})`);
+      recommendations.push(`Update Twilio voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'}) — POST /api/twilio/admin/configure-incoming sets it`);
     }
     if (twilioTwimlApp && !twilioTwimlApp.error && !twilioTwimlApp.voiceUrlMatchesExpected) {
       recommendations.push(`TwiML App voice URL should be ${expectedWebhooks.outgoing} for web-dialer outgoing calls (currently: ${twilioTwimlApp.voiceUrl || 'unset'}) — POST /api/twilio/admin/configure-outgoing sets it`);
@@ -13582,6 +14023,60 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     } catch (error: any) {
       console.error('❌ Failed to configure TwiML App voice URL:', error);
       return res.status(500).json({ success: false, message: error?.message || 'Failed to update TwiML App' });
+    }
+  });
+
+  // One-click setup for the INCOMING number's webhooks — points the Twilio
+  // number's voice URL and status callback at APP_URL, so a domain move (e.g.
+  // treemarkables → inflowapp) is a single authenticated POST instead of a
+  // manual console edit. Deliberately leaves smsUrl alone: inbound SMS lives
+  // with SMS Everyone, and repointing the Twilio number's SMS webhook is a
+  // separate behavioural decision, not part of a domain rename. Verified by
+  // the diagnostic's voiceUrlMatchesExpected flag.
+  app.post('/api/twilio/admin/configure-incoming', async (req: Request, res: Response) => {
+    const secret = req.headers['x-webhook-secret'];
+    const secretOk = !!secret && secret === process.env.HERO_WEBHOOK_SECRET;
+    let sessionOk = false;
+    if (!secretOk && req.session.employeeId) {
+      try {
+        const emp = await storage.getEmployee(req.session.employeeId);
+        sessionOk = !!emp && emp.role === 'admin';
+      } catch {
+        sessionOk = false;
+      }
+    }
+    if (!secretOk && !sessionOk) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    try {
+      const phoneNumber = process.env.TWILIO_PHONE_NUMBER;
+      if (!phoneNumber) {
+        return res.status(400).json({ success: false, message: 'TWILIO_PHONE_NUMBER not set' });
+      }
+      const client = await getTwilioClient();
+      const list = await client.incomingPhoneNumbers.list({ phoneNumber, limit: 1 });
+      const num = list[0];
+      if (!num) {
+        return res.status(404).json({ success: false, message: `No incoming number found in Twilio account for ${phoneNumber}` });
+      }
+      const previous = { voiceUrl: num.voiceUrl, statusCallback: num.statusCallback };
+      const updated = await client.incomingPhoneNumbers(num.sid).update({
+        voiceUrl: `${APP_URL}/api/webhooks/twilio-answer`,
+        voiceMethod: 'POST',
+        statusCallback: `${APP_URL}/api/webhooks/twilio-voice`,
+        statusCallbackMethod: 'POST',
+      });
+      console.log(`✅ Incoming number ${phoneNumber} voice URL set to ${updated.voiceUrl} (was ${previous.voiceUrl})`);
+      return res.json({
+        success: true,
+        sid: updated.sid,
+        previous,
+        voiceUrl: updated.voiceUrl,
+        statusCallback: updated.statusCallback,
+      });
+    } catch (error: any) {
+      console.error('❌ Failed to configure incoming number webhooks:', error);
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to update incoming number' });
     }
   });
 
@@ -14121,6 +14616,26 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Ex-GST subtotal for an invoice, computed EXACTLY like the customer-facing
+  // surfaces (InvoiceView totals + the PDF): sum the `items` JSONB line totals
+  // (item.total with item.amount as the legacy field name), falling back to
+  // invoice.amount only when there are no line items. Every caller that
+  // charges or states a total MUST go through this so the amount charged can
+  // never diverge from the amount displayed.
+  function invoiceSubtotalExGst(invoice: any): number {
+    const items: any[] = Array.isArray(invoice?.items) ? invoice.items : [];
+    let subtotal = 0;
+    for (const item of items) {
+      const raw = item?.total ?? item?.amount ?? 0;
+      const n = typeof raw === 'string' ? parseFloat(raw) : raw;
+      if (Number.isFinite(n)) subtotal += n;
+    }
+    if (subtotal === 0) {
+      subtotal = parseFloat(invoice?.amount || '0') || 0;
+    }
+    return subtotal;
+  }
+
   // Public: create a Stripe Checkout session to pay an invoice online. Mirrors
   // the proposal deposit-checkout endpoint. Charges the GST-inclusive
   // outstanding balance (invoice total computed the same way as the email /
@@ -14155,16 +14670,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       // Total = subtotal (line items, or invoice.amount fallback) + 15% GST.
-      // Mirrors send-email + InvoiceView so we charge exactly what the
-      // customer sees.
-      const dbLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoice.id));
-      let subtotal = 0;
-      for (const li of dbLineItems) {
-        subtotal += parseFloat(li.totalPrice || '0') || 0;
-      }
-      if (subtotal === 0) {
-        subtotal = parseFloat((invoice as any).amount || '0') || 0;
-      }
+      // Subtotal comes from the invoice's `items` JSONB — the SAME source
+      // InvoiceView and the PDF render from — so we charge exactly what the
+      // customer sees. (The invoice_line_items table has no writers; reading
+      // it always fell back to invoice.amount, which on some invoices holds
+      // the GST-inclusive total → customers were charged GST twice.)
+      const subtotal = invoiceSubtotalExGst(invoice);
       const total = Math.round((subtotal * 1.15) * 100) / 100;
 
       // Subtract anything already paid against this invoice (succeeded, non-refund).
@@ -14244,15 +14755,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const customerName = customer?.name || 'Valued Customer';
       const invoiceViewUrl = invoiceViewLink(invoiceId, { base: baseUrl });
 
-      // Calculate total from line items table or fall back to invoice.amount
-      const dbLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoiceId));
-      let subtotal = 0;
-      for (const li of dbLineItems) {
-        subtotal += parseFloat(li.totalPrice || '0');
-      }
-      if (subtotal === 0) {
-        subtotal = parseFloat((invoice as any).amount || '0');
-      }
+      // Calculate total from the invoice's items JSONB (same source as
+      // InvoiceView / the PDF / payment-checkout) or fall back to invoice.amount
+      const subtotal = invoiceSubtotalExGst(invoice);
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
@@ -15464,10 +15969,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const endOfDay = fromZonedTime(`${todayStr}T23:59:59`, 'Pacific/Auckland');
 
       // Get all data
-      const [leads, jobsResult, calls] = await Promise.all([
-        storage.getLeads(),
+      const [leads, jobsResult, calls, allInvoices] = await Promise.all([
+        // Pipeline leads, not the legacy lead-submission stub (returns []).
+        storage.getAllPipelineLeads(),
         storage.getAllJobs({ limit: 999999 }),
-        storage.getCallRecords()
+        storage.getCallRecords(),
+        storage.getAllInvoices()
       ]);
       const jobs = jobsResult.jobs;
 
@@ -15504,9 +16011,17 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         return callDate >= startOfDay && callDate <= endOfDay;
       });
 
-      // Calculate today's revenue from completed and invoiced jobs
-      const todayRevenue = todayJobsCompleted.reduce((sum, job) => {
-        return sum + (job.invoiceTotal || 0);
+      // Today's revenue = invoices ISSUED today, ex-GST. Anchoring on the
+      // invoice (not the job) matches how /api/revenue-stats and
+      // /api/dashboard-stats recognise revenue. The previous version summed
+      // `job.invoiceTotal`, which is not a column on jobs — it was always
+      // undefined, so this tile read $0 for every tenant.
+      const todayRevenue = allInvoices.reduce((sum, inv) => {
+        if (inv.status === 'cancelled') return sum;
+        const anchor = inv.issueDate ? new Date(inv.issueDate) :
+                       inv.createdAt ? new Date(inv.createdAt) : null;
+        if (!anchor || anchor < startOfDay || anchor > endOfDay) return sum;
+        return sum + invoiceRevenueExGst(inv);
       }, 0);
 
       res.json({
@@ -17145,6 +17660,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      installPdfTextSanitizer(doc);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="photo-report-job-${job.jobNumber ?? job.id}.pdf"`);
       doc.pipe(res);
@@ -18754,6 +19270,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
             const emailResult = await emailService.sendEmail({
               to: clientEmail,
+              fromName: __bizName || undefined, // From matches the "{business} Team" sign-off; blank → platform default
               subject: emailSubject,
               html: emailBody,
               text: `Hi ${clientName}, your job is scheduled for ${scheduleDate} at ${startTimeStr}.\n\nWe look forward to completing your job.\n\nThanks,\n${__signoff}`
@@ -21246,9 +21763,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         message.includes('leave the team a review')
       );
       
-      // Send email using the service - don't override from, let Resend config handle it
+      // Send email using the service - address stays on the shared verified domain
+      // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
       const emailResult = await emailService.sendEmail({
         to,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         text: message,
         html: `<p>${message.replace(/\n/g, '<br>')}</p>`,
@@ -21441,17 +21961,52 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         console.error('📬 Missing email_id in Resend event');
         return res.status(400).json({ error: 'Missing email_id' });
       }
-      
-      // Store the event
-      await storage.createEmailEvent({
-        messageId: messageId,
-        eventType: event.type,
-        recipient: Array.isArray(data?.to) ? data.to[0] : data?.to,
-        timestamp: data?.created_at ? new Date(data.created_at) : new Date(),
-        userAgent: data?.click?.user_agent || data?.open?.user_agent,
-        ipAddress: data?.click?.ip_address || data?.open?.ip_address,
-        linkUrl: data?.click?.link,
-        rawPayload: event
+
+      // Resolve the sending tenant so the event row is stamped to the business
+      // that sent the email. This webhook has no session, so withTenant() would
+      // leave business_id to the column DEFAULT (the legacy tenant) and every
+      // other tenant's email-activity reads would come back empty under RLS.
+      // Every sender records the Resend message id in a job-diary entry's
+      // metadata.sendgridMessageId, so that entry's business_id is the tenant.
+      let eventBusinessId: string | undefined;
+      try {
+        const [senderEntry] = await db
+          .select({ businessId: schema.jobDiaryEntries.businessId })
+          .from(schema.jobDiaryEntries)
+          .where(sql`${schema.jobDiaryEntries.metadata} ->> 'sendgridMessageId' = ${messageId}`)
+          .limit(1);
+        eventBusinessId = senderEntry?.businessId ?? undefined;
+
+        // Fallback (e.g. an email.sent event racing the diary write): the
+        // recipient's customer record — but only when the address belongs to
+        // exactly one tenant, since customers can be shared across businesses.
+        if (!eventBusinessId) {
+          const recipientEmail = Array.isArray(data?.to) ? data.to[0] : data?.to;
+          if (recipientEmail) {
+            const owners = await db
+              .selectDistinct({ businessId: customers.businessId })
+              .from(customers)
+              .where(eq(customers.email, recipientEmail))
+              .limit(2);
+            if (owners.length === 1) eventBusinessId = owners[0].businessId ?? undefined;
+          }
+        }
+      } catch (resolveErr) {
+        console.warn('📬 Could not resolve tenant for Resend event — storing with default stamping:', resolveErr);
+      }
+
+      // Store the event, stamped to the resolved tenant (unresolved → default)
+      await runWithBusiness(eventBusinessId, async () => {
+        await storage.createEmailEvent({
+          messageId: messageId,
+          eventType: event.type,
+          recipient: Array.isArray(data?.to) ? data.to[0] : data?.to,
+          timestamp: data?.created_at ? new Date(data.created_at) : new Date(),
+          userAgent: data?.click?.user_agent || data?.open?.user_agent,
+          ipAddress: data?.click?.ip_address || data?.open?.ip_address,
+          linkUrl: data?.click?.link,
+          rawPayload: event
+        });
       });
       
       console.log(`📬 Stored ${event.type} event for message ${messageId}`);
@@ -23308,7 +23863,9 @@ Transcription: ${transcriptText}`;
       if (!jobFound && jobNumberMatch) {
         const jobNumber = jobNumberMatch[1];
         console.log(`🔍 Looking up job by number: ${jobNumber}`);
-        const job = await storage.getJobByJobNumber(jobNumber);
+        // Pass the sender so a job number shared across tenants (per-tenant
+        // numbering) can still resolve to the job whose customer sent the reply.
+        const job = await storage.getJobByJobNumber(jobNumber, actualFromEmail || undefined);
         
         if (job) {
           console.log(`✅ Found job ${job.jobNumber} - creating diary entry`);
@@ -23585,13 +24142,18 @@ Transcription: ${transcriptText}`;
                 },
               });
               try {
-                const notificationHelper = await import('./services/notificationHelper.js');
-                await notificationHelper.createNotification({
+                // NOTE: this used to call notificationHelper.createNotification(),
+                // which does not exist — it threw on EVERY email quote-acceptance
+                // and was swallowed by the catch below, so the owner never got a
+                // quote_accepted bell entry (same latent bug the UUID reply path
+                // had). Use storage.createNotification like every other path.
+                await storage.createNotification({
                   type: 'quote_accepted',
                   title: `Quote ${acceptedNumber} accepted`,
                   message: `${actualFromName || actualFromEmail} accepted quote ${acceptedNumber} for Job #${targetJob.jobNumber}`,
                   jobId: targetJob.id,
                   priority: 'high',
+                  isRead: false,
                   actionUrl: `/dispatch?job=${targetJob.id}&tab=diary`,
                   metadata: { proposalId: quoteProposal.id, quoteNumber: acceptedNumber },
                 });
@@ -24224,8 +24786,11 @@ Transcription: ${transcriptText}`;
       if (messagePlatform === 'email') {
         // Send email using EmailService
         try {
+          // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+          const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
           const emailResult = await emailService.sendEmail({
             to: recipientContact,
+            fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
             subject: lastInboundMessage.subject ? `Re: ${lastInboundMessage.subject}` : 'Response to your enquiry',
             text: content,
             html: content.replace(/\n/g, '<br>')
@@ -26739,12 +27304,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   app.post('/api/proposals/:id/accept', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { selectedChoices } = req.body || {};
+      const { selectedChoices, selectedOptionalItems } = req.body || {};
       console.log('🚀 ACCEPT PROPOSAL REQUEST RECEIVED - Proposal ID:', id);
       console.log('📋 Request method:', req.method);
       console.log('🔐 Session ID:', req.session?.id);
       console.log('👤 Employee ID:', req.session?.employeeId);
-      console.log('🎯 Selected choices:', selectedChoices);
+      console.log('🎯 Selected choices:', selectedChoices, 'optional items:', selectedOptionalItems);
       
       // Get the proposal
       const proposal = await storage.getProposal(id);
@@ -26797,114 +27362,96 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         return res.status(400).json({ success: false, message: 'Proposal has expired' });
       }
 
-      // If customer selected different choices, update the proposal sections
-      let updatedSections = proposal.sections;
+      // Recompute totals from the stored line items, honouring the customer's
+      // optional-item and choice selections (keyed by proposal_line_items row
+      // ids — the same ids the public endpoint serves to the accept page).
+      // Optional items — the per-item isOptional flag OR any item in an
+      // 'optional'/'multipleChoice' section — count ONLY when the customer
+      // explicitly selected them: their stored `selected` flag defaults to
+      // true, so trusting it silently added unchosen options to the total.
       let updatedTotalAmount: number = parseFloat(proposal.totalAmount?.toString() || '0');
       let updatedSubtotal: number = parseFloat(proposal.subtotal?.toString() || '0');
+      let updatedGst: number | undefined;
+      try {
+        const [acceptSections, acceptLineItems] = await Promise.all([
+          storage.getProposalSectionsByProposal(id),
+          storage.getProposalLineItemsByProposal(id),
+        ]);
+        const interactiveSectionIds = new Set(
+          acceptSections
+            .filter((s: any) => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+            .map((s: any) => s.id),
+        );
+        const optSel: Record<string, boolean> =
+          selectedOptionalItems && typeof selectedOptionalItems === 'object' ? selectedOptionalItems : {};
+        const choiceSel: Record<string, string> =
+          selectedChoices && typeof selectedChoices === 'object' ? selectedChoices : {};
+        const acceptTaxRate = (parseFloat(proposal.taxRate?.toString() || '15') || 15) / 100;
 
-      // When no choices are made, recompute from actual DB line items (more reliable than cached proposal.subtotal)
-      if (!selectedChoices || Object.keys(selectedChoices).length === 0) {
-        try {
-          const acceptLineItems = await storage.getProposalLineItemsByProposal(id);
-          const acceptTaxRate = parseFloat(proposal.taxRate?.toString() || '15') / 100;
-          const acceptDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
-          let computedSubtotal = 0;
-          for (const item of acceptLineItems) {
-            if (item.selected !== false) {
-              const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
-              computedSubtotal += item.priceIncludesTax ? price / (1 + acceptTaxRate) : price;
+        let computedSubtotal = 0;
+        const itemUpdates: Array<{ id: string; selected: boolean; selectedChoiceId: string | null }> = [];
+        for (const item of acceptLineItems) {
+          const toggleable = item.isOptional === true || interactiveSectionIds.has(item.sectionId || '');
+          const isSelected = toggleable ? optSel[item.id] === true : item.selected !== false;
+
+          // Validate any customer-picked choice against the item's stored choices
+          let selectedChoiceId: string | null = item.selectedChoiceId ?? null;
+          let choices: any[] = [];
+          if (item.pricingType === 'choice') {
+            choices = await storage.getProposalLineItemChoicesByLineItem(item.id);
+            if (choiceSel[item.id]) {
+              if (choices.some((c: any) => c.id === choiceSel[item.id])) {
+                selectedChoiceId = choiceSel[item.id];
+              } else {
+                console.log(`⚠️ Invalid choice ${choiceSel[item.id]} for item ${item.id}, keeping original`);
+              }
             }
           }
-          // discountAmount is the pre-computed dollar discount (see CREATE/PUT).
-          const acceptDiscountValue = acceptDiscountAmt;
-          const acceptSubtotalAfterDiscount = Math.max(0, computedSubtotal - acceptDiscountValue);
-          const acceptGst = acceptSubtotalAfterDiscount * acceptTaxRate;
-          updatedSubtotal = Math.round(computedSubtotal * 100) / 100;
-          updatedTotalAmount = Math.round((acceptSubtotalAfterDiscount + acceptGst) * 100) / 100;
-          console.log(`💰 Accept: recomputed from line items: subtotal=${updatedSubtotal}, total=${updatedTotalAmount}`);
-        } catch (err) {
-          console.error('⚠️ Accept: failed to recompute from line items, using cached values:', err);
+
+          // Persist the customer's picks so later reads (PDF, re-renders,
+          // invoicing) agree with the accepted totals.
+          if ((toggleable && isSelected !== (item.selected !== false))
+            || selectedChoiceId !== (item.selectedChoiceId ?? null)) {
+            itemUpdates.push({ id: item.id, selected: isSelected, selectedChoiceId });
+          }
+
+          if (!isSelected) continue;
+          let itemPrice = 0;
+          if (item.pricingType === 'choice' && choices.length > 0) {
+            const chosen = choices.find((c: any) => c.id === selectedChoiceId)
+              ?? choices.find((c: any) => c.isDefault)
+              ?? choices[0];
+            itemPrice = (parseFloat(chosen.price?.toString() || '0') || 0)
+              * (parseFloat(item.quantity?.toString() || '1') || 1);
+          } else if (item.pricingType === 'fixed' && item.fixedPrice) {
+            itemPrice = parseFloat(item.fixedPrice.toString()) || 0;
+          } else {
+            itemPrice = parseFloat(item.totalPrice?.toString() || '0') || 0;
+          }
+          computedSubtotal += item.priceIncludesTax ? itemPrice / (1 + acceptTaxRate) : itemPrice;
         }
-      }
-      
-      if (selectedChoices && Object.keys(selectedChoices).length > 0 && Array.isArray(proposal.sections)) {
-        console.log('🎯 Applying customer-selected choices to proposal...');
-        
-        // Update sections with selected choices (validate choice IDs)
-        updatedSections = proposal.sections.map((section: any) => ({
-          ...section,
-          lineItems: (section.lineItems || []).map((item: any) => {
-            if (selectedChoices[item.id] && item.pricingType === 'choice') {
-              // Validate that the selected choice exists
-              const validChoice = (item.choices || []).find((c: any) => c.id === selectedChoices[item.id]);
-              if (validChoice) {
-                console.log(`🎯 Updating line item ${item.id} with choice ${selectedChoices[item.id]}`);
-                return {
-                  ...item,
-                  selectedChoiceId: selectedChoices[item.id]
-                };
-              } else {
-                console.log(`⚠️ Invalid choice ${selectedChoices[item.id]} for item ${item.id}, keeping original`);
-              }
-            }
-            return item;
-          })
-        }));
-        
-        // Recalculate totals based on selected choices (matching ProposalTemplate logic)
-        let subtotalExGst = 0;
-        let gstAmount = 0;
-        const gstRate = 0.15;
-        
-        updatedSections.forEach((section: any) => {
-          (section.lineItems || []).forEach((item: any) => {
-            if (item.selected) {
-              let itemPrice = 0;
-              if (item.pricingType === 'choice' && item.selectedChoiceId) {
-                const selectedChoice = (item.choices || []).find((c: any) => c.id === item.selectedChoiceId);
-                if (selectedChoice) {
-                  itemPrice = Number(selectedChoice.price) * Number(item.quantity);
-                }
-              } else if (item.pricingType === 'fixed' && item.fixedPrice) {
-                itemPrice = Number(item.fixedPrice);
-              } else {
-                itemPrice = Number(item.totalPrice);
-              }
-              
-              // Handle priceIncludesTax flag (matching ProposalTemplate logic)
-              const isInclusive = item.priceIncludesTax || false;
-              
-              if (isInclusive) {
-                // Price includes GST - extract the ex-GST amount
-                const exGst = itemPrice / (1 + gstRate);
-                subtotalExGst += exGst;
-                gstAmount += itemPrice - exGst;
-              } else {
-                // Price is ex-GST
-                subtotalExGst += itemPrice;
-                gstAmount += itemPrice * gstRate;
-              }
-            }
-          });
-        });
-        
-        // Apply discount (discount reduces the taxable amount - matching ProposalTemplate logic)
-        const discountAmount = Number(proposal.discountAmount || 0);
-        const subtotalAfterDiscount = Math.max(0, subtotalExGst - discountAmount);
-        
-        // GST is calculated on the discounted amount (less GST)
-        const gstOnDiscounted = subtotalAfterDiscount * gstRate;
-        const totalAmount = subtotalAfterDiscount + gstOnDiscounted;
-        
-        // Round to 2 decimal places (matching UI formatting)
-        updatedSubtotal = Math.round(subtotalExGst * 100) / 100;
-        updatedTotalAmount = Math.round(totalAmount * 100) / 100;
-        const roundedGst = Math.round(gstOnDiscounted * 100) / 100;
-        console.log(`💰 Recalculated totals: subtotal=${updatedSubtotal}, discount=${discountAmount}, subtotalAfterDiscount=${Math.round(subtotalAfterDiscount * 100) / 100}, gst=${roundedGst}, total=${updatedTotalAmount}`);
+
+        // discountAmount is the pre-computed dollar discount (see CREATE/PUT).
+        const acceptDiscountValue = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
+        const acceptSubtotalAfterDiscount = Math.max(0, computedSubtotal - acceptDiscountValue);
+        const acceptGst = acceptSubtotalAfterDiscount * acceptTaxRate;
+        updatedSubtotal = Math.round(computedSubtotal * 100) / 100;
+        updatedGst = Math.round(acceptGst * 100) / 100;
+        updatedTotalAmount = Math.round((acceptSubtotalAfterDiscount + acceptGst) * 100) / 100;
+        console.log(`💰 Accept: recomputed from line items: subtotal=${updatedSubtotal}, discount=${acceptDiscountValue}, gst=${updatedGst}, total=${updatedTotalAmount} (${itemUpdates.length} selection updates)`);
+
+        for (const u of itemUpdates) {
+          await storage.updateProposalLineItem(u.id, {
+            selected: u.selected,
+            selectedChoiceId: u.selectedChoiceId,
+          } as any);
+        }
+      } catch (err) {
+        console.error('⚠️ Accept: failed to recompute from line items, using cached values:', err);
       }
       
       // Deposit gate. If this proposal requires an upfront payment, persist
-      // the updated sections/totals and stop here — the customer UI will
+      // the updated totals and stop here — the customer UI will
       // open Stripe Checkout via /api/proposals/:id/deposit-checkout and
       // the webhook will run finalizeProposalAcceptance() on payment.
       const depositAmount = computeDepositAmount(
@@ -26917,9 +27464,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const pendingProposal = await storage.updateProposal(id, {
           status: 'accepted_pending_deposit',
           acceptedDate: new Date(),
-          sections: updatedSections,
           totalAmount: updatedTotalAmount,
           subtotal: updatedSubtotal,
+          ...(updatedGst !== undefined ? { gstAmount: updatedGst } : {}),
         } as any);
         console.log(`⏸️ Proposal ${proposal.proposalNumber} acceptance pending deposit of ${depositAmount}`);
         return res.json({
@@ -26940,9 +27487,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const updatedProposal = await storage.updateProposal(id, {
         status: 'accepted',
         acceptedDate: new Date(),
-        sections: updatedSections,
         totalAmount: updatedTotalAmount,
         subtotal: updatedSubtotal,
+        ...(updatedGst !== undefined ? { gstAmount: updatedGst } : {}),
       } as any);
 
       // Owner-pathed public accept link (no session) → bind the proposal's tenant so
@@ -27643,6 +28190,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const __updBiz = (await storage.getBusinessSettings())?.businessName || '';
         await emailService.sendEmail({
           to: msg.recipientEmail,
+          fromName: __updBiz || undefined, // From shows the tenant's business name; blank → platform default
           subject: __updBiz ? `Update from ${__updBiz}` : 'Update',
           html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
           text: msg.message,
@@ -29724,8 +30272,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       
       if (data.sentVia === 'email' || data.sentVia === 'both') {
         if (data.customerEmail) {
+          // Authed route → getBusinessSettings() is RLS-scoped to this tenant.
+          const __reviewBiz = (await storage.getBusinessSettings())?.businessName || '';
           await emailService.sendEmail({
             to: data.customerEmail,
+            fromName: __reviewBiz || undefined, // From shows the tenant's business name; blank → platform default
             subject: 'How was our service?',
             html: `
               <p>Hi ${data.customerName},</p>
@@ -29733,7 +30284,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
               <p>We'd love to hear about your experience! Please take a moment to leave us a review:</p>
               <p><a href="${reviewLink}" style="background-color: #4CAF50; color: white; padding: 14px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Leave a Review</a></p>
               <p>Your feedback helps us improve our services.</p>
-              <p>Best regards,<br>Treemarkables Team</p>
+              <p>Best regards,<br>${__reviewBiz ? `${__reviewBiz} Team` : 'The Team'}</p>
             `
           });
         }
@@ -32256,6 +32807,262 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // ========================================
+  // HAZARD TREE PINS — site-persistent register (WIP)
+  // Distinct from tree_markers (job overlay). Dark unless HAZARD_TREE_PINS=true.
+  // See HAZARD_TREE_PINS_PLAN.md. Do not hang this off tree_markers.
+  // ========================================
+
+  app.get("/api/hazard-pins/enabled", requireSession, (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        enabled: HAZARD_TREE_PINS_ENABLED,
+        riskRatings: TREE_PIN_RISK_RATINGS,
+        workTypes: TREE_PIN_WORK_TYPES,
+      },
+    });
+  });
+
+  app.get("/api/customers/:id/sites", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const sites = await storage.getCustomerSites(req.params.id);
+      res.json({ success: true, data: sites });
+    } catch (error) {
+      console.error("Error fetching customer sites:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch sites" });
+    }
+  });
+
+  app.post("/api/customers/:id/sites", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const parsed = insertCustomerSiteSchema.safeParse({
+        ...req.body,
+        customerId: req.params.id,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid site",
+          errors: parsed.error.errors,
+        });
+      }
+      const site = await storage.createCustomerSite(parsed.data);
+      res.json({ success: true, data: site });
+    } catch (error) {
+      console.error("Error creating customer site:", error);
+      res.status(500).json({ success: false, message: "Failed to create site" });
+    }
+  });
+
+  app.get("/api/customers/:id/tree-pins", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const pins = await storage.getTreePinsByCustomer(req.params.id);
+      res.json({ success: true, data: pins });
+    } catch (error) {
+      console.error("Error fetching tree pins:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch tree pins" });
+    }
+  });
+
+  app.post("/api/customers/:id/tree-pins", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found" });
+      }
+      const parsed = createTreePinRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          success: false,
+          message: "GPS, risk rating, and recommended work type are required",
+          errors: parsed.error.errors,
+        });
+      }
+      const body = parsed.data;
+      let linkJobId: string | undefined;
+      if (body.jobId) {
+        const job = await storage.getJob(body.jobId);
+        if (!job) {
+          return res.status(400).json({ success: false, message: "Job not found" });
+        }
+        if (job.customerId !== req.params.id) {
+          return res.status(400).json({
+            success: false,
+            message: "Job is not linked to this customer",
+          });
+        }
+        linkJobId = job.id;
+      }
+      let siteId = body.siteId;
+      if (siteId) {
+        const sites = await storage.getCustomerSites(req.params.id);
+        if (!sites.some((s) => s.id === siteId)) {
+          return res.status(400).json({ success: false, message: "Site does not belong to this customer" });
+        }
+      } else {
+        const site = await storage.ensureDefaultCustomerSite(req.params.id);
+        siteId = site.id;
+      }
+      const pin = await storage.createTreePin({
+        customerId: req.params.id,
+        siteId,
+        latitude: String(body.latitude),
+        longitude: String(body.longitude),
+        gpsAccuracy: body.gpsAccuracy ?? null,
+        riskRating: body.riskRating,
+        recommendedWorkType: body.recommendedWorkType.trim(),
+        status: "assessed",
+        notes: body.notes ?? null,
+        species: body.species ?? null,
+        sizeNotes: body.sizeNotes ?? null,
+        accessNotes: body.accessNotes ?? null,
+        createdBy: req.session.employeeId ?? null,
+      });
+      if (linkJobId) {
+        await storage.createTreePinWorkLink({ pinId: pin.id, jobId: linkJobId });
+      }
+      res.json({ success: true, data: pin });
+    } catch (error) {
+      console.error("Error creating tree pin:", error);
+      res.status(500).json({ success: false, message: "Failed to create tree pin" });
+    }
+  });
+
+  app.get("/api/hazard-pins/:id", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const pin = await storage.getTreePin(req.params.id);
+      if (!pin) {
+        return res.status(404).json({ success: false, message: "Pin not found" });
+      }
+      res.json({ success: true, data: pin });
+    } catch (error) {
+      console.error("Error fetching tree pin:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch tree pin" });
+    }
+  });
+
+  // NOTE: multer/busboy callbacks run outside the request's ALS tenant context,
+  // so this handler rides the OWNER connection. RLS does not scope the pin read
+  // (explicit ownership check) and withTenant() cannot stamp the update
+  // (businessId passed from the parent pin). Same pattern as site-map images.
+  app.post(
+    "/api/hazard-pins/:id/photos",
+    requireSession,
+    requireHazardTreePins,
+    imageUpload.fields([
+      { name: "photos", maxCount: TREE_PIN_MAX_PHOTOS },
+      { name: "photo", maxCount: 1 },
+    ]),
+    async (req, res) => {
+      try {
+        const pin = await storage.getTreePin(req.params.id);
+        if (
+          !pin ||
+          pin.archivedAt ||
+          (pin.businessId && req.session.businessId && pin.businessId !== req.session.businessId)
+        ) {
+          return res.status(404).json({ success: false, message: "Pin not found" });
+        }
+        const filesMap = req.files as
+          | { photos?: Express.Multer.File[]; photo?: Express.Multer.File[] }
+          | undefined;
+        const files = [...(filesMap?.photos ?? []), ...(filesMap?.photo ?? [])];
+        const images = files.filter((f) => (f.mimetype || "").toLowerCase().startsWith("image/"));
+        if (images.length === 0) {
+          return res.status(400).json({ success: false, message: "No photos provided" });
+        }
+        const existingCount = pin.photoUrls?.length ?? 0;
+        if (existingCount + images.length > TREE_PIN_MAX_PHOTOS) {
+          return res.status(400).json({
+            success: false,
+            message: `A pin can hold at most ${TREE_PIN_MAX_PHOTOS} photos`,
+          });
+        }
+        const photoStorage = new PhotoStorageService();
+        const photoUrls: string[] = [];
+        for (const file of images) {
+          try {
+            const { url } = await photoStorage.uploadPhoto(
+              file.buffer,
+              file.originalname || `hazard-pin-${pin.id}-${Date.now()}.jpg`,
+              file.mimetype,
+            );
+            photoUrls.push(url);
+          } catch (uploadErr) {
+            console.error("Error uploading hazard pin photo to GCS:", uploadErr);
+          }
+        }
+        if (photoUrls.length === 0) {
+          return res.status(500).json({
+            success: false,
+            message: "Failed to upload any photos to storage",
+          });
+        }
+        const updated = await storage.appendTreePinPhotos(
+          pin.id,
+          photoUrls,
+          pin.businessId ?? req.session.businessId,
+        );
+        res.json({ success: true, data: updated, photos: photoUrls });
+      } catch (error) {
+        console.error("Error uploading hazard pin photos:", error);
+        res.status(500).json({ success: false, message: "Failed to upload photos" });
+      }
+    },
+  );
+
+  app.get("/api/jobs/:id/tree-pins", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: "Job not found" });
+      }
+      const pins = await storage.getTreePinsByJob(req.params.id);
+      res.json({ success: true, data: pins });
+    } catch (error) {
+      console.error("Error fetching job tree pins:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch tree pins" });
+    }
+  });
+
+  // Link an existing customer pin onto this job (tree_pin_work_links).
+  app.post("/api/jobs/:id/tree-pins/:pinId/link", requireSession, requireHazardTreePins, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: "Job not found" });
+      }
+      const pin = await storage.getTreePin(req.params.pinId);
+      if (!pin || pin.archivedAt) {
+        return res.status(404).json({ success: false, message: "Pin not found" });
+      }
+      if (!job.customerId || pin.customerId !== job.customerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Pin is not on this job's customer",
+        });
+      }
+      const link = await storage.createTreePinWorkLink({ pinId: pin.id, jobId: job.id });
+      res.json({ success: true, data: link });
+    } catch (error) {
+      console.error("Error linking tree pin to job:", error);
+      res.status(500).json({ success: false, message: "Failed to link pin" });
+    }
+  });
+
   // The uploaded base image for the job's site map (photo mode — council jobs
   // where the card address is the billing address, not the site).
   app.get("/api/jobs/:id/site-map-image", async (req, res) => {
@@ -34276,6 +35083,7 @@ If you cannot find a value, use null. Do not guess.`
       } catch { /* fallback to userId */ }
 
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      installPdfTextSanitizer(doc);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="near-miss-${report.reportNumber}.pdf"`);
       doc.pipe(res);
@@ -34490,8 +35298,10 @@ If you cannot find a value, use null. Do not guess.`
       // Convert newlines to <br> for HTML rendering — template stores plain text
       const htmlBody = rawBody.replace(/\n/g, '<br>');
 
+      const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings()); // authed route → RLS-scoped to this tenant
       const result = await emailService.sendEmail({
         to: customer.email,
+        fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         html: htmlBody,
         text: rawBody,

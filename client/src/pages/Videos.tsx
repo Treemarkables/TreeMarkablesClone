@@ -14,13 +14,18 @@ import { Trash2, Upload, Copy, Download, Video as VideoIcon, Search, Pencil, Che
 import { useToast } from "@/hooks/use-toast";
 import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
 import { isNativeApp } from "@/lib/platform";
+import { canSaveToPhotos, saveToPhotos, isPhotosPermissionError } from "@/lib/mediaLibrary";
 import { formatNZTime } from "@shared/dateUtils";
 
-// Per-video state for the native (iOS app) download path. The WKWebView ignores
-// Content-Disposition: attachment — navigating to the file just plays it — so on
-// native we fetch the video into memory and hand it to the share sheet ("Save
-// Video" / "Save to Files"), same pattern as the job-photo download.
+// Per-video state for the native (iOS app) download path. Current app builds
+// ship the MediaLibrary plugin, which downloads natively and saves straight
+// into the Photos library ("saving"/"saved" phases). Older builds fall back to
+// the share-sheet path: the WKWebView ignores Content-Disposition: attachment —
+// navigating to the file just plays it — so we fetch the video into memory and
+// hand it to the share sheet ("fetching"/"ready" phases).
 type NativeDownloadState =
+  | { id: string; phase: "saving"; percent: number }
+  | { id: string; phase: "saved" }
   | { id: string; phase: "fetching"; percent: number }
   | { id: string; phase: "ready"; file: File };
 
@@ -163,7 +168,35 @@ export default function Videos() {
       return;
     }
 
-    // iOS app. Second tap on a staged file → straight to the share sheet.
+    // iOS app with the MediaLibrary plugin: native download → straight into the
+    // Photos library, no share sheet and no file to deal with.
+    if (canSaveToPhotos()) {
+      if (nativeDownload?.phase === "saving") return; // one at a time
+      try {
+        setNativeDownload({ id: v.id, phase: "saving", percent: 0 });
+        await saveToPhotos(
+          { id: v.id, url: v.url, kind: "video", filename: `${displayTitle(v)}.${(String(v.url).split(".").pop() || "mp4").toLowerCase()}` },
+          (percent) => setNativeDownload({ id: v.id, phase: "saving", percent }),
+        );
+        setNativeDownload({ id: v.id, phase: "saved" });
+        setTimeout(() => {
+          setNativeDownload((s) => (s?.phase === "saved" && s.id === v.id ? null : s));
+        }, 2500);
+      } catch (err: any) {
+        setNativeDownload(null);
+        toast({
+          title: "Could not save to Photos",
+          description: isPhotosPermissionError(err)
+            ? "Allow Photos access in Settings → Inflow → Photos, then try again."
+            : err?.message || "Please try again.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    // Older iOS builds without the plugin. Second tap on a staged file →
+    // straight to the share sheet.
     if (nativeDownload?.phase === "ready" && nativeDownload.id === v.id) {
       try {
         await navigator.share({ files: [nativeDownload.file] });
@@ -440,16 +473,20 @@ export default function Videos() {
                     variant="outline"
                     size="sm"
                     onClick={() => downloadVideo(v)}
-                    disabled={nativeDownload?.phase === "fetching"}
+                    disabled={nativeDownload?.phase === "fetching" || nativeDownload?.phase === "saving"}
                     aria-label="Download video"
                     data-testid={`button-library-download-${v.id}`}
                   >
-                    {nativeDownload?.id === v.id && nativeDownload.phase === "fetching" ? (
+                    {nativeDownload != null && nativeDownload.id === v.id && (nativeDownload.phase === "fetching" || nativeDownload.phase === "saving") ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
                         {nativeDownload.percent > 0 ? `${nativeDownload.percent}%` : "…"}
                       </>
-                    ) : nativeDownload?.id === v.id && nativeDownload.phase === "ready" ? (
+                    ) : nativeDownload != null && nativeDownload.id === v.id && nativeDownload.phase === "saved" ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 mr-1" /> Saved
+                      </>
+                    ) : nativeDownload != null && nativeDownload.id === v.id && nativeDownload.phase === "ready" ? (
                       <>
                         <Download className="w-3.5 h-3.5 mr-1" /> Save
                       </>
