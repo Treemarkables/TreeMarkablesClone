@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Users,
+  Bug,
   UserCog,
   UserCheck,
   Bell,
@@ -408,6 +409,13 @@ const settingsSections: SettingSection[] = [
         description: "Publish how-to videos and articles shown to every subscriber",
         icon: BookOpen,
         path: "/admin/help"
+      },
+      {
+        id: "bug-reports",
+        title: "Bug Reports",
+        description: "Triage problems members have reported from inside the app",
+        icon: Bug,
+        path: "/admin/bug-reports"
       }
     ]
   }
@@ -471,6 +479,7 @@ export default function Settings() {
           // server separately allowlists publishers (INFLOW_CONTENT_PUBLISHER_BUSINESS_IDS),
           // so other publisher tenants (e.g. the demo tenant) reach it by URL.
           if (option.id === "help-content" && !roleChecklistEnabled) return false;
+          if (option.id === "bug-reports" && !roleChecklistEnabled) return false;
           if (!q) return true;
           return (
             option.title.toLowerCase().includes(q) ||

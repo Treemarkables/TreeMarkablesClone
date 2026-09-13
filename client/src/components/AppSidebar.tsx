@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Building2,
   TreePine,
+  Bug,
   type LucideIcon, Receipt,
 } from "lucide-react";
 import {
@@ -44,6 +45,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
+import { useBugReport } from "@/contexts/BugReportContext";
 import { PlanGate } from "@/components/PlanGate";
 
 interface AppSidebarProps {
@@ -101,6 +103,7 @@ function SidebarNavContent({
 }) {
   // Platform operator (Treemarkables/Inflow) — gates the Subscribers footer link.
   const platformOperator = useRoleChecklistFeature();
+  const { open: openBugReport } = useBugReport();
 
   // Which tenant this session belongs to — the response envelope varies across
   // cached consumers ({data} vs bare row), so coerce both shapes.
@@ -602,6 +605,33 @@ function SidebarNavContent({
           {/* Platform-operator only: concierge subscriber management. Same
               allowlist gate as the Settings Platform section; the server
               enforces via requirePlatformAdmin regardless. */}
+          {/* Report a problem — every member (beta testers included). */}
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild className={ITEM}>
+              <button
+                className="w-full justify-start"
+                data-testid="button-sidebar-report-problem"
+                onClick={() => {
+                  close();
+                  openBugReport();
+                }}
+              >
+                <Bug className="h-5 w-5 shrink-0 text-slate-600" />
+                <span>Report a problem</span>
+              </button>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {/* Platform-operator only: cross-tenant bug-report triage. */}
+          {isAdmin && platformOperator && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={location === "/admin/bug-reports"} className={ITEM}>
+                <Link href="/admin/bug-reports" onClick={handleLinkClick} data-testid="link-bug-reports">
+                  <Bug className="h-5 w-5 shrink-0 text-slate-600" />
+                  <span>Bug reports</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           {isAdmin && platformOperator && (
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={location === "/admin/subscribers"} className={ITEM}>
