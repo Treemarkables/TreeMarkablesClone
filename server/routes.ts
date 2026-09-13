@@ -7211,6 +7211,16 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
+      // Freeze each person's role-checklist result now that the job is closed —
+      // before Settings edits can move the denominator. Never fails the update.
+      if (job.status === 'completed' && oldJob?.status !== 'completed') {
+        try {
+          await snapshotRoleCompletions(job.id);
+        } catch (snapshotError) {
+          console.error('Error snapshotting role completions:', snapshotError);
+        }
+      }
+
       // Re-sync booking reminders if scheduledDate changed and the job
       // has reminders enabled. We compare timestamps (handle date|null|undefined).
       try {
@@ -7569,6 +7579,16 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const job = await storage.updateJob(req.params.id, updateData);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Freeze each person's role-checklist result now that the job is closed —
+      // before Settings edits can move the denominator. Never fails the update.
+      if (job.status === 'completed' && oldJob?.status !== 'completed') {
+        try {
+          await snapshotRoleCompletions(job.id);
+        } catch (snapshotError) {
+          console.error('Error snapshotting role completions:', snapshotError);
+        }
       }
 
       // Re-sync booking reminders if scheduledDate changed and the job
@@ -15176,6 +15196,98 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   }
 
+  // Freeze each person's role-checklist result for this job. Called when a job
+  // closes, so the completion-rate metric has a denominator that can't move:
+  // role_checklist_tasks is editable from Settings, and recomputing on read would
+  // let a task added next month retroactively drop every past job below 100%.
+  //
+  // Upserts rather than insert-once — reopening a job, ticking what was missed and
+  // re-closing SHOULD correct the record. What's frozen is the task list, not the
+  // outcome.
+  async function snapshotRoleCompletions(jobId: string) {
+    const job = await storage.getJob(jobId);
+    if (!job) return;
+    const closeDate = getNZDateString(job.completedDate ?? new Date());
+
+    const [assignments, timeEntries, completions, taskRows] = await Promise.all([
+      storage.getJobStaffAssignmentsByJob(jobId),
+      storage.getJobStaffTimeEntries(jobId),
+      storage.getJobChecklistCompletions(jobId),
+      db.select().from(schema.roleChecklistTasks)
+        .orderBy(asc(schema.roleChecklistTasks.sortOrder), asc(schema.roleChecklistTasks.createdAt)),
+    ]);
+
+    // Everyone who touched this job — rostered or not. Someone clocked in without
+    // an assignment row still did the work.
+    const employeeIds = Array.from(new Set([
+      ...assignments.map(a => a.employeeId),
+      ...timeEntries.map((e: any) => e?.employeeId),
+    ].filter((id): id is string => typeof id === 'string' && id.length > 0)));
+    if (employeeIds.length === 0) return;
+
+    // Their role on the close date, falling back to the most recent role they held
+    // on any day this job ran — a multi-day job may close after they finished up.
+    const jobDates = new Set<string>([closeDate]);
+    for (const d of getJobScheduledNZDates(job)) jobDates.add(d);
+    for (const a of assignments) {
+      if (a.startTime) jobDates.add(getNZDateString(a.startTime));
+    }
+    const roleRows = await db.select().from(schema.jobDayRoles).where(and(
+      inArray(schema.jobDayRoles.employeeId, employeeIds),
+      inArray(schema.jobDayRoles.nzDate, Array.from(jobDates)),
+    ));
+    const roleByEmployee = new Map<string, { roleKey: string; nzDate: string }>();
+    for (const r of roleRows) {
+      const existing = roleByEmployee.get(r.employeeId);
+      if (r.nzDate === closeDate) {
+        roleByEmployee.set(r.employeeId, { roleKey: r.roleKey, nzDate: r.nzDate });
+        continue;
+      }
+      if (!existing || (existing.nzDate !== closeDate && r.nzDate > existing.nzDate)) {
+        roleByEmployee.set(r.employeeId, { roleKey: r.roleKey, nzDate: r.nzDate });
+      }
+    }
+
+    const doneIds = new Set(completions.map(c => c.itemId));
+    const expectedByRole = new Map<string, string[]>();
+    for (const t of taskRows) {
+      if (!t.isEnabled || !isRoleKey(t.roleKey)) continue;
+      const list = expectedByRole.get(t.roleKey) ?? [];
+      list.push(t.itemId);
+      expectedByRole.set(t.roleKey, list);
+    }
+
+    for (const employeeId of employeeIds) {
+      const role = roleByEmployee.get(employeeId);
+      if (!role || !isRoleKey(role.roleKey)) continue; // no role = nothing to be a percentage of
+      const expected = expectedByRole.get(role.roleKey) ?? [];
+      if (expected.length === 0) continue;
+      const done = expected.filter(id => doneIds.has(id));
+      await db.insert(schema.jobRoleCompletions)
+        .values(withTenant({
+          jobId,
+          employeeId,
+          nzDate: closeDate,
+          roleKey: role.roleKey,
+          itemsDone: done.length,
+          itemsExpected: expected.length,
+          expectedItemIds: expected,
+          doneItemIds: done,
+        }))
+        .onConflictDoUpdate({
+          target: [schema.jobRoleCompletions.jobId, schema.jobRoleCompletions.employeeId],
+          set: {
+            nzDate: closeDate,
+            roleKey: role.roleKey,
+            itemsDone: done.length,
+            itemsExpected: expected.length,
+            expectedItemIds: expected,
+            doneItemIds: done,
+          },
+        });
+    }
+  }
+
   // One person's unticked role tasks on a job. Fed back on clock-out so the app can
   // prompt before they walk off — the prompt NEVER gates the stop, because gating it
   // just moves when people press stop and the resulting time drift poisons back-costing.
@@ -19819,6 +19931,94 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         success: false,
         message: 'Error creating staff assignments'
       });
+    }
+  });
+
+  // How often each person finishes their role checklist.
+  //
+  // Reads the frozen snapshots written at job close, NOT a live recompute — the
+  // denominator each job was judged against is the task list that existed then, so
+  // editing role_checklist_tasks in Settings can't rewrite history.
+  app.get('/api/metrics/role-completion', async (req: Request, res: Response) => {
+    try {
+      // Same tenant gate as the checklist itself (shared/roleChecklistAccess.ts).
+      if (!businessHasRoleChecklist(currentBusinessId())) {
+        return res.json({ success: true, data: { employees: [], totals: { jobsCounted: 0, jobsFullyComplete: 0, completionRate: 0 }, period: { from: null, to: null } } });
+      }
+      const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+      const from = isDate(req.query.startDate) ? req.query.startDate : null;
+      const to = isDate(req.query.endDate) ? req.query.endDate : null;
+
+      const filters = [];
+      if (from) filters.push(gte(schema.jobRoleCompletions.nzDate, from));
+      if (to) filters.push(lte(schema.jobRoleCompletions.nzDate, to));
+      const rows = await db.select().from(schema.jobRoleCompletions)
+        .where(filters.length > 0 ? and(...filters) : undefined);
+
+      const allEmployees = await storage.getAllEmployees();
+      const employeeMap = new Map(allEmployees.map(e => [e.id, e]));
+
+      interface Agg {
+        employeeId: string;
+        employeeName: string;
+        roleKeys: string[];
+        jobsCounted: number;
+        jobsFullyComplete: number;
+        completionRate: number;
+        itemsDone: number;
+        itemsExpected: number;
+        taskRate: number;
+      }
+      const byEmployee = new Map<string, Agg>();
+      for (const r of rows) {
+        const employee = employeeMap.get(r.employeeId);
+        if (!employee) continue; // left the company / other tenant — RLS already hid those
+        let agg = byEmployee.get(r.employeeId);
+        if (!agg) {
+          agg = {
+            employeeId: r.employeeId,
+            employeeName: `${employee.firstName} ${employee.lastName}`.trim(),
+            roleKeys: [],
+            jobsCounted: 0,
+            jobsFullyComplete: 0,
+            completionRate: 0,
+            itemsDone: 0,
+            itemsExpected: 0,
+            taskRate: 0,
+          };
+          byEmployee.set(r.employeeId, agg);
+        }
+        agg.jobsCounted += 1;
+        if (r.itemsExpected > 0 && r.itemsDone >= r.itemsExpected) agg.jobsFullyComplete += 1;
+        agg.itemsDone += r.itemsDone;
+        agg.itemsExpected += r.itemsExpected;
+        if (!agg.roleKeys.includes(r.roleKey)) agg.roleKeys.push(r.roleKey);
+      }
+
+      const employees = Array.from(byEmployee.values()).map(a => ({
+        ...a,
+        completionRate: a.jobsCounted === 0 ? 0 : Math.round((a.jobsFullyComplete / a.jobsCounted) * 100),
+        taskRate: a.itemsExpected === 0 ? 0 : Math.round((a.itemsDone / a.itemsExpected) * 100),
+      })).sort((x, y) => y.completionRate - x.completionRate || x.employeeName.localeCompare(y.employeeName));
+
+      const jobsCounted = employees.reduce((n, e) => n + e.jobsCounted, 0);
+      const jobsFullyComplete = employees.reduce((n, e) => n + e.jobsFullyComplete, 0);
+
+      res.json({
+        success: true,
+        data: {
+          employees,
+          totals: {
+            jobsCounted,
+            jobsFullyComplete,
+            completionRate: jobsCounted === 0 ? 0 : Math.round((jobsFullyComplete / jobsCounted) * 100),
+          },
+          period: { from, to },
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching role completion metrics:', error);
+      res.status(500).json({ success: false, message: 'Error fetching role completion metrics' });
     }
   });
 
