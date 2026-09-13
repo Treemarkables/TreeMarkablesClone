@@ -423,6 +423,8 @@ export default function ProposalViewer({}: ProposalViewerProps) {
                   blocks={blocks}
                   selectedChoices={selectedChoices}
                   selectedOptionalItems={selectedOptionalItems}
+                  onOptionalToggle={!isAccepted && !isExpired ? handleOptionalToggle : undefined}
+                  onChoiceSelect={!isAccepted && !isExpired ? handleChoiceSelect : undefined}
                 />
               );
             }

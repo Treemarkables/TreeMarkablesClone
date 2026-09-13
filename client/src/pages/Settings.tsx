@@ -128,6 +128,13 @@ const settingsSections: SettingSection[] = [
         path: "/settings/channels"
       },
       {
+        id: "suppliers",
+        title: "Suppliers",
+        description: "Per-supplier email addresses so invoices land in your queue already read and checked",
+        icon: Receipt,
+        path: "/settings/suppliers"
+      },
+      {
         id: "import",
         title: "Import & Migration",
         description: "Bring your customers and jobs across from ServiceM8 or CSV",

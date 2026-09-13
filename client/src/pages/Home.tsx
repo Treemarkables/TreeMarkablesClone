@@ -123,7 +123,7 @@ export default function Home() {
       <SEO
         title="Treemarkables — Gisborne's Number 1 Arborist & Tree Care"
         description="Gisborne's trusted arborists for safe tree removals, expert pruning, stump grinding and hedge trimming across Tairāwhiti and the East Coast."
-        canonicalUrl="https://app.treemarkables.co.nz/"
+        canonicalUrl="https://www.treemarkables.co.nz/"
       />
 
       <HeaderV2 />

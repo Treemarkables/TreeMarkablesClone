@@ -68,7 +68,7 @@ interface EmailComposerModalProps {
   invoiceData?: any;
   quoteData?: any;
   proposalData?: any;
-  templateType?: "invoice" | "quote" | "proposal";
+  templateType?: "invoice" | "quote" | "proposal" | "general";
   customEmail?: string;
   defaultCc?: string;
 }
@@ -765,6 +765,9 @@ export function EmailComposerModal({
           queryKey: ["/api/jobs", job.id, "diary"],
         });
       }
+      // An emailed invoice gets stamped status='sent' server-side — refresh
+      // invoice caches so the job-card header price picks it up.
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
 
       onClose();
     },

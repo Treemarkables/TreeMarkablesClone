@@ -103,10 +103,10 @@ export default function TreeRemoval() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "@id": "https://app.treemarkables.co.nz/#business",
+    "@id": "https://www.treemarkables.co.nz/#business",
     name: "Treemarkables",
     description: "Professional tree removal services in Gisborne, New Zealand. Certified arborists specializing in hazardous tree removal, emergency services, and precision cutting.",
-    url: "https://app.treemarkables.co.nz",
+    url: "https://www.treemarkables.co.nz",
     telephone: "+64272166882",
     address: { "@type": "PostalAddress", addressLocality: "Gisborne", addressRegion: "Gisborne Region", addressCountry: "NZ" },
     geo: { "@type": "GeoCoordinates", latitude: -38.6623, longitude: 178.0176 },
@@ -124,8 +124,8 @@ export default function TreeRemoval() {
         keywords="tree removal Gisborne, safe tree removal, certified arborists Gisborne, dangerous tree removal, unwanted tree removal, Wairoa tree removal, competitive tree removal prices"
         ogTitle="Tree Removal Gisborne – Safe & Efficient Service"
         ogDescription="Need a dangerous or unwanted tree removed? Our certified arborists provide safe tree removal for homes and farms in Gisborne and Wairoa. Contact us for competitive prices."
-        ogImage="https://app.treemarkables.co.nz/hazardous-tree-removal.jpg"
-        canonicalUrl="https://app.treemarkables.co.nz/tree-removal"
+        ogImage="https://www.treemarkables.co.nz/hazardous-tree-removal.jpg"
+        canonicalUrl="https://www.treemarkables.co.nz/tree-removal"
         structuredData={structuredData}
       />
       <HeaderV2 />
