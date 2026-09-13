@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { getNZDateString } from "@shared/dateUtils";
 
 // Staff time entry schema
 const staffTimeEntrySchema = z.object({
@@ -64,7 +65,6 @@ export function StaffTimeManager({
   });
 
   // Fetch ALL staff time entries for the job from the new time tracking system
-  const today = new Date().toISOString().split('T')[0];
   const { data: staffTimeData, isLoading } = useQuery({
     queryKey: ['time-entries', jobId],
     queryFn: async () => {
@@ -85,7 +85,7 @@ export function StaffTimeManager({
       employeeId: "",
       hours: "",
       rate: "",
-      date: new Date().toISOString().split('T')[0], // Today's date
+      date: getNZDateString(new Date()), // Today in NZ
     },
   });
 
@@ -103,7 +103,7 @@ export function StaffTimeManager({
         employeeId: "",
         hours: "",
         rate: "",
-        date: new Date().toISOString().split('T')[0],
+        date: getNZDateString(new Date()),
       });
     }
   }, [editingEntry, form]);

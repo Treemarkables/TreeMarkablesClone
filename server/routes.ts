@@ -14898,7 +14898,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           hours: hours,
           rate: rate || 0,
           costRate: costRate !== null && !isNaN(costRate) ? costRate : undefined,
-          date: entry.date || entry.entryDate || new Date().toISOString().split('T')[0]
+          date: entry.date || entry.entryDate || getNZDateString(new Date())
         });
 
         // Only add to diary for NEW entries (skip existing ones being preserved)
@@ -15028,7 +15028,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       hours,
       rate: chargeRate,
       costRate,
-      date: new Date().toISOString().split('T')[0],
+      // NZ calendar day, not UTC: a timer stopped before ~1pm NZ would
+      // otherwise be filed under yesterday.
+      date: getNZDateString(new Date()),
     });
 
     // Recalculate labour cost from cost rates (same maths as the manual flow)
