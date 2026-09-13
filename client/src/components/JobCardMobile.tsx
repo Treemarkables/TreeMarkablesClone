@@ -37,6 +37,7 @@ import {
   Send,
   Loader2,
   Navigation,
+  ScrollText,
   Link2,
   FileImage,
   RotateCcw,
@@ -76,6 +77,7 @@ import { JobBillingPanel } from "@/components/JobBillingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { OnMyWayDialog } from "@/components/OnMyWayDialog";
+import { ProgressRecapDialog } from "@/components/ProgressRecapDialog";
 import { ShareTimelineDialog } from "@/components/ShareTimelineDialog";
 import { openPhotoReport } from "@/lib/openPhotoReport";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
@@ -289,6 +291,7 @@ export function JobCardMobile({
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showOnMyWay, setShowOnMyWay] = useState(false);
+  const [showProgressRecap, setShowProgressRecap] = useState(false);
   const [showShareTimeline, setShowShareTimeline] = useState(false);
 
   // Pick the best phone for native dialer: job-level mobile → customer mobile →
@@ -523,6 +526,7 @@ export function JobCardMobile({
                 <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actions?.proposal ?? actionStub("Proposal")} />
                 <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
                 <ActionTile label="On My Way" icon={Navigation} colour="orange" onClick={() => setShowOnMyWay(true)} />
+                <ActionTile label="Progress Recap" icon={ScrollText} colour="purple" onClick={() => setShowProgressRecap(true)} />
                 <ActionTile label="Share Timeline" icon={Link2} colour="blue" onClick={() => setShowShareTimeline(true)} />
                 <ActionTile label="Photo Report" icon={FileImage} colour="slate" onClick={() => openPhotoReport(jobId)} />
                 <ActionTile
@@ -641,6 +645,13 @@ export function JobCardMobile({
           onClose={() => setShowEmailModal(false)}
           job={job}
           customer={customer}
+        />
+      )}
+      {showProgressRecap && (
+        <ProgressRecapDialog
+          isOpen={showProgressRecap}
+          onClose={() => setShowProgressRecap(false)}
+          jobId={jobId}
         />
       )}
       {showOnMyWay && (

@@ -52,6 +52,7 @@ import {
   MoreHorizontal,
   Mic,
   Navigation,
+  ScrollText,
   Link2,
   FileImage,
   Calendar as CalendarIcon,
@@ -104,6 +105,7 @@ import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { OnMyWayDialog } from "@/components/OnMyWayDialog";
+import { ProgressRecapDialog } from "@/components/ProgressRecapDialog";
 import { ShareTimelineDialog } from "@/components/ShareTimelineDialog";
 import { openPhotoReport } from "@/lib/openPhotoReport";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
@@ -291,6 +293,7 @@ export function JobCardDesktop({
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showOnMyWay, setShowOnMyWay] = useState(false);
+  const [showProgressRecap, setShowProgressRecap] = useState(false);
   const [showShareTimeline, setShowShareTimeline] = useState(false);
   const { toast } = useToast();
   const { webCallAvailable, startCall } = useWebCall();
@@ -730,6 +733,13 @@ export function JobCardDesktop({
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
+                  onClick={() => setShowProgressRecap(true)}
+                  data-testid="more-progress-recap"
+                >
+                  <ScrollText className="w-4 h-4 mr-2 text-purple-600" />
+                  Progress Recap
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={() => setShowShareTimeline(true)}
                   data-testid="more-share-timeline"
                 >
@@ -846,6 +856,13 @@ export function JobCardDesktop({
           onClose={() => setShowEmailModal(false)}
           job={job}
           customer={customer}
+        />
+      )}
+      {showProgressRecap && (
+        <ProgressRecapDialog
+          isOpen={showProgressRecap}
+          onClose={() => setShowProgressRecap(false)}
+          jobId={jobId}
         />
       )}
       {showOnMyWay && (

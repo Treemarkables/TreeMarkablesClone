@@ -31,7 +31,7 @@ import { cacheDeletePrefix } from "./perfCache";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db, ownerDb } from "./db";
-import { eq, desc, sql, inArray, and, gte, lt, lte, ne } from "drizzle-orm";
+import { eq, desc, sql, inArray, and, gte, lt, lte, ne, asc } from "drizzle-orm";
 import { invoices, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
@@ -150,6 +150,7 @@ if (ffmpegStatic) {
 }
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString, nzTimeToUTC } from "@shared/dateUtils";
+import { ROLE_LABEL as ROLE_LABELS, isRoleKey } from "@shared/crewRoles";
 import { composeCustomerAddress } from "@shared/customerAddress";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
@@ -14986,7 +14987,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           hours: hours,
           rate: rate || 0,
           costRate: costRate !== null && !isNaN(costRate) ? costRate : undefined,
-          date: entry.date || entry.entryDate || new Date().toISOString().split('T')[0]
+          date: entry.date || entry.entryDate || getNZDateString(new Date())
         });
 
         // Only add to diary for NEW entries (skip existing ones being preserved)
@@ -15101,6 +15102,100 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
   // Stop a running timer: write the time entry, recompute labour + margin,
   // diary-log, delete the timer row. Shared by /timer/stop and start-with-switch.
+  // Set one person's crew role for an NZ date. job_day_roles is the source of truth;
+  // the legacy job_staff_assignments.day_role is mirrored for one release.
+  async function upsertDayRole(employeeId: string, nzDate: string, roleKey: 'A' | 'B' | 'C', setBy: string | null) {
+    await db.insert(schema.jobDayRoles)
+      .values(withTenant({ employeeId, nzDate, roleKey, setByEmployeeId: setBy }))
+      .onConflictDoUpdate({
+        target: [schema.jobDayRoles.employeeId, schema.jobDayRoles.nzDate],
+        set: { roleKey, setByEmployeeId: setBy, updatedAt: new Date() },
+      });
+    const startUtc = fromZonedTime(`${nzDate}T00:00:00`, 'Pacific/Auckland');
+    const endUtc = fromZonedTime(`${nzDate}T23:59:59.999`, 'Pacific/Auckland');
+    await db.update(schema.jobStaffAssignments)
+      .set({ dayRole: roleKey, updatedAt: new Date() })
+      .where(and(
+        eq(schema.jobStaffAssignments.employeeId, employeeId),
+        gte(schema.jobStaffAssignments.startTime, startUtc),
+        lte(schema.jobStaffAssignments.startTime, endUtc),
+      ));
+  }
+
+  // Enabled checklist tasks grouped by role, in display order.
+  async function getRoleTaskLabels(): Promise<Record<'A' | 'B' | 'C', string[]>> {
+    const rows = await db.select().from(schema.roleChecklistTasks)
+      .orderBy(asc(schema.roleChecklistTasks.sortOrder), asc(schema.roleChecklistTasks.createdAt));
+    const byRole: Record<'A' | 'B' | 'C', string[]> = { A: [], B: [], C: [] };
+    for (const r of rows) {
+      if (!r.isEnabled) continue;
+      if (r.roleKey === 'A' || r.roleKey === 'B' || r.roleKey === 'C') byRole[r.roleKey].push(r.label);
+    }
+    return byRole;
+  }
+
+  // On clock-in, tell each person what their role expects of them today. Anyone
+  // clocked in WITHOUT a role isn't nagged — the person who pressed the button gets
+  // one line instead, because they're the one who can fix it.
+  async function notifyCrewOfRoles(job: any, employeeIds: string[], nzDate: string, requestedBy: string | null) {
+    if (employeeIds.length === 0) return;
+    const [roleRows, taskLabels] = await Promise.all([
+      db.select().from(schema.jobDayRoles).where(and(
+        inArray(schema.jobDayRoles.employeeId, employeeIds),
+        eq(schema.jobDayRoles.nzDate, nzDate),
+      )),
+      getRoleTaskLabels(),
+    ]);
+    const roleByEmployee = new Map(roleRows.map(r => [r.employeeId, r.roleKey as 'A' | 'B' | 'C']));
+    const jobRef = job?.jobNumber ? `Job ${job.jobNumber}` : 'this job';
+    const withoutRole: string[] = [];
+
+    for (const employeeId of employeeIds) {
+      const role = roleByEmployee.get(employeeId);
+      if (!role) {
+        withoutRole.push(employeeId);
+        continue;
+      }
+      const tasks = taskLabels[role];
+      await notificationHelper.notifyEmployee(employeeId, {
+        title: `You're ${ROLE_LABELS[role]} on ${jobRef}`,
+        body: tasks.length > 0 ? tasks.join(' · ') : 'No tasks set for this role.',
+        clickAction: `/jobs/${job.id}`,
+        collapseId: `day-role-${job.id}-${employeeId}-${nzDate}`,
+        data: { jobId: job.id, roleKey: role },
+      });
+    }
+
+    if (withoutRole.length > 0 && requestedBy) {
+      await notificationHelper.notifyEmployee(requestedBy, {
+        title: `${withoutRole.length} crew on ${jobRef} have no role today`,
+        body: 'Open the job card to set who is Kaitiaki, Kaiwhangai and Kaitirotiro.',
+        clickAction: `/jobs/${job.id}`,
+        collapseId: `day-role-missing-${job.id}-${nzDate}`,
+      });
+    }
+  }
+
+  // One person's unticked role tasks on a job. Fed back on clock-out so the app can
+  // prompt before they walk off — the prompt NEVER gates the stop, because gating it
+  // just moves when people press stop and the resulting time drift poisons back-costing.
+  async function outstandingRoleItems(jobId: string, employeeId: string, nzDate: string) {
+    const [roleRow] = await db.select().from(schema.jobDayRoles).where(and(
+      eq(schema.jobDayRoles.employeeId, employeeId),
+      eq(schema.jobDayRoles.nzDate, nzDate),
+    ));
+    if (!roleRow || !isRoleKey(roleRow.roleKey)) return [];
+    const [tasks, completions] = await Promise.all([
+      db.select().from(schema.roleChecklistTasks)
+        .orderBy(asc(schema.roleChecklistTasks.sortOrder), asc(schema.roleChecklistTasks.createdAt)),
+      storage.getJobChecklistCompletions(jobId),
+    ]);
+    const done = new Set(completions.map(c => c.itemId));
+    return tasks
+      .filter(t => t.isEnabled && t.roleKey === roleRow.roleKey && !done.has(t.itemId))
+      .map(t => ({ itemId: t.itemId, label: t.label, roleKey: roleRow.roleKey as 'A' | 'B' | 'C' }));
+  }
+
   async function finalizeTimer(timer: { id: string; jobId: string; employeeId: string; startedAt: Date | string }) {
     const elapsedMs = Date.now() - new Date(timer.startedAt).getTime();
     // Round to 2dp hours, minimum 1 minute so an accidental tap-tap still
@@ -15116,7 +15211,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       hours,
       rate: chargeRate,
       costRate,
-      date: new Date().toISOString().split('T')[0],
+      // NZ calendar day, not UTC: a timer stopped before ~1pm NZ would
+      // otherwise be filed under yesterday.
+      date: getNZDateString(new Date()),
     });
 
     // Recalculate labour cost from cost rates (same maths as the manual flow)
@@ -15231,11 +15328,26 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         startedAt = parsed;
       }
 
+      // Clocking in is when the crew actually forms, so it's also where roles get
+      // allocated — the picker sends them alongside the ids. Applied before the
+      // timers start so the notification below can name the right tasks. A missing
+      // entry means "leave their role alone", not "clear it".
+      const todayNZ = getNZDateString(new Date());
+      const roleInput = (req.body?.roles && typeof req.body.roles === 'object')
+        ? req.body.roles as Record<string, unknown>
+        : {};
+      const clockedIn: string[] = [];
+
       const started: any[] = [];
       const switchedJobIds = new Set<string>();
       for (const employeeId of employeeIds) {
         const employee = await storage.getEmployee(employeeId);
         if (!employee) continue; // unknown/other-tenant id — skip
+        const requestedRole = roleInput[employeeId];
+        if (isRoleKey(requestedRole)) {
+          await upsertDayRole(employeeId, todayNZ, requestedRole, req.session.employeeId ?? null);
+        }
+        clockedIn.push(employeeId);
         const running = await storage.getActiveTimerForEmployee(employeeId);
         if (running) {
           if (running.jobId === jobId) continue; // already clocked in here
@@ -15253,6 +15365,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           switchedJobIds: Array.from(switchedJobIds),
         },
       });
+
+      // After the response — a push that fails must never fail the clock-in.
+      void notifyCrewOfRoles(job, clockedIn, todayNZ, req.session.employeeId ?? null)
+        .catch(err => console.error('Error notifying crew of roles:', err));
     } catch (error) {
       console.error('Error starting timer(s):', error);
       res.status(500).json({ success: false, message: 'Error starting timer(s)' });
@@ -15277,7 +15393,14 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         return res.status(404).json({ success: false, message: 'No running timer' });
       }
       const result = await finalizeTimer(timer);
-      res.json({ success: true, data: result });
+      // The stop has already happened. `outstanding` is a prompt for the client,
+      // never a reason to fail this request.
+      const outstanding = await outstandingRoleItems(timer.jobId, timer.employeeId, getNZDateString(new Date()))
+        .catch(err => {
+          console.error('Error computing outstanding role items:', err);
+          return [];
+        });
+      res.json({ success: true, data: { ...result, outstanding, employeeId: timer.employeeId } });
     } catch (error) {
       console.error('Error stopping timer:', error);
       res.status(500).json({ success: false, message: 'Error stopping timer' });
@@ -15291,11 +15414,41 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
       const timers = await storage.getActiveTimersForJob(req.params.id);
+      const stoppedEmployeeIds = timers.map(t => t.employeeId);
       const results = [];
       for (const t of timers) {
         results.push(await finalizeTimer(t)); // sequential — labour recompute isn't concurrent-safe
       }
-      res.json({ success: true, data: { stopped: results.length } });
+
+      // Everyone is already clocked out at this point. What follows only decides
+      // what to PROMPT about; none of it can fail the stop.
+      const todayNZ = getNZDateString(new Date());
+      const requesterId = req.session.employeeId;
+      let outstanding: Array<{ itemId: string; label: string; roleKey: 'A' | 'B' | 'C' }> = [];
+      let totalOutstanding = 0;
+      try {
+        for (const employeeId of stoppedEmployeeIds) {
+          const items = await outstandingRoleItems(req.params.id, employeeId, todayNZ);
+          totalOutstanding += items.length;
+          if (employeeId === requesterId) outstanding = items;
+        }
+      } catch (err) {
+        console.error('Error computing outstanding role items:', err);
+      }
+
+      res.json({ success: true, data: { stopped: results.length, outstanding, totalOutstanding } });
+
+      // Foreman digest — one line for the whole crew, not one per person.
+      if (totalOutstanding > 0 && requesterId) {
+        const job = await storage.getJob(req.params.id).catch(() => null);
+        const jobRef = job?.jobNumber ? `Job ${job.jobNumber}` : 'This job';
+        void notificationHelper.notifyEmployee(requesterId, {
+          title: `${jobRef} finished with ${totalOutstanding} task${totalOutstanding === 1 ? '' : 's'} unticked`,
+          body: 'Open the job card to see what each role still owes.',
+          clickAction: `/jobs/${req.params.id}`,
+          collapseId: `role-tasks-outstanding-${req.params.id}-${todayNZ}`,
+        }).catch(err => console.error('Error sending outstanding-tasks digest:', err));
+      }
     } catch (error) {
       console.error('Error stopping job timers:', error);
       res.status(500).json({ success: false, message: 'Error stopping job timers' });
@@ -17535,6 +17688,72 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // AI progress recap — turns the job's diary into a short, customer-friendly
+  // progress update the owner can paste into an email or text (CompanyCam's
+  // "Progress Recap", GPT-written). Metered as an AI action.
+  app.post('/api/jobs/:jobId/progress-recap', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+      const businessId = req.session.businessId;
+      if (businessId) {
+        const ok = await usageMeter.guard('ai', businessId, 'progress_recap');
+        if (!ok) return res.status(429).json({ success: false, message: 'Monthly AI limit reached — upgrade your plan or wait for the next billing cycle.' });
+      }
+
+      const entries = await storage.getJobDiaryEntriesByJob(req.params.jobId);
+      const usable = [...entries]
+        .filter((e: any) => !e.isPrivate)
+        .sort((a: any, b: any) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime())
+        .slice(-80); // newest 80 — plenty of context without blowing the prompt
+
+      if (usable.length === 0) {
+        return res.status(400).json({ success: false, message: 'No diary activity to summarise yet' });
+      }
+
+      const digest = usable.map((e: any) => {
+        const when = e.createdAt ? getNZDateString(new Date(e.createdAt)) : '';
+        const photoCount = (Array.isArray(e.photos) ? e.photos.length : 0) + (e.photoUrl && !(Array.isArray(e.photos) && e.photos.length) ? 1 : 0);
+        const desc = String(e.description || '').slice(0, 300);
+        return `${when} [${e.entryType}] ${e.title}${desc && desc !== e.title ? ` — ${desc}` : ''}${photoCount ? ` (${photoCount} photo${photoCount > 1 ? 's' : ''})` : ''}`;
+      }).join('\n').slice(0, 12000);
+
+      const settings = await storage.getBusinessSettings();
+      const identity = getBusinessIdentity(settings);
+      const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'system',
+            content: `You write short progress updates for ${identity.name || 'a field-service business'} (New Zealand) to send to their customer. Warm, plain-English, professional. NZ English spelling. Plain text only — no markdown, no emoji, no headings. 120-200 words. Summarise what has been done so far and where the job is at. Never invent work that isn't in the log, never mention prices unless they appear in the log, and never include internal-sounding details (staff scheduling gripes, costs, margins).`,
+          },
+          {
+            role: 'user',
+            content: `Job: ${job.title || `#${job.jobNumber}`}${customer?.name ? `\nCustomer: ${customer.name}` : ''}${job.address ? `\nSite: ${job.address}` : ''}\nStatus: ${job.status}\n\nActivity log (oldest first):\n${digest}\n\nWrite the progress update addressed to the customer (start with "Hi ${customer?.name?.split(' ')[0] || 'there'},").`,
+          },
+        ],
+      });
+
+      const recap = completion.choices[0]?.message?.content?.trim();
+      if (!recap) {
+        return res.status(500).json({ success: false, message: 'Could not generate a recap' });
+      }
+      if (businessId) await usageMeter.recordUsage('ai', businessId, { feature: 'progress_recap' });
+
+      res.json({ success: true, data: { recap } });
+    } catch (error) {
+      console.error('Error generating progress recap:', error);
+      res.status(500).json({ success: false, message: 'Error generating progress recap' });
+    }
+  });
+
   // ── Public job photo timeline (CompanyCam-style share link) ───────────────
 
   // Get-or-create the job's shareable timeline link (session side).
@@ -19081,6 +19300,130 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Everyone who is actually on this job today, plus each person's day role.
+  //
+  // The job card's role section used to read staff assignments alone, so a crew the
+  // foreman clocked in without rostering them showed as "No crew assigned to this
+  // job yet" — a dead end with three people standing on site. The union with timers
+  // is what makes roles allocatable from the job card.
+  app.get('/api/jobs/:jobId/crew-today', async (req: Request, res: Response) => {
+    try {
+      const jobId = req.params.jobId;
+      const todayNZ = getNZDateString(new Date());
+
+      const [assignments, runningTimers, timeEntries, allEmployees] = await Promise.all([
+        storage.getJobStaffAssignmentsByJob(jobId),
+        storage.getActiveTimersForJob(jobId),
+        storage.getJobStaffTimeEntries(jobId),
+        storage.getAllEmployees(),
+      ]);
+
+      // addStaffTimeEntry stamps `date` from the UTC calendar day, which is the NZ
+      // day behind for anything worked before ~1pm NZ. Accept both spellings so
+      // this morning's stopped timers aren't dropped from the crew list.
+      const todayUTC = new Date().toISOString().split('T')[0];
+      const workedToday = new Set(
+        timeEntries
+          .filter((e: any) => e?.date === todayNZ || e?.date === todayUTC)
+          .map((e: any) => e.employeeId)
+          .filter(Boolean),
+      );
+
+      const employeeMap = new Map(allEmployees.map(e => [e.id, e]));
+      const source = new Map<string, 'assigned' | 'clocked_in' | 'worked'>();
+      for (const a of assignments) {
+        if (a.employeeId) source.set(a.employeeId, 'assigned');
+      }
+      for (const id of Array.from(workedToday)) {
+        if (!source.has(id)) source.set(id, 'worked');
+      }
+      // Running beats everything else — that person is on the job right now.
+      for (const t of runningTimers) {
+        source.set(t.employeeId, 'clocked_in');
+      }
+
+      const employeeIds = Array.from(source.keys()).filter(id => employeeMap.has(id));
+      const roleRows = employeeIds.length === 0 ? [] : await db
+        .select()
+        .from(schema.jobDayRoles)
+        .where(and(
+          inArray(schema.jobDayRoles.employeeId, employeeIds),
+          eq(schema.jobDayRoles.nzDate, todayNZ),
+        ));
+      const roleByEmployee = new Map(roleRows.map(r => [r.employeeId, r.roleKey]));
+
+      const crew = employeeIds
+        .map(id => {
+          const employee = employeeMap.get(id)!;
+          return {
+            employeeId: id,
+            employeeName: `${employee.firstName} ${employee.lastName}`.trim(),
+            dayRole: (roleByEmployee.get(id) ?? null) as 'A' | 'B' | 'C' | null,
+            source: source.get(id)!,
+            isClockedIn: source.get(id) === 'clocked_in',
+          };
+        })
+        .sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+
+      res.json({ success: true, data: { date: todayNZ, crew } });
+    } catch (error) {
+      console.error('Error fetching crew for today:', error);
+      res.status(500).json({ success: false, message: 'Error fetching crew for today' });
+    }
+  });
+
+  // Add people to TODAY's crew on this job, straight from the job card.
+  //
+  // Deliberately not the /staff-assignments create route: that one is the scheduling
+  // path — it fans out across every day the job runs, checks conflicts and fires
+  // assignment notifications. This is "these people are on this job today", so it
+  // writes one row each for today only, silently. Clocking someone in achieves the
+  // same thing as a side effect; this is for allocating a role before anyone starts
+  // the clock.
+  app.post('/api/jobs/:jobId/crew-today', async (req: Request, res: Response) => {
+    try {
+      const jobId = req.params.jobId;
+      const requested: unknown = req.body?.employeeIds;
+      if (!Array.isArray(requested) || requested.length === 0) {
+        return res.status(400).json({ success: false, message: 'employeeIds required' });
+      }
+      const job = await storage.getJob(jobId);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+      const employeeIds = Array.from(new Set(requested.filter((v): v is string => typeof v === 'string'))).slice(0, 50);
+      const todayNZ = getNZDateString(new Date());
+      const startTime = nzTimeToUTC(todayNZ, job.scheduledStartTime || '07:00');
+      const endTime = nzTimeToUTC(todayNZ, job.scheduledEndTime || '17:00');
+
+      const existing = await storage.getJobStaffAssignmentsByJob(jobId);
+      const alreadyToday = new Set(
+        existing
+          .filter(a => a.startTime && getNZDateString(a.startTime) === todayNZ)
+          .map(a => a.employeeId),
+      );
+
+      const added: string[] = [];
+      for (const employeeId of employeeIds) {
+        if (alreadyToday.has(employeeId)) continue;
+        const employee = await storage.getEmployee(employeeId);
+        if (!employee) continue; // unknown/other-tenant id — skip
+        await storage.createJobStaffAssignment({
+          jobId,
+          employeeId,
+          startTime,
+          endTime,
+          status: 'assigned',
+        });
+        added.push(employeeId);
+      }
+
+      res.json({ success: true, data: { added, date: todayNZ } });
+    } catch (error) {
+      console.error("Error adding today's crew:", error);
+      res.status(500).json({ success: false, message: "Error adding today's crew" });
+    }
+  });
+
   // Create staff assignments for a job (with conflict checking and notifications)
   app.post('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
     try {
@@ -19479,9 +19822,34 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Set the day-level Role A / Role B for one crew member on one NZ date.
-  // Mirrored across every assignment row for that (employeeId, NZ-date) so per-job
-  // reads pick it up with no joins. Setting null clears the role for the day.
+  // Every crew role set for one NZ date. The clock-in picker lists all staff, not
+  // just this job's, so it needs roles for people who have no assignment here yet.
+  app.get('/api/day-roles', async (req: Request, res: Response) => {
+    try {
+      const date = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+        ? req.query.date
+        : getNZDateString(new Date());
+      const rows = await db.select().from(schema.jobDayRoles).where(eq(schema.jobDayRoles.nzDate, date));
+      res.json({
+        success: true,
+        data: rows.map(r => ({ employeeId: r.employeeId, dayRole: r.roleKey })),
+        date,
+      });
+    } catch (error) {
+      console.error('Error fetching day roles:', error);
+      res.status(500).json({ success: false, message: 'Error fetching day roles' });
+    }
+  });
+
+  // Set the day-level crew role (Kaitiaki / Kaiwhangai / Kaitirotiro) for one person
+  // on one NZ date. Setting null clears it for the day.
+  //
+  // job_day_roles is the source of truth — a role is a fact about a PERSON on a DAY,
+  // so someone who is clocked in without any assignment row can still hold one (that
+  // gap is what blocked allocating roles from the job card). The legacy
+  // job_staff_assignments.day_role is still mirrored for one release so existing
+  // readers keep working; drop that write once nothing reads the column.
+  //
   // Must be registered BEFORE /api/staff-assignments/:id so Express doesn't match :id="day-role".
   app.put('/api/staff-assignments/day-role', async (req: Request, res: Response) => {
     try {
@@ -19492,6 +19860,35 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (dayRole !== null && dayRole !== 'A' && dayRole !== 'B' && dayRole !== 'C') {
         return res.status(400).json({ success: false, message: "dayRole must be 'A', 'B', 'C', or null" });
       }
+
+      // Reject ids from another tenant outright — RLS hides them from the read, and
+      // without this an unknown id would silently write a role nobody can see.
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee) {
+        return res.status(404).json({ success: false, message: 'Employee not found' });
+      }
+
+      if (dayRole === null) {
+        await db.delete(schema.jobDayRoles)
+          .where(and(
+            eq(schema.jobDayRoles.employeeId, employeeId),
+            eq(schema.jobDayRoles.nzDate, date),
+          ));
+      } else {
+        await db.insert(schema.jobDayRoles)
+          .values(withTenant({
+            employeeId,
+            nzDate: date,
+            roleKey: dayRole,
+            setByEmployeeId: req.session.employeeId ?? null,
+          }))
+          .onConflictDoUpdate({
+            target: [schema.jobDayRoles.employeeId, schema.jobDayRoles.nzDate],
+            set: { roleKey: dayRole, setByEmployeeId: req.session.employeeId ?? null, updatedAt: new Date() },
+          });
+      }
+
+      // Transitional mirror onto the legacy column (see note above).
       const startUtc = fromZonedTime(`${date}T00:00:00`, 'Pacific/Auckland');
       const endUtc = fromZonedTime(`${date}T23:59:59.999`, 'Pacific/Auckland');
       const updated = await db.update(schema.jobStaffAssignments)
@@ -19502,7 +19899,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           lte(schema.jobStaffAssignments.startTime, endUtc),
         ))
         .returning();
-      res.json({ success: true, data: { updatedCount: updated.length } });
+
+      res.json({ success: true, data: { dayRole, updatedCount: updated.length } });
     } catch (error) {
       console.error('Error setting day role:', error);
       res.status(500).json({ success: false, message: 'Error setting day role' });
