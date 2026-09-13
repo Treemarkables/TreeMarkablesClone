@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getNZDateString } from "@shared/dateUtils";
 import { 
   Users, 
   Clock, 
@@ -49,7 +50,7 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
     employeeId: '',
     hours: '',
     rate: '',
-    date: new Date().toISOString().split('T')[0]
+    date: getNZDateString(new Date())
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -67,7 +68,6 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
   const employees: Employee[] = (employeesData?.data || []).filter((emp: Employee) => emp.isActive !== false);
 
   // Fetch ALL existing staff time entries for this job from the new time tracking system
-  const today = new Date().toISOString().split('T')[0];
   const { data: staffTimeData, isLoading } = useQuery({
     queryKey: ['time-entries', jobId],
     queryFn: async () => {
@@ -121,7 +121,7 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
         employeeId: '',
         hours: '',
         rate: '',
-        date: new Date().toISOString().split('T')[0]
+        date: getNZDateString(new Date())
       });
     },
     onError: (error: any) => {
@@ -428,7 +428,7 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
                     </div>
                     
                     <div className="text-sm text-gray-600">
-                      {entry.date && entry.date !== new Date().toISOString().split('T')[0] && (
+                      {entry.date && entry.date !== getNZDateString(new Date()) && (
                         <div>{new Date(entry.date).toLocaleDateString()}</div>
                       )}
                     </div>

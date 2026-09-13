@@ -2,6 +2,12 @@ import { storage } from '../storage.js';
 import { generateQuoteFollowupDraft } from './quoteFollowupAi.js';
 import { getBusinessIdentity } from '../businessIdentity.js';
 import * as usageMeter from './usageMeter.js';
+import * as notificationHelper from './notificationHelper.js';
+import { db } from '../db.js';
+import * as schema from '../../shared/schema.js';
+import { and, eq, inArray } from 'drizzle-orm';
+import { getNZDateString, jobRunsOnNZDate } from '../../shared/dateUtils.js';
+import { ROLE_LABEL, isRoleKey } from '../../shared/crewRoles.js';
 
 // De-duplication helper: check if a reminder of this type for this entity was already sent in the last 24 hours
 async function wasReminderSentRecently(type: string, entityId: string, entityField: 'jobId' | 'quoteId'): Promise<boolean> {
@@ -250,6 +256,90 @@ async function checkStaleLeads(): Promise<void> {
 }
 
 // Run all reminder checks — called by AutomatedTriggers every hour
+// Check 5: role checklist tasks still unticked after the crew clocked off.
+//
+// The clock-out sheet prompts on the spot, but it's dismissible — and the whole
+// reason the reminder exists is the person who taps dismiss and walks away. This is
+// the follow-up. It deliberately skips jobs with anyone still on the clock: a crew
+// mid-job hasn't failed to do anything yet.
+async function checkOutstandingRoleTasks(): Promise<void> {
+  const todayNZ = getNZDateString(new Date());
+  // addStaffTimeEntry stamps `date` from the UTC calendar day, which runs a day
+  // behind NZ for anything worked before ~1pm. Accept both spellings.
+  const todayUTC = new Date().toISOString().split('T')[0];
+
+  const roleRows = await db.select().from(schema.jobDayRoles)
+    .where(eq(schema.jobDayRoles.nzDate, todayNZ));
+  if (roleRows.length === 0) return;
+  const roleByEmployee = new Map(roleRows.map(r => [r.employeeId, r.roleKey]));
+
+  const taskRows = await db.select().from(schema.roleChecklistTasks);
+  const tasksByRole = new Map<string, Array<{ itemId: string; label: string }>>();
+  for (const t of taskRows) {
+    if (!t.isEnabled || !isRoleKey(t.roleKey)) continue;
+    const list = tasksByRole.get(t.roleKey) ?? [];
+    list.push({ itemId: t.itemId, label: t.label });
+    tasksByRole.set(t.roleKey, list);
+  }
+  if (tasksByRole.size === 0) return;
+
+  const { jobs } = await storage.getAllJobs({ limit: 999999, status: 'work_order' });
+  const recent = await storage.getNotificationsCreatedSince(new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+  for (const job of jobs) {
+    if (!jobRunsOnNZDate(job, todayNZ)) continue;
+
+    // Anyone still clocked in means the job isn't over — nothing is late yet.
+    const stillRunning = await storage.getActiveTimersForJob(job.id);
+    if (stillRunning.length > 0) continue;
+
+    const entries = await storage.getJobStaffTimeEntries(job.id);
+    const workedToday = Array.from(new Set(
+      entries
+        .filter((e: any) => e?.date === todayNZ || e?.date === todayUTC)
+        .map((e: any) => e.employeeId)
+        .filter(Boolean),
+    )) as string[];
+    if (workedToday.length === 0) continue;
+
+    const completions = await storage.getJobChecklistCompletions(job.id);
+    const done = new Set(completions.map(c => c.itemId));
+
+    for (const employeeId of workedToday) {
+      const roleKey = roleByEmployee.get(employeeId);
+      if (!roleKey || !isRoleKey(roleKey)) continue;
+      const outstanding = (tasksByRole.get(roleKey) ?? []).filter(t => !done.has(t.itemId));
+      if (outstanding.length === 0) continue;
+
+      // One nudge per person per job per day — this is a reminder, not a nag.
+      const alreadySent = recent.some(n =>
+        n.type === 'reminder_role_tasks' && n.jobId === job.id && n.userId === employeeId);
+      if (alreadySent) continue;
+
+      const label = ROLE_LABEL[roleKey];
+      await storage.createNotification({
+        title: `${outstanding.length} ${label} task${outstanding.length === 1 ? '' : 's'} still unticked`,
+        message: `Job #${job.jobNumber}: ${outstanding.map(t => t.label).join(', ')}`,
+        type: 'reminder_role_tasks',
+        priority: 'medium',
+        isRead: false,
+        userId: employeeId,
+        jobId: job.id,
+        actionUrl: `/jobs/${job.id}`,
+        metadata: { roleKey, itemIds: outstanding.map(t => t.itemId) },
+      });
+
+      await notificationHelper.notifyEmployee(employeeId, {
+        title: `${outstanding.length} ${label} task${outstanding.length === 1 ? '' : 's'} still unticked`,
+        body: `Job #${job.jobNumber}: ${outstanding.map(t => t.label).join(' · ')}`,
+        clickAction: `/jobs/${job.id}`,
+        collapseId: `role-tasks-${job.id}-${employeeId}-${todayNZ}`,
+      });
+      console.log(`[ReminderChecker] Role-task reminder: Job #${job.jobNumber} → ${employeeId} (${label})`);
+    }
+  }
+}
+
 export async function runAllReminderChecks(): Promise<void> {
   console.log('[ReminderChecker] Running proactive business reminder checks...');
   const results = await Promise.allSettled([
@@ -257,6 +347,7 @@ export async function runAllReminderChecks(): Promise<void> {
     checkUnstaffedTomorrowJobs(),
     checkUninvoicedCompletedJobs(),
     checkStaleLeads(),
+    checkOutstandingRoleTasks(),
   ]);
 
   const errors = results.filter(r => r.status === 'rejected');

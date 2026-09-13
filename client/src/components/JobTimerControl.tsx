@@ -27,6 +27,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
+import { getNZDateString } from "@shared/dateUtils";
+import type { RoleKey } from "@/lib/crewRoles";
+import { RoleChips } from "@/components/crew/RoleChips";
+import { StaffPickerList } from "@/components/crew/StaffPickerList";
+import {
+  ClockOutChecklistSheet,
+  type OutstandingItem,
+} from "@/components/crew/ClockOutChecklistSheet";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -81,6 +89,8 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [roles, setRoles] = useState<Record<string, RoleKey | null>>({});
+  const [outstanding, setOutstanding] = useState<OutstandingItem[] | null>(null);
   // Backdated clock-in — "we started at 7:30 but forgot to press the button".
   const [useCustomTime, setUseCustomTime] = useState(false);
   const [customTime, setCustomTime] = useState("");
@@ -95,6 +105,13 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
 
   // Staff list + business-wide running timers — only fetched while the
   // picker is open (badges for people already clocked in elsewhere).
+  // Roles for today, so the picker's chips arrive pre-filled — on the second job of
+  // the day the foreman just hits Start.
+  const { data: dayRolesResp } = useQuery<{ data: Array<{ employeeId: string; dayRole: RoleKey }> }>({
+    queryKey: ["/api/day-roles"],
+    staleTime: 60_000,
+  });
+
   const { data: employeesResp } = useQuery<{ data: EmployeeRow[] }>({
     queryKey: ["/api/employees"],
     enabled: pickerOpen,
@@ -145,6 +162,9 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
       preset.add(currentUser.id);
     }
     setSelectedIds(preset);
+    const existing: Record<string, RoleKey | null> = {};
+    for (const r of dayRolesResp?.data ?? []) existing[r.employeeId] = r.dayRole;
+    setRoles(existing);
     setUseCustomTime(false);
     setCustomTime("");
     setPickerOpen(true);
@@ -179,7 +199,11 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   };
 
   const startMutation = useMutation({
-    mutationFn: async (payload: { employeeIds: string[]; startedAt?: string }) => {
+    mutationFn: async (payload: {
+      employeeIds: string[];
+      startedAt?: string;
+      roles?: Record<string, RoleKey>;
+    }) => {
       const location = await getClockInLocation();
       const res = await apiRequest("POST", `/api/jobs/${jobId}/timer/start`,
         location ? { ...payload, location } : payload);
@@ -189,6 +213,13 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
       invalidateTimers();
       // Switched staff had timers finalized on other jobs — refresh those too.
       for (const switched of result?.data?.switchedJobIds ?? []) invalidateJob(switched);
+      queryClient.invalidateQueries({ queryKey: ["/api/day-roles"] });
+      queryClient.invalidateQueries({
+        predicate: (q) =>
+          Array.isArray(q.queryKey)
+          && q.queryKey[0] === "/api/jobs"
+          && q.queryKey[2] === "crew-today",
+      });
       setPickerOpen(false);
     },
     onError: () => {
@@ -202,10 +233,25 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   });
 
   const stopMutation = useMutation({
-    mutationFn: async (timerId: string) => apiRequest("POST", "/api/timer/stop", { timerId }),
-    onSuccess: () => {
+    mutationFn: async (timerId: string) => {
+      const res = await apiRequest("POST", "/api/timer/stop", { timerId });
+      return (await res.json()) as { data?: { outstanding?: OutstandingItem[]; employeeId?: string } };
+    },
+    onSuccess: (result) => {
       invalidateJob(jobId);
       queryClient.invalidateQueries({ queryKey: ["/api/timers/active"] });
+      queryClient.invalidateQueries({
+        predicate: (q) =>
+          Array.isArray(q.queryKey)
+          && q.queryKey[0] === "/api/jobs"
+          && q.queryKey[2] === "crew-today",
+      });
+      // Only prompt the person who actually clocked out. A foreman stopping
+      // someone else's timer shouldn't be handed that person's checklist.
+      const outstanding = result?.data?.outstanding ?? [];
+      if (outstanding.length > 0 && result?.data?.employeeId === currentUser?.id) {
+        setOutstanding(outstanding);
+      }
     },
     onError: () => {
       invalidateTimers();
@@ -218,10 +264,23 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   });
 
   const stopAllMutation = useMutation({
-    mutationFn: async () => apiRequest("POST", `/api/jobs/${jobId}/timers/stop-all`, {}),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/timers/stop-all`, {});
+      return (await res.json()) as { data?: { outstanding?: OutstandingItem[] } };
+    },
+    onSuccess: (result) => {
       invalidateJob(jobId);
       queryClient.invalidateQueries({ queryKey: ["/api/timers/active"] });
+      queryClient.invalidateQueries({
+        predicate: (q) =>
+          Array.isArray(q.queryKey)
+          && q.queryKey[0] === "/api/jobs"
+          && q.queryKey[2] === "crew-today",
+      });
+      // The server only returns the requester's own items here; the rest of the
+      // crew get theirs as a push, and the foreman gets one digest line.
+      const items = result?.data?.outstanding ?? [];
+      if (items.length > 0) setOutstanding(items);
     },
     onError: () => {
       invalidateTimers();
@@ -321,55 +380,52 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
               Clock in staff
             </DialogTitle>
             <DialogDescription>
-              Select who is working on this job. Staff clocked in on another
-              job will be switched here.
+              Select who is working on this job and give them their role for the
+              day. Staff clocked in on another job will be switched here.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="max-h-[50vh] overflow-y-auto -mx-1 px-1">
-            <ul className="space-y-1">
-              {employees.map((emp) => {
-                const running = timerByEmployee.get(emp.id);
-                const runningHere = running?.jobId === jobId;
-                const name = `${emp.firstName} ${emp.lastName}`;
+          <StaffPickerList
+            employees={employees}
+            selectedIds={selectedIds}
+            onToggle={toggleSelected}
+            lockedIds={new Set(
+              timers.filter((t) => t.jobId === jobId).map((t) => t.employeeId),
+            )}
+            renderTrailing={(emp) => {
+              const running = timerByEmployee.get(emp.id);
+              if (running?.jobId === jobId) {
                 return (
-                  <li key={emp.id}>
-                    <label
-                      className={`flex items-center gap-3 rounded-md px-3 py-2.5 ${
-                        runningHere ? "opacity-60" : "cursor-pointer hover:bg-muted/60"
-                      }`}
-                      data-testid={`picker-staff-${emp.id}`}
-                    >
-                      <Checkbox
-                        checked={runningHere || selectedIds.has(emp.id)}
-                        disabled={runningHere}
-                        onCheckedChange={() => toggleSelected(emp.id)}
-                      />
-                      <span className="text-sm font-medium flex-1 truncate">{name}</span>
-                      {runningHere ? (
-                        <span className="text-xs text-emerald-600 font-medium flex-shrink-0">
-                          Clocked in
-                        </span>
-                      ) : running ? (
-                        <span className="text-xs text-amber-600 font-medium flex-shrink-0">
-                          On Job {running.jobNumber ?? ""}
-                        </span>
-                      ) : scheduledIds.has(emp.id) ? (
-                        <span className="text-xs text-muted-foreground flex-shrink-0">
-                          Scheduled
-                        </span>
-                      ) : null}
-                    </label>
-                  </li>
+                  <span className="text-xs text-emerald-600 font-medium flex-shrink-0">
+                    Clocked in
+                  </span>
                 );
-              })}
-              {employees.length === 0 && (
-                <li className="text-sm text-muted-foreground px-3 py-4 text-center">
-                  No active staff found
-                </li>
-              )}
-            </ul>
-          </div>
+              }
+              if (running) {
+                return (
+                  <span className="text-xs text-amber-600 font-medium flex-shrink-0">
+                    On Job {running.jobNumber ?? ""}
+                  </span>
+                );
+              }
+              return scheduledIds.has(emp.id) ? (
+                <span className="text-xs text-muted-foreground flex-shrink-0">
+                  Scheduled
+                </span>
+              ) : null;
+            }}
+            renderBelow={(emp, selected) =>
+              selected ? (
+                <RoleChips
+                  size="sm"
+                  value={roles[emp.id] ?? null}
+                  onSelect={(role) => setRoles((r) => ({ ...r, [emp.id]: role }))}
+                  disabled={startMutation.isPending}
+                  testIdPrefix={`picker-role-${emp.id}`}
+                />
+              ) : null
+            }
+          />
 
           {/* Backdated start — pressed the button late? Set the real time. */}
           <div className="border-t border-border pt-3 space-y-2">
@@ -428,7 +484,15 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
                   }
                   startedAt = d.toISOString();
                 }
-                startMutation.mutate({ employeeIds: Array.from(selectedIds), startedAt });
+                const employeeIds = Array.from(selectedIds);
+                // Only send roles for people actually being clocked in, and only
+                // where one is set — an empty chip row means "leave their role alone".
+                const pickedRoles: Record<string, RoleKey> = {};
+                for (const id of employeeIds) {
+                  const role = roles[id];
+                  if (role) pickedRoles[id] = role;
+                }
+                startMutation.mutate({ employeeIds, startedAt, roles: pickedRoles });
               }}
               disabled={selectedIds.size === 0 || startMutation.isPending}
               data-testid="button-picker-start"
@@ -445,6 +509,12 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ClockOutChecklistSheet
+        jobId={jobId}
+        items={outstanding}
+        onDismiss={() => setOutstanding(null)}
+      />
     </div>
   );
 }

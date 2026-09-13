@@ -1994,6 +1994,41 @@ export type JobStaffAssignment = typeof jobStaffAssignments.$inferSelect;
 export type InsertJobStaffAssignment = z.infer<typeof insertJobStaffAssignmentSchema>;
 export type UpdateJobStaffAssignment = z.infer<typeof updateJobStaffAssignmentSchema>;
 
+// Per-person, per-day crew role (Kaitiaki / Kaiwhangai / Kaitirotiro) driving the
+// role checklist sections on the job card. This is a fact about a PERSON on a DAY,
+// not about one job booking, which is why it lives here rather than on
+// jobStaffAssignments.dayRole: that column had to be copied onto every assignment
+// row for the day and inherited onto newly created ones, and it left anyone who was
+// clocked in WITHOUT an assignment row with nowhere to hold a role — which is what
+// blocked allocating roles from the job card at all.
+//
+// dayRole is still written for one release so existing readers keep working; this
+// table is the read source. nzDate is the Pacific/Auckland calendar date
+// (YYYY-MM-DD) — see shared/dateUtils.getNZDateString.
+export const jobDayRoles = pgTable("job_day_roles", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull(),
+  nzDate: text("nz_date").notNull(),
+  roleKey: text("role_key").notNull(), // 'A' Kaiwhangai | 'B' Kaitirotiro | 'C' Kaitiaki
+  setByEmployeeId: varchar("set_by_employee_id"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  // employeeId is already tenant-scoped, so this stays clear of the nullable-
+  // businessId NULL-distinct trap a three-column unique would hit.
+  employeeDateUnique: unique("job_day_roles_employee_date_uniq").on(table.employeeId, table.nzDate),
+  dateIdx: index("job_day_roles_date_idx").on(table.nzDate),
+}));
+
+export const insertJobDayRoleSchema = createInsertSchema(jobDayRoles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type JobDayRole = typeof jobDayRoles.$inferSelect;
+export type InsertJobDayRole = z.infer<typeof insertJobDayRoleSchema>;
+
 // Job Template Schema  
 export const jobTemplates = pgTable("job_templates", {
   businessId: varchar("business_id"),
