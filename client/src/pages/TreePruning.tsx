@@ -86,10 +86,10 @@ export default function TreePruning() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "@id": "https://app.treemarkables.co.nz/tree-pruning#business",
+    "@id": "https://www.treemarkables.co.nz/tree-pruning#business",
     name: "Treemarkables Tree Pruning Services",
     description: "Professional tree pruning and care services in Gisborne, New Zealand. Expert arborists specializing in structural pruning, crown thinning, deadwooding, and tree health maintenance.",
-    url: "https://app.treemarkables.co.nz/tree-pruning",
+    url: "https://www.treemarkables.co.nz/tree-pruning",
     telephone: "+64272166882",
     address: { "@type": "PostalAddress", addressLocality: "Gisborne", addressRegion: "Gisborne Region", addressCountry: "NZ" },
     geo: { "@type": "GeoCoordinates", latitude: -38.6623, longitude: 178.0176 },
@@ -107,8 +107,8 @@ export default function TreePruning() {
         keywords="tree pruning Gisborne, professional arborists, tree health, crown reduction, tree shaping, East Coast tree pruning, free tree assessments, Gisborne tree care"
         ogTitle="Tree Pruning Gisborne – Professional Arborists"
         ogDescription="Improve tree health and safety with our expert tree pruning services. Treemarkables offers crown reduction and shaping across Gisborne and the wider East Coast. Free assessments available."
-        ogImage="https://app.treemarkables.co.nz/tree-pruning.jpg"
-        canonicalUrl="https://app.treemarkables.co.nz/tree-pruning"
+        ogImage="https://www.treemarkables.co.nz/tree-pruning.jpg"
+        canonicalUrl="https://www.treemarkables.co.nz/tree-pruning"
         structuredData={structuredData}
       />
       <HeaderV2 />

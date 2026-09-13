@@ -120,6 +120,27 @@ function openPhotoLightbox(urls: string[], startIndex: number): void {
   document.body.appendChild(modal);
 }
 
+export interface ChoiceLineItem {
+  id: string;
+  description: string;
+  quantity?: number;
+  unit?: string;
+  notes?: string;
+  pricingType: 'normal' | 'choice' | 'fixed';
+  unitPrice?: number;
+  total?: number;
+  fixedPrice?: number;
+  choices?: Array<{ id: string; label: string; description?: string; price: number; isDefault?: boolean }>;
+  selectedChoiceId?: string;
+  isOptional?: boolean;
+  selected?: boolean;
+  // Section the item came from — 'optional'/'multipleChoice' sections make
+  // every item in them customer-toggleable; sectionId groups multipleChoice
+  // siblings so selecting one deselects the rest.
+  sectionId?: string;
+  sectionType?: string;
+}
+
 export interface DocumentRenderContext {
   // Document noun for headings/labels — 'Invoice' (default), 'Proposal', or
   // 'Quote'. The header and meta blocks are shared across all three document
@@ -157,21 +178,28 @@ export interface DocumentRenderContext {
   // Proposal-flavoured fields — all optional; invoice callers can omit.
   proposalNumber?: string;
   expiryDate?: Date;
-  lineItemsWithChoices?: Array<{
+  lineItemsWithChoices?: ChoiceLineItem[];
+  // Ordered content flow mirroring the builder's sections (description, line
+  // items, description, …). When present, the lineItemsWithChoices block
+  // renders this interleaved flow instead of one flattened table, so the
+  // customer sees the document in exactly the order it was authored.
+  sectionFlow?: Array<{
     id: string;
-    description: string;
-    quantity?: number;
-    unit?: string;
-    notes?: string;
-    pricingType: 'normal' | 'choice' | 'fixed';
-    unitPrice?: number;
-    total?: number;
-    fixedPrice?: number;
-    choices?: Array<{ id: string; label: string; description?: string; price: number; isDefault?: boolean }>;
-    selectedChoiceId?: string;
-    isOptional?: boolean;
-    selected?: boolean;
+    title?: string;
+    content?: string;
+    items: ChoiceLineItem[];
   }>;
+  // Ex-GST value of the optional extras currently selected — rendered as an
+  // "Includes optional extras" line in the totals block so customers see their
+  // taps changing the price. Omitted/0 hides the line.
+  optionsSelectedExGst?: number;
+  // Interactive selection callbacks. Customer-facing proposal pages pass these
+  // so optional / multiple-choice items render as tappable circles that feed
+  // selections back into the page's totals + accept payload. Static callers
+  // (builder canvas, PDF-ish read-only renders) omit them and get the current
+  // non-interactive markers.
+  onOptionalToggle?: (lineItemId: string, selected: boolean) => void;
+  onChoiceSelect?: (lineItemId: string, choiceId: string) => void;
   photos?: Array<{ id: string; url: string; caption?: string; altText?: string }>;
   acceptance?: {
     accepted: boolean;
@@ -470,6 +498,9 @@ export function renderDocumentBlock(
           <div className="flex justify-end">
             <div className="w-full max-w-sm space-y-1">
               {cfg.showSubtotal && <div className="flex justify-between text-xs"><span className="text-gray-600">{editText('labelSubtotal', cfg.labelSubtotal || 'Subtotal (excl GST)')}:</span><span className="text-black">{formatCurrency(ctx.subtotal)}</span></div>}
+              {ctx.optionsSelectedExGst !== undefined && ctx.optionsSelectedExGst > 0 && (
+                <div className="flex justify-between text-xs"><span className="text-green-700 font-medium">Includes optional extras:</span><span className="text-green-700 font-medium">+{formatCurrency(ctx.optionsSelectedExGst)}</span></div>
+              )}
               {ctx.discountAmount !== undefined && ctx.discountAmount > 0 && <div className="flex justify-between text-xs"><span className="text-gray-600">Discount:</span><span className="text-black">-{formatCurrency(ctx.discountAmount)}</span></div>}
               {cfg.showGST && <div className="flex justify-between text-xs border-b border-gray-200 pb-1"><span className="text-gray-600">{editText('labelGST', cfg.labelGST || 'GST (15%)')}:</span><span className="text-black">{formatCurrency(ctx.gstAmount)}</span></div>}
               <div className="flex justify-between pt-2"><span className="text-sm font-bold text-black">{editText('labelTotal', cfg.labelTotal || 'Total Amount')}:</span><span className="text-sm font-bold text-black">{formatCurrency(ctx.totalAmount)}</span></div>
@@ -555,12 +586,11 @@ export function renderDocumentBlock(
     }
     case 'lineItemsWithChoices': {
       const cfg = block.config as DocumentBlockConfigLineItemsWithChoices;
-      const items = ctx.lineItemsWithChoices ?? [];
-      if (items.length === 0) return null;
       const descPct = cfg.descColPct ?? 60;
-      return (
-        <div key={block.id} className="mb-4">
-          <h2 className="text-xs font-semibold text-black mb-2">{cfg.labelDescription || 'Services & Pricing'}</h2>
+      // Renders one items table. Named `items` so the shared row/banner logic
+      // below reads the same whether it's the whole flattened list (legacy) or
+      // a single section's items (sectionFlow).
+      const renderItemsTable = (items: ChoiceLineItem[]) => (
           <div className="w-full overflow-x-auto">
             <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
               <thead className="bg-gray-50">
@@ -572,7 +602,24 @@ export function renderDocumentBlock(
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
+                {(() => {
+                  // Group stats for the customer-selectable sections, so each
+                  // group's banner can show a live "n added" count.
+                  const interactive = !!ctx.onOptionalToggle && cfg.showOptionalToggle !== false;
+                  const groupStats = new Map<string, { count: number; selected: number }>();
+                  for (const li of items) {
+                    if (li.sectionType !== 'optional' && li.sectionType !== 'multipleChoice') continue;
+                    const k = li.sectionId ?? 'none';
+                    const s = groupStats.get(k) ?? { count: 0, selected: 0 };
+                    s.count += 1;
+                    if (li.selected !== false) s.selected += 1;
+                    groupStats.set(k, s);
+                  }
+                  const colCount = 2 + (cfg.showQty ? 1 : 0) + (cfg.showRate ? 1 : 0);
+                  const rows: JSX.Element[] = [];
+                  let prevGroupKey: string | null = null;
+
+                  items.forEach((item) => {
                   const qty = item.quantity ?? 1;
                   let rate = 0;
                   let total = 0;
@@ -589,25 +636,107 @@ export function renderDocumentBlock(
                     rate = item.unitPrice ?? 0;
                     total = item.total ?? qty * rate;
                   }
-                  const dimmed = item.isOptional && item.selected === false;
-                  return (
-                    <tr key={item.id} className={`even:bg-gray-50 ${dimmed ? 'opacity-50' : ''}`}>
+                  const sectionInteractive = item.sectionType === 'optional' || item.sectionType === 'multipleChoice';
+                  const toggleable = !!item.isOptional || sectionInteractive;
+                  const isSelected = item.selected !== false;
+                  const dimmed = toggleable && !isSelected;
+                  const canToggle = toggleable && interactive;
+                  const isMultipleChoice = item.sectionType === 'multipleChoice';
+                  const handleToggle = () => {
+                    if (!canToggle) return;
+                    // multipleChoice sections are radio-style: picking one item
+                    // deselects its siblings in the same section.
+                    if (isMultipleChoice && !isSelected) {
+                      items.forEach(li => {
+                        if (li.sectionId === item.sectionId && li.id !== item.id) ctx.onOptionalToggle!(li.id, false);
+                      });
+                    }
+                    ctx.onOptionalToggle!(item.id, !isSelected);
+                  };
+
+                  // Banner row announcing a run of customer-selectable items —
+                  // spells out that they're optional and whether multiple can
+                  // be picked, with a live count of what's been added.
+                  const groupKey = sectionInteractive ? `${item.sectionId ?? 'none'}:${item.sectionType}` : null;
+                  if (interactive && groupKey && groupKey !== prevGroupKey) {
+                    const stats = groupStats.get(item.sectionId ?? 'none') ?? { count: 0, selected: 0 };
+                    rows.push(
+                      <tr key={`banner-${groupKey}`} className="bg-amber-50">
+                        <td colSpan={colCount} className="border border-amber-200 px-2 py-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <svg className="w-4 h-4 text-amber-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
+                            <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wide">
+                              {isMultipleChoice ? 'Optional — choose one' : 'Optional extras'}
+                            </span>
+                            <span className="text-[11px] text-amber-800">
+                              {isMultipleChoice
+                                ? 'Tap a circle to pick the option you want — it will be added to your total.'
+                                : `Tap a circle to add ${stats.count > 1 ? 'as many as you like ' : 'it '}to your total.`}
+                            </span>
+                            <span className={`ml-auto text-[11px] font-semibold rounded-full px-2 py-0.5 ${stats.selected > 0 ? 'bg-green-100 text-green-800' : 'bg-white text-amber-700 border border-amber-300'}`}>
+                              {stats.selected > 0
+                                ? `${stats.selected} ${isMultipleChoice ? 'selected' : 'added'}`
+                                : 'None added yet'}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>,
+                    );
+                  }
+                  prevGroupKey = groupKey;
+
+                  rows.push(
+                    <tr
+                      key={item.id}
+                      onClick={canToggle ? handleToggle : undefined}
+                      className={`${toggleable && isSelected && canToggle ? 'bg-green-50' : 'even:bg-gray-50'} ${dimmed && !canToggle ? 'opacity-50' : ''} ${canToggle ? 'cursor-pointer' : ''}`}
+                    >
                       <td className="border border-gray-200 px-2 py-2 text-xs text-gray-900">
                         <div className="flex items-start gap-2">
-                          {cfg.showOptionalToggle && item.isOptional && (
-                            <span className="inline-block mt-0.5 w-3 h-3 rounded border border-gray-400 flex-shrink-0" style={item.selected !== false ? { backgroundColor: '#2563eb', borderColor: '#2563eb' } : undefined} />
-                          )}
-                          <div className="flex-1">
+                          {canToggle ? (
+                            <button
+                              type="button"
+                              aria-pressed={isSelected}
+                              aria-label={isSelected ? `Remove ${item.description}` : `Add ${item.description}`}
+                              onClick={(e) => { e.stopPropagation(); handleToggle(); }}
+                              className={`mt-0.5 w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-1 ${isSelected ? 'bg-green-600 border-green-600 text-white shadow-sm scale-105' : 'bg-white border-gray-400 text-gray-500'}`}
+                            >
+                              {isSelected ? (
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                              ) : (
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                              )}
+                            </button>
+                          ) : cfg.showOptionalToggle && toggleable ? (
+                            <span className="inline-block mt-0.5 w-3 h-3 rounded border border-gray-400 flex-shrink-0" style={isSelected ? { backgroundColor: '#2563eb', borderColor: '#2563eb' } : undefined} />
+                          ) : null}
+                          <div className={`flex-1 ${dimmed && canToggle ? 'text-gray-500' : ''}`}>
                             <LinkifiedText text={item.description} />
+                            {canToggle && (
+                              <div className={`text-[11px] mt-0.5 font-semibold ${isSelected ? 'text-green-700' : 'text-amber-700'}`}>
+                                {isSelected
+                                  ? (isMultipleChoice ? 'Selected — counted in your total' : 'Added to your total')
+                                  : (isMultipleChoice ? 'Tap to choose this option' : 'Optional — tap to add')}
+                              </div>
+                            )}
                             {item.notes && <div className="text-[10px] text-gray-500 mt-0.5">{item.notes}</div>}
                             {cfg.showChoiceSelector && item.pricingType === 'choice' && item.choices && (
                               <div className="mt-1 space-y-0.5">
                                 {item.choices.map(c => {
                                   const selectedId = item.selectedChoiceId ?? item.choices!.find(x => x.isDefault)?.id ?? item.choices![0].id;
                                   const isSel = selectedId === c.id;
+                                  const canPick = !!ctx.onChoiceSelect;
                                   return (
-                                    <div key={c.id} className={`flex items-center gap-1.5 text-[10px] ${isSel ? 'font-semibold text-black' : 'text-gray-600'}`}>
-                                      <span className="inline-block w-2 h-2 rounded-full border border-gray-400 flex-shrink-0" style={isSel ? { backgroundColor: '#2563eb', borderColor: '#2563eb' } : undefined} />
+                                    <div
+                                      key={c.id}
+                                      role={canPick ? 'radio' : undefined}
+                                      aria-checked={canPick ? isSel : undefined}
+                                      tabIndex={canPick ? 0 : undefined}
+                                      onClick={canPick ? (e) => { e.stopPropagation(); ctx.onChoiceSelect!(item.id, c.id); } : undefined}
+                                      onKeyDown={canPick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); ctx.onChoiceSelect!(item.id, c.id); } } : undefined}
+                                      className={`flex items-center gap-1.5 text-[10px] ${isSel ? 'font-semibold text-black' : 'text-gray-600'} ${canPick ? 'cursor-pointer rounded px-1 -mx-1 py-0.5' : ''}`}
+                                    >
+                                      <span className={`inline-block rounded-full border flex-shrink-0 ${canPick ? 'w-3 h-3 border-2' : 'w-2 h-2'} border-gray-400`} style={isSel ? { backgroundColor: '#16a34a', borderColor: '#16a34a' } : undefined} />
                                       <span>{c.label}</span>
                                       <span className="ml-auto">{formatCurrency(c.price)}</span>
                                     </div>
@@ -618,15 +747,66 @@ export function renderDocumentBlock(
                           </div>
                         </div>
                       </td>
-                      {cfg.showQty && <td className="border border-gray-200 px-2 py-2 text-xs text-center text-gray-900">{qty}</td>}
-                      {cfg.showRate && <td className="border border-gray-200 px-2 py-2 text-xs text-right text-gray-900">{formatCurrency(rate)}</td>}
-                      <td className="border border-gray-200 px-2 py-2 text-xs text-right font-medium text-gray-900">{formatCurrency(total)}</td>
-                    </tr>
+                      {cfg.showQty && <td className={`border border-gray-200 px-2 py-2 text-xs text-center ${dimmed ? 'text-gray-400' : 'text-gray-900'}`}>{qty}</td>}
+                      {cfg.showRate && <td className={`border border-gray-200 px-2 py-2 text-xs text-right ${dimmed ? 'text-gray-400' : 'text-gray-900'}`}>{formatCurrency(rate)}</td>}
+                      <td className={`border border-gray-200 px-2 py-2 text-xs text-right font-semibold whitespace-nowrap ${dimmed ? 'text-gray-400' : toggleable && isSelected && canToggle ? 'text-green-700' : 'text-gray-900'}`}>
+                        {/* "+" prefix on selectable extras makes it read as an
+                            addition to the total rather than an already-included
+                            price. multipleChoice picks ARE the price, no prefix. */}
+                        {canToggle && !isMultipleChoice ? `+ ${formatCurrency(total)}` : formatCurrency(total)}
+                      </td>
+                    </tr>,
                   );
-                })}
+                  });
+                  return rows;
+                })()}
               </tbody>
             </table>
           </div>
+      );
+
+      // Interleaved flow: render the builder's sections in their authored
+      // order — description, line items, description, line items — instead of
+      // merging all text into one Overview and all items into one table.
+      if (ctx.sectionFlow && ctx.sectionFlow.length > 0) {
+        const genericTitles = new Set([
+          '', 'line items', 'items', 'pricing', 'services', 'service', 'quote',
+          'description', 'job description', 'overview', 'photos', 'untitled section',
+        ]);
+        return (
+          <div key={block.id} className="mb-4">
+            {ctx.sectionFlow.map(sec => {
+              const title = (sec.title ?? '').trim();
+              const showTitle = !genericTitles.has(title.toLowerCase());
+              const hasContent = !!sec.content?.trim();
+              if (!hasContent && sec.items.length === 0) return null;
+              return (
+                <div key={sec.id} className="mb-4">
+                  {showTitle && <h2 className="text-xs font-semibold text-black mb-2">{title}</h2>}
+                  {hasContent && (
+                    <div className={`text-xs text-gray-700 whitespace-pre-wrap ${sec.items.length > 0 ? 'mb-2' : ''}`}>
+                      <LinkifiedText text={sec.content!} />
+                    </div>
+                  )}
+                  {sec.items.length > 0 && (
+                    <>
+                      {!showTitle && <h2 className="text-xs font-semibold text-black mb-2">{cfg.labelDescription || 'Services & Pricing'}</h2>}
+                      {renderItemsTable(sec.items)}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
+
+      const items = ctx.lineItemsWithChoices ?? [];
+      if (items.length === 0) return null;
+      return (
+        <div key={block.id} className="mb-4">
+          <h2 className="text-xs font-semibold text-black mb-2">{cfg.labelDescription || 'Services & Pricing'}</h2>
+          {renderItemsTable(items)}
         </div>
       );
     }

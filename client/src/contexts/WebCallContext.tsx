@@ -233,8 +233,11 @@ function WebCallBar({
   const displayName = callInfo?.displayName || callInfo?.number || "Unknown";
 
   return (
+    // pointer-events-auto: same trap as the mobile CallScreen — an open
+    // Radix modal sets pointer-events:none on <body>, which would make the
+    // mute/hang-up controls here dead while a dialog is open under the bar.
     <div
-      className="fixed bottom-4 right-4 z-[9999] flex items-center gap-4 rounded-xl bg-neutral-900 text-white shadow-2xl px-5 py-4 min-w-[280px]"
+      className="pointer-events-auto fixed bottom-4 right-4 z-[9999] flex items-center gap-4 rounded-xl bg-neutral-900 text-white shadow-2xl px-5 py-4 min-w-[280px]"
       data-testid="web-call-bar"
     >
       <div className="min-w-0 flex-1">

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, real, index, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -340,7 +340,9 @@ export const quotes = pgTable("quotes", {
   leadId: varchar("lead_id").references(() => leads.id),
   jobId: varchar("job_id").references(() => jobs.id),
   customerId: varchar("customer_id").references(() => customers.id),
-  quoteNumber: text("quote_number").notNull().unique(),
+  // Unique PER BUSINESS (quotes_business_quote_number_uniq below), not globally —
+  // each tenant runs its own quote sequence.
+  quoteNumber: text("quote_number").notNull(),
   description: text("description").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   validUntil: timestamp("valid_until"),
@@ -365,7 +367,9 @@ export const quotes = pgTable("quotes", {
   followUpNotes: text("follow_up_notes"),
   // Presentation method tracking for conversion rate analysis
   presentationMethod: text("presentation_method"), // on-site, sent-later, phone
-});
+}, (table) => ({
+  businessQuoteNumberUniq: uniqueIndex("quotes_business_quote_number_uniq").on(table.businessId, table.quoteNumber),
+}));
 
 // Job Management
 export const jobs = pgTable("jobs", {
@@ -378,11 +382,15 @@ export const jobs = pgTable("jobs", {
   // record is later updated.
   customerContactId: varchar("customer_contact_id").references(() => customerContacts.id, { onDelete: "set null" }),
   quoteId: varchar("quote_id").references(() => quotes.id),
-  jobNumber: text("job_number").notNull().unique(),
+  // Unique PER BUSINESS (jobs_business_job_number_uniq below), not globally —
+  // each tenant runs its own sequence; migrated jobs keep their source numbers.
+  jobNumber: text("job_number").notNull(),
   title: text("title"),
   description: text("description"),
   includeDescriptionInQuotesProposals: boolean("include_description_in_quotes_proposals").default(true),
   leadSource: text("lead_source"), // phone, website, referral, google, facebook, direct, other
+  importSource: text("import_source").default('manual'), // manual, csv_import, servicem8_import
+  externalId: text("external_id"), // Source-platform id (e.g. ServiceM8 job UUID) for import dedup
   address: text("address").notNull().default("Address not specified"),
   scheduledDate: timestamp("scheduled_date"),
   scheduledEndDate: timestamp("scheduled_end_date"), // For multi-day jobs — last day of the job
@@ -562,6 +570,19 @@ export const jobs = pgTable("jobs", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastActivityAt: timestamp("last_activity_at"),
+}, (table) => ({
+  businessJobNumberUniq: uniqueIndex("jobs_business_job_number_uniq").on(table.businessId, table.jobNumber),
+}));
+
+// Per-business job-number floor. When a business has a row here, getNextJobNumber
+// switches from max+1 to "lowest free number ≥ floor" (gap-fill) — used to resume
+// sane numbering after the old shared sequence inflated a tenant's numbers,
+// without renumbering real jobs already sent to customers. No row = normal max+1.
+export const jobNumberFloors = pgTable("job_number_floors", {
+  businessId: varchar("business_id").primaryKey().references(() => businesses.id),
+  floor: integer("floor").notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Job Diary Entries
@@ -1473,6 +1494,15 @@ export const businessSettings = pgTable("business_settings", {
   complianceRemindersEnabled: boolean("compliance_reminders_enabled").default(true),
   complianceReminderOffsets: jsonb("compliance_reminder_offsets").$type<number[]>().default(sql`'[30, 7]'::jsonb`),
 
+  // Staff push delivery window ("quiet hours"). Staff scheduling pushes
+  // (job assignments, schedule changes) are only delivered between start and
+  // end (NZ time, every day); out-of-window pushes are queued and delivered
+  // at the next window start. Times are 24h "HH:MM" strings. Disabling the
+  // window sends pushes immediately around the clock.
+  staffPushWindowEnabled: boolean("staff_push_window_enabled").default(true),
+  staffPushWindowStart: text("staff_push_window_start").default("07:00"),
+  staffPushWindowEnd: text("staff_push_window_end").default("18:00"),
+
   // Inquiry auto-reply (sent to the customer immediately on website form submission)
   // The default copy follows what Jules asked for: "Hey, we have received your
   // inquiry. Jules will be in touch within 24 hours to schedule in your quote."
@@ -1536,6 +1566,8 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
   })).optional(),
   // Lead times (whole days before expiry) for vehicle compliance reminders, e.g. [30, 7].
   complianceReminderOffsets: z.array(z.number().int().min(1).max(365)).max(6).optional(),
+  staffPushWindowStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24h HH:MM format').optional(),
+  staffPushWindowEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24h HH:MM format').optional(),
   inquiryAutoReplyChannel: z.enum(['email', 'sms', 'both']).optional(),
   inquiryAutoReplyEmailSubject: z.string().max(200).optional(),
   inquiryAutoReplyEmailMessage: z.string().max(5000).optional(),
@@ -2969,7 +3001,10 @@ export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   jobId: varchar("job_id").references(() => jobs.id),
-  invoiceNumber: text("invoice_number").notNull().unique(),
+  // Unique PER BUSINESS (invoices_business_invoice_number_uniq below), not
+  // globally — invoice numbers derive from the (now per-tenant) job number, so
+  // two tenants can each have invoice "4048".
+  invoiceNumber: text("invoice_number").notNull(),
   jobTitle: text("job_title").notNull(),
   address: text("address"), // Billing address for the invoice
   contactName: text("contact_name"), // Contact person name (e.g., "Sam Frasier" for Gisborne District Council)
@@ -2987,7 +3022,9 @@ export const invoices = pgTable("invoices", {
   xeroSyncedAt: timestamp("xero_synced_at"), // When invoice was last synced to Xero
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  businessInvoiceNumberUniq: uniqueIndex("invoices_business_invoice_number_uniq").on(table.businessId, table.invoiceNumber),
+}));
 
 // Invoice Sections — mirror of proposalSections, lets invoices carry photos +
 // narrative sections rendered on the customer-facing invoice page.
@@ -3240,7 +3277,9 @@ export type UpdateInvoiceLineItem = z.infer<typeof updateInvoiceLineItemSchema>;
 export const supplierInvoices = pgTable("supplier_invoices", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  jobId: varchar("job_id").references(() => jobs.id, { onDelete: 'cascade' }).notNull(),
+  // Nullable since the inbound-ingestion queue (#supplier-invoice-ingestion):
+  // an emailed bill sits unassigned (`needs_review`) until a human picks a job.
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: 'cascade' }),
   supplierName: text("supplier_name").notNull(),
   invoiceNumber: text("invoice_number"),
   invoiceDate: timestamp("invoice_date"),
@@ -3264,10 +3303,28 @@ export const supplierInvoices = pgTable("supplier_invoices", {
   rebill: boolean("rebill").notNull().default(false),
   markupPercent: decimal("markup_percent", { precision: 10, scale: 2 }).default("0"),
   rebilledAt: timestamp("rebilled_at"), // when rebilled items were pushed onto the job's line items
-  status: text("status").notNull().default("confirmed"), // pending_review | confirmed
+  // Manual flow: pending_review | confirmed.
+  // Inbound (emailed) flow: needs_review | assigned | rejected | quarantined.
+  status: text("status").notNull().default("confirmed"),
   notes: text("notes"),
-  rawExtraction: jsonb("raw_extraction"), // raw GPT-5 output, kept for audit/debugging
+  rawExtraction: jsonb("raw_extraction"), // raw model output, kept for audit/debugging
   createdBy: varchar("created_by"),
+  // ── Inbound ingestion (supplier emails → triage queue) ─────────────────────
+  source: text("source").notNull().default("manual"), // manual | inbound
+  inboundDocumentId: varchar("inbound_document_id"),
+  supplierConnectionId: varchar("supplier_connection_id"),
+  documentType: text("document_type").notNull().default("invoice"), // invoice | credit_note | statement | unknown
+  customerAccountRef: text("customer_account_ref"),
+  poOrJobReference: text("po_or_job_reference"), // extracted; unused in Phase 1, drives Phase 2 matching
+  branch: text("branch"),
+  arithmeticValid: boolean("arithmetic_valid"),
+  confidence: decimal("confidence", { precision: 3, scale: 2 }), // 0.00–1.00
+  validationIssues: jsonb("validation_issues").default([]), // string[] of failed checks for the reviewer
+  // sha256(supplierConnectionId + normalised(invoiceNumber) + totalIncGst);
+  // partial unique on (business_id, dedupe_hash) WHERE status != 'rejected'.
+  dedupeHash: text("dedupe_hash"),
+  assignedByUserId: varchar("assigned_by_user_id"),
+  assignedAt: timestamp("assigned_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -3292,6 +3349,90 @@ export const updateSupplierInvoiceSchema = insertSupplierInvoiceSchema.partial()
 export type SupplierInvoice = typeof supplierInvoices.$inferSelect;
 export type InsertSupplierInvoice = z.infer<typeof insertSupplierInvoiceSchema>;
 export type UpdateSupplierInvoice = z.infer<typeof updateSupplierInvoiceSchema>;
+
+// ── Supplier invoice ingestion (Phase 1) ─────────────────────────────────────
+// Suppliers email invoices to a per-supplier Inflow address
+// (inv-{tenantSlug}-{token}@<INBOUND_EMAIL_DOMAIN>) or the tenant catch-all
+// (bills-{tenantSlug}@…). The token identifies the supplier BEFORE any parsing
+// — the supplier is never derived from the email's From address.
+export const supplierConnections = pgTable("supplier_connections", {
+  businessId: varchar("business_id").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplierName: text("supplier_name").notNull(), // user-entered, e.g. "Placemakers Gisborne"
+  inboundToken: text("inbound_token").notNull().unique(), // random 12-char, in the address local part
+  inboundAddress: text("inbound_address").notNull().unique(), // generated, denormalised for display
+  allowedSenderDomains: text("allowed_sender_domains").array().notNull().default(sql`'{}'::text[]`),
+  // Domain seen on the first (quarantined) email, awaiting "Confirm this sender".
+  pendingSenderDomain: text("pending_sender_domain"),
+  status: text("status").notNull().default("pending_first_email"), // pending_first_email | active | paused
+  extractionHint: text("extraction_hint"), // per-supplier parser hint, Phase 2
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  businessIdx: index("supplier_connections_business_idx").on(table.businessId),
+}));
+export const insertSupplierConnectionSchema = createInsertSchema(supplierConnections).omit({ id: true, createdAt: true, updatedAt: true });
+export type SupplierConnection = typeof supplierConnections.$inferSelect;
+export type InsertSupplierConnection = z.infer<typeof insertSupplierConnectionSchema>;
+
+// The raw receipt record — written synchronously in the webhook before any work.
+export const inboundDocuments = pgTable("inbound_documents", {
+  businessId: varchar("business_id").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplierConnectionId: varchar("supplier_connection_id"), // null for the tenant catch-all
+  resendEmailId: text("resend_email_id").notNull().unique(), // dedupe key for webhook replays
+  fromAddress: text("from_address"),
+  toAddress: text("to_address"),
+  subject: text("subject"),
+  spfPass: boolean("spf_pass"), // null = not reported by the provider
+  dkimPass: boolean("dkim_pass"),
+  attachmentRefs: jsonb("attachment_refs").default([]), // [{ filename, mimeType, size, url }] after fetch
+  status: text("status").notNull().default("received"), // received | fetching | parsing | parsed | failed | quarantined
+  failureReason: text("failure_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  businessIdx: index("inbound_documents_business_idx").on(table.businessId),
+}));
+export type InboundDocument = typeof inboundDocuments.$inferSelect;
+
+// Extracted line items. 4dp unit cost — trade pricing (fasteners, cable,
+// chain) goes below cents and 2dp introduces rounding drift that shows up as
+// failed arithmetic validation on large line counts.
+export const supplierInvoiceLines = pgTable("supplier_invoice_lines", {
+  businessId: varchar("business_id").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplierInvoiceId: varchar("supplier_invoice_id").notNull().references(() => supplierInvoices.id, { onDelete: 'cascade' }),
+  lineNumber: integer("line_number").notNull(), // preserve source ordering
+  description: text("description").notNull().default(""),
+  sku: text("sku"),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull().default("1"),
+  unit: text("unit"),
+  unitCostExGst: decimal("unit_cost_ex_gst", { precision: 12, scale: 4 }).notNull().default("0"),
+  lineTotalExGst: decimal("line_total_ex_gst", { precision: 12, scale: 2 }).notNull().default("0"),
+  gstRate: decimal("gst_rate", { precision: 4, scale: 3 }).notNull().default("0.150"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  invoiceIdx: index("supplier_invoice_lines_invoice_idx").on(table.supplierInvoiceId),
+}));
+export type SupplierInvoiceLine = typeof supplierInvoiceLines.$inferSelect;
+
+// Not used for splitting in Phase 1 — every invoice allocates wholly to its
+// assignedJobId, but assignment still writes one row per line at full value so
+// Phase 2 line-level splitting is an edit rather than a backfill.
+export const invoiceJobAllocations = pgTable("invoice_job_allocations", {
+  businessId: varchar("business_id").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplierInvoiceLineId: varchar("supplier_invoice_line_id").notNull().references(() => supplierInvoiceLines.id, { onDelete: 'cascade' }),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  jobPhaseId: varchar("job_phase_id"),
+  allocatedAmountExGst: decimal("allocated_amount_ex_gst", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  lineIdx: index("invoice_job_allocations_line_idx").on(table.supplierInvoiceLineId),
+  jobIdx: index("invoice_job_allocations_job_idx").on(table.jobId),
+}));
+export type InvoiceJobAllocation = typeof invoiceJobAllocations.$inferSelect;
 
 // Invoice Section Schema Exports
 export const insertInvoiceSectionSchema = createInsertSchema(invoiceSections).omit({
@@ -4510,7 +4651,10 @@ export type CallRecord = typeof callRecords.$inferSelect;
 export type InsertCallRecord = z.infer<typeof insertCallRecordSchema>;
 export type UpdateCallRecord = z.infer<typeof updateCallRecordSchema>;
 
-// Tree location markers for job site mapping
+// Tree location markers for job site mapping (THIS JOB's overlay / proposal
+// snapshot). Persistent hazard-tree pins live in `tree_pins` — see
+// HAZARD_TREE_PINS_PLAN.md. Do not hang a site register off this table:
+// jobId is NOT NULL and ON DELETE CASCADE.
 export const treeMarkers = pgTable("tree_markers", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -4545,6 +4689,19 @@ export const jobSiteMaps = pgTable("job_site_maps", {
 
 export type JobSiteMapImage = typeof jobSiteMaps.$inferSelect;
 
+// Public job photo timeline — a token-gated, read-only customer link to the
+// job's photo feed (CompanyCam-style). One link per job; is_enabled allows
+// revoking without deleting the row (dead links 404 rather than leak).
+export const jobTimelineLinks = pgTable("job_timeline_links", {
+  businessId: varchar("business_id"),
+  jobId: varchar("job_id").primaryKey().references(() => jobs.id, { onDelete: 'cascade' }),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type JobTimelineLink = typeof jobTimelineLinks.$inferSelect;
+
 // Live job timer — one row per staff member currently clocked in on a job.
 // Stopping the timer converts the elapsed time into a jobs.staffTimeEntries
 // entry (the existing manual time-recording store), so labour cost,
@@ -4574,6 +4731,112 @@ export const updateTreeMarkerSchema = insertTreeMarkerSchema.partial();
 export type TreeMarker = typeof treeMarkers.$inferSelect;
 export type InsertTreeMarker = z.infer<typeof insertTreeMarkerSchema>;
 export type UpdateTreeMarker = z.infer<typeof updateTreeMarkerSchema>;
+
+// ---------------------------------------------------------------------------
+// Hazard-tree pin register (site-persistent). DISTINCT from tree_markers:
+// markers are a job overlay (JobSiteMap / proposal snapshot) and CASCADE when
+// the job is deleted. Pins belong to a customer site and survive across
+// quotes and jobs. See HAZARD_TREE_PINS_PLAN.md.
+// ---------------------------------------------------------------------------
+
+export const customerSites = pgTable("customer_sites", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  address: text("address"),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  customerIdx: index("customer_sites_customer_id_idx").on(table.customerId),
+}));
+
+export const treePins = pgTable("tree_pins", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  siteId: varchar("site_id").notNull().references(() => customerSites.id, { onDelete: "restrict" }),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+  gpsAccuracy: real("gps_accuracy"),
+  riskRating: text("risk_rating").notNull(), // low | medium | high | critical
+  recommendedWorkType: text("recommended_work_type").notNull(),
+  status: text("status").notNull().default("assessed"), // assessed | quoted | scheduled | done | monitor
+  photoUrls: text("photo_urls").array().default([]),
+  species: text("species"),
+  sizeNotes: text("size_notes"),
+  accessNotes: text("access_notes"),
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  archivedAt: timestamp("archived_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  customerIdx: index("tree_pins_customer_id_idx").on(table.customerId),
+  siteIdx: index("tree_pins_site_id_idx").on(table.siteId),
+  statusIdx: index("tree_pins_status_idx").on(table.status),
+}));
+
+export const treePinWorkLinks = pgTable("tree_pin_work_links", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pinId: varchar("pin_id").notNull().references(() => treePins.id, { onDelete: "cascade" }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  quoteId: varchar("quote_id").references(() => quotes.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  pinIdx: index("tree_pin_work_links_pin_id_idx").on(table.pinId),
+  jobIdx: index("tree_pin_work_links_job_id_idx").on(table.jobId),
+  quoteIdx: index("tree_pin_work_links_quote_id_idx").on(table.quoteId),
+}));
+
+export const insertCustomerSiteSchema = createInsertSchema(customerSites).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateCustomerSiteSchema = insertCustomerSiteSchema.partial();
+export type CustomerSite = typeof customerSites.$inferSelect;
+export type InsertCustomerSite = z.infer<typeof insertCustomerSiteSchema>;
+export type UpdateCustomerSite = z.infer<typeof updateCustomerSiteSchema>;
+
+export const insertTreePinSchema = createInsertSchema(treePins).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateTreePinSchema = insertTreePinSchema.partial();
+export type TreePin = typeof treePins.$inferSelect;
+export type InsertTreePin = z.infer<typeof insertTreePinSchema>;
+export type UpdateTreePin = z.infer<typeof updateTreePinSchema>;
+
+export const insertTreePinWorkLinkSchema = createInsertSchema(treePinWorkLinks).omit({
+  id: true,
+  createdAt: true,
+});
+export type TreePinWorkLink = typeof treePinWorkLinks.$inferSelect;
+export type InsertTreePinWorkLink = z.infer<typeof insertTreePinWorkLinkSchema>;
+
+/** Field-capture body for POST /api/customers/:id/tree-pins (P0 minimum). */
+export const createTreePinRequestSchema = z.object({
+  siteId: z.string().optional(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  gpsAccuracy: z.number().positive().optional(),
+  riskRating: z.enum(["low", "medium", "high", "critical"]),
+  recommendedWorkType: z.string().trim().min(1).max(120),
+  notes: z.string().max(2000).optional(),
+  species: z.string().max(120).optional(),
+  sizeNotes: z.string().max(500).optional(),
+  accessNotes: z.string().max(500).optional(),
+  /** When set, also write tree_pin_work_links so the pin shows on this job. */
+  jobId: z.string().min(1).optional(),
+});
+export type CreateTreePinRequest = z.infer<typeof createTreePinRequestSchema>;
+
 
 // ─── Mulch Drops ────────────────────────────────────────────────────────────
 export const mulchDrops = pgTable("mulch_drops", {

@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Lock, Pencil, Plus, Settings2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import type { CompetencyType, EmployeeCompetency } from "@shared/schema";
 
@@ -125,6 +125,7 @@ export default function CompetencyRegister() {
   const [employeeFilter, setEmployeeFilter] = useState<string>(ALL_EMPLOYEES);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [typesOpen, setTypesOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
 
@@ -297,10 +298,20 @@ export default function CompetencyRegister() {
     <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold">Training &amp; Competency Register</h1>
-        <Button onClick={openAdd}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add competency
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setTypesOpen(true)}
+            data-testid="button-manage-competency-types"
+          >
+            <Settings2 className="mr-2 h-4 w-4" />
+            Types
+          </Button>
+          <Button onClick={openAdd}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add competency
+          </Button>
+        </div>
       </div>
 
       <p className="text-sm text-muted-foreground">
@@ -552,6 +563,230 @@ export default function CompetencyRegister() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <CompetencyTypeManagerDialog
+        open={typesOpen}
+        onClose={() => setTypesOpen(false)}
+        types={typesRes?.data ?? []}
+        onError={(title, description) =>
+          toast({ variant: "destructive", title, description })
+        }
+      />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Type manager: built-in competency types are read-only; custom types belong
+// to the business and are fully editable.
+// ---------------------------------------------------------------------------
+interface TypeDraft {
+  name: string;
+  category: string;
+  requiresExpiry: boolean;
+}
+
+function CompetencyTypeManagerDialog({
+  open,
+  onClose,
+  types,
+  onError,
+}: {
+  open: boolean;
+  onClose: () => void;
+  types: CompetencyType[];
+  onError: (title: string, description: string) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  const [draft, setDraft] = useState<TypeDraft>({
+    name: "",
+    category: "",
+    requiresExpiry: true,
+  });
+
+  const visibleTypes = types.filter((t) => t.isActive);
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["/api/competency-types"] });
+
+  const fail = (title: string) => (error: unknown) =>
+    onError(title, error instanceof Error ? error.message : "Please try again.");
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const body = {
+        name: draft.name.trim(),
+        category: draft.category.trim() || undefined,
+        requiresExpiry: draft.requiresExpiry,
+      };
+      const res =
+        editingId === "new"
+          ? await apiRequest("POST", "/api/competency-types", body)
+          : await apiRequest("PUT", `/api/competency-types/${editingId}`, body);
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidate();
+      setEditingId(null);
+    },
+    onError: fail("Could not save competency type"),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/competency-types/${id}`);
+      return res.json();
+    },
+    onSuccess: invalidate,
+    onError: fail("Could not remove competency type"),
+  });
+
+  const handleClose = (next: boolean) => {
+    if (!next) {
+      setEditingId(null);
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        {editingId ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>
+                {editingId === "new" ? "New competency type" : "Edit competency type"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  placeholder="e.g. Forklift licence"
+                  data-testid="input-competency-type-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Input
+                  value={draft.category}
+                  onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+                  placeholder="Optional grouping, e.g. driver"
+                  data-testid="input-competency-type-category"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.requiresExpiry}
+                  onChange={(e) =>
+                    setDraft({ ...draft, requiresExpiry: e.target.checked })
+                  }
+                  data-testid="checkbox-competency-type-expiry"
+                />
+                Has an expiry date (tracked for renewal reminders)
+              </label>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setEditingId(null)}
+                data-testid="button-competency-type-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={!draft.name.trim() || saveMutation.isPending}
+                onClick={() => saveMutation.mutate()}
+                data-testid="button-competency-type-save"
+              >
+                Save type
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Competency types</DialogTitle>
+              <DialogDescription>
+                Built-in types are read-only. Add the tickets and licences your industry
+                actually uses.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              {visibleTypes.map((t) => (
+                <div
+                  key={t.id}
+                  className="bg-card border border-border rounded-lg p-3 flex items-center justify-between gap-3"
+                  data-testid={`row-competency-type-${t.id}`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium truncate">{t.name}</span>
+                      {t.isBuiltIn && (
+                        <Badge variant="secondary" className="gap-1">
+                          <Lock className="h-3 w-3" />
+                          Built-in
+                        </Badge>
+                      )}
+                    </div>
+                    {t.category && (
+                      <p className="text-xs text-muted-foreground">{t.category}</p>
+                    )}
+                  </div>
+                  {!t.isBuiltIn && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          setDraft({
+                            name: t.name,
+                            category: t.category ?? "",
+                            requiresExpiry: t.requiresExpiry,
+                          });
+                          setEditingId(t.id);
+                        }}
+                        aria-label={`Edit ${t.name}`}
+                        data-testid={`button-competency-type-edit-${t.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removeMutation.mutate(t.id)}
+                        disabled={removeMutation.isPending}
+                        aria-label={`Remove ${t.name}`}
+                        data-testid={`button-competency-type-remove-${t.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {visibleTypes.length === 0 && (
+                <p className="text-sm text-muted-foreground">No types yet.</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  setDraft({ name: "", category: "", requiresExpiry: true });
+                  setEditingId("new");
+                }}
+                data-testid="button-competency-type-new"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New type
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

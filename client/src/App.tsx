@@ -1,8 +1,9 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Router as WouterRouter } from "wouter";
+import { useBrowserLocation } from "wouter/use-browser-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { UpgradeGate } from "@/components/PlanGate";
+import { PlanGate, UpgradeGate } from "@/components/PlanGate";
 import { BillingBanner } from "@/components/BillingBanner";
 import { GettingStarted } from "@/components/GettingStarted";
 import { PullToRefresh } from "@/components/PullToRefresh";
@@ -14,7 +15,35 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
 import { WebCallProvider } from "@/contexts/WebCallContext";
 import { WebCallButton } from "@/components/WebCallButton";
-import { lazy, Suspense } from "react";
+// NOTE: useState/useEffect/useCallback are imported further down (imports are
+// hoisted module-wide, so the hooks below can use them).
+import { lazy, Suspense, startTransition } from "react";
+
+// ---------------------------------------------------------------------------
+// Flash-free navigation. Wouter v3 reads the browser location through
+// useSyncExternalStore, whose updates React must render synchronously — so the
+// instant you navigate, the old page unmounts and the <Suspense> fallback
+// (deliberately null, see PageSpinner) renders while the next page's lazy chunk
+// downloads. That was the white flash between pages.
+//
+// This hook mirrors the real location into React state and updates it inside
+// startTransition. Transitions may suspend without falling back: React keeps
+// the OLD page on screen until the new page's chunk has loaded, then swaps.
+// navigate() is passed through untouched, so pushState/replaceState semantics
+// (and back/forward, which arrive via the same popstate subscription) are
+// unchanged — only the moment the router *sees* the new location is deferred.
+// ---------------------------------------------------------------------------
+function useTransitionedLocation(): [string, ReturnType<typeof useBrowserLocation>[1]] {
+  const [location, navigate] = useBrowserLocation();
+  const [shownLocation, setShownLocation] = useState(location);
+  useEffect(() => {
+    if (location !== shownLocation) {
+      startTransition(() => setShownLocation(location));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
+  return [shownLocation, navigate];
+}
 
 // Route targets are lazy-loaded so the initial JS bundle stays small. This is
 // the biggest lever on first-paint time — previously all ~90 pages were bundled
@@ -62,6 +91,7 @@ const Dispatch = lazy(() => import("@/pages/Dispatch"));
 const WorkflowAutomation = lazy(() => import("@/components/WorkflowAutomation").then((m) => ({ default: m.WorkflowAutomation })));
 const History = lazy(() => import("@/pages/History"));
 const Clients = lazy(() => import("@/pages/Clients"));
+const HazardPins = lazy(() => import("@/pages/HazardPins"));
 const MaterialsServices = lazy(() => import("@/pages/MaterialsServices"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const StaffManagement = lazy(() => import("@/pages/StaffManagement"));
@@ -96,6 +126,7 @@ const InvoiceViewer = lazy(() => import("@/pages/InvoiceViewer"));
 const InvoiceView = lazy(() => import("@/pages/InvoiceView"));
 const PaymentComplete = lazy(() => import("@/pages/PaymentComplete"));
 const PublicReview = lazy(() => import("@/pages/PublicReview"));
+const PublicTimeline = lazy(() => import("@/pages/PublicTimeline"));
 const MulchDrops = lazy(() => import("@/pages/MulchDrops"));
 const NearMissReport = lazy(() => import("@/pages/NearMissReport"));
 const NearMissHistory = lazy(() => import("@/pages/NearMissHistory"));
@@ -115,7 +146,10 @@ const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
 const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
 const SettingsAccount = lazy(() => import("@/pages/SettingsAccount"));
 const SettingsChannels = lazy(() => import("@/pages/SettingsChannels"));
+const SettingsSuppliers = lazy(() => import("@/pages/SettingsSuppliers"));
+const SupplierInvoices = lazy(() => import("@/pages/SupplierInvoices"));
 const SettingsSetup = lazy(() => import("@/pages/SettingsSetup"));
+const SettingsImport = lazy(() => import("@/pages/SettingsImport"));
 const AdminSubscribers = lazy(() => import("@/pages/AdminSubscribers"));
 const SettingsQuoteFollowup = lazy(() => import("@/pages/SettingsQuoteFollowup"));
 const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoReply"));
@@ -126,7 +160,7 @@ const UnlinkedCalls = lazy(() => import("@/pages/UnlinkedCalls"));
 const Reconciliation = lazy(() => import("@/pages/Reconciliation"));
 const ProfitabilityCalculator = lazy(() => import("@/pages/ProfitabilityCalculator"));
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft, LayoutGrid } from "lucide-react";
 import { useJobFilters, useLaneFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
@@ -207,7 +241,7 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 
 // Inner component that uses useSidebar hook
 function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
-  const { isCrew, isAdmin, logout } = useAuth();
+  const { isCrew, isAdmin, logout, currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState("jobs");
   // Live push: invalidate queries instantly when server broadcasts a change
   useSSE();
@@ -229,6 +263,14 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   const [dispatchFilters, setDispatchFilters] = useJobFilters();
   const [dispatchLane, setDispatchLane] = useLaneFilter();
   const [dispatchSearchOpen, setDispatchSearchOpen] = useDispatchSearchOpen();
+
+  // Logged-in tenant identity for the header wordmark. Shares the cache key
+  // other business-settings consumers already use (envelope shape: { data }).
+  const { data: bizSettingsResponse } = useQuery<{ data?: { businessName?: string } }>({
+    queryKey: ['/api/business-settings'],
+    staleTime: 5 * 60 * 1000,
+  });
+  const businessName = bizSettingsResponse?.data?.businessName?.trim() || "";
 
   // Lanes for the dispatch filter (only on the dispatch page).
   const { data: lanesResponse } = useQuery<{ data: { id: string; name: string; color: string }[] }>({
@@ -353,10 +395,15 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* Mobile header - sidebar toggle, logo, and actions */}
           <header
-            className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-white"
+            className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-background"
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 0.75rem)" }}
           >
             <LogoSidebarTrigger size={44} />
+            {businessName && (
+              <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight" data-testid="header-business-name-mobile">
+                {businessName}
+              </span>
+            )}
             {/* Notifications Bell — standalone so flex-1 spacer gives it room from actions */}
             {isAdmin && <div className="shrink-0"><NotificationBell /></div>}
 
@@ -375,9 +422,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         size="icon"
                         aria-label="Create new"
                         data-testid="create-new-button-mobile"
-                        className="rounded-full text-green-700 border-green-400 bg-green-100 shrink-0 h-12 w-12"
+                        className="rounded-full bg-brand-lime text-brand-lime-foreground border-brand-lime-border shrink-0 h-12 w-12"
                       >
-                        <Plus className="h-7 w-7 text-green-700" />
+                        <Plus className="h-7 w-7" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -424,7 +471,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-11 w-11 ${(dispatchFilters.length > 0 || dispatchLane !== "all") ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                        className={`h-11 w-11 ${(dispatchFilters.length > 0 || dispatchLane !== "all") ? "text-primary" : "text-muted-foreground"}`}
                         aria-label="Filter jobs"
                         data-testid="mobile-filter-dropdown-trigger"
                       >
@@ -460,7 +507,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`h-11 w-11 ${dispatchLane !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                          className={`h-11 w-11 ${dispatchLane !== "all" ? "text-primary" : "text-muted-foreground"}`}
                           aria-label="Filter by lane"
                           data-testid="dispatch-lanes-button-mobile"
                         >
@@ -524,9 +571,14 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuLabel className="font-normal" data-testid="account-identity-mobile">
+                      <div className="font-medium truncate">{[currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ")}</div>
+                      <div className="text-sm text-muted-foreground truncate">{businessName || currentUser?.email}</div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
                       <Link href="/history" className="flex items-center w-full" data-testid="menu-history-mobile">
-                        <HistoryIcon className="w-8 h-8 mr-3 text-gray-600" />
+                        <HistoryIcon className="w-8 h-8 mr-3 text-muted-foreground" />
                         <div>
                           <div className="font-medium">History</div>
                           <div className="text-sm text-muted-foreground">Find any past job</div>
@@ -536,7 +588,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/clients" className="flex items-center w-full" data-testid="menu-clients-mobile">
-                        <Users className="w-8 h-8 mr-3 text-blue-600" />
+                        <Users className="w-8 h-8 mr-3 text-muted-foreground" />
                         <div>
                           <div className="font-medium">Clients</div>
                           <div className="text-sm text-muted-foreground">Import & manage your customer list</div>
@@ -546,7 +598,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/materials-services" className="flex items-center w-full" data-testid="menu-materials-services-mobile">
-                        <Package className="w-8 h-8 mr-3 text-orange-600" />
+                        <Package className="w-8 h-8 mr-3 text-muted-foreground" />
                         <div>
                           <div className="font-medium">Materials & Services</div>
                           <div className="text-sm text-muted-foreground">Import & manage items you sell</div>
@@ -556,7 +608,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/settings" className="flex items-center w-full" data-testid="menu-settings-mobile">
-                        <Settings2 className="w-8 h-8 mr-3 text-gray-600" />
+                        <Settings2 className="w-8 h-8 mr-3 text-muted-foreground" />
                         <div>
                           <div className="font-medium">Settings</div>
                           <div className="text-sm text-muted-foreground">Add staff & manage your account</div>
@@ -566,7 +618,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     
                     <DropdownMenuItem asChild>
                       <Link href="/developer" className="flex items-center w-full" data-testid="menu-developer-mobile">
-                        <Code className="w-8 h-8 mr-3 text-purple-600" />
+                        <Code className="w-8 h-8 mr-3 text-muted-foreground" />
                         <div>
                           <div className="font-medium">Developer</div>
                           <div className="text-sm text-muted-foreground">API access and integrations</div>
@@ -588,12 +640,21 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           </header>
           
           {/* Desktop header - full menu */}
-          <header className="hidden md:flex items-center justify-between p-2 border-b bg-white">
-            <LogoSidebarTrigger size={36} />
+          <header className="hidden md:flex items-center justify-between p-2 border-b bg-background">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <LogoSidebarTrigger size={36} />
+              {businessName && (
+                <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight" data-testid="header-business-name">
+                  {businessName}
+                </span>
+              )}
+            </div>
 
             <div className="flex items-center gap-2">
-              {/* In-browser dialer (desktop web only) */}
-              <WebCallButton />
+              {/* In-browser dialer (desktop web only; part of the call-recording add-on) */}
+              <PlanGate requires="addon:call_recording">
+                <WebCallButton />
+              </PlanGate>
 
               {/* Notifications Bell */}
               <NotificationBell />
@@ -611,7 +672,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     }}
                     aria-label={dispatchSearchOpen ? "Close search" : "Search jobs"}
                     data-testid="desktop-search-toggle"
-                    className="text-black"
+                    className="text-foreground"
                   >
                     <Search className="h-5 w-5" />
                   </Button>
@@ -620,7 +681,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="sm"
-                        className={`gap-1.5 ${dispatchFilters.length > 0 ? "text-[#1877F2]" : "text-black"}`}
+                        className={`gap-1.5 ${dispatchFilters.length > 0 ? "bg-accent text-accent-foreground" : "text-foreground"}`}
                         data-testid="desktop-filter-dropdown-trigger"
                       >
                         <Filter className="h-4 w-4" />
@@ -660,7 +721,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                           variant="ghost"
                           size="sm"
                           data-testid="dispatch-lanes-button-desktop"
-                          className={`gap-1.5 ${dispatchLane !== "all" ? "text-[#1877F2]" : "text-black"}`}
+                          className={`gap-1.5 ${dispatchLane !== "all" ? "bg-accent text-accent-foreground" : "text-foreground"}`}
                         >
                           <LayoutGrid className="h-4 w-4" />
                           {dispatchLane !== "all" ? (dispatchLanes.find(l => l.id === dispatchLane)?.name ?? "Lanes") : "Lanes"}
@@ -685,7 +746,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     size="sm"
                     onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
                     data-testid="paste-message-button-desktop"
-                    className="text-black gap-1.5"
+                    className="text-foreground gap-1.5"
                   >
                     <MessageSquare className="h-4 w-4" />
                     Paste
@@ -696,7 +757,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         variant="ghost"
                         size="sm"
                         data-testid="create-new-button-desktop"
-                        className="text-black gap-1.5"
+                        className="text-foreground gap-1.5"
                       >
                         <Plus className="h-4 w-4" />
                         New
@@ -775,9 +836,14 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel className="font-normal" data-testid="account-identity">
+                    <div className="font-medium truncate">{[currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ")}</div>
+                    <div className="text-sm text-muted-foreground truncate">{businessName || currentUser?.email}</div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link href="/history" className="flex items-center w-full" data-testid="menu-history">
-                      <HistoryIcon className="w-8 h-8 mr-3 text-gray-600" />
+                      <HistoryIcon className="w-8 h-8 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">History</div>
                         <div className="text-sm text-muted-foreground">Find any past job, saved forever</div>
@@ -787,7 +853,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/clients" className="flex items-center w-full" data-testid="menu-clients">
-                      <Users className="w-8 h-8 mr-3 text-blue-600" />
+                      <Users className="w-8 h-8 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">Clients</div>
                         <div className="text-sm text-muted-foreground">Import & manage your customer list</div>
@@ -797,7 +863,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/materials-services" className="flex items-center w-full" data-testid="menu-materials-services">
-                      <Package className="w-8 h-8 mr-3 text-orange-600" />
+                      <Package className="w-8 h-8 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">Materials & Services</div>
                         <div className="text-sm text-muted-foreground">Import & manage items you sell</div>
@@ -807,7 +873,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/settings" className="flex items-center w-full" data-testid="menu-settings">
-                      <Settings2 className="w-8 h-8 mr-3 text-gray-600" />
+                      <Settings2 className="w-8 h-8 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">Settings</div>
                         <div className="text-sm text-muted-foreground">Add staff & manage your account</div>
@@ -817,7 +883,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   
                   <DropdownMenuItem asChild>
                     <Link href="/developer" className="flex items-center w-full" data-testid="menu-developer">
-                      <Code className="w-8 h-8 mr-3 text-purple-600" />
+                      <Code className="w-8 h-8 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">Developer</div>
                         <div className="text-sm text-muted-foreground">API access and integrations</div>
@@ -836,7 +902,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   setLocation('/dispatch?newJob=true');
                 }}
                 data-testid="global-new-job-btn"
-                className="bg-amber-500 hover:bg-amber-600 text-white"
+                className="bg-brand-lime text-brand-lime-foreground border-brand-lime-border"
               >
                 <Plus className="h-8 w-8 mr-1" />
                 New Job
@@ -867,9 +933,59 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   );
 }
 
+// ---------------------------------------------------------------------------
+// Idle prefetch of the hottest page chunks. Every page is a lazy chunk fetched
+// on first navigation — from the Singapore origin, so a first visit to any page
+// pays a network round trip. Once a logged-in layout has mounted and the
+// browser is idle, quietly warm the chunks users bounce between most. The
+// import() specifiers match the lazy() declarations above, so the module cache
+// dedupes: a prefetched page renders instantly on navigation, and pages the
+// user already visited cost nothing to "prefetch" again. Runs once per session
+// (module flag), staggered one chunk per idle callback so it never competes
+// with real work — mid-range Android parse time is why pages were split in the
+// first place, and this must not reintroduce a startup parse storm.
+// ---------------------------------------------------------------------------
+const HOT_PAGE_CHUNKS: Array<() => Promise<unknown>> = [
+  () => import("@/pages/TodayDashboard"),
+  () => import("@/pages/Dispatch"),
+  () => import("@/pages/JobDashboard"),
+  () => import("@/pages/Opportunities"),
+  () => import("@/pages/Calendar"),
+  () => import("@/pages/Tasks"),
+  () => import("@/pages/Invoices"),
+  () => import("@/pages/Clients"),
+  () => import("@/pages/StaffSchedule"),
+  () => import("@/pages/Settings"),
+  () => import("@/pages/Videos"),
+  () => import("@/pages/Library"),
+  () => import("@/pages/MetricsDashboard"),
+  () => import("@/pages/Calls"),
+];
+let hotChunksPrefetched = false;
+function prefetchHotPageChunks() {
+  if (hotChunksPrefetched) return;
+  hotChunksPrefetched = true;
+  const idle: (cb: () => void) => void =
+    typeof window.requestIdleCallback === "function"
+      ? (cb) => window.requestIdleCallback(cb, { timeout: 10_000 })
+      : (cb) => window.setTimeout(cb, 1_500);
+  const queue = [...HOT_PAGE_CHUNKS];
+  const next = () => {
+    const load = queue.shift();
+    if (!load) return;
+    load().catch(() => {}).finally(() => idle(next));
+  };
+  idle(next);
+}
+
 // Sidebar layout wrapper for dashboard pages
 function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const isMobile = useIsMobile();
+
+  // Warm the hot page chunks once the logged-in shell is up and idle.
+  useEffect(() => {
+    prefetchHotPageChunks();
+  }, []);
   
   const style = {
     "--sidebar-width": "16rem",
@@ -1057,16 +1173,8 @@ function Router() {
       <Route path="/tree-pruning" component={TreePruning}/>
       <Route path="/stump-grinding" component={StumpGrinding}/>
       <Route path="/hedge-trimming" component={HedgeTrimming}/>
-      <Route path="/mulch">
-        <AuthenticatedRoute>
-          <Mulch />
-        </AuthenticatedRoute>
-      </Route>
-      <Route path="/mulch/thanks">
-        <AuthenticatedRoute>
-          <MulchThanks />
-        </AuthenticatedRoute>
-      </Route>
+      <Route path="/mulch" component={Mulch}/>
+      <Route path="/mulch/thanks" component={MulchThanks}/>
       <Route path="/blog" component={Blog}/>
       <Route path="/blog/:slug" component={BlogPost}/>
       <Route path="/summer-offer" component={SummerOffer}/>
@@ -1168,6 +1276,7 @@ function Router() {
       <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
       <Route path="/payment-complete" component={PaymentComplete}/>
       <Route path="/review/:token" component={PublicReview}/>
+      <Route path="/timeline/:token" component={PublicTimeline}/>
       <Route path="/watch/:videoId" component={WatchVideo}/>
       
       {/* Dashboard pages with sidebar - Admin only */}
@@ -1237,10 +1346,19 @@ function Router() {
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
+      <Route path="/supplier-invoices">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <SupplierInvoices />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
       <Route path="/calls">
         <ProtectedRoute>
           <SidebarLayout>
-            <Calls />
+            <UpgradeGate requires="addon:call_recording" feature="Call recording">
+              <Calls />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1254,7 +1372,9 @@ function Router() {
       <Route path="/unlinked-calls">
         <ProtectedRoute>
           <SidebarLayout>
-            <UnlinkedCalls />
+            <UpgradeGate requires="addon:call_recording" feature="Call recording">
+              <UnlinkedCalls />
+            </UpgradeGate>
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1450,6 +1570,14 @@ function Router() {
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
+      {/* Hazard trees — crew-accessible. Sidebar link is gated by HAZARD_TREE_PINS. */}
+      <Route path="/hazard-pins">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <HazardPins />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
       <Route path="/materials-services">
         <ProtectedRoute>
           <SidebarLayout>
@@ -1504,9 +1632,19 @@ function Router() {
           <SettingsChannels />
         </SidebarLayout>
       </Route>
+      <Route path="/settings/suppliers">
+        <SidebarLayout>
+          <SettingsSuppliers />
+        </SidebarLayout>
+      </Route>
       <Route path="/settings/setup">
         <SidebarLayout>
           <SettingsSetup />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/import">
+        <SidebarLayout>
+          <SettingsImport />
         </SidebarLayout>
       </Route>
       <Route path="/admin/subscribers">
@@ -1755,6 +1893,11 @@ function App() {
 
   return (
     <ErrorBoundary>
+      {/* hook=useTransitionedLocation defers route swaps into a React
+          transition, so navigating to a not-yet-loaded lazy page keeps the
+          current page visible instead of flashing the (null) Suspense
+          fallback while the chunk downloads. */}
+      <WouterRouter hook={useTransitionedLocation}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <AuthProvider>
@@ -1775,6 +1918,7 @@ function App() {
           </AuthProvider>
         </TooltipProvider>
       </QueryClientProvider>
+      </WouterRouter>
     </ErrorBoundary>
   );
 }

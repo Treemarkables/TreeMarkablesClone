@@ -29,7 +29,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
+        // Reclaim BEFORE didBecomeActive: when a backgrounded app is woken by a
+        // notification tap, iOS can deliver the tap response between foregrounding
+        // and didBecomeActive. If Capacitor's router re-stole the delegate during
+        // the previous foreground session, that tap would be swallowed.
+        reclaimNotificationDelegate()
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
@@ -50,12 +54,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // luck of the boot timing, which is why a previously-working build can
         // "suddenly" start dropping taps after a reinstall or a slower launch.
         //
-        // Reclaim immediately AND re-assert over the next ~2s so a late bridge
+        // Reclaim immediately AND re-assert over the next ~30s so a late bridge
         // load can't hold the delegate through the window when iOS delivers the
-        // tap. reclaimNotificationDelegate() is idempotent (no-op when we already
+        // tap. The old burst stopped at 3s, but on a slow cold boot (remote
+        // index.html over cellular) the bridge loads AFTER that and re-stole the
+        // delegate for the rest of the session — swallowing every subsequent tap.
+        // reclaimNotificationDelegate() is idempotent (no-op when we already
         // own it), so the repeats are cheap and safe.
         reclaimNotificationDelegate()
-        for delay in [0.3, 0.8, 1.5, 3.0] {
+        for delay in [0.3, 0.8, 1.5, 3.0, 5.0, 8.0, 12.0, 20.0, 30.0] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 self?.reclaimNotificationDelegate()
             }

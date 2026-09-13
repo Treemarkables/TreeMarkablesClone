@@ -18,7 +18,9 @@ import {
   Target,
   DollarSign,
   TrendingUp,
-  type LucideIcon,
+  Building2,
+  TreePine,
+  type LucideIcon, Receipt,
 } from "lucide-react";
 import {
   Sidebar,
@@ -39,7 +41,9 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 import { PlanGate } from "@/components/PlanGate";
 
 interface AppSidebarProps {
@@ -47,9 +51,10 @@ interface AppSidebarProps {
   onTabChange: (tab: string) => void;
 }
 
-// Shared row classes: tall flat row + blue-pill active state. Icons inherit
-// currentColor, so the active row tints both the label and the icon blue.
-const ITEM = "rounded-lg h-11 gap-3 text-[15px] data-[active=true]:bg-blue-50 data-[active=true]:text-blue-600 data-[active=true]:hover:bg-blue-50 data-[active=true]:hover:text-blue-600";
+// Shared row classes: tall pill row + ink active state with a lime indicator
+// bar (Inflow brand). Icons inherit currentColor, so the active row tints both
+// the label and the icon.
+const ITEM = "relative rounded-full h-11 gap-3 text-[15px] data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground data-[active=true]:hover:bg-sidebar-primary data-[active=true]:hover:text-sidebar-primary-foreground data-[active=true]:before:absolute data-[active=true]:before:left-2 data-[active=true]:before:top-1/2 data-[active=true]:before:-translate-y-1/2 data-[active=true]:before:h-3.5 data-[active=true]:before:w-1 data-[active=true]:before:rounded-full data-[active=true]:before:bg-brand-lime";
 
 // Fixed-width icon slot so labels line up. The span wrapper keeps the svg out
 // of SidebarMenuButton's [&>svg]:size-4 direct-child rule (we want 20px here
@@ -78,6 +83,8 @@ function SidebarNavContent({
   isAdmin,
   isCrew,
   logout,
+  userName,
+  userEmail,
 }: {
   activeTab: string;
   onTabChange: (tab: string) => void;
@@ -89,7 +96,37 @@ function SidebarNavContent({
   isAdmin: boolean;
   isCrew: boolean;
   logout: () => void;
+  userName: string;
+  userEmail: string;
 }) {
+  // Platform operator (Treemarkables/Inflow) — gates the Subscribers footer link.
+  const platformOperator = useRoleChecklistFeature();
+
+  // Which tenant this session belongs to — the response envelope varies across
+  // cached consumers ({data} vs bare row), so coerce both shapes.
+  const { data: settingsResp } = useQuery<{ data?: { businessName?: string }; businessName?: string }>({
+    queryKey: ["/api/business-settings"],
+    staleTime: 5 * 60 * 1000,
+  });
+  const businessName = settingsResp?.data?.businessName ?? settingsResp?.businessName ?? "";
+
+  // Same flag as the spike page: GET /api/hazard-pins/enabled → HAZARD_TREE_PINS.
+  // Hidden while loading or when the flag is off (enabled !== true).
+  const { data: hazardPinsEnabledResp } = useQuery<{ data?: { enabled?: boolean } }>({
+    queryKey: ["/api/hazard-pins/enabled"],
+    staleTime: 5 * 60 * 1000,
+  });
+  const hazardPinsEnabled = hazardPinsEnabledResp?.data?.enabled === true;
+
+  const identityPrimary = businessName || userName || userEmail;
+  const identitySecondary = businessName ? userName || userEmail : userName ? userEmail : "";
+  const identityInitials = identityPrimary
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
+
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const safetyActive = location === "/safety" || location.startsWith("/safety/") || ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
   const financeActive = ["/metrics", "/profitability-calculator"].includes(location);
@@ -138,7 +175,26 @@ function SidebarNavContent({
 
   return (
     <>
-      <SidebarContent className="pt-safe pt-6 md:pt-0 font-light">
+      {identityPrimary && (
+        <SidebarHeader className="border-b border-sidebar-border px-3 py-3">
+          <div className="flex items-center gap-3" data-testid="sidebar-account">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-lime text-brand-lime-foreground text-sm font-semibold">
+              {identityInitials}
+            </div>
+            <div className="min-w-0 flex-1" title={userEmail}>
+              <p className="truncate text-[15px] font-semibold leading-tight" data-testid="text-business-name">
+                {identityPrimary}
+              </p>
+              {identitySecondary && (
+                <p className="truncate text-[13px] text-muted-foreground leading-tight mt-0.5" data-testid="text-logged-in-user">
+                  {identitySecondary}
+                </p>
+              )}
+            </div>
+          </div>
+        </SidebarHeader>
+      )}
+      <SidebarContent className="pt-2 md:pt-0 font-light">
         {/* Core Dashboard */}
         <SidebarGroup>
           <SidebarGroupLabel>{isCrew ? "My Work" : "Core Dashboard"}</SidebarGroupLabel>
@@ -241,13 +297,27 @@ function SidebarNavContent({
                 </SidebarMenuItem>
               ))}
 
-              {/* Calls — recorded call log */}
+              {/* Calls — recorded call log (paid add-on, any tier) */}
+              {isAdmin && (
+                <PlanGate requires="addon:call_recording">
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location === "/calls"} className={ITEM}>
+                      <Link href="/calls" onClick={handleLinkClick} data-testid="link-calls">
+                        <NavIcon icon={Phone} />
+                        <span>Calls</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </PlanGate>
+              )}
+
+              {/* Supplier Invoices — emailed bills waiting to be assigned to a job */}
               {isAdmin && (
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/calls"} className={ITEM}>
-                    <Link href="/calls" onClick={handleLinkClick} data-testid="link-calls">
-                      <NavIcon icon={Phone} />
-                      <span>Calls</span>
+                  <SidebarMenuButton asChild isActive={location === "/supplier-invoices"} className={ITEM}>
+                    <Link href="/supplier-invoices" onClick={handleLinkClick} data-testid="link-supplier-invoices">
+                      <NavIcon icon={Receipt} />
+                      <span>Supplier Invoices</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -297,6 +367,19 @@ function SidebarNavContent({
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </Collapsible>
+
+              {/* Hazard trees — field GPS pin register. Crew-visible (not admin-only);
+                  shown only when HAZARD_TREE_PINS is on. See HAZARD_TREE_PINS_PLAN.md. */}
+              {hazardPinsEnabled && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/hazard-pins"} className={ITEM}>
+                    <Link href="/hazard-pins" onClick={handleLinkClick} data-testid="link-hazard-pins">
+                      <NavIcon icon={TreePine} />
+                      <span>Hazard trees</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
 
               {/* Safety — collapsible group (JHA + Near Miss). Crew+ only — hidden on Freemium. */}
               <PlanGate requires="plan:crew">
@@ -516,6 +599,19 @@ function SidebarNavContent({
 
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu className="font-normal text-[16px]">
+          {/* Platform-operator only: concierge subscriber management. Same
+              allowlist gate as the Settings Platform section; the server
+              enforces via requirePlatformAdmin regardless. */}
+          {isAdmin && platformOperator && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={location === "/admin/subscribers"} className={ITEM}>
+                <Link href="/admin/subscribers" onClick={handleLinkClick} data-testid="link-subscribers">
+                  <Building2 className="h-5 w-5 shrink-0 text-slate-600" />
+                  <span>Subscribers</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           {isAdmin && (
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={location.startsWith("/settings")} className={ITEM}>
@@ -544,7 +640,7 @@ function SidebarNavContent({
                   close();
                 }}
               >
-                <LogOut className="h-5 w-5 shrink-0 text-slate-600" />
+                <LogOut className="h-5 w-5 shrink-0 text-muted-foreground" />
                 <span>Log Out</span>
               </button>
             </SidebarMenuButton>
@@ -578,6 +674,8 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     isAdmin: !!isAdmin,
     isCrew: !!isCrew,
     logout,
+    userName: [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" "),
+    userEmail: currentUser?.email ?? "",
   };
 
   // Mobile: render a custom fixed overlay drawer — bypasses Radix Sheet/portal entirely

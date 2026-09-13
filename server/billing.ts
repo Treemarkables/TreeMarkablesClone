@@ -10,6 +10,7 @@ import { db } from "./db";
 import { subscriptions, subscriptionPlans } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { Subscription } from "@shared/schema";
+import { invalidateEntitlementsCache } from "./tenancy/entitlements";
 
 export async function getActivePlans() {
   return db.select().from(subscriptionPlans)
@@ -50,6 +51,9 @@ export async function upsertSubscription(businessId: string, data: SubscriptionW
   } else {
     await db.insert(subscriptions).values({ businessId, ...data });
   }
+  // The subscription changed — drop the cached entitlement resolution so plan
+  // upgrades/cancellations apply on the next request, not after the TTL.
+  invalidateEntitlementsCache(businessId);
 }
 
 /** Mirror a Stripe subscription object into our `subscriptions` row (called from the webhook). */

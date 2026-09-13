@@ -4,16 +4,19 @@ import { Resend } from 'resend';
 function getCredentials() {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
+    // Log nothing about the environment here — enumerating *KEY* env names
+    // hands anyone reading the logs a map of every secret we hold.
     console.error('❌ RESEND_API_KEY not found in environment');
-    console.error('Available env keys:', Object.keys(process.env).filter(k => k.includes('RESEND') || k.includes('KEY')));
     throw new Error('RESEND_API_KEY not found in environment');
   }
-  
-  console.log(`✅ RESEND_API_KEY loaded: ${apiKey.substring(0, 10)}...`);
-  
-  // From email configured in Resend dashboard with friendly sender name
-  const fromEmail = 'Treemarkables <info@updates.treemarkables.co.nz>';
-  
+
+  // Base From header: default sender name over the verified sending address.
+  // Per-tenant emails override the display name (emailService.composeFrom) but
+  // keep this address. Set RESEND_FROM_EMAIL in the environment to move sending
+  // to a newly verified domain (e.g. "Inflow <no-reply@mail.inflowapp.co.nz>")
+  // without a code change.
+  const fromEmail = (process.env.RESEND_FROM_EMAIL || 'Treemarkables <info@updates.treemarkables.co.nz>').trim();
+
   return { apiKey, fromEmail };
 }
 

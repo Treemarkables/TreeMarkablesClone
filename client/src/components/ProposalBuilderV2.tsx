@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import {
   X, Plus, Upload, Trash2, Mail, MessageSquare, Check, Crown,
   GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye, ArrowLeft, Save,
-  SlidersHorizontal, Map as MapIcon,
+  SlidersHorizontal, Map as MapIcon, Download,
 } from "lucide-react";
 import { BuilderToolbarButton } from "@/components/BuilderToolbarButton";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
@@ -28,6 +28,7 @@ import { invalidRecipientMessage } from "@/lib/emailValidation";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
 import type { DocumentTemplate, Customer, Proposal, DocumentBlock } from "@shared/schema";
 import { DEFAULT_PROPOSAL_BLOCKS } from "@shared/schema";
+import { proposalAcceptLink } from "@shared/customerLinks";
 
 // Minimal typed interfaces for browser SpeechRecognition (not in TypeScript lib by default)
 interface SpeechRecognitionAlternative { readonly transcript: string; }
@@ -90,11 +91,13 @@ interface WysiwygBlock {
 interface DraftLineItem {
   description: string;
   itemCode: string;
-  quantity: number;
-  costExGst: number;
-  markupPct: number;
+  // Numeric fields hold the raw typed string while editing so intermediate
+  // states like "8." survive re-renders; parsed via draftNum() on compute/commit.
+  quantity: number | string;
+  costExGst: number | string;
+  markupPct: number | string;
   pricingType: PricingType;
-  fixedPrice: number;
+  fixedPrice: number | string;
   isOptional: boolean;
   priceIncludesTax: boolean;
   choices: LineItemChoice[];
@@ -152,16 +155,21 @@ function inferBlockType(section: {
   return "description";
 }
 
+function draftNum(v: number | string): number {
+  return typeof v === "number" ? v : parseFloat(v) || 0;
+}
+
 function draftPriceExGst(draft: DraftLineItem): number {
   if (draft.pricingType === "fixed") {
-    return draft.priceIncludesTax ? draft.fixedPrice / 1.15 : draft.fixedPrice;
+    const fixed = draftNum(draft.fixedPrice);
+    return draft.priceIncludesTax ? fixed / 1.15 : fixed;
   }
-  const costEx = draft.priceIncludesTax ? draft.costExGst / 1.15 : draft.costExGst;
-  return costEx * (1 + draft.markupPct / 100);
+  const costEx = draft.priceIncludesTax ? draftNum(draft.costExGst) / 1.15 : draftNum(draft.costExGst);
+  return costEx * (1 + draftNum(draft.markupPct) / 100);
 }
 
 function draftTotal(draft: DraftLineItem): number {
-  return draft.quantity * draftPriceExGst(draft);
+  return draftNum(draft.quantity) * draftPriceExGst(draft);
 }
 
 function calcBlockSubtotal(block: WysiwygBlock): number {
@@ -907,7 +915,7 @@ function LineItemsBlock({
     return {
       id: existing?.id || `item-${Date.now()}`,
       description: d.description,
-      quantity: d.quantity,
+      quantity: draftNum(d.quantity),
       unitPrice: priceExGst,
       totalPrice: total,
       unit: existing?.unit || "each",
@@ -916,10 +924,10 @@ function LineItemsBlock({
       selected: existing?.selected !== undefined ? existing.selected : true,
       pricingType: d.pricingType,
       choices: d.choices,
-      fixedPrice: d.pricingType === "fixed" ? d.fixedPrice : undefined,
+      fixedPrice: d.pricingType === "fixed" ? draftNum(d.fixedPrice) : undefined,
       priceIncludesTax: d.priceIncludesTax,
-      costPrice: d.costExGst,
-      markupPct: d.markupPct,
+      costPrice: draftNum(d.costExGst),
+      markupPct: draftNum(d.markupPct),
     };
   };
 
@@ -1034,9 +1042,9 @@ function LineItemsBlock({
           <label className="text-xs text-gray-500 mb-1 block">Qty</label>
           <Input
             type="text"
-            inputMode="numeric"
+            inputMode="decimal"
             value={d.quantity}
-            onChange={(e) => setD((prev) => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+            onChange={(e) => setD((prev) => ({ ...prev, quantity: e.target.value.replace(/[^0-9.]/g, "") }))}
             className="h-9 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
         </div>
@@ -1048,8 +1056,8 @@ function LineItemsBlock({
             <Input
               type="number"
               value={d.fixedPrice === 0 ? '' : d.fixedPrice}
-              onChange={(e) => setD((prev) => ({ ...prev, fixedPrice: parseFloat(e.target.value) || 0 }))}
-              onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.fixedPrice || 0) > 0) { onCommit(); onCancel(); } }}
+              onChange={(e) => setD((prev) => ({ ...prev, fixedPrice: e.target.value }))}
+              onBlur={() => { if (d.description?.trim() && draftNum(d.quantity) > 0 && draftNum(d.fixedPrice) > 0) { onCommit(); onCancel(); } }}
               className="h-9 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               placeholder="0.00"
             />
@@ -1061,8 +1069,8 @@ function LineItemsBlock({
               <Input
                 type="number"
                 value={d.costExGst === 0 ? '' : d.costExGst}
-                onChange={(e) => setD((prev) => ({ ...prev, costExGst: parseFloat(e.target.value) || 0 }))}
-                onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.costExGst || 0) > 0) { onCommit(); onCancel(); } }}
+                onChange={(e) => setD((prev) => ({ ...prev, costExGst: e.target.value }))}
+                onBlur={() => { if (d.description?.trim() && draftNum(d.quantity) > 0 && draftNum(d.costExGst) > 0) { onCommit(); onCancel(); } }}
                 className="h-9 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 placeholder="0.00"
               />
@@ -1072,7 +1080,7 @@ function LineItemsBlock({
               <Input
                 type="number"
                 value={d.markupPct}
-                onChange={(e) => setD((prev) => ({ ...prev, markupPct: parseFloat(e.target.value) || 0 }))}
+                onChange={(e) => setD((prev) => ({ ...prev, markupPct: e.target.value }))}
                 className="h-9 text-sm"
                 placeholder="0"
               />
@@ -1383,6 +1391,7 @@ export function ProposalBuilderV2({
   const [proposalTitle, setProposalTitle] = useState("Treemarkables Quote");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [previewSelectedChoices, setPreviewSelectedChoices] = useState<Record<string, string>>({});
@@ -1967,23 +1976,60 @@ export function ProposalBuilderV2({
     return draftId;
   }, [draftId, ensureJobSaved, buildPayload, saveDraftMutation, onRequestJobSave, toast, jobId]);
 
+  const handleDownloadPdf = useCallback(async () => {
+    setDownloadingPdf(true);
+    try {
+      // Flush the latest edits first so the PDF matches what's on screen —
+      // same reason ensureDraftSaved exists for the email/SMS sends.
+      const id = await ensureDraftSaved();
+      if (!id) return; // save failure already surfaced its own toast
+      const res = await fetch(`/api/proposals/${id}/pdf`);
+      if (!res.ok) throw new Error("PDF failed");
+      const blob = await res.blob();
+      // Reuse the server's filename (Quote-/Proposal-<number>.pdf) so the
+      // download matches the emailed attachment.
+      const cd = res.headers.get("Content-Disposition") || "";
+      const filename = cd.match(/filename="([^"]+)"/)?.[1] || `${isQuote ? "Quote" : "Proposal"}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Download failed", description: "Could not generate the PDF.", variant: "destructive" });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }, [ensureDraftSaved, isQuote, toast]);
+
   const initEmailForm = useCallback(() => {
     const email = customEmail || (job as { jobContactEmail?: string } | null)?.jobContactEmail || (customer as { email?: string } | null)?.email || "";
     setEmailForm({ to: email, cc: "", subject: "Treemarkables Quote", message: "Thank you for your inquiry, we are pleased to provide you with the following proposal." });
   }, [customEmail, job, customer]);
 
-  const initSmsForm = useCallback(() => {
+  const initSmsForm = useCallback((overrideId?: string) => {
     const phone = (customer as { phone?: string } | null)?.phone || (job as { jobContactMobile?: string } | null)?.jobContactMobile || (job as { jobContactPhone?: string } | null)?.jobContactPhone || "";
     const name = (customer as { name?: string } | null)?.name || "Valued Customer";
     const first = name.split(" ")[0];
-    const link = draftId ? `${window.location.origin}/proposal/${draftId}` : "";
+    // Link to the public accept page (same URL the email CTA uses) — it loads via
+    // /api/proposals/:id/public, which works without a session. The bare /proposal/:id
+    // viewer fetches session-authed endpoints, so customers opening it from an SMS
+    // got an empty "not found" page under RLS.
+    const docLabel = isQuote ? "quote" : "proposal";
+    const linkId = overrideId || draftId;
+    const link = linkId
+      ? proposalAcceptLink(linkId, { base: window.location.origin, quote: isQuote })
+      : "";
     setSmsForm({
       to: phone,
       message: link
-        ? `Hi ${first}, your proposal is ready! Total: ${fmtNZD(grandTotal)}. View: ${link}\nJules\nTreemarkables`
-        : `Hi ${first}, your proposal is ready! Total: ${fmtNZD(grandTotal)}.\nJules\nTreemarkables`,
+        ? `Hi ${first}, your ${docLabel} is ready! Total: ${fmtNZD(grandTotal)}. View: ${link}\nJules\nTreemarkables`
+        : `Hi ${first}, your ${docLabel} is ready! Total: ${fmtNZD(grandTotal)}.\nJules\nTreemarkables`,
     });
-  }, [customer, job, draftId, grandTotal]);
+  }, [customer, job, draftId, grandTotal, isQuote]);
 
   const handleSendEmail = async () => {
     if (!emailForm.to.trim() || !emailForm.subject.trim()) {
@@ -2008,9 +2054,18 @@ export function ProposalBuilderV2({
     // Ensure draft is persisted before sending (same pattern as email) so proposalId/link is valid
     const effectiveDraftId = await ensureDraftSaved();
     const resolvedCustomerId = (customer as { id?: string } | null)?.id || customerId;
+    // Never let a proposal SMS go out without a view link. The message is
+    // composed at dialog-open; if the draft only came into existence just now
+    // (compose-time save failed or hadn't happened), the composed text has no
+    // link — append it rather than sending the customer a dead-end text.
+    let message = smsForm.message;
+    if (effectiveDraftId && !message.includes("/proposal/")) {
+      const link = proposalAcceptLink(effectiveDraftId, { base: window.location.origin, quote: isQuote });
+      message = `${message.trimEnd()}\nView: ${link}`;
+    }
     await sendSmsMutation.mutateAsync({
       to: smsForm.to,
-      message: smsForm.message,
+      message,
       jobId,
       customerId: resolvedCustomerId,
       proposalId: effectiveDraftId || undefined,
@@ -2133,7 +2188,9 @@ export function ProposalBuilderV2({
             <>
             {/* sm:flex-initial on both groups so the row can shrink (labels
                 truncate) instead of clipping the Close button at tablet widths */}
-            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[4] sm:flex-initial">
+            {/* flex-[5]/flex-[2] mirrors the 5-vs-2 button split so all seven
+                stacked mobile buttons come out equal width */}
+            <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2 min-w-0 flex-[5] sm:flex-initial">
               <BuilderToolbarButton
                 icon={ArrowLeft}
                 label="Back"
@@ -2151,7 +2208,14 @@ export function ProposalBuilderV2({
               <BuilderToolbarButton
                 icon={MessageSquare}
                 label={isQuote ? "SMS quote" : "SMS proposal"}
-                onClick={() => { initSmsForm(); setShowSmsDialog(true); }}
+                onClick={async () => {
+                  // Persist the draft first so the composed message can include the
+                  // view link — composing before the first save produced an SMS with
+                  // no link at all (the draft only got created on Send).
+                  const id = draftId || (await ensureDraftSaved());
+                  initSmsForm(id || undefined);
+                  setShowSmsDialog(true);
+                }}
                 aria-label={isQuote ? "SMS quote" : "SMS proposal"}
                 className="bg-green-600 hover:bg-green-700"
               />
@@ -2173,6 +2237,14 @@ export function ProposalBuilderV2({
                 }}
                 aria-label={isQuote ? "Save quote" : "Save proposal"}
                 className="bg-indigo-600 hover:bg-indigo-700"
+              />
+              <BuilderToolbarButton
+                icon={Download}
+                label="PDF"
+                loading={downloadingPdf}
+                onClick={handleDownloadPdf}
+                aria-label={isQuote ? "Download quote PDF" : "Download proposal PDF"}
+                className="bg-teal-600 hover:bg-teal-700"
               />
               {/* Preview button removed — the customer view now lives inline
                   below the editor (scroll down to see it), matching the
@@ -2523,7 +2595,9 @@ export function ProposalBuilderV2({
                 gstAmount: gst.toString(),
                 totalAmount: grandTotal.toString(),
                 taxRate: taxRate.toString(),
-                discountAmount: discountAmount.toString(),
+                // Dollar discount (discountAmount state holds the raw % for
+                // percentage discounts) — matches what the server persists.
+                discountAmount: discountValue.toString(),
                 discountType,
                 validUntil: validUntil || null,
                 expiryDate: validUntil || null,
@@ -2604,6 +2678,12 @@ export function ProposalBuilderV2({
                         blocks={blocksForRenderer}
                         selectedChoices={previewSelectedChoices}
                         selectedOptionalItems={previewSelectedOptional}
+                        onOptionalToggle={(lineItemId, selected) =>
+                          setPreviewSelectedOptional((prev) => ({ ...prev, [lineItemId]: selected }))
+                        }
+                        onChoiceSelect={(lineItemId, choiceId) =>
+                          setPreviewSelectedChoices((prev) => ({ ...prev, [lineItemId]: choiceId }))
+                        }
                       />
                     ) : (
                       <ProposalTemplate
