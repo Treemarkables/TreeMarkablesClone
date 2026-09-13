@@ -610,6 +610,50 @@ const MIGRATIONS: Migration[] = [
     },
   },
   {
+    // Frozen snapshot of each person's role-checklist completion, written when a
+    // job closes. role_checklist_tasks is editable from Settings, so recomputing
+    // on read would let a task added next month retroactively drop every past job
+    // below 100%. Freezing the denominator at close is what makes the trend honest.
+    // Mirrors migrations/manual/20260914_job_role_completions.sql.
+    name: "job-role-completions",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS job_role_completions (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        job_id varchar NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        employee_id varchar NOT NULL,
+        nz_date text NOT NULL,
+        role_key text NOT NULL,
+        items_done integer NOT NULL,
+        items_expected integer NOT NULL,
+        expected_item_ids jsonb,
+        done_item_ids jsonb,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT job_role_completions_job_employee_uniq UNIQUE (job_id, employee_id))`,
+      `CREATE INDEX IF NOT EXISTS job_role_completions_employee_idx ON job_role_completions (employee_id)`,
+      `CREATE INDEX IF NOT EXISTS job_role_completions_date_idx ON job_role_completions (nz_date)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      await client.query(`ALTER TABLE job_role_completions ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = $1::regclass LIMIT 1`,
+        ["job_role_completions"],
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON job_role_completions
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+        console.log(`[schema] created tenant_isolation policy on job_role_completions`);
+      }
+      if (hasRole.rowCount && hasRole.rowCount > 0) {
+        await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON job_role_completions TO app_tenant`);
+      }
+    },
+  },
+  {
     // In-app bug / feedback reports (text + voice + photos + video) with
     // per-tenant RLS. Read cross-tenant by the platform operator only.
     name: "bug-reports",
