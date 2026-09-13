@@ -12,6 +12,8 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { BugReportProvider } from "@/contexts/BugReportContext";
+import { BugReportButton } from "@/components/BugReportButton";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
 import { WebCallProvider } from "@/contexts/WebCallContext";
 import { WebCallButton } from "@/components/WebCallButton";
@@ -74,6 +76,7 @@ const Videos = lazy(() => import("@/pages/Videos"));
 const Library = lazy(() => import("@/pages/Library"));
 const Help = lazy(() => import("@/pages/Help"));
 const HelpAdmin = lazy(() => import("@/pages/admin/HelpAdmin"));
+const BugReportsAdmin = lazy(() => import("@/pages/admin/BugReportsAdmin"));
 const Opportunities = lazy(() => import("@/pages/Opportunities"));
 const ConversationDetail = lazy(() => import("@/pages/ConversationDetail"));
 const Reputation = lazy(() => import("@/pages/Reputation"));
@@ -404,6 +407,8 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                 {businessName}
               </span>
             )}
+            {/* Report a problem — every member, every screen */}
+            <div className="shrink-0"><BugReportButton className="h-11 w-11 text-muted-foreground" /></div>
             {/* Notifications Bell — standalone so flex-1 spacer gives it room from actions */}
             {isAdmin && <div className="shrink-0"><NotificationBell /></div>}
 
@@ -655,6 +660,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               <PlanGate requires="addon:call_recording">
                 <WebCallButton />
               </PlanGate>
+
+              {/* Report a problem — every member, every screen */}
+              <BugReportButton className="text-muted-foreground" />
 
               {/* Notifications Bell */}
               <NotificationBell />
@@ -1256,6 +1264,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <HelpAdmin />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/bug-reports">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <BugReportsAdmin />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1901,6 +1916,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <AuthProvider>
+            <BugReportProvider>
             <TwilioCallProvider>
             <WebCallProvider>
               <ScrollToTop />
@@ -1915,6 +1931,7 @@ function App() {
               </Suspense>
             </WebCallProvider>
             </TwilioCallProvider>
+            </BugReportProvider>
           </AuthProvider>
         </TooltipProvider>
       </QueryClientProvider>

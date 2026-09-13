@@ -609,6 +609,67 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // In-app bug / feedback reports (text + voice + photos + video) with
+    // per-tenant RLS. Read cross-tenant by the platform operator only.
+    name: "bug-reports",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS bug_reports (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        reporter_employee_id varchar NOT NULL,
+        status text NOT NULL DEFAULT 'draft',
+        severity text NOT NULL DEFAULT 'minor',
+        title text,
+        description text NOT NULL DEFAULT '',
+        transcript text,
+        page_url text,
+        user_agent text,
+        platform text,
+        screen_size text,
+        app_build text,
+        extra_context jsonb,
+        operator_notes text,
+        resolved_at timestamp,
+        submitted_at timestamp,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+      `CREATE INDEX IF NOT EXISTS bug_reports_status_idx ON bug_reports (status, created_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS bug_report_attachments (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        report_id varchar NOT NULL REFERENCES bug_reports(id) ON DELETE CASCADE,
+        kind text NOT NULL,
+        url text NOT NULL,
+        thumbnail_url text,
+        mime_type text,
+        size_bytes integer,
+        original_name text,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+      `CREATE INDEX IF NOT EXISTS bug_report_attachments_report_idx ON bug_report_attachments (report_id)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      for (const table of ["bug_reports", "bug_report_attachments"]) {
+        await client.query(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+        const pol = await client.query(
+          `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = $1::regclass LIMIT 1`,
+          [table],
+        );
+        if (pol.rowCount === 0) {
+          await client.query(
+            `CREATE POLICY tenant_isolation ON ${table}
+               USING (business_id = nullif(current_setting('app.current_business', true), ''))
+               WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+          );
+          console.log(`[schema] created tenant_isolation policy on ${table}`);
+        }
+        if ((hasRole.rowCount ?? 0) > 0) {
+          await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO app_tenant`);
+        }
+      }
+    },
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

@@ -5610,5 +5610,79 @@ export const insertBusinessAddOnSchema = createInsertSchema(businessAddOns).omit
 export type BusinessAddOn = typeof businessAddOns.$inferSelect;
 export type InsertBusinessAddOn = z.infer<typeof insertBusinessAddOnSchema>;
 
+// ============================================================================
+// In-app bug / feedback reports
+//
+// Any signed-in member (beta tester or staff) can file a report from anywhere in
+// the app: free text, an optional voice note (transcribed server-side), photos
+// and a screen recording / video. Device + page context is captured
+// automatically so the operator can reproduce without a back-and-forth.
+// Reports are tenant-scoped (RLS) like every other table; the platform operator
+// reads them cross-tenant via the requirePlatformAdmin concierge routes.
+// ============================================================================
+export const bugReportStatuses = ['draft', 'open', 'in_progress', 'resolved', 'closed'] as const;
+export type BugReportStatus = typeof bugReportStatuses[number];
+
+export const bugReportSeverities = ['blocker', 'major', 'minor', 'idea'] as const;
+export type BugReportSeverity = typeof bugReportSeverities[number];
+
+export const bugReports = pgTable("bug_reports", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reporterEmployeeId: varchar("reporter_employee_id").references(() => employees.id).notNull(),
+  // draft while attachments are still uploading; flips to open on submit
+  status: text("status").notNull().default("draft"), // BugReportStatus
+  severity: text("severity").notNull().default("minor"), // BugReportSeverity
+  title: text("title"),
+  description: text("description").notNull().default(""),
+  // Whisper transcript of the voice note (if one was attached)
+  transcript: text("transcript"),
+  // Auto-captured context
+  pageUrl: text("page_url"),
+  userAgent: text("user_agent"),
+  platform: text("platform"), // web | ios | android
+  screenSize: text("screen_size"), // e.g. "390x844@3"
+  appBuild: text("app_build"), // client build id, when known
+  extraContext: jsonb("extra_context"), // anything else the client captures (recent console errors, etc.)
+  // Operator triage
+  operatorNotes: text("operator_notes"),
+  resolvedAt: timestamp("resolved_at"),
+  submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const bugReportAttachmentKinds = ['photo', 'video', 'audio'] as const;
+export type BugReportAttachmentKind = typeof bugReportAttachmentKinds[number];
+
+export const bugReportAttachments = pgTable("bug_report_attachments", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").references(() => bugReports.id, { onDelete: "cascade" }).notNull(),
+  kind: text("kind").notNull(), // BugReportAttachmentKind
+  url: text("url").notNull(), // /objects/photos/... or /objects/videos/...
+  thumbnailUrl: text("thumbnail_url"),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
+  originalName: text("original_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertBugReportSchema = createInsertSchema(bugReports).omit({
+  id: true,
+  businessId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertBugReportAttachmentSchema = createInsertSchema(bugReportAttachments).omit({
+  id: true,
+  businessId: true,
+  createdAt: true,
+});
+export type BugReport = typeof bugReports.$inferSelect;
+export type InsertBugReport = z.infer<typeof insertBugReportSchema>;
+export type BugReportAttachment = typeof bugReportAttachments.$inferSelect;
+export type InsertBugReportAttachment = z.infer<typeof insertBugReportAttachmentSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';

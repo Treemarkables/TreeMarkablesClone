@@ -83,6 +83,7 @@ import path from "path";
 import bcrypt from "bcrypt";
 import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
+import { registerBugReportRoutes } from "./bugReports";
 import {
   isStripeConfigured,
   businessOwnsStripeAccount,
@@ -2216,6 +2217,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // XERO INTEGRATION ROUTES
   // ========================================
   registerXeroRoutes(app, storage);
+  // In-app bug / feedback reports (text + voice + photos + video) — server/bugReports.ts
+  registerBugReportRoutes(app, { requireSession, requirePlatformAdmin, imageUpload, videoUpload, audioUpload });
   
   // ========================================
   // CLIENT-SIDE ERROR LOGGING
