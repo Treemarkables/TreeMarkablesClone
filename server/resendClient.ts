@@ -4,13 +4,12 @@ import { Resend } from 'resend';
 function getCredentials() {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
+    // Log nothing about the environment here — enumerating *KEY* env names
+    // hands anyone reading the logs a map of every secret we hold.
     console.error('❌ RESEND_API_KEY not found in environment');
-    console.error('Available env keys:', Object.keys(process.env).filter(k => k.includes('RESEND') || k.includes('KEY')));
     throw new Error('RESEND_API_KEY not found in environment');
   }
-  
-  console.log(`✅ RESEND_API_KEY loaded: ${apiKey.substring(0, 10)}...`);
-  
+
   // Base From header: default sender name over the verified sending address.
   // Per-tenant emails override the display name (emailService.composeFrom) but
   // keep this address. Set RESEND_FROM_EMAIL in the environment to move sending

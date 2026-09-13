@@ -19,8 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Image as ImageIcon, Video as VideoIcon, MapPin, Grid3x3, Map as MapIcon, Search } from "lucide-react";
+import { Image as ImageIcon, Video as VideoIcon, MapPin, Grid3x3, Map as MapIcon, Search, Download, Loader2, Check } from "lucide-react";
 import { formatNZTime } from "@shared/dateUtils";
+import { useToast } from "@/hooks/use-toast";
+import { isNativeApp } from "@/lib/platform";
+import { canSaveToPhotos, saveToPhotos, isPhotosPermissionError } from "@/lib/mediaLibrary";
 
 type MediaItem = {
   id: string;
@@ -63,7 +66,14 @@ function videoIcon(): L.DivIcon {
   });
 }
 
+// Per-item state for the Save button ("saving" covers both the native
+// save-to-Photos path and the older fetch-for-share-sheet fallback).
+type SaveState =
+  | { id: string; phase: "saving"; percent: number }
+  | { id: string; phase: "saved" };
+
 export default function Library() {
+  const { toast } = useToast();
   const [q, setQ] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -164,6 +174,96 @@ export default function Library() {
     });
     return merged;
   }, [photosQuery.data, videosQuery.data]);
+
+  const [saveState, setSaveState] = useState<SaveState | null>(null);
+
+  const saveName = (item: MediaItem) => {
+    const base = (item.title || item.filename || `${item.kind}-${item.id}`)
+      .replace(/[/\\:*?"<>|]+/g, " ")
+      .trim();
+    const ext = (String(item.url).split(".").pop() || (item.kind === "video" ? "mp4" : "jpg")).toLowerCase();
+    return base.toLowerCase().endsWith(`.${ext}`) ? base : `${base}.${ext}`;
+  };
+
+  const markSaved = (id: string) => {
+    setSaveState({ id, phase: "saved" });
+    setTimeout(() => {
+      setSaveState((s) => (s?.phase === "saved" && s.id === id ? null : s));
+    }, 2500);
+  };
+
+  const saveItem = async (item: MediaItem) => {
+    if (saveState?.phase === "saving") return; // one at a time
+
+    // iOS app with the MediaLibrary plugin: native download → straight into the
+    // Photos library, no share sheet and no file to deal with.
+    if (canSaveToPhotos()) {
+      try {
+        setSaveState({ id: item.id, phase: "saving", percent: 0 });
+        await saveToPhotos(
+          { id: item.id, url: item.url, kind: item.kind, filename: saveName(item) },
+          (percent) => setSaveState({ id: item.id, phase: "saving", percent }),
+        );
+        markSaved(item.id);
+      } catch (err: any) {
+        setSaveState(null);
+        toast({
+          title: "Could not save to Photos",
+          description: isPhotosPermissionError(err)
+            ? "Allow Photos access in Settings → Inflow → Photos, then try again."
+            : err?.message || "Please try again.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    if (isNativeApp()) {
+      if ((window as any).Capacitor?.getPlatform?.() === "android" && item.kind === "video") {
+        // Android shell: navigating to an attachment response fires the WebView
+        // DownloadListener (page never unloads) — same trick as openPhotoReport.
+        window.location.assign(`${item.url}?download=1&name=${encodeURIComponent(saveName(item))}`);
+        return;
+      }
+      // Older iOS builds without the plugin: fetch into memory and hand the
+      // file to the share sheet ("Save Image"/"Save Video"), same pattern as
+      // the job-photo download.
+      try {
+        setSaveState({ id: item.id, phase: "saving", percent: 0 });
+        const res = await fetch(item.url, { credentials: "include" });
+        if (!res.ok) throw new Error("The file could not be fetched.");
+        const blob = await res.blob();
+        const file = new File([blob], saveName(item), {
+          type: blob.type || (item.kind === "video" ? "video/mp4" : "image/jpeg"),
+        });
+        if (!(typeof navigator.canShare === "function" && navigator.canShare({ files: [file] }))) {
+          throw new Error("Saving isn't supported in this app version.");
+        }
+        await navigator.share({ files: [file] });
+        setSaveState(null);
+      } catch (err: any) {
+        setSaveState(null);
+        if (err?.name === "AbortError") return; // user closed the share sheet
+        toast({
+          title: `Could not save ${item.kind}`,
+          description: err?.message || "Please try again.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    // Browsers. Videos: ?download=1 makes the server send Content-Disposition:
+    // attachment. Photos: same-origin anchor with a download attribute.
+    const a = document.createElement("a");
+    a.href = item.kind === "video"
+      ? `${item.url}?download=1&name=${encodeURIComponent(saveName(item))}`
+      : item.url;
+    a.download = item.kind === "video" ? "" : saveName(item);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   const itemsWithGps = items.filter((i) => i.gpsLatitude != null && i.gpsLongitude != null);
   const mapCenter: [number, number] = itemsWithGps.length > 0
@@ -277,6 +377,32 @@ export default function Library() {
                       <MapPin className="h-3 w-3" />
                     </Badge>
                   )}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="absolute bottom-1 right-1 h-7 px-2"
+                    disabled={saveState?.phase === "saving"}
+                    onClick={(e) => {
+                      // The whole card is a link — keep the tap on the button.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      saveItem(item);
+                    }}
+                    aria-label={`Save ${item.kind}`}
+                    data-testid={`button-library-save-${item.id}`}
+                  >
+                    {saveState?.id === item.id && saveState.phase === "saving" ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        {saveState.percent > 0 ? `${saveState.percent}%` : "…"}
+                      </>
+                    ) : saveState?.id === item.id && saveState.phase === "saved" ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
                 </div>
                 <CardContent className="p-2">
                   <div className="text-xs font-medium truncate">{item.title || item.notes || item.description || item.filename || "Untitled"}</div>
@@ -325,6 +451,19 @@ export default function Library() {
                       >
                         Open
                       </a>
+                      <button
+                        type="button"
+                        onClick={() => saveItem(item)}
+                        disabled={saveState?.phase === "saving"}
+                        className="text-xs text-primary underline mt-1 ml-3 inline-block disabled:opacity-50"
+                        data-testid={`button-library-map-save-${item.id}`}
+                      >
+                        {saveState?.id === item.id && saveState.phase === "saving"
+                          ? `Saving${saveState.percent > 0 ? ` ${saveState.percent}%` : "…"}`
+                          : saveState?.id === item.id && saveState.phase === "saved"
+                            ? "Saved"
+                            : "Save"}
+                      </button>
                     </div>
                   </Popup>
                 </Marker>

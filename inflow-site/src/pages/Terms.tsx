@@ -28,8 +28,8 @@ export default function Terms() {
 
       <LegalSection title="Subscriptions & billing">
         <p>Paid plans are billed monthly in advance in New Zealand dollars. Prices are shown excluding
-          GST, which is added at checkout. Plans, usage allowances and add-ons are as described on our
-          Pricing page. You can upgrade, downgrade or cancel at any time; cancelling stops future
+          GST, which is added at checkout. Plans, usage allowances and add-ons are as agreed when you
+          sign up. You can upgrade, downgrade or cancel at any time; cancelling stops future
           billing, and you keep access until the end of the current period. Fees already paid are
           non-refundable except where required by law.</p>
         <p>If a payment fails, we may retry it and notify you. If it remains unpaid, your account may

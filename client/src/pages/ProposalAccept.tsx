@@ -457,6 +457,7 @@ export default function ProposalAccept() {
                 Array.isArray(proposal.blockConfig) && proposal.blockConfig.length > 0
                   ? (proposal.blockConfig as DocumentBlock[])
                   : null;
+              const canSelect = proposal?.status !== 'accepted' && proposal?.status !== 'accepted_pending_deposit';
               if (blocks) {
                 return (
                   <BlockRenderedProposal
@@ -467,6 +468,8 @@ export default function ProposalAccept() {
                     blocks={blocks}
                     selectedChoices={selectedChoices}
                     selectedOptionalItems={selectedOptionalItems}
+                    onOptionalToggle={canSelect ? handleOptionalToggle : undefined}
+                    onChoiceSelect={canSelect ? handleChoiceSelect : undefined}
                     className="border-0"
                   />
                 );

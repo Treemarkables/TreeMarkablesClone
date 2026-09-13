@@ -101,45 +101,34 @@ async function hasNewDeployShipped(): Promise<boolean> {
   }
 }
 
-// Reload on foreground when EITHER we've been backgrounded a while OR a new
-// build has shipped. In Capacitor (iOS WKWebView) and PWAs the page otherwise
-// only refetches HTML on a manual full reload, so users sit on stale code
-// indefinitely.
+// Reload on foreground ONLY when a new build has actually shipped. In
+// Capacitor (iOS WKWebView) and PWAs the page otherwise only refetches HTML on
+// a manual full reload, so users sit on stale code indefinitely after a deploy.
+// Time away alone is NOT a reason to reload — an unconditional
+// backgrounded-too-long reload made every app-open after a break white-flash
+// and refetch the whole bundle, which users read as the app "restarting".
+// hasNewDeployShipped is one cheap no-store fetch of index.html; if it can't
+// tell (offline/transient), we stay on the current code and check again next
+// foreground.
 //
 // The catch: a foreground reload IS destructive when the user has in-progress
 // work on screen. Locking the phone mid-edit and returning would otherwise wipe
 // anything not yet auto-saved (the job-card auto-save history makes this a real
-// data-loss path, and it's exactly when the >5min threshold fires). So we ask
-// the reload-guard registry first — if any surface is mid-edit (e.g. an open
-// job card), we skip this reload entirely and retry on the next foreground,
-// once the work is closed. Picking up fresh code can always wait; eating an
-// edit cannot.
-const STALE_RELOAD_THRESHOLD_MS = 5 * 60 * 1000;
-let lastVisibleAt = Date.now();
+// data-loss path). So we ask the reload-guard registry first — if any surface
+// is mid-edit (e.g. an open job card), we skip this reload entirely and retry
+// on the next foreground, once the work is closed. Picking up fresh code can
+// always wait; eating an edit cannot.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    lastVisibleAt = Date.now();
-    return;
-  }
   if (document.visibilityState !== 'visible') return;
 
-  if (isReloadUnsafe()) {
-    console.warn('↻ Foreground reload skipped — in-progress work open. Will retry once it closes.');
-    return;
-  }
-
-  const elapsed = Date.now() - lastVisibleAt;
-  if (elapsed > STALE_RELOAD_THRESHOLD_MS) {
-    console.warn(`↻ App backgrounded for ${Math.round(elapsed / 1000)}s — reloading to get fresh code`);
-    window.location.reload();
-    return;
-  }
-  // Even after a brief away, pick up a fresh deploy on return.
   hasNewDeployShipped().then((isStale) => {
-    if (isStale) {
-      console.warn('↻ New build detected on foreground — reloading to get fresh code');
-      window.location.reload();
+    if (!isStale) return;
+    if (isReloadUnsafe()) {
+      console.warn('↻ New build shipped but in-progress work open — will reload once it closes.');
+      return;
     }
+    console.warn('↻ New build detected on foreground — reloading to get fresh code');
+    window.location.reload();
   });
 });
 

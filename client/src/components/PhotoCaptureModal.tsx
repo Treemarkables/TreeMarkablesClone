@@ -30,6 +30,11 @@ interface PhotoCaptureModalProps {
   onClose: () => void;
   jobId?: string;
   onPendingPhotos?: (files: File[], previewUrls: string[]) => void;
+  /** POST multipart `photos[]` here instead of the job diary (e.g. hazard pins). */
+  uploadUrl?: string;
+  onUploaded?: () => void;
+  /** Restrict file pickers to images (camera / tree-pin capture). */
+  acceptImagesOnly?: boolean;
 }
 
 export function PhotoCaptureModal({
@@ -37,8 +42,13 @@ export function PhotoCaptureModal({
   onClose,
   jobId,
   onPendingPhotos,
+  uploadUrl,
+  onUploaded,
+  acceptImagesOnly = false,
 }: PhotoCaptureModalProps) {
-  const isPendingMode = !jobId && !!onPendingPhotos;
+  const isCustomUpload = Boolean(uploadUrl);
+  const isPendingMode = !jobId && !isCustomUpload && !!onPendingPhotos;
+  const imagesOnly = acceptImagesOnly || isCustomUpload;
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
@@ -77,11 +87,13 @@ export function PhotoCaptureModal({
 
       const formData = new FormData();
       for (const f of prepared) formData.append("photos", f);
-      formData.append("authorName", "User");
-      formData.append("description", caption.trim() || "Photo added");
-
-      const timestamp = Date.now();
-      const url = `/api/jobs/${jobId}/diary-photos?_bypass=${timestamp}`;
+      const url = uploadUrl
+        ? uploadUrl
+        : `/api/jobs/${jobId}/diary-photos?_bypass=${Date.now()}`;
+      if (!uploadUrl) {
+        formData.append("authorName", "User");
+        formData.append("description", caption.trim() || "Photo added");
+      }
 
       console.log("📸 Uploading", prepared.length, "photo(s) in one batch:", url);
 
@@ -120,14 +132,14 @@ export function PhotoCaptureModal({
         throw err;
       }
     },
-    onSuccess: (data) => {
-      // Invalidate ALL diary queries for this job (including all filter types)
-      queryClient.invalidateQueries({
-        queryKey: ["/api/jobs", jobId, "diary-timeline"],
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-
-      // Reset and close
+    onSuccess: () => {
+      if (jobId) {
+        queryClient.invalidateQueries({
+          queryKey: ["/api/jobs", jobId, "diary-timeline"],
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      }
+      onUploaded?.();
       handleClose();
     },
     onError: (error: Error) => {
@@ -148,11 +160,16 @@ export function PhotoCaptureModal({
     const validFiles: File[] = [];
     const newPreviewUrls: string[] = [];
 
-    // Validate each file
     for (const file of files) {
-      // No file type restrictions - accept all file types
+      if (imagesOnly && !(file.type || "").toLowerCase().startsWith("image/")) {
+        toast({
+          title: "Photos only",
+          description: `${file.name} is not an image`,
+          variant: "destructive",
+        });
+        continue;
+      }
 
-      // Validate file size
       if (file.size > maxSize) {
         toast({
           title: "File too large",
@@ -261,7 +278,7 @@ export function PhotoCaptureModal({
                 <input
                   id="camera-input"
                   type="file"
-                  accept={isMobile ? "image/*" : "image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"}
+                  accept={isMobile || imagesOnly ? "image/*" : "image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"}
                   {...(isMobile ? { capture: "environment" } : {})}
                   onChange={handleFileSelect}
                   className="sr-only"
@@ -283,7 +300,7 @@ export function PhotoCaptureModal({
                 <input
                   id="library-input"
                   type="file"
-                  accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  accept={imagesOnly ? "image/*" : "image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"}
                   multiple
                   onChange={handleFileSelect}
                   className="sr-only"
@@ -304,7 +321,7 @@ export function PhotoCaptureModal({
 
           {/* Caption — typed or spoken (voice caption transcribes onto the
               diary entry, so it shows in the timeline and photo report). */}
-          {selectedFiles.length > 0 && !isPendingMode && (
+          {selectedFiles.length > 0 && !isPendingMode && !isCustomUpload && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label htmlFor="photo-caption" className="text-sm font-medium text-gray-700">

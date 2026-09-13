@@ -1,12 +1,55 @@
 import { sendSMSEveryoneMessage, getSMSEveryoneSenderId } from './smsEveryoneClient';
 import * as usageMeter from './usageMeter';
 import { currentBusinessId } from '../tenancy/tenantStore';
+import { storage } from '../storage';
+import { proposalLinkPattern } from '@shared/customerLinks';
 
 interface SMSParams {
   to: string;
   message: string;
   businessId?: string;  // explicit tenant (required on cron/off-request paths); else from ALS
   feature?: string;     // e.g. 'booking_reminder' — for usage analytics
+}
+
+// ── Customer-link guard ──────────────────────────────────────────────────────
+// Last gate before an SMS leaves the platform, so it protects every sender —
+// stale client bundles, crons, future features — across all tenants. Message
+// text is composed client-side, so the server can't trust the link inside it.
+//
+// 1. `/proposal/<id>` without `/accept` is the SESSION-AUTHED staff viewer —
+//    anonymous customers 404 on it under RLS (the July 2026 dead-link bug).
+//    Rewrite it to the public accept page rather than trusting old clients.
+// 2. A linked proposal that doesn't exist in the DB means the message would be
+//    a dead end no matter the path — block the send and log an audit line
+//    (grep DO logs for SMS_LINK_AUDIT).
+// 3. Any localhost link in a customer SMS is always a bug (a template once
+//    shipped `localhost:5000/customer-portal`) — block it.
+async function guardCustomerLinks(
+  message: string,
+): Promise<{ message: string; ok: boolean; reason?: string }> {
+  if (/localhost|127\.0\.0\.1/i.test(message)) {
+    return { message, ok: false, reason: 'message contains a localhost link' };
+  }
+
+  const proposalIds = new Set<string>();
+  const rewritten = message.replace(proposalLinkPattern(), (_m, id: string, accept?: string) => {
+    proposalIds.add(id);
+    return `/proposal/${id}${accept ?? '/accept'}`;
+  });
+
+  for (const id of proposalIds) {
+    try {
+      const proposal = await storage.getProposal(id);
+      if (!proposal) {
+        return { message: rewritten, ok: false, reason: `linked proposal ${id} does not exist` };
+      }
+    } catch (e) {
+      // Lookup infrastructure failure (not a missing row) — don't block sends on it.
+      console.warn(`⚠️ SMS_LINK_AUDIT proposal lookup failed for ${id}:`, (e as Error).message);
+    }
+  }
+
+  return { message: rewritten, ok: true };
 }
 
 function normalizePhoneNumber(phone: string): string {
@@ -72,6 +115,20 @@ class SMSService {
         if (!ok) return false; // over cap AND enforcement on
       }
 
+      const linkGuard = await guardCustomerLinks(params.message);
+      if (!linkGuard.ok) {
+        console.error(
+          `🛑 SMS_LINK_AUDIT blocked send to=${params.to} business=${businessId ?? 'n/a'} reason="${linkGuard.reason}" message="${params.message.slice(0, 200)}"`,
+        );
+        return false;
+      }
+      if (linkGuard.message !== params.message) {
+        console.warn(
+          `🔧 SMS_LINK_AUDIT rewrote staff viewer link to public accept link (to=${params.to} business=${businessId ?? 'n/a'})`,
+        );
+      }
+      const message = linkGuard.message;
+
       const normalizedPhone = normalizePhoneNumber(params.to);
       console.log(`📱 Normalizing phone: ${params.to} -> ${normalizedPhone}`);
 
@@ -79,14 +136,14 @@ class SMSService {
         console.log('\n=== SMS NOTIFICATION (Mock Mode) ===');
         console.log(`To: ${normalizedPhone}`);
         console.log(`From: ${this.senderId || 'Treemarkables'}`);
-        console.log(`Message: ${params.message}`);
+        console.log(`Message: ${message}`);
         console.log('Time:', new Date().toLocaleString());
         console.log('==============================\n');
         if (businessId) await usageMeter.recordUsage('sms', businessId, { feature: params.feature });
         return true;
       }
 
-      const result = await sendSMSEveryoneMessage(normalizedPhone, params.message);
+      const result = await sendSMSEveryoneMessage(normalizedPhone, message);
 
       console.log(`📱 SMS sent successfully to ${normalizedPhone} via SMS Everyone (Campaign ID: ${result.CampaignId})`);
       console.log(`📱 Credits used: ${result.Credits}, Messages: ${result.Messages}`);
@@ -132,7 +189,10 @@ class SMSService {
     quoteNumber: string,
     amount: number
   ): Promise<boolean> {
-    const message = `Hi ${customerName}, your quote #${quoteNumber} is ready! Total: $${amount.toFixed(2)} NZD. Valid for 30 days. View: localhost:5000/customer-portal - Treemarkables`;
+    // No link here on purpose: this template only knows the quote NUMBER, not a
+    // linkable document id, and the localhost URL it used to carry would have
+    // gone straight to customers (now blocked by guardCustomerLinks anyway).
+    const message = `Hi ${customerName}, your quote #${quoteNumber} is ready! Total: $${amount.toFixed(2)} NZD. Valid for 30 days. We'll follow up with the full details. - Treemarkables`;
     
     return this.sendSMS({
       to: customerPhone,
