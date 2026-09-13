@@ -22,7 +22,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, FileText, ChevronUp, ChevronDown, Pencil } from "lucide-react";
+import { Plus, Trash2, FileText, ChevronUp, ChevronDown, Pencil, Copy, Lock, Settings2 } from "lucide-react";
 import { format } from "date-fns";
 import type {
   SwmsTemplate,
@@ -361,6 +361,7 @@ export default function SWMSBuilder() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [chooseOpen, setChooseOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [builder, setBuilder] = useState<BuilderState>(emptyBuilder());
   const [viewId, setViewId] = useState<string | null>(null);
 
@@ -461,6 +462,14 @@ export default function SWMSBuilder() {
               ))}
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            onClick={() => setManageOpen(true)}
+            data-testid="button-manage-templates"
+          >
+            <Settings2 className="mr-2 h-4 w-4" />
+            Templates
+          </Button>
           <Button onClick={() => setChooseOpen(true)} data-testid="button-new-swms">
             <Plus className="mr-2 h-4 w-4" />
             New SWMS
@@ -472,7 +481,7 @@ export default function SWMSBuilder() {
         <Card className="bg-card border border-border rounded-lg">
           <CardContent className="p-8 text-center text-muted-foreground">
             <FileText className="mx-auto mb-3 h-8 w-8" />
-            No SWMS documents yet. Create one from an arborist template or from scratch.
+            No SWMS documents yet. Create one from a template or from scratch.
           </CardContent>
         </Card>
       ) : (
@@ -517,7 +526,7 @@ export default function SWMSBuilder() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1">
-              <Label>Start from an arborist template</Label>
+              <Label>Start from a template</Label>
               <Select onValueChange={startFromTemplate}>
                 <SelectTrigger data-testid="select-template">
                   <SelectValue placeholder="Choose a template" />
@@ -574,7 +583,277 @@ export default function SWMSBuilder() {
         onClose={() => setViewId(null)}
         onError={failToast}
       />
+
+      {/* Template manager */}
+      <TemplateManagerDialog
+        templates={templates}
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        onError={failToast}
+      />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Template manager: built-ins are read-only (duplicate to customize),
+// custom templates are fully editable including their steps.
+// ---------------------------------------------------------------------------
+interface TemplateDraft {
+  name: string;
+  category: string;
+  activityDescription: string;
+  ppeText: string;
+  steps: StepDraft[];
+}
+
+function emptyTemplateDraft(): TemplateDraft {
+  return { name: "", category: "", activityDescription: "", ppeText: "", steps: [emptyStep(1)] };
+}
+
+function templateToDraft(tpl: SwmsTemplate): TemplateDraft {
+  const steps = readTemplateSteps(tpl.steps);
+  return {
+    name: tpl.name,
+    category: tpl.category ?? "",
+    activityDescription: tpl.activityDescription ?? "",
+    ppeText: arrayToLines(tpl.defaultPpe),
+    steps: steps.length > 0 ? steps : [emptyStep(1)],
+  };
+}
+
+function draftToBody(draft: TemplateDraft) {
+  return {
+    name: draft.name.trim(),
+    category: draft.category.trim() || undefined,
+    activityDescription: draft.activityDescription.trim() || undefined,
+    defaultPpe: linesToArray(draft.ppeText),
+    steps: draft.steps.map((s, i) => ({
+      stepNumber: i + 1,
+      taskStep: s.taskStep,
+      hazards: s.hazards,
+      controls: s.controls,
+      riskRating: s.riskRating,
+    })),
+  };
+}
+
+function TemplateManagerDialog({
+  templates,
+  open,
+  onClose,
+  onError,
+}: {
+  templates: SwmsTemplate[];
+  open: boolean;
+  onClose: () => void;
+  onError: (title: string) => (error: unknown) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  const [draft, setDraft] = useState<TemplateDraft>(emptyTemplateDraft());
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["/api/swms-templates"] });
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const body = draftToBody(draft);
+      const res =
+        editingId === "new"
+          ? await apiRequest("POST", "/api/swms-templates", body)
+          : await apiRequest("PUT", `/api/swms-templates/${editingId}`, body);
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidate();
+      setEditingId(null);
+    },
+    onError: onError("Could not save template"),
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/swms-templates/${id}/duplicate`);
+      return res.json();
+    },
+    onSuccess: invalidate,
+    onError: onError("Could not duplicate template"),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/swms-templates/${id}`);
+      return res.json();
+    },
+    onSuccess: invalidate,
+    onError: onError("Could not remove template"),
+  });
+
+  const beginEdit = (tpl: SwmsTemplate) => {
+    setDraft(templateToDraft(tpl));
+    setEditingId(tpl.id);
+  };
+
+  const beginNew = () => {
+    setDraft(emptyTemplateDraft());
+    setEditingId("new");
+  };
+
+  const handleClose = (next: boolean) => {
+    if (!next) {
+      setEditingId(null);
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        {editingId ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>{editingId === "new" ? "New SWMS template" : "Edit template"}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Template name</Label>
+                  <Input
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                    placeholder="e.g. Roof work"
+                    data-testid="input-template-name"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Category</Label>
+                  <Input
+                    value={draft.category}
+                    onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+                    placeholder="Optional grouping"
+                    data-testid="input-template-category"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Activity description</Label>
+                <Textarea
+                  value={draft.activityDescription}
+                  onChange={(e) => setDraft({ ...draft, activityDescription: e.target.value })}
+                  rows={2}
+                  data-testid="input-template-activity"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Default PPE (one per line)</Label>
+                <Textarea
+                  value={draft.ppeText}
+                  onChange={(e) => setDraft({ ...draft, ppeText: e.target.value })}
+                  rows={4}
+                  data-testid="input-template-ppe"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Steps</Label>
+                <StepsEditor
+                  steps={draft.steps}
+                  onChange={(steps) => setDraft({ ...draft, steps })}
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setEditingId(null)} data-testid="button-template-cancel">
+                Cancel
+              </Button>
+              <Button
+                disabled={!draft.name.trim() || saveMutation.isPending}
+                onClick={() => saveMutation.mutate()}
+                data-testid="button-template-save"
+              >
+                Save template
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>SWMS templates</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Built-in templates are read-only — duplicate one to customize it for your business.
+            </p>
+            <div className="space-y-2">
+              {templates.map((tpl) => (
+                <div
+                  key={tpl.id}
+                  className="bg-card border border-border rounded-lg p-3 flex items-center justify-between gap-3"
+                  data-testid={`row-template-${tpl.id}`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium truncate">{tpl.name}</span>
+                      {tpl.isBuiltIn && (
+                        <Badge variant="secondary" className="gap-1">
+                          <Lock className="h-3 w-3" />
+                          Built-in
+                        </Badge>
+                      )}
+                    </div>
+                    {tpl.category && (
+                      <p className="text-xs text-muted-foreground">{tpl.category}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => duplicateMutation.mutate(tpl.id)}
+                      disabled={duplicateMutation.isPending}
+                      aria-label={`Duplicate ${tpl.name}`}
+                      data-testid={`button-template-duplicate-${tpl.id}`}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    {!tpl.isBuiltIn && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => beginEdit(tpl)}
+                          aria-label={`Edit ${tpl.name}`}
+                          data-testid={`button-template-edit-${tpl.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => removeMutation.mutate(tpl.id)}
+                          disabled={removeMutation.isPending}
+                          aria-label={`Remove ${tpl.name}`}
+                          data-testid={`button-template-remove-${tpl.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {templates.length === 0 && (
+                <p className="text-sm text-muted-foreground">No templates yet.</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button onClick={beginNew} data-testid="button-template-new">
+                <Plus className="mr-2 h-4 w-4" />
+                New template
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -672,6 +951,32 @@ function SwmsDetailDialog({
     onError: onError("Could not delete SWMS"),
   });
 
+  const saveAsTemplateMutation = useMutation({
+    mutationFn: async () => {
+      if (!detail) throw new Error("Missing SWMS");
+      const res = await apiRequest("POST", "/api/swms-templates", {
+        name: detail.title,
+        activityDescription: detail.activityDescription || undefined,
+        defaultPpe: detail.ppeRequired ?? [],
+        steps: (detail.steps ?? [])
+          .slice()
+          .sort((a, b) => a.stepNumber - b.stepNumber)
+          .map((s, i) => ({
+            stepNumber: i + 1,
+            taskStep: s.taskStep,
+            hazards: s.hazards ?? [],
+            controls: s.controls ?? [],
+            riskRating: s.riskRating ?? 1,
+          })),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/swms-templates"] });
+    },
+    onError: onError("Could not save as template"),
+  });
+
   const signMutation = useMutation({
     mutationFn: async (signatureDataUrl: string) => {
       if (!id) throw new Error("Missing SWMS id");
@@ -693,6 +998,7 @@ function SwmsDetailDialog({
     if (!next) {
       setEditing(false);
       setWorkerName("");
+      saveAsTemplateMutation.reset();
       onClose();
     }
   };
@@ -868,6 +1174,15 @@ function SwmsDetailDialog({
               <Button variant="outline" onClick={beginEdit} data-testid="button-edit">
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit
+              </Button>
+              <Button
+                variant="outline"
+                disabled={saveAsTemplateMutation.isPending || saveAsTemplateMutation.isSuccess}
+                onClick={() => saveAsTemplateMutation.mutate()}
+                data-testid="button-save-as-template"
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                {saveAsTemplateMutation.isSuccess ? "Saved as template" : "Save as template"}
               </Button>
               {detail.status !== "active" && (
                 <Button

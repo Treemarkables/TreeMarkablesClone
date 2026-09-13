@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { Link as RouterLink, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +38,7 @@ import {
   Download,
   Loader2,
   Users,
+  ArrowLeft,
 } from "lucide-react";
 
 interface Integration {
@@ -546,6 +547,18 @@ export default function Integrations() {
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="self-start mb-2 -ml-2"
+            data-testid="button-back-to-settings"
+          >
+            <RouterLink href="/settings" className="flex items-center gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Settings
+            </RouterLink>
+          </Button>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 truncate">

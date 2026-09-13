@@ -45,7 +45,9 @@ import {
   ChevronUp,
   ChevronDown,
   GripVertical,
+  ArrowLeft,
 } from "lucide-react";
+import { Link } from "wouter";
 import { toast } from "@/hooks/use-toast";
 import type { DocumentTemplate, InsertDocumentTemplate, InvoiceSectionConfig } from "@shared/schema";
 import { InvoiceTemplate } from "@/components/InvoiceTemplate";
@@ -371,6 +373,18 @@ export default function TemplateManagement() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      <Button
+        variant="ghost"
+        size="sm"
+        asChild
+        className="self-start -ml-2"
+        data-testid="button-back-to-settings"
+      >
+        <Link href="/settings" className="flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Settings
+        </Link>
+      </Button>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

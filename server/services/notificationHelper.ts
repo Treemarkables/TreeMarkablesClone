@@ -1,4 +1,5 @@
 import { storage } from '../storage.js';
+import { getStaffPushWindow, isWithinStaffPushWindow, nextStaffPushWindowStart } from './notificationWindow.js';
 
 /**
  * Notification helper service
@@ -11,6 +12,120 @@ interface NotificationOptions {
   clickAction?: string;
   collapseId?: string;
   data?: Record<string, any>;
+}
+
+type StaffPushPrefKey = 'jobAssignments' | 'scheduleChanges';
+
+interface QueuedPushMetadata {
+  push?: {
+    clickAction?: string;
+    collapseId?: string;
+    data?: Record<string, any>;
+    prefKey?: StaffPushPrefKey;
+  };
+}
+
+/**
+ * Staff scheduling pushes respect the tenant's configured delivery window
+ * (business settings, default 7am-6pm NZ): inside it they send immediately,
+ * outside it they're parked in notification_queue and the queue worker
+ * delivers them at the next window start (via deliverQueuedPush).
+ */
+async function sendOrQueueStaffPush(
+  employeeId: string,
+  prefKey: StaffPushPrefKey,
+  options: NotificationOptions,
+  jobId?: string,
+): Promise<boolean> {
+  const window = await getStaffPushWindow();
+  if (isWithinStaffPushWindow(window)) {
+    return notifyEmployee(employeeId, options);
+  }
+
+  try {
+    const sendAt = nextStaffPushWindowStart(window);
+
+    // Supersede any still-pending queued push carrying the same collapseId so
+    // a job reassigned three times overnight delivers one push at 7am, not three.
+    if (options.collapseId) {
+      const pending = await storage.getPendingNotifications(new Date(Date.now() + 48 * 60 * 60 * 1000));
+      for (const item of pending) {
+        if (item.notificationType !== 'push' || item.recipientId !== employeeId) continue;
+        const meta = (item.metadata as QueuedPushMetadata | null)?.push;
+        if (meta?.collapseId === options.collapseId) {
+          await storage.markNotificationFailed(item.id, 'Superseded by a newer queued push');
+        }
+      }
+    }
+
+    await storage.createNotificationQueueItem({
+      recipientId: employeeId,
+      notificationType: 'push',
+      subject: options.title,
+      message: options.body,
+      metadata: {
+        push: {
+          clickAction: options.clickAction,
+          collapseId: options.collapseId,
+          data: options.data,
+          prefKey,
+        },
+      },
+      sendAt,
+      status: 'pending',
+      jobId,
+    });
+    console.log(`🌙 Outside staff push window — queued ${prefKey} push for employee ${employeeId} until ${sendAt.toISOString()}`);
+    return true;
+  } catch (error) {
+    // Queueing failed — better a late push than a lost one.
+    console.error('Error queueing staff push, sending immediately instead:', error);
+    return notifyEmployee(employeeId, options);
+  }
+}
+
+/**
+ * Deliver a notification_queue row of type 'push' (called by the queue worker
+ * once sendAt has passed). Re-checks the gating preference and, for
+ * job-linked pushes, that the employee is still assigned to the job — an
+ * overnight unassignment shouldn't produce a 7am "you've been assigned" push.
+ */
+export async function deliverQueuedPush(item: {
+  id: string;
+  recipientId: string;
+  subject: string | null;
+  message: string;
+  metadata: unknown;
+  jobId: string | null;
+}): Promise<boolean> {
+  const meta = (item.metadata as QueuedPushMetadata | null)?.push ?? {};
+
+  const prefs = await storage.getNotificationPreferences(item.recipientId);
+  if (prefs) {
+    if (meta.prefKey === 'jobAssignments' && !prefs.jobAssignments) return false;
+    if (meta.prefKey === 'scheduleChanges' && !prefs.scheduleChanges) return false;
+  }
+
+  if (item.jobId) {
+    try {
+      const assignments = await storage.getJobStaffAssignmentsByJob(item.jobId);
+      if (!assignments.some(a => a.employeeId === item.recipientId)) {
+        console.log(`⏭️ Skipping queued push ${item.id} — employee ${item.recipientId} no longer assigned to job ${item.jobId}`);
+        return false;
+      }
+    } catch (error) {
+      // Staleness check is best-effort — deliver rather than drop.
+      console.error('Error checking assignment freshness for queued push:', error);
+    }
+  }
+
+  return notifyEmployee(item.recipientId, {
+    title: item.subject || 'Notification',
+    body: item.message,
+    clickAction: meta.clickAction,
+    collapseId: meta.collapseId,
+    data: meta.data,
+  });
 }
 
 /**
@@ -34,15 +149,38 @@ export async function notifyEmployee(employeeId: string, options: NotificationOp
     
     // Send to all active devices
     let successCount = 0;
+    const outcomes: { record: (typeof tokens)[number]; ok: boolean; errorCode?: string }[] = [];
     for (const tokenRecord of tokens) {
-      const sent = await firebaseMessagingService.sendToDevice(tokenRecord.token, options, tokenRecord.deviceInfo || undefined);
-      if (sent) {
+      const result = await firebaseMessagingService.sendToDeviceDetailed(tokenRecord.token, options, tokenRecord.deviceInfo || undefined);
+      outcomes.push({ record: tokenRecord, ok: result.ok, errorCode: result.errorCode });
+      if (result.ok) {
         successCount++;
         // Mark token as recently used
         await storage.markFcmTokenAsUsed(tokenRecord.token);
       }
     }
-    
+
+    // third-party-auth-error normally means a broken push-gateway credential
+    // (APNs key / Web Push cert), so sendToDevice never deactivates on it. But
+    // when a SIBLING token of the same platform class delivered in this very
+    // batch, the credential is provably fine — the failing token is a zombie
+    // from an old install that will reject on every future push (seen in prod:
+    // 5 of one employee's 8 iOS tokens erroring on every send, forever).
+    // Retire those so the noise and wasted sends stop.
+    const platformClass = (deviceInfo: string | null | undefined) =>
+      (deviceInfo || '').startsWith('iOS') ? 'apns' : 'web';
+    const okClasses = new Set(outcomes.filter(o => o.ok).map(o => platformClass(o.record.deviceInfo)));
+    for (const o of outcomes) {
+      if (o.ok || o.errorCode !== 'messaging/third-party-auth-error') continue;
+      if (!okClasses.has(platformClass(o.record.deviceInfo))) continue;
+      try {
+        await storage.updateFcmToken(o.record.id, { isActive: false });
+        console.log(`🧹 Deactivated zombie FCM token …${o.record.token.slice(-8)} (auth-error while sibling ${platformClass(o.record.deviceInfo)} token delivered) for employee ${employeeId}`);
+      } catch (cleanupErr) {
+        console.error('Error deactivating zombie FCM token:', cleanupErr);
+      }
+    }
+
     console.log(`✅ Notification sent to ${successCount}/${tokens.length} devices for employee ${employeeId}`);
     return successCount > 0;
   } catch (error) {
@@ -71,8 +209,8 @@ export async function notifyJobAssignment(employeeId: string, jobNumber: string,
   }
   
   const clickUrl = jobId ? `/dispatch?job=${jobId}` : '/dispatch';
-  
-  return notifyEmployee(employeeId, {
+
+  return sendOrQueueStaffPush(employeeId, 'jobAssignments', {
     title: '📋 New Job Assignment',
     body: `You've been assigned to Job #${jobNumber}${jobTitle ? `: ${jobTitle}` : ''}`,
     clickAction: clickUrl,
@@ -82,7 +220,7 @@ export async function notifyJobAssignment(employeeId: string, jobNumber: string,
       jobNumber,
       jobId: jobId || '',
     },
-  });
+  }, jobId);
 }
 
 /**
@@ -95,8 +233,8 @@ export async function notifyScheduleChange(employeeId: string, jobNumber: string
   }
   
   const clickUrl = jobId ? `/dispatch?job=${jobId}` : '/dispatch';
-  
-  return notifyEmployee(employeeId, {
+
+  return sendOrQueueStaffPush(employeeId, 'scheduleChanges', {
     title: '🕒 Schedule Update',
     body: `Job #${jobNumber} has been rescheduled to ${newDate}`,
     clickAction: clickUrl,
@@ -106,7 +244,7 @@ export async function notifyScheduleChange(employeeId: string, jobNumber: string
       jobNumber,
       jobId: jobId || '',
     },
-  });
+  }, jobId);
 }
 
 /**
@@ -121,7 +259,7 @@ export async function notifyNewLead(adminEmployeeId: string, customerName: strin
   return notifyEmployee(adminEmployeeId, {
     title: '🌟 New Lead',
     body: `New inquiry from ${customerName} via ${source}`,
-    clickAction: '/conversations',
+    clickAction: '/inbox',
     data: {
       type: 'new_lead',
       customerName,
@@ -300,7 +438,8 @@ export async function notifyCustomerSmsReply(customerName: string, messageBody: 
     return await pushToAdminsWithCustomerMessages({
       title,
       body,
-      clickAction: '/conversations',
+      clickAction: '/inbox',
+      collapseId: `sms-reply-${jobNumber || customerName}`,
       data: { type: 'sms_reply', customerName, jobNumber: jobNumber || '' },
     });
   } catch (error) {
@@ -328,31 +467,6 @@ export async function pushToAdminsWithCustomerMessages(options: NotificationOpti
   } catch (error) {
     console.error('Error pushing to admins:', error);
     return 0;
-  }
-}
-
-/**
- * For a conversation, return the jobId of the most recent non-archived job
- * for its customer. Used so push notifications about a reply can deep-link
- * to the job card's diary tab once the conversation has been converted to a
- * lead/job, instead of back to the generic Conversations list.
- *
- * Fetches the conversation from storage to read customerId — callers pass
- * partial objects without FKs, so we can't rely on them for the lookup.
- */
-async function getConversationJobId(conversationId: string): Promise<string | null> {
-  try {
-    const full = await storage.getConversation(conversationId);
-    const customerId = full?.customerId;
-    if (!customerId) return null;
-    const jobs = await storage.getJobsByCustomer(customerId);
-    const active = jobs.find(
-      (j: any) => j.status !== 'archived' && j.status !== 'unsuccessful',
-    );
-    return (active ?? jobs[0])?.id ?? null;
-  } catch (error) {
-    console.error('Error looking up job for conversation:', error);
-    return null;
   }
 }
 
@@ -388,16 +502,16 @@ export async function createConversationNotification(conversation: {
                         conversation.source || 'Message';
 
     // A brand-new inquiry always deep-links to its conversation — never to a
-    // job derived merely from a matched customer's history. (getConversationJobId
-    // is for *reply* notifications on already-converted conversations; using it
-    // here sent returning-customer inquiries to the dispatch board instead of
-    // the conversation where the inquiry lives.)
+    // job derived merely from a matched customer's history. (An earlier
+    // customer-job lookup sent returning-customer inquiries to an unrelated
+    // job's dispatch board instead of the conversation where the inquiry lives.)
     const clickAction = `/conversation/${conversation.id}`;
 
     await pushToAdminsWithCustomerMessages({
       title: `New ${sourceLabel} Inquiry`,
       body: conversation.title || 'New customer inquiry received',
       clickAction,
+      collapseId: `new-conv-${conversation.id}`,
       data: {
         type: 'new_conversation',
         conversationId: conversation.id,
@@ -465,6 +579,7 @@ export async function createNewLeadNotification(params: {
       title: `New ${params.sourceLabel} lead`,
       body: pushBody,
       clickAction,
+      collapseId: `new-lead-${params.jobId}`,
       data: {
         type: 'new_lead',
         jobId: params.jobId,
@@ -585,10 +700,13 @@ export async function notifyConversationReply(conversation: {
       ? `${senderName}: ${replyPreview.slice(0, 100)}${replyPreview.length > 100 ? '…' : ''}`
       : `${senderName} replied via ${sourceLabel}`;
 
-    const jobId = await getConversationJobId(conversation.id);
-    const clickAction = jobId
-      ? `/dispatch?job=${jobId}&tab=diary`
-      : `/conversation/${conversation.id}`;
+    // A reply that arrived on a conversation always deep-links to that
+    // conversation. (Job-matched replies take a separate path in
+    // gmailReplyService that carries the real linked jobId and routes to the
+    // job diary. Here we must NOT derive a job from the customer's history — a
+    // prior/unrelated job sent returning-customer replies to the wrong
+    // dispatch board instead of the conversation.)
+    const clickAction = `/conversation/${conversation.id}`;
 
     await storage.createNotification({
       title: `${sourceLabel} reply from ${senderName}`,
@@ -599,7 +717,6 @@ export async function notifyConversationReply(conversation: {
       metadata: {
         conversationId: conversation.id,
         source: conversation.source,
-        jobId: jobId || undefined,
         ...(messageId && { messageId }),
       }
     });
@@ -608,11 +725,11 @@ export async function notifyConversationReply(conversation: {
       title: `${sourceLabel} Reply — ${senderName}`,
       body: bodyText,
       clickAction,
+      collapseId: messageId ? `conv-reply-${messageId}` : `conv-reply-${conversation.id}`,
       data: {
         type: 'conversation_reply',
         conversationId: conversation.id,
         source: conversation.source || '',
-        jobId: jobId || '',
       },
     });
 

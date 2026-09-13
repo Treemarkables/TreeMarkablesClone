@@ -35,7 +35,7 @@ export function LogoSidebarTrigger({ className = "", size = 44 }: LogoSidebarTri
       onClick={handleClick}
       data-testid="button-sidebar-toggle"
       aria-label="Toggle sidebar"
-      className={`rounded-full flex-shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-1 ${className}`}
+      className={`rounded-full flex-shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${className}`}
       style={{
         width: size,
         height: size,

@@ -52,6 +52,11 @@ export interface CallEvent {
   // server, so the UI version and the installed native build can differ;
   // this disambiguates which native code produced an event.
   nativeBuild?: string;
+  // "callConnected" timing (incoming calls only): ms from the CallKit answer
+  // action to media connected / to audio-session activation. Splits the
+  // "silence after answering" wait into app-side vs network-side time.
+  answerToConnectMs?: string;
+  answerToActivateMs?: string;
 }
 
 export interface TwilioVoiceOptions {

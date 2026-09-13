@@ -4,11 +4,13 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Home from "@/pages/Home";
 import Features from "@/pages/Features";
-import Pricing from "@/pages/Pricing";
+// Pricing hidden until launch — restore this import, its <Route> and PAGE_META entry together.
+// import Pricing from "@/pages/Pricing";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
+import Security from "@/pages/Security";
 import Support from "@/pages/Support";
 import NotFound from "@/pages/NotFound";
 
@@ -31,10 +33,6 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
     title: "Features — Inflow",
     description: "Every workflow a trades business runs on — jobs & dispatch, quoting & proposals, invoicing, safety, CRM, supplier invoices and job costing — in one app.",
   },
-  "/pricing": {
-    title: "Pricing — Inflow",
-    description: "Start free, then pay by jobs per month — never per seat. Unlimited users on every paid plan. NZD, plus GST. No lock-in.",
-  },
   "/about": {
     title: "About — Inflow",
     description: "Inflow was built inside a real trades business in Gisborne, New Zealand — for the way trades actually work.",
@@ -49,6 +47,7 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
   },
   "/privacy": { title: "Privacy Policy — Inflow", description: "How Inflow collects, uses and protects your data, under the New Zealand Privacy Act 2020." },
   "/terms": { title: "Terms of Service — Inflow", description: "The terms that govern your use of Inflow." },
+  "/security": { title: "Security — Inflow", description: "How Inflow protects your business's data: tenant isolation, encryption, Australian hosting, backups and NZ Privacy Act compliance." },
 };
 
 function setMetaTag(key: string, content: string, asProperty = false) {
@@ -94,12 +93,12 @@ export default function App() {
         <Switch>
           <Route path="/" component={Home} />
           <Route path="/features" component={Features} />
-          <Route path="/pricing" component={Pricing} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/support" component={Support} />
           <Route path="/privacy" component={Privacy} />
           <Route path="/terms" component={Terms} />
+          <Route path="/security" component={Security} />
           <Route component={NotFound} />
         </Switch>
       </main>
