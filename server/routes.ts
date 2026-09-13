@@ -15066,7 +15066,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   }
 
   // Enrich timer rows with employee names for display.
-  async function enrichTimers(timers: Array<{ employeeId: string } & Record<string, any>>) {
+  async function enrichTimers<T extends { employeeId: string }>(
+    timers: T[],
+  ): Promise<Array<T & { employeeName: string }>> {
     return Promise.all(timers.map(async (t) => {
       const emp = await storage.getEmployee(t.employeeId);
       return {
