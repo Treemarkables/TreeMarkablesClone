@@ -24,6 +24,7 @@ import {
   Mail,
   Circle,
   Clock,
+  Users,
 } from "lucide-react";
 
 interface FleetItem {
@@ -53,6 +54,21 @@ interface LiveTimer {
   employeeId: string;
   employeeName: string;
   startedAt: string;
+  distanceKm: number | null;
+}
+
+interface CrewJobRef {
+  jobId: string;
+  jobNumber: string | null;
+  jobTitle: string;
+}
+
+interface CrewMember {
+  employeeId: string;
+  name: string;
+  position: string | null;
+  timer: (CrewJobRef & { startedAt: string; distanceKm: number | null; hasLocation: boolean }) | null;
+  assignments: CrewJobRef[];
 }
 
 interface JobToday {
@@ -70,7 +86,66 @@ interface TodayOverview {
   date: string;
   fleet: FleetItem[];
   jobsToday: JobToday[];
+  crew: CrewMember[];
   counts: { needsAttention: number; dueSoon: number; jobsToday: number };
+}
+
+// Clock-in GPS fix + Nominatim rooftop error headroom; within this we say
+// "on site", beyond it we show the km.
+const ON_SITE_RADIUS_KM = 0.5;
+
+function crewJobLabel(ref: CrewJobRef): string {
+  return ref.jobNumber ? `Job #${ref.jobNumber}` : ref.jobTitle;
+}
+
+type CrewStatusKind = "on-site" | "far" | "clocked-in" | "assigned" | "idle";
+
+// rank drives the strip ordering: on-site, far-from-site, clocked-in
+// (no location), assigned-not-clocked-in, idle.
+function crewStatus(m: CrewMember): { rank: number; kind: CrewStatusKind; text: string; jobId: string | null } {
+  if (m.timer) {
+    const since = `since ${nzTime(m.timer.startedAt)}`;
+    const label = crewJobLabel(m.timer);
+    if (m.timer.distanceKm != null && m.timer.distanceKm <= ON_SITE_RADIUS_KM) {
+      return { rank: 0, kind: "on-site", text: `On site at ${label} — ${since}`, jobId: m.timer.jobId };
+    }
+    if (m.timer.distanceKm != null) {
+      return {
+        rank: 1,
+        kind: "far",
+        text: `Clocked in at ${label} — ${m.timer.distanceKm} km from site — ${since}`,
+        jobId: m.timer.jobId,
+      };
+    }
+    return { rank: 2, kind: "clocked-in", text: `Clocked in at ${label} — ${since}`, jobId: m.timer.jobId };
+  }
+  if (m.assignments.length > 0) {
+    const labels = m.assignments.map(crewJobLabel).join(", ");
+    return {
+      rank: 3,
+      kind: "assigned",
+      text: `Assigned to ${labels} today — not clocked in`,
+      jobId: m.assignments[0].jobId,
+    };
+  }
+  return { rank: 4, kind: "idle", text: "No job today", jobId: null };
+}
+
+function CrewStatusDot({ kind }: { kind: CrewStatusKind }) {
+  if (kind === "on-site") {
+    return (
+      <span className="relative flex h-2 w-2 shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+      </span>
+    );
+  }
+  const color =
+    kind === "far" ? "bg-amber-500" :
+    kind === "clocked-in" ? "bg-green-500" :
+    kind === "assigned" ? "bg-blue-500" :
+    "bg-muted-foreground/40";
+  return <span className={`inline-flex rounded-full h-2 w-2 shrink-0 ${color}`} />;
 }
 
 // Phrase a whole-day countdown the way someone reading it at 7am would say it.
@@ -182,19 +257,35 @@ function TodayJobCard({
             </Badge>
           )}
           <Badge variant={statusVariant(job.status)}>{statusLabel(job.status)}</Badge>
-          {job.liveTimers.map((t) => (
-            <Badge
-              key={t.employeeId}
-              variant="outline"
-              className="text-green-700 dark:text-green-400 border-green-600/40 gap-1"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-              </span>
-              {t.employeeName} on site — since {nzTime(t.startedAt)}
-            </Badge>
-          ))}
+          {job.liveTimers.map((t) => {
+            const far = t.distanceKm != null && t.distanceKm > ON_SITE_RADIUS_KM;
+            const onSite = t.distanceKm != null && !far;
+            return (
+              <Badge
+                key={t.employeeId}
+                variant="outline"
+                className={
+                  far
+                    ? "text-amber-700 dark:text-amber-400 border-amber-600/40 gap-1"
+                    : "text-green-700 dark:text-green-400 border-green-600/40 gap-1"
+                }
+              >
+                <span className="relative flex h-2 w-2">
+                  {onSite && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+                  )}
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${far ? "bg-amber-500" : "bg-green-500"}`}
+                  />
+                </span>
+                {far
+                  ? `${t.employeeName} — ${t.distanceKm} km from site — since ${nzTime(t.startedAt)}`
+                  : onSite
+                    ? `${t.employeeName} on site — since ${nzTime(t.startedAt)}`
+                    : `${t.employeeName} clocked in — since ${nzTime(t.startedAt)}`}
+              </Badge>
+            );
+          })}
         </div>
         <p className="text-xs text-muted-foreground truncate mt-0.5 pl-[4.75rem]">
           {[job.customerName, job.address].filter(Boolean).join(" · ")}
@@ -321,7 +412,13 @@ export default function TodayDashboard() {
   const overview = data?.data;
   const fleet = overview?.fleet ?? [];
   const jobsToday = overview?.jobsToday ?? [];
+  const crew = overview?.crew ?? [];
   const counts = overview?.counts ?? { needsAttention: 0, dueSoon: 0, jobsToday: 0 };
+
+  // On-site first, then far-from-site, clocked-in, assigned, idle.
+  const crewSorted = [...crew]
+    .map((m) => ({ member: m, status: crewStatus(m) }))
+    .sort((a, b) => a.status.rank - b.status.rank || a.member.name.localeCompare(b.member.name));
 
   const today = new Date().toLocaleDateString("en-NZ", {
     weekday: "long",
@@ -370,6 +467,64 @@ export default function TodayDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Crew — who's at which job right now (clock-ins + today's assignments) */}
+      {crewSorted.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4" />
+              Crew
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y">
+              {crewSorted.map(({ member, status }) => {
+                const clickable = status.jobId != null;
+                return (
+                  <li key={member.employeeId}>
+                    <div
+                      role={clickable ? "button" : undefined}
+                      tabIndex={clickable ? 0 : undefined}
+                      data-testid={`crew-row-${member.employeeId}`}
+                      onClick={clickable ? () => handleJobClick(status.jobId!) : undefined}
+                      onKeyDown={
+                        clickable
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handleJobClick(status.jobId!);
+                              }
+                            }
+                          : undefined
+                      }
+                      className={`flex items-center gap-3 px-6 py-3 ${
+                        clickable
+                          ? "cursor-pointer hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          : ""
+                      }`}
+                    >
+                      <CrewStatusDot kind={status.kind} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{member.name}</p>
+                        <p
+                          className={`text-xs truncate ${
+                            status.kind === "far"
+                              ? "text-amber-700 dark:text-amber-400"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {status.text}
+                        </p>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Fleet compliance */}
       <Card className="mb-6">
