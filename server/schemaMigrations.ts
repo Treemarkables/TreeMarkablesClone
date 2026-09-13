@@ -550,6 +550,65 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Per-person, per-day crew role (Kaitiaki / Kaiwhangai / Kaitirotiro) for the
+    // job card's role checklist. Replaces job_staff_assignments.day_role as the
+    // read source: that column is a per-person-per-day fact stored per-booking, so
+    // it had to be fanned out across every assignment row for the day, and anyone
+    // clocked in without an assignment row had nowhere to hold a role at all.
+    // day_role keeps being written for one release; it is NOT dropped here.
+    // Mirrors migrations/manual/20260914_job_day_roles.sql.
+    name: "job-day-roles",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS job_day_roles (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        employee_id varchar NOT NULL,
+        nz_date text NOT NULL,
+        role_key text NOT NULL,
+        set_by_employee_id varchar,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT job_day_roles_employee_date_uniq UNIQUE (employee_id, nz_date))`,
+      `CREATE INDEX IF NOT EXISTS job_day_roles_date_idx ON job_day_roles (nz_date)`,
+      // Backfill from the legacy column. Re-runs harmlessly every boot (ON CONFLICT
+      // DO NOTHING), which also self-heals rows written through the old path while
+      // both writers are live. DISTINCT ON keeps the most recently updated row when
+      // a person's assignments disagree for the same NZ day.
+      `INSERT INTO job_day_roles (business_id, employee_id, nz_date, role_key)
+         SELECT DISTINCT ON (employee_id, nz_date) business_id, employee_id, nz_date, day_role
+           FROM (
+             SELECT business_id,
+                    employee_id,
+                    to_char((start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Pacific/Auckland')::date, 'YYYY-MM-DD') AS nz_date,
+                    day_role,
+                    updated_at
+               FROM job_staff_assignments
+              WHERE day_role IN ('A', 'B', 'C')
+           ) src
+          ORDER BY employee_id, nz_date, updated_at DESC
+         ON CONFLICT ON CONSTRAINT job_day_roles_employee_date_uniq DO NOTHING`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      await client.query(`ALTER TABLE job_day_roles ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = $1::regclass LIMIT 1`,
+        ["job_day_roles"],
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON job_day_roles
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+        console.log(`[schema] created tenant_isolation policy on job_day_roles`);
+      }
+      if (hasRole.rowCount && hasRole.rowCount > 0) {
+        await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON job_day_roles TO app_tenant`);
+      }
+    },
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;
