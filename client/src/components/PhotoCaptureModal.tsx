@@ -9,10 +9,21 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Camera, Upload, X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Camera, Upload, X, Mic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { compressImage } from "@/lib/imageCompression";
+import { MicrophoneButton } from "@/components/MicrophoneButton";
+import { SpeechToQuote } from "@/components/SpeechToQuote";
+
+// Web Speech is a silent no-op inside the iOS Capacitor WKWebView, so the
+// native app routes voice captions through the Whisper-backed SpeechToQuote
+// recorder instead (same split as JobDetailsPanel's VoiceButton).
+const isNativeApp = () =>
+  typeof window !== "undefined" &&
+  typeof (window as any).Capacitor !== "undefined" &&
+  !!(window as any).Capacitor.isNativePlatform?.();
 
 interface PhotoCaptureModalProps {
   isOpen: boolean;
@@ -40,6 +51,8 @@ export function PhotoCaptureModal({
   const imagesOnly = acceptImagesOnly || isCustomUpload;
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [caption, setCaption] = useState("");
+  const [voiceRecorderOpen, setVoiceRecorderOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -79,7 +92,7 @@ export function PhotoCaptureModal({
         : `/api/jobs/${jobId}/diary-photos?_bypass=${Date.now()}`;
       if (!uploadUrl) {
         formData.append("authorName", "User");
-        formData.append("description", "Photo added");
+        formData.append("description", caption.trim() || "Photo added");
       }
 
       console.log("📸 Uploading", prepared.length, "photo(s) in one batch:", url);
@@ -199,7 +212,12 @@ export function PhotoCaptureModal({
   const handleClose = () => {
     setSelectedFiles([]);
     setPreviewUrls([]);
+    setCaption("");
     onClose();
+  };
+
+  const appendCaption = (text: string) => {
+    setCaption((prev) => (prev ? `${prev} ${text}` : text));
   };
 
   const removePhoto = (index: number) => {
@@ -301,6 +319,39 @@ export function PhotoCaptureModal({
             </div>
           )}
 
+          {/* Caption — typed or spoken (voice caption transcribes onto the
+              diary entry, so it shows in the timeline and photo report). */}
+          {selectedFiles.length > 0 && !isPendingMode && !isCustomUpload && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label htmlFor="photo-caption" className="text-sm font-medium text-gray-700">
+                  Caption (optional)
+                </label>
+                {isNativeApp() ? (
+                  <button
+                    type="button"
+                    onClick={() => setVoiceRecorderOpen(true)}
+                    className="flex items-center gap-1 text-sm font-semibold text-purple-600"
+                    data-testid="button-voice-caption"
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    Voice
+                  </button>
+                ) : (
+                  <MicrophoneButton onTranscript={appendCaption} size="sm" />
+                )}
+              </div>
+              <Textarea
+                id="photo-caption"
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="What are we looking at? e.g. Decayed union on the northern limb"
+                className="min-h-[64px]"
+                data-testid="textarea-photo-caption"
+              />
+            </div>
+          )}
+
           {/* Action buttons */}
           {selectedFiles.length > 0 && (
             <div className="flex justify-end gap-2">
@@ -325,6 +376,22 @@ export function PhotoCaptureModal({
             </div>
           )}
         </div>
+
+        {/* Native (iOS) voice-caption recorder — Whisper-backed, since Web
+            Speech doesn't work in the WKWebView. Appends the transcription
+            to the caption field. */}
+        {voiceRecorderOpen && (
+          <SpeechToQuote
+            open={voiceRecorderOpen}
+            onOpenChange={setVoiceRecorderOpen}
+            context="job-description"
+            onQuoteGenerated={(data: any) => {
+              const text =
+                typeof data?.transcription === "string" ? data.transcription.trim() : "";
+              if (text) appendCaption(text);
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
