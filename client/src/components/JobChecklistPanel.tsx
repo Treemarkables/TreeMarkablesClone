@@ -18,16 +18,27 @@ import {
   Wrench,
   TreePine,
   AlertTriangle,
+  Mic,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useSpeechToText } from "@/hooks/useSpeechToText";
+import { SpeechToQuote } from "@/components/SpeechToQuote";
 import { formatNZTime, getNZDateString } from "@shared/dateUtils";
 import type { RoleChecklistTask } from "@shared/schema";
 import { ROLE_KEYS, ROLE_LABEL, type RoleKey } from "@/lib/crewRoles";
 import { RoleChips } from "@/components/crew/RoleChips";
 import { CrewPickerDialog } from "@/components/crew/CrewPickerDialog";
 
+// Web Speech is a silent no-op inside the iOS Capacitor WKWebView — native
+// routes voice check-off through the Whisper recorder instead (same split
+// as JobDetailsPanel / PhotoCaptureModal).
+const isNativeApp = () =>
+  typeof window !== "undefined" &&
+  typeof (window as any).Capacitor !== "undefined" &&
+  !!(window as any).Capacitor.isNativePlatform?.();
 type ChecklistIcon = React.ComponentType<{ className?: string }>;
 
 // Icon name → lucide component. Keep in sync with RoleChecklistSettings.tsx.
@@ -257,6 +268,51 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
   const totalCount = allItemIds.length;
   const percent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
 
+  // ── Voice check-off ───────────────────────────────────────────────────────
+  // Speak what's done; GPT maps the transcript to item ids server-side and
+  // ticks them. Result (or "nothing matched") shows inline under the control.
+  const [voiceRecorderOpen, setVoiceRecorderOpen] = useState(false);
+  const [voiceResult, setVoiceResult] = useState<string | null>(null);
+
+  const voiceCheckMutation = useMutation({
+    mutationFn: async (transcript: string) => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/checklist/voice-check`, { transcript });
+      return (await res.json()) as { data?: { checked?: string[]; alreadyDone?: string[] } };
+    },
+    onSuccess: (result) => {
+      const checked = result?.data?.checked ?? [];
+      const already = result?.data?.alreadyDone ?? [];
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "checklist"] });
+      if (checked.length > 0) {
+        setVoiceResult(`Ticked off: ${checked.join(", ")}${already.length ? ` (already done: ${already.join(", ")})` : ""}`);
+      } else if (already.length > 0) {
+        setVoiceResult(`Already ticked: ${already.join(", ")}`);
+      } else {
+        setVoiceResult("Nothing matched — try naming the task, e.g. \"pre-start done\".");
+      }
+    },
+    onError: (err: any) => {
+      setVoiceResult(null);
+      toast({
+        title: "Voice check-off failed",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleVoiceTranscript = (text: string) => {
+    const trimmed = text.trim();
+    if (trimmed) voiceCheckMutation.mutate(trimmed);
+  };
+
+  const { isListening, isSupported: webSpeechSupported, toggleListening } = useSpeechToText({
+    onResult: handleVoiceTranscript,
+    continuous: false,
+    language: "en-NZ",
+  });
+  const voiceAvailable = isNativeApp() || webSpeechSupported;
+
   if (isTempJob) {
     return (
       <div className="p-4 w-full" data-testid="job-checklist-panel">
@@ -296,6 +352,43 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
           {percent}%
         </span>
       </div>
+
+      {/* Voice check-off — hands-free ticking while gloves are on. */}
+      {voiceAvailable && (
+        <div
+          className="flex items-center justify-between gap-3 px-4 py-3 bg-muted/50 rounded-md"
+          data-testid="voice-checkoff"
+        >
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">Voice check-off</div>
+            <div className="text-xs text-muted-foreground">
+              {voiceCheckMutation.isPending
+                ? "Matching to the checklist..."
+                : voiceResult || 'Say what’s done — e.g. "pre-start and signs out are done".'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setVoiceResult(null);
+              if (isNativeApp()) setVoiceRecorderOpen(true);
+              else toggleListening();
+            }}
+            disabled={voiceCheckMutation.isPending}
+            className={`h-10 w-10 rounded-full grid place-items-center shrink-0 ${
+              isListening ? "bg-red-100 text-red-600 animate-pulse" : "bg-purple-100 text-purple-600"
+            } disabled:opacity-50`}
+            aria-label={isListening ? "Stop listening" : "Start voice check-off"}
+            data-testid="button-voice-checkoff"
+          >
+            {voiceCheckMutation.isPending ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Mic className="h-5 w-5" />
+            )}
+          </button>
+        </div>
+      )}
 
       <section data-testid="role-assignment-section">
         <div className="flex items-center justify-between gap-2 mb-2">
@@ -359,6 +452,20 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
         </>
       )}
 
+      {/* Native (iOS) voice recorder — Whisper-backed; transcription feeds
+          the voice check-off mutation. */}
+      {voiceRecorderOpen && (
+        <SpeechToQuote
+          open={voiceRecorderOpen}
+          onOpenChange={setVoiceRecorderOpen}
+          context="job-description"
+          onQuoteGenerated={(data: any) => {
+            const text =
+              typeof data?.transcription === "string" ? data.transcription.trim() : "";
+            if (text) handleVoiceTranscript(text);
+          }}
+        />
+      )}
       <CrewPickerDialog
         jobId={jobId}
         open={pickerOpen}
