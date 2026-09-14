@@ -598,25 +598,24 @@ class GmailReplyService {
         // swallowed every reply after the first for a whole day, so distinct
         // customer replies went un-notified. Falls back to a short per-job
         // window only when the email has no Message-ID to identify it.
-        // getNotificationsCreatedSince includes archived rows, so a reply the
-        // user already cleared won't re-notify on the next poll.
+        // hasNotificationSince matches archived rows too, so a reply the user
+        // already cleared won't re-notify on the next poll.
         try {
           const { storage } = await import('../storage.js');
-          const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-          const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+          // Targeted existence query — this poller runs every minute over every
+          // email from the last 2 days, so a "download all recent notifications"
+          // check here multiplied into the Neon egress bill (Sep 2026).
           const jobAlreadyNotified = email.messageId
-            ? recentNotifs.some(
-                (n) =>
-                  n.type === 'email_reply' &&
-                  (n.metadata as any)?.emailMessageId === email.messageId,
-              )
-            : recentNotifs.some(
-                (n) =>
-                  n.type === 'email_reply' &&
-                  n.jobId === job.id &&
-                  Date.now() - new Date(n.createdAt as any).getTime() <
-                    5 * 60 * 1000,
-              );
+            ? await storage.hasNotificationSince({
+                type: 'email_reply',
+                since: new Date(Date.now() - 24 * 60 * 60 * 1000),
+                metadata: { key: 'emailMessageId', value: email.messageId },
+              })
+            : await storage.hasNotificationSince({
+                type: 'email_reply',
+                since: new Date(Date.now() - 5 * 60 * 1000),
+                jobId: job.id,
+              });
           if (!jobAlreadyNotified) {
             const emailPreview = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
             await storage.createNotification({
@@ -785,13 +784,11 @@ class GmailReplyService {
       try {
         if (email.messageId) {
           const { storage } = await import('../storage.js');
-          const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-          const recent = await storage.getNotificationsCreatedSince(since);
-          const alreadyAlerted = recent.some(
-            (n) =>
-              n.type === 'email_processing_failed' &&
-              (n.metadata as any)?.emailMessageId === email.messageId,
-          );
+          const alreadyAlerted = await storage.hasNotificationSince({
+            type: 'email_processing_failed',
+            since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            metadata: { key: 'emailMessageId', value: email.messageId },
+          });
           if (!alreadyAlerted) {
             await storage.createNotification({
               title: 'Customer email failed to process',

@@ -83,6 +83,16 @@ import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
 import { cacheGet, cacheSet, cacheDelete, cacheDeletePrefix } from "./perfCache";
 import { invalidateEntitlementsCache } from "./tenancy/entitlements";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull, type SQL } from "drizzle-orm";
+
+// Notification list bounds — see getAllNotifications.
+const DEFAULT_NOTIFICATION_LIST_LIMIT = 100;
+const MAX_NOTIFICATION_LIST_LIMIT = 500;
+// Types that stay visible even when their job is completed (shared by the list
+// filter and the SQL summary predicate — keep the two in sync).
+const ALWAYS_SHOW_NOTIFICATION_TYPES = new Set([
+  'email_reply', 'sms_reply', 'payment_received', 'invoice_paid',
+  'reminder_uninvoiced', 'reminder_no_crew', 'reminder_stale_quote', 'reminder_stale_lead',
+]);
 import { EXPENSE_COMPANY_KEYWORDS } from "@shared/customerFilters";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
@@ -158,6 +168,26 @@ export function jobRevenueExGst(job: { lineItems?: any; subtotal?: any; totalInc
 // Filter/sort vocabulary for the paginated customers list (Clients page).
 export type CustomerListFilter = 'all' | 'active' | 'historical' | 'customers' | 'potential_expenses' | 'vip';
 export type CustomerListSort = 'name' | 'email' | 'recent';
+
+/** Targeted existence check for notification de-duplication. Every filter is
+ *  applied in SQL so the check costs one indexed row, not a download of the
+ *  whole recent-notifications set (the Sep 2026 Neon egress blow-up). */
+export interface NotificationExistsOpts {
+  type: string;
+  since: Date;
+  jobId?: string;
+  quoteId?: string;
+  userId?: string;
+  /** Match `metadata->>key = value` (e.g. emailMessageId / messageId / conversationId). */
+  metadata?: { key: string; value: string };
+}
+
+export interface NotificationVolumeStats {
+  createdLast24h: number;
+  unarchived: number;
+  total: number;
+  byTypeLast24h: Array<{ type: string; count: number }>;
+}
 
 export interface IStorage {
   // User management
@@ -280,6 +310,8 @@ export interface IStorage {
   updateJob(id: string, updates: Partial<InsertJob>): Promise<Job>;
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
+  getUninvoicedCompletedJobs(completedBetween: { from: Date; to: Date }): Promise<Job[]>;
+  getJobsScheduledAroundNZDate(nzDate: string): Promise<Array<Job & { customerName: string | null }>>;
   getCompletedJobsWithCustomerNames(): Promise<Array<Job & { customerName: string | null; invoiceAmountIncGst: number | null }>>;
   getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
   searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
@@ -520,6 +552,9 @@ export interface IStorage {
   getAllNotifications(userId?: string, limit?: number): Promise<NotificationWithDetails[]>;
   getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]>;
   getNotificationsCreatedSince(since: Date): Promise<Notification[]>;
+  hasNotificationSince(opts: NotificationExistsOpts): Promise<boolean>;
+  archiveNotificationsBefore(before: Date, opts?: { typePrefix?: string }): Promise<number>;
+  getNotificationVolumeStats(): Promise<NotificationVolumeStats>;
   markNotificationAsRead(id: string): Promise<Notification>;
   markAllNotificationsAsRead(userId?: string): Promise<void>;
   deleteNotification(id: string): Promise<void>;
@@ -1994,6 +2029,54 @@ class DatabaseStorage implements IStorage {
     return await db.select().from(schema.jobs)
       .where(eq(schema.jobs.status, status))
       .orderBy(desc(schema.jobs.createdAt));
+  }
+
+  /** Completed, non-imported jobs finished inside the window that have NO invoice
+   *  row. One query with an anti-join — the reminder cron used to load every
+   *  completed job ever (thousands of imported ServiceM8 rows) and then run a
+   *  per-job invoice lookup plus a per-job notifications download, every hour. */
+  async getUninvoicedCompletedJobs(completedBetween: { from: Date; to: Date }): Promise<Job[]> {
+    return await db.select().from(schema.jobs)
+      .where(and(
+        eq(schema.jobs.status, 'completed'),
+        // import_source defaults to 'manual'; anything else is migrated history.
+        or(isNull(schema.jobs.importSource), eq(schema.jobs.importSource, 'manual')),
+        gte(schema.jobs.completedDate, completedBetween.from),
+        lte(schema.jobs.completedDate, completedBetween.to),
+        sql`NOT EXISTS (SELECT 1 FROM ${schema.invoices} i WHERE i.job_id = ${schema.jobs.id})`,
+      ))
+      .orderBy(desc(schema.jobs.completedDate));
+  }
+
+  /** SQL prefilter for "jobs running on NZ date X": anything whose single
+   *  date, date span, or explicit scheduled_dates set could touch that day
+   *  (±1 day of slack for the NZ/UTC offset). Callers still apply
+   *  jobRunsOnNZDate() for the exact answer; this just stops /today from
+   *  downloading every non-archived job in the tenant once a minute. */
+  async getJobsScheduledAroundNZDate(nzDate: string): Promise<Array<Job & { customerName: string | null }>> {
+    const dayBefore = new Date(`${nzDate}T00:00:00Z`);
+    dayBefore.setUTCDate(dayBefore.getUTCDate() - 1);
+    const dayAfter = new Date(`${nzDate}T23:59:59Z`);
+    dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+    const rows = await db.select({
+      job: schema.jobs,
+      customerName: schema.customers.name,
+    })
+      .from(schema.jobs)
+      .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+      .where(and(
+        ne(schema.jobs.status, 'archived'),
+        or(
+          // Single-day or span booking that overlaps the window.
+          and(
+            lte(schema.jobs.scheduledDate, dayAfter),
+            gte(sql`COALESCE(${schema.jobs.scheduledEndDate}, ${schema.jobs.scheduledDate})`, dayBefore),
+          ),
+          // Explicit non-contiguous date set containing the day.
+          sql`${schema.jobs.scheduledDates} @> ${JSON.stringify([nzDate])}::jsonb`,
+        ),
+      ));
+    return rows.map(r => ({ ...r.job, customerName: r.customerName ?? null }));
   }
 
   async getCompletedJobsWithCustomerNames(): Promise<Array<Job & { customerName: string | null; invoiceAmountIncGst: number | null }>> {
@@ -4479,16 +4562,18 @@ class DatabaseStorage implements IStorage {
     return updatedNotification;
   }
   async getAllNotifications(userId?: string, limit?: number): Promise<NotificationWithDetails[]> {
-    let query = db.select().from(schema.notifications);
+    // Always bounded. The bell polls this every 60s per open tab; with no cap it
+    // shipped the entire unarchived table (155k rows / 68 MB per call on prod,
+    // Sep 2026) and was the second-largest source of Neon network egress.
+    const effectiveLimit = Math.min(Math.max(Number(limit) || 0, 0) || DEFAULT_NOTIFICATION_LIST_LIMIT, MAX_NOTIFICATION_LIST_LIMIT);
     const conditions = [eq(schema.notifications.archived, false)];
     if (userId) {
       conditions.push(eq(schema.notifications.userId, userId));
     }
-    query = query.where(and(...conditions)) as any;
-    if (limit) {
-      query = query.limit(limit) as any;
-    }
-    const notifications = await query.orderBy(desc(schema.notifications.createdAt));
+    const notifications = await db.select().from(schema.notifications)
+      .where(and(...conditions))
+      .orderBy(desc(schema.notifications.createdAt))
+      .limit(effectiveLimit);
     
     // Filter out notifications for completed jobs
     const filteredNotifications = await this.filterCompletedJobNotifications(notifications);
@@ -4510,10 +4595,7 @@ class DatabaseStorage implements IStorage {
       jobs.filter(j => j.status === 'completed').map(j => j.id)
     );
     
-    const alwaysShowTypes = new Set([
-      'email_reply', 'sms_reply', 'payment_received', 'invoice_paid',
-      'reminder_uninvoiced', 'reminder_no_crew', 'reminder_stale_quote', 'reminder_stale_lead',
-    ]);
+    const alwaysShowTypes = ALWAYS_SHOW_NOTIFICATION_TYPES;
     
     return notifications.filter(n => 
       !n.jobId || 
@@ -4577,49 +4659,110 @@ class DatabaseStorage implements IStorage {
       .where(and(...conditions));
   }
   async getNotificationSummary(userId?: string): Promise<NotificationSummary> {
-    // Get all non-archived notifications for the user (or all if no userId)
-    const conditions = [eq(schema.notifications.archived, false)];
-    if (userId) {
-      conditions.push(eq(schema.notifications.userId, userId));
-    }
-    const rawNotifications = await db.select()
-      .from(schema.notifications)
-      .where(and(...conditions))
-      .orderBy(desc(schema.notifications.createdAt));
-    
-    // Filter out notifications for completed jobs
-    const allNotifications = await this.filterCompletedJobNotifications(rawNotifications);
-    
-    // Count unread notifications
-    const unreadCount = allNotifications.filter((n: any) => !n.isRead).length;
-    
-    // Group by type
+    // Counts are computed in SQL. This used to SELECT every unarchived row and
+    // count in JS — the same 68 MB download as the list, every 60s per tab.
+    // The "hide notifications for completed jobs unless always-shown type"
+    // rule from filterCompletedJobNotifications is reproduced as a predicate.
+    const alwaysShow = Array.from(ALWAYS_SHOW_NOTIFICATION_TYPES);
+    const visible = sql`${schema.notifications.archived} = false
+      AND (${schema.notifications.jobId} IS NULL
+        OR ${schema.notifications.type} IN (${sql.join(alwaysShow.map(t => sql`${t}`), sql`, `)})
+        OR NOT EXISTS (SELECT 1 FROM ${schema.jobs} j WHERE j.id = ${schema.notifications.jobId} AND j.status = 'completed'))
+      ${userId ? sql`AND ${schema.notifications.userId} = ${userId}` : sql``}`;
+
+    const [totals] = await db.select({
+      total: sql<number>`count(*)::int`,
+      unread: sql<number>`count(*) FILTER (WHERE ${schema.notifications.isRead} = false)::int`,
+    }).from(schema.notifications).where(visible);
+
+    const typeRows = await db.select({
+      type: schema.notifications.type,
+      count: sql<number>`count(*)::int`,
+    }).from(schema.notifications).where(visible).groupBy(schema.notifications.type);
+
+    const priorityRows = await db.select({
+      priority: schema.notifications.priority,
+      count: sql<number>`count(*)::int`,
+    }).from(schema.notifications).where(visible).groupBy(schema.notifications.priority);
+
+    const recentRows = await db.select({
+      id: schema.notifications.id,
+      title: schema.notifications.title,
+      type: schema.notifications.type,
+      priority: schema.notifications.priority,
+      createdAt: schema.notifications.createdAt,
+    }).from(schema.notifications).where(visible)
+      .orderBy(desc(schema.notifications.createdAt))
+      .limit(5);
+
     const byType: Record<string, number> = {};
-    allNotifications.forEach((n: any) => {
-      byType[n.type] = (byType[n.type] || 0) + 1;
-    });
-    
-    // Group by priority
+    for (const r of typeRows) byType[r.type] = Number(r.count);
     const byPriority: Record<string, number> = {};
-    allNotifications.forEach((n: any) => {
-      byPriority[n.priority] = (byPriority[n.priority] || 0) + 1;
-    });
-    
-    // Get recent notifications (up to 5)
-    const recent = allNotifications.slice(0, 5).map((n: any) => ({
-      id: n.id,
-      title: n.title,
-      type: n.type,
-      priority: n.priority,
-      createdAt: n.createdAt.toISOString(),
-    }));
-    
+    for (const r of priorityRows) byPriority[r.priority] = Number(r.count);
+
     return {
-      total: allNotifications.length,
-      unread: unreadCount,
+      total: Number(totals?.total ?? 0),
+      unread: Number(totals?.unread ?? 0),
       byType,
       byPriority,
-      recent,
+      recent: recentRows.map(n => ({
+        id: n.id,
+        title: n.title,
+        type: n.type,
+        priority: n.priority,
+        createdAt: n.createdAt.toISOString(),
+      })),
+    };
+  }
+  async hasNotificationSince(opts: NotificationExistsOpts): Promise<boolean> {
+    const conditions: SQL[] = [
+      eq(schema.notifications.type, opts.type),
+      gte(schema.notifications.createdAt, opts.since),
+    ];
+    if (opts.jobId) conditions.push(eq(schema.notifications.jobId, opts.jobId));
+    if (opts.quoteId) conditions.push(eq(schema.notifications.quoteId, opts.quoteId));
+    if (opts.userId) conditions.push(eq(schema.notifications.userId, opts.userId));
+    if (opts.metadata) {
+      conditions.push(sql`${schema.notifications.metadata}->>${opts.metadata.key} = ${opts.metadata.value}`);
+    }
+    const [row] = await db.select({ id: schema.notifications.id })
+      .from(schema.notifications)
+      .where(and(...conditions))
+      .limit(1);
+    return !!row;
+  }
+  async archiveNotificationsBefore(before: Date, opts?: { typePrefix?: string }): Promise<number> {
+    const conditions: SQL[] = [
+      eq(schema.notifications.archived, false),
+      lt(schema.notifications.createdAt, before),
+    ];
+    if (opts?.typePrefix) conditions.push(sql`${schema.notifications.type} LIKE ${opts.typePrefix + '%'}`);
+    const rows = await db.update(schema.notifications)
+      .set({ archived: true })
+      .where(and(...conditions))
+      .returning({ id: schema.notifications.id });
+    return rows.length;
+  }
+  async getNotificationVolumeStats(): Promise<NotificationVolumeStats> {
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [totals] = await db.select({
+      total: sql<number>`count(*)::int`,
+      unarchived: sql<number>`count(*) FILTER (WHERE ${schema.notifications.archived} = false)::int`,
+      createdLast24h: sql<number>`count(*) FILTER (WHERE ${schema.notifications.createdAt} >= ${since24h})::int`,
+    }).from(schema.notifications);
+    const byType = await db.select({
+      type: schema.notifications.type,
+      count: sql<number>`count(*)::int`,
+    }).from(schema.notifications)
+      .where(gte(schema.notifications.createdAt, since24h))
+      .groupBy(schema.notifications.type)
+      .orderBy(desc(sql`count(*)`))
+      .limit(10);
+    return {
+      total: Number(totals?.total ?? 0),
+      unarchived: Number(totals?.unarchived ?? 0),
+      createdLast24h: Number(totals?.createdLast24h ?? 0),
+      byTypeLast24h: byType.map(r => ({ type: r.type, count: Number(r.count) })),
     };
   }
   async deleteExpiredNotifications(): Promise<void> { }

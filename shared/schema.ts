@@ -1664,7 +1664,12 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   readAt: timestamp("read_at"), // When notification was read
   archived: boolean("archived").default(false).notNull(), // Archived (hidden) but kept for de-dup
-});
+}, (table) => ({
+  // Mirrors server/schemaMigrations.ts "notifications-dedupe-indexes" (boot-applied).
+  typeJobCreatedIdx: index("notifications_type_job_created_idx").on(table.type, table.jobId, table.createdAt),
+  typeQuoteCreatedIdx: index("notifications_type_quote_created_idx").on(table.type, table.quoteId, table.createdAt),
+  archivedCreatedIdx: index("notifications_archived_created_idx").on(table.archived, table.createdAt),
+}));
 
 // Notification Insert Schema
 export const insertNotificationSchema = createInsertSchema(notifications).omit({
