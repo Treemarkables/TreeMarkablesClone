@@ -558,12 +558,6 @@ function startNotificationQueueWorker() {
       process.exit(1);
     }
 
-    // Tenant-isolation backstop: any business_id table without an RLS policy is
-    // cross-tenant readable under the app_tenant grant. Logs loudly; hard-fails
-    // only under TENANT_RLS_STRICT (then the outer catch exits). Runs after the
-    // self-healing boot DDL on the previous deploy has had a chance to add policies.
-    await assertTenantTablesHaveRlsPolicies();
-
     // Self-healing schema: bring the database up to match the deployed code so a
     // schema change can't silently outrun the prod DB (caused the deposit-column /
     // billing-table scrambles). Non-fatal — log loudly but keep booting, so a
@@ -574,6 +568,14 @@ function startNotificationQueueWorker() {
     } catch (e) {
       console.error("[schema] boot migrations failed (continuing):", e);
     }
+
+    // Tenant-isolation backstop: any business_id table without an RLS policy is
+    // cross-tenant readable under the app_tenant grant. Logs loudly; hard-fails
+    // only under TENANT_RLS_STRICT (then the outer catch exits). Runs AFTER the
+    // boot DDL above so a deploy that adds a new tenant table is judged on the
+    // schema it just created — previously it ran first, so a policy-less table
+    // passed its own deploy and only failed the next one.
+    await assertTenantTablesHaveRlsPolicies();
     // Re-queue any inbound supplier-invoice documents a previous instance left
     // mid-flight (the claim is an atomic status transition, so this is safe on
     // both app instances).
