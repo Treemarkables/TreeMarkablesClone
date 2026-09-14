@@ -5534,6 +5534,10 @@ export const businesses = pgTable("businesses", {
   name: text("name").notNull(),
   slug: text("slug").unique(),
   status: text("status").notNull().default("active"),
+  // Concierge "comp for life": set → full Business tier + every add-on + no usage
+  // caps, with no subscription/Stripe rows needed (server/tenancy/comped.ts).
+  // Null = bill normally. Timestamp (not boolean) so we know WHEN it was granted.
+  compedAt: timestamp("comped_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertBusinessSchema = createInsertSchema(businesses).omit({ id: true, createdAt: true });

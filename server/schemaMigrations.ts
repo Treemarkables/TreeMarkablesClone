@@ -715,6 +715,15 @@ const MIGRATIONS: Migration[] = [
     },
   },
   {
+    // Concierge "comp for life" flag (beta testers / partners): replaces the
+    // INFLOW_COMPED_BUSINESS_IDS env var (which needed a redeploy per tester).
+    // Read by server/tenancy/comped.ts → entitlements + usage caps.
+    name: "businesses-comped-at",
+    statements: [
+      `ALTER TABLE businesses ADD COLUMN IF NOT EXISTS comped_at timestamp`,
+    ],
+  },
+  {
     // Notification de-dup + bell reads used to full-scan `notifications` (155k
     // rows on prod). These back the targeted hasNotificationSince() lookups,
     // the bounded bell list/summary, and the retention sweep (dbHygiene.ts).
