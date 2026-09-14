@@ -243,6 +243,10 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 }
 
 // Inner component that uses useSidebar hook
+// Mobile header icon-button size: a 40px circle that may shrink to 36px so
+// the /dispatch action row fits a 375pt phone (see the header comment below).
+const MOBILE_HEADER_ICON = "h-10 w-10 min-w-9";
+
 function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const { isCrew, isAdmin, logout, currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState("jobs");
@@ -397,25 +401,34 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
       <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* Mobile header - sidebar toggle, logo, and actions */}
+          {/* Sizing budget: on /dispatch an admin sees nine controls in this
+              row (logo, bug, bell, +, paste, filter, lanes, search, account).
+              Every control is a 40px circle that may shrink to 36px (min-w-9)
+              with 4px gaps and 8px side padding, so the row fits a 375pt phone
+              instead of pushing search/account off the right edge. Keep new
+              controls on that budget or fold them into a menu. */}
           <header
-            className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-background"
-            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 0.75rem)" }}
+            className="md:hidden flex items-center gap-1 px-2 py-3 border-b bg-background"
+            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 0.5rem)" }}
           >
-            <LogoSidebarTrigger size={44} />
-            {businessName && (
-              <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight" data-testid="header-business-name-mobile">
+            <LogoSidebarTrigger size={40} />
+            {/* Business name is hidden on /dispatch — the action row needs the width */}
+            {businessName && !isDispatchPage && (
+              <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight px-1" data-testid="header-business-name-mobile">
                 {businessName}
               </span>
             )}
             {/* Report a problem — every member, every screen */}
-            <div className="shrink-0"><BugReportButton className="h-11 w-11 text-muted-foreground" /></div>
+            <BugReportButton className={MOBILE_HEADER_ICON} />
             {/* Notifications Bell — standalone so flex-1 spacer gives it room from actions */}
-            {isAdmin && <div className="shrink-0"><NotificationBell /></div>}
+            {isAdmin && <NotificationBell />}
 
             {/* Spacer: pushes action buttons to the right, away from the bell */}
             <div className="flex-1" />
             
-            <div className="flex items-center gap-2">
+            {/* `contents` makes the actions direct flex children of the header so
+                they share its gap and shrink evenly alongside the bug/bell buttons */}
+            <div className="contents">
 
               {/* Dispatch controls — only shown on /dispatch */}
               {isDispatchPage && (
@@ -427,9 +440,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         size="icon"
                         aria-label="Create new"
                         data-testid="create-new-button-mobile"
-                        className="rounded-full bg-brand-lime text-brand-lime-foreground border-brand-lime-border shrink-0 h-12 w-12"
+                        className={`rounded-full bg-brand-lime text-brand-lime-foreground border-brand-lime-border ${MOBILE_HEADER_ICON}`}
                       >
-                        <Plus className="h-7 w-7" />
+                        <Plus className="h-6 w-6" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -466,9 +479,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
                     aria-label="Paste message"
                     data-testid="paste-message-button-mobile"
-                    className="rounded-full text-orange-600 border-orange-400 bg-orange-100 shrink-0 h-12 w-12"
+                    className={`rounded-full text-orange-600 border-orange-400 bg-orange-100 ${MOBILE_HEADER_ICON}`}
                   >
-                    <MessageSquare className="h-7 w-7 text-orange-600" />
+                    <MessageSquare className="h-6 w-6 text-orange-600" />
                   </Button>
 
                   <DropdownMenu>
@@ -476,11 +489,11 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-11 w-11 ${(dispatchFilters.length > 0 || dispatchLane !== "all") ? "text-primary" : "text-muted-foreground"}`}
+                        className={`${MOBILE_HEADER_ICON} ${(dispatchFilters.length > 0 || dispatchLane !== "all") ? "text-primary" : "text-muted-foreground"}`}
                         aria-label="Filter jobs"
                         data-testid="mobile-filter-dropdown-trigger"
                       >
-                        <Filter className="h-7 w-7" />
+                        <Filter className="h-6 w-6" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -512,7 +525,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`h-11 w-11 ${dispatchLane !== "all" ? "text-primary" : "text-muted-foreground"}`}
+                          className={`${MOBILE_HEADER_ICON} ${dispatchLane !== "all" ? "text-primary" : "text-muted-foreground"}`}
                           aria-label="Filter by lane"
                           data-testid="dispatch-lanes-button-mobile"
                         >
@@ -547,9 +560,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   }}
                   aria-label={dispatchSearchOpen ? "Close search" : "Search jobs"}
                   data-testid="mobile-search-toggle"
-                  className="text-muted-foreground h-11 w-11"
+                  className={`text-muted-foreground ${MOBILE_HEADER_ICON}`}
                 >
-                  {dispatchSearchOpen ? <X className="h-7 w-7" /> : <Search className="h-7 w-7" />}
+                  {dispatchSearchOpen ? <X className="h-6 w-6" /> : <Search className="h-6 w-6" />}
                 </Button>
               )}
               
@@ -571,7 +584,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {isAdmin && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label="Account menu" data-testid="button-account-dropdown-mobile">
+                    <Button variant="ghost" size="icon" className={MOBILE_HEADER_ICON} aria-label="Account menu" data-testid="button-account-dropdown-mobile">
                       <User className="h-6 w-6" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -662,7 +675,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               </PlanGate>
 
               {/* Report a problem — every member, every screen */}
-              <BugReportButton className="text-muted-foreground" />
+              <BugReportButton />
 
               {/* Notifications Bell */}
               <NotificationBell />
