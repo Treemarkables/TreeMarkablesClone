@@ -82,7 +82,7 @@ export default function SettingsBilling() {
   const { data: plansRes, isLoading: plansLoading } = useQuery<{ success: boolean; data: Plan[] }>({
     queryKey: ["/api/billing/plans"],
   });
-  const { data: subRes } = useQuery<{ success: boolean; data: Subscription | null }>({
+  const { data: subRes } = useQuery<{ success: boolean; data: Subscription | null; comped?: boolean }>({
     queryKey: ["/api/billing/subscription"],
   });
   const { data: usageRes } = useQuery<{ success: boolean; data: Usage }>({
@@ -92,8 +92,13 @@ export default function SettingsBilling() {
   const plans = plansRes?.data ?? [];
   const sub = subRes?.data ?? null;
   const usage = usageRes?.data ?? null;
+  // Comped (concierge "comp for life"): full Business tier, every add-on, no caps,
+  // never billed — and no Subscribe CTAs, which would start a real Stripe checkout.
+  const comped = subRes?.comped ?? false;
   const isLive = sub && (sub.status === "active" || sub.status === "trialing");
-  const currentPlanId = isLive ? sub!.planId : null;
+  const currentPlanId = comped
+    ? (plans.find((p) => p.key === "business")?.id ?? null)
+    : isLive ? sub!.planId : null;
 
   // App Store Guideline 3.1.1: the iOS shell must not surface any subscription
   // purchase / billing-management CTA (we bill via Stripe on the web). On native
@@ -180,7 +185,19 @@ export default function SettingsBilling() {
           : "Choose the plan that fits your business. Prices in NZD, excluding GST. Cancel anytime."}
       </p>
 
-      {sub && (isLive || sub.status === "past_due") && (
+      {comped && (
+        <Card className="mb-6 border-border">
+          <CardContent className="py-4">
+            <p className="text-sm text-muted-foreground">Current plan</p>
+            <p className="font-medium">Business · Complimentary</p>
+            <p className="text-xs text-muted-foreground">
+              Your account has full access to every feature and add-on at no charge. Nothing to pay, nothing renews.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!comped && sub && (isLive || sub.status === "past_due") && (
         <Card className="mb-6 border-border">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
             <div>
@@ -327,6 +344,8 @@ export default function SettingsBilling() {
                   </ul>
                   {isCurrent ? (
                     <Button disabled className="w-full">Current plan</Button>
+                  ) : comped ? (
+                    <Button variant="outline" disabled className="w-full">Included</Button>
                   ) : native ? (
                     // No purchase CTA inside the iOS app (App Store 3.1.1).
                     <Button variant="outline" disabled className="w-full">

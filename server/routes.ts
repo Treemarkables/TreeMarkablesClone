@@ -25,6 +25,7 @@ import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
 import { resolveEntitlements } from "./tenancy/entitlements";
+import { isCompedBusiness } from "./tenancy/comped";
 import { testServiceM8Connection, startServiceM8Import, getServiceM8ImportStatus } from "./services/servicem8Import";
 import { jwksHandler } from "./tenancy/jwksHandler";
 import { cacheDeletePrefix } from "./perfCache";
@@ -21749,7 +21750,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const businesses = await storage.listBusinesses();
       const data = await Promise.all(businesses.map(async (b) => {
         const cl = await buildOnboardingChecklist(b.id);
-        return { id: b.id, name: b.name, slug: b.slug, status: b.status, createdAt: b.createdAt, requiredDone: cl.requiredDone, requiredTotal: cl.requiredTotal };
+        return { id: b.id, name: b.name, slug: b.slug, status: b.status, comped: !!b.compedAt, createdAt: b.createdAt, requiredDone: cl.requiredDone, requiredTotal: cl.requiredTotal };
       }));
       res.json({ success: true, data });
     } catch (error) {
@@ -21777,7 +21778,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             stripeManaged: !!sub.stripeSubscriptionId,
           }
         : null;
-      res.json({ success: true, data: { business, settings: settings ?? null, channels, checklist, plans: plans.map((p) => ({ id: p.id, key: p.key, name: p.name })), subscription } });
+      res.json({ success: true, data: { business, comped: !!business.compedAt, settings: settings ?? null, channels, checklist, plans: plans.map((p) => ({ id: p.id, key: p.key, name: p.name })), subscription } });
     } catch (error) {
       console.error('Error loading subscriber:', error);
       res.status(500).json({ success: false, message: 'Error loading subscriber' });
@@ -21804,6 +21805,34 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     } catch (error) {
       console.error('Error updating subscriber status:', error);
       res.status(500).json({ success: false, message: 'Error updating subscriber status' });
+    }
+  });
+
+  // Concierge: "comp for life" — full Business tier + every add-on + no usage caps,
+  // with no subscription/Stripe rows (server/tenancy/comped.ts). Reversible. The
+  // platform operator is comped by code and can't be toggled here.
+  app.put('/api/admin/subscribers/:id/comp', requirePlatformAdmin, async (req: Request, res: Response) => {
+    try {
+      const businessId = req.params.id;
+      const comped = req.body?.comped;
+      if (typeof comped !== 'boolean') {
+        return res.status(400).json({ success: false, message: "Body must include comped: true | false." });
+      }
+      if (TREEMARKABLES_BUSINESS_IDS.includes(businessId)) {
+        return res.status(400).json({ success: false, message: 'The platform operator account is always comped.' });
+      }
+      const business = await storage.getBusinessById(businessId);
+      if (!business) return res.status(404).json({ success: false, message: 'Subscriber not found' });
+      const existing = await storage.getSubscriptionForBusiness(businessId);
+      if (comped && existing?.stripeSubscriptionId) {
+        return res.status(409).json({ success: false, message: 'This subscriber has a live Stripe subscription — cancel it in Stripe first, or they will keep being charged.' });
+      }
+      const updated = await storage.setBusinessComped(businessId, comped);
+      console.log(`[CONCIERGE_AUDIT] operator=${req.session.employeeId} action=set_comped target=${businessId} value=${comped}`);
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating subscriber comp:', error);
+      res.status(500).json({ success: false, message: 'Error updating subscriber comp' });
     }
   });
 
@@ -28271,7 +28300,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     const businessId = req.session.businessId;
     if (!businessId) return res.status(401).json({ success: false, message: 'Not logged in' });
     try {
-      res.json({ success: true, data: (await billing.getSubscriptionByBusiness(businessId)) || null });
+      // `comped` (top-level, additive) lets the billing page show "complimentary"
+      // instead of Subscribe CTAs for comped tenants, who have no subscription row.
+      const [subRow, comped] = await Promise.all([billing.getSubscriptionByBusiness(businessId), isCompedBusiness(businessId)]);
+      res.json({ success: true, data: subRow || null, comped });
     } catch (e: any) {
       res.status(500).json({ success: false, message: e?.message });
     }

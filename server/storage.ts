@@ -82,6 +82,7 @@ import { db, ownerDb } from "./db";
 import { withTenant, currentBusinessId } from "./tenancy/tenantStore";
 import { cacheGet, cacheSet, cacheDelete, cacheDeletePrefix } from "./perfCache";
 import { invalidateEntitlementsCache } from "./tenancy/entitlements";
+import { invalidateCompedCache } from "./tenancy/comped";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull, type SQL } from "drizzle-orm";
 import { EXPENSE_COMPANY_KEYWORDS } from "@shared/customerFilters";
 import * as schema from "@shared/schema";
@@ -5690,6 +5691,17 @@ class DatabaseStorage implements IStorage {
 
   async setBusinessStatus(businessId: string, status: string): Promise<(typeof schema.businesses.$inferSelect) | undefined> {
     const [row] = await ownerDb.update(schema.businesses).set({ status }).where(eq(schema.businesses.id, businessId)).returning();
+    return row;
+  }
+
+  // Concierge "comp for life" toggle. Stamps/clears businesses.comped_at and drops
+  // the cached comp + entitlement resolutions so the change bites immediately.
+  async setBusinessComped(businessId: string, comped: boolean): Promise<(typeof schema.businesses.$inferSelect) | undefined> {
+    const [row] = await ownerDb.update(schema.businesses)
+      .set({ compedAt: comped ? new Date() : null })
+      .where(eq(schema.businesses.id, businessId)).returning();
+    invalidateCompedCache(businessId);
+    invalidateEntitlementsCache(businessId);
     return row;
   }
 
