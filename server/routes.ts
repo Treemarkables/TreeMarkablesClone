@@ -107,6 +107,7 @@ import {
 import * as billing from "./billing";
 import * as usageMeter from "./services/usageMeter";
 import * as supplierIngest from "./services/supplierInvoiceIngest";
+import { computeJobRiskFlags } from "./services/scheduleRiskFlags";
 import { createTenant } from "./onboarding";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import {
@@ -21007,17 +21008,44 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // (Nominatim, NZ-scoped, cached per address for the process lifetime — the
   // same service the site-map uses) and return them sorted by distance.
   const nearMeGeocodeCache = new Map<string, { lat: number; lng: number } | null>();
+  // Nominatim chokes on NZ rural-delivery tokens ("RD 3") and unit/level
+  // prefixes ("Level 2, 18 Quay St") that the street address itself doesn't
+  // need. If the raw query misses we retry once with those stripped; PO boxes
+  // are never a work site so they're skipped outright.
+  function simplifyNZAddressForGeocode(address: string): string | null {
+    if (/\bP\.?O\.?\s*Box\b/i.test(address)) return null;
+    let s = address
+      .replace(/\bR\.?\s?D\.?\s*\d+\b,?/gi, ' ')
+      .replace(/^\s*(level|unit|flat|suite|apartment|apt)\s*\w+\s*[,/-]\s*/i, '')
+      .replace(/^\s*\d+[a-z]?\s*\/\s*/i, '')
+      .replace(/\s*,\s*,+/g, ',')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/^[\s,]+|[\s,]+$/g, '')
+      .trim();
+    return s.length > 0 && s.toLowerCase() !== address.trim().toLowerCase() ? s : null;
+  }
+  async function nominatimLookup(query: string): Promise<{ lat: number; lng: number } | null> {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=nz&q=${encodeURIComponent(query)}`;
+    const resp = await fetch(url, { headers: { 'User-Agent': 'InflowApp/1.0 (job distance sort)' } });
+    const results = resp.ok ? await resp.json() : [];
+    const hit = Array.isArray(results) && results[0]
+      ? { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) }
+      : null;
+    return hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lng) ? hit : null;
+  }
   async function geocodeNZAddressCached(address: string): Promise<{ lat: number; lng: number } | null> {
     const key = address.trim().toLowerCase();
     if (nearMeGeocodeCache.has(key)) return nearMeGeocodeCache.get(key)!;
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=nz&q=${encodeURIComponent(address)}`;
-      const resp = await fetch(url, { headers: { 'User-Agent': 'InflowApp/1.0 (job distance sort)' } });
-      const results = resp.ok ? await resp.json() : [];
-      const hit = Array.isArray(results) && results[0]
-        ? { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) }
-        : null;
-      const value = hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lng) ? hit : null;
+      if (/\bP\.?O\.?\s*Box\b/i.test(address)) {
+        nearMeGeocodeCache.set(key, null);
+        return null;
+      }
+      let value = await nominatimLookup(address);
+      if (!value) {
+        const simplified = simplifyNZAddressForGeocode(address);
+        if (simplified) value = await nominatimLookup(simplified);
+      }
       nearMeGeocodeCache.set(key, value);
       return value;
     } catch (err) {
@@ -21071,6 +21099,84 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     } catch (error) {
       console.error('Error computing jobs near me:', error);
       res.status(500).json({ success: false, message: 'Error computing jobs near me' });
+    }
+  });
+
+  // ── Live Roster day map ────────────────────────────────────────────────────
+  // Jobs on one NZ calendar day, geocoded (same cached Nominatim helper as
+  // near-me) and tagged with the risk signals the safety tables already hold
+  // (see services/scheduleRiskFlags.ts). Same date window as /api/jobs/for-date
+  // so the pins match the roster rows one-for-one. Path deliberately outside
+  // /api/jobs/* — GET /api/jobs/:id would swallow it.
+  app.get('/api/schedule/day-map', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const date = req.query.date;
+      if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ success: false, message: 'date param required (YYYY-MM-DD)' });
+      }
+      const result = await db.execute(
+        sql`SELECT id, job_number, title, customer_id, address, status, priority,
+                   scheduled_start_time, scheduled_end_time, assigned_team,
+                   description, special_instructions, notes, internal_notes
+            FROM jobs
+            WHERE scheduled_date IS NOT NULL
+              AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') <= ${date}::date
+              AND DATE((COALESCE(scheduled_end_date, scheduled_date) AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') >= ${date}::date
+              AND status NOT IN ('archived', 'unsuccessful')
+            ORDER BY scheduled_date ASC, scheduled_start_time ASC NULLS LAST`
+      );
+      type Row = {
+        id: string; job_number: string | null; title: string | null; customer_id: string | null;
+        address: string | null; status: string; priority: string | null;
+        scheduled_start_time: string | null; scheduled_end_time: string | null;
+        assigned_team: string[] | null; description: string | null;
+        special_instructions: string | null; notes: string | null; internal_notes: string | null;
+      };
+      const rows = result.rows as unknown as Row[];
+      const riskByJob = await computeJobRiskFlags(rows.map((r) => ({
+        id: r.id,
+        priority: r.priority,
+        description: r.description,
+        specialInstructions: r.special_instructions,
+        notes: r.notes,
+        internalNotes: r.internal_notes,
+      })));
+
+      const GEOCODE_CAP = 40; // Nominatim courtesy cap — a day's roster is well under this
+      let geocoded = 0;
+      const out: Array<Record<string, unknown>> = [];
+      for (const r of rows) {
+        const address = (r.address ?? '').trim();
+        const mappable = address.length > 0 && !/^address not specified$/i.test(address);
+        let coords: { lat: number; lng: number } | null = null;
+        if (mappable && geocoded < GEOCODE_CAP) {
+          geocoded += 1;
+          coords = await geocodeNZAddressCached(address);
+        }
+        const risk = riskByJob.get(r.id) ?? { level: 'none', reasons: [], urgent: false };
+        out.push({
+          id: r.id,
+          jobNumber: r.job_number,
+          title: r.title,
+          customerId: r.customer_id,
+          address: mappable ? address : null,
+          status: r.status,
+          priority: r.priority,
+          scheduledStartTime: r.scheduled_start_time,
+          scheduledEndTime: r.scheduled_end_time,
+          assignedTeam: r.assigned_team ?? [],
+          lat: coords?.lat ?? null,
+          lng: coords?.lng ?? null,
+          risk,
+        });
+      }
+      res.json({ success: true, data: out });
+    } catch (error) {
+      console.error('Error building schedule day map:', error);
+      res.status(500).json({ success: false, message: 'Error building schedule day map' });
     }
   });
 

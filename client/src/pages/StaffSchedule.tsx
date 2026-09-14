@@ -12,6 +12,7 @@ type Job = BaseJob & {
 };
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 import { StaffMultiWeekGrid, type MultiWeekCellSlot } from '@/components/StaffMultiWeekGrid';
+import { ScheduleDayMap } from '@/components/ScheduleDayMap';
 
 // View modes: the classic single-day Gantt, plus 1–4 week availability grids
 // that fit the whole period in one viewport (no scrolling).
@@ -805,6 +806,17 @@ export default function StaffSchedule() {
             onDrillToDay={drillToDay}
           />
         </div>
+      )}
+
+      {/* ── Day map: where the day's jobs are, with risk flags front and centre ── */}
+      {!isWeekMode && (
+        <ScheduleDayMap
+          dateStr={dateStr}
+          jobs={dayJobs}
+          jobColorMap={jobColorMap}
+          customerMap={customerMap}
+          onOpenJob={openJob}
+        />
       )}
 
       {/* ── Timeline grid ── */}
