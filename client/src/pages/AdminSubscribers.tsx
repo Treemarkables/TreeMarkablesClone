@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,6 +19,7 @@ interface SubscriberSummary {
   name: string;
   slug: string | null;
   status: string;
+  comped?: boolean;
   createdAt: string | null;
   requiredDone: number;
   requiredTotal: number;
@@ -54,7 +56,7 @@ function ProgressPill({ done, total }: { done: number; total: number }) {
 
 function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { toast } = useToast();
-  const { data, isLoading } = useQuery<{ success: boolean; data: { business: SubscriberSummary; settings: Record<string, any> | null; channels: Channel[]; checklist: { requiredDone: number; requiredTotal: number }; plans: PlanOpt[]; subscription: SubscriptionInfo | null } }>({
+  const { data, isLoading } = useQuery<{ success: boolean; data: { business: SubscriberSummary; comped: boolean; settings: Record<string, any> | null; channels: Channel[]; checklist: { requiredDone: number; requiredTotal: number }; plans: PlanOpt[]; subscription: SubscriptionInfo | null } }>({
     queryKey: [`/api/admin/subscribers/${id}`],
   });
 
@@ -133,6 +135,17 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
     onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't update status", description: e.message }),
   });
 
+  const setComped = useMutation({
+    mutationFn: async (comped: boolean) => {
+      const r = await apiRequest("PUT", `/api/admin/subscribers/${id}/comp`, { comped });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.message || "Could not update comp.");
+      return j;
+    },
+    onSuccess: invalidate,
+    onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't update comp", description: e.message }),
+  });
+
   const setPlan = useMutation({
     mutationFn: async () => {
       const r = await apiRequest("PUT", `/api/admin/subscribers/${id}/plan`, { planId: planSel });
@@ -152,6 +165,7 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const subscription = data?.data?.subscription ?? null;
   const plans = data?.data?.plans ?? [];
   const suspended = biz?.status === "suspended";
+  const comped = data?.data?.comped ?? false;
 
   return (
     <div>
@@ -162,6 +176,7 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
         <h2 className="text-xl font-semibold">{biz?.name}</h2>
         {biz && <ProgressPill done={biz.requiredDone} total={biz.requiredTotal} />}
         {suspended && <span className="text-xs px-2 py-0.5 rounded-full border border-destructive/40 text-destructive">Suspended</span>}
+        {comped && <span className="text-xs px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/5">Comped</span>}
       </div>
 
       <Card className="mb-6 border-border">
@@ -182,8 +197,28 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
             </Button>
           </div>
 
+          <div className="pt-4 border-t border-border flex items-center justify-between gap-3">
+            <div>
+              <p className="font-medium">Comp for life</p>
+              <p className="text-sm text-muted-foreground">
+                {comped
+                  ? "Free forever: full Business tier, every add-on, no usage caps. Never billed."
+                  : "Give this subscriber everything for free — Business tier, all add-ons, no usage caps — with no Stripe involvement."}
+              </p>
+            </div>
+            <Switch
+              checked={comped}
+              disabled={setComped.isPending}
+              onCheckedChange={(v) => setComped.mutate(v)}
+              aria-label="Comp for life"
+            />
+          </div>
+
           <div className="pt-4 border-t border-border">
             <p className="font-medium mb-1">Plan</p>
+            {comped && (
+              <p className="text-xs text-muted-foreground mb-2">Comped — the plan below is ignored while the comp is on.</p>
+            )}
             {subscription?.stripeManaged ? (
               <p className="text-sm text-muted-foreground">
                 {subscription.planName || subscription.planKey || "—"} · managed via Stripe (change it in Stripe, not here).
@@ -338,6 +373,7 @@ export default function AdminSubscribers() {
                     <span className="font-medium truncate">{s.name}</span>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
+                    {s.comped && <span className="text-xs px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/5">Comped</span>}
                     <ProgressPill done={s.requiredDone} total={s.requiredTotal} />
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   </div>

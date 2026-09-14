@@ -20,8 +20,8 @@
 import { db } from "../db";
 import * as schema from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { TREEMARKABLES_BUSINESS_IDS } from "@shared/roleChecklistAccess";
 import { cacheGet, cacheSet, cacheDelete } from "../perfCache";
+import { isCompedBusiness } from "./comped";
 import type { Entitlement, Capability } from "./capabilities";
 
 const PLAN_RANK: Record<string, number> = { freemium: 0, crew: 1, business: 2 };
@@ -36,16 +36,10 @@ const ALL_ADDON_ENTITLEMENTS: Entitlement[] = [
 
 /**
  * Comped businesses get full Business-tier + every add-on, no subscription rows
- * needed. Treemarkables (platform owner, both prod + dev-branch ids) is always
- * comped — same footgun-avoidance as usageMeter.ts: flipping enforcement on must
- * never lock the owner out of its own product. Extra ids via env (comma-separated).
+ * needed. Who counts as comped (Treemarkables, INFLOW_COMPED_BUSINESS_IDS, or the
+ * concierge `businesses.comped_at` flag) lives in ./comped.ts — shared with the
+ * usage meter so feature gates and caps can never disagree.
  */
-const COMPED = new Set(
-  (process.env.INFLOW_COMPED_BUSINESS_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-);
-function isComped(businessId: string): boolean {
-  return COMPED.has(businessId) || TREEMARKABLES_BUSINESS_IDS.includes(businessId);
-}
 
 export interface BusinessEntitlements {
   planKey: string;
@@ -76,7 +70,7 @@ export function invalidateEntitlementsCache(businessId: string): void {
 
 /** Resolve a business's plan + active add-ons into its unlocked entitlement set. */
 export async function resolveEntitlements(businessId: string): Promise<BusinessEntitlements> {
-  if (isComped(businessId)) {
+  if (await isCompedBusiness(businessId)) {
     return {
       planKey: "business",
       entitlements: new Set<Entitlement>(["plan:crew", "plan:business", ...ALL_ADDON_ENTITLEMENTS]),

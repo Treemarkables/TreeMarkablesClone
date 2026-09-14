@@ -16,31 +16,22 @@
  * multiple OpenAI calls), NOT per token — see the plan.
  */
 import { db } from "../db";
+import { isCompedBusiness } from "../tenancy/comped";
 import { jobs, subscriptionPlans, subscriptions, usageEvents } from "@shared/schema";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getSubscriptionByBusiness, getPlanByKey } from "../billing";
 import { nzTimeToUTC } from "@shared/dateUtils";
-import { TREEMARKABLES_BUSINESS_IDS } from "@shared/roleChecklistAccess";
 
 export type Metric = "sms" | "ai";
 
 /** Only actually block when this is on. Off = record + log, never block. */
 export const ENFORCE = process.env.USAGE_CAPS_ENFORCE === "true";
 
-/** Businesses that are never capped (extra ones via comma-separated env). */
-const COMPED = new Set(
-  (process.env.INFLOW_COMPED_BUSINESS_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-);
-
 /**
- * Comped = never capped. The env list PLUS Treemarkables itself — TM is the platform
- * owner running Inflow, so it must never be throttled on its own product regardless of
- * whether INFLOW_COMPED_BUSINESS_IDS is set (avoids a footgun where flipping enforcement
- * on would cap the owner). Covers both the prod and dev-branch TM businessIds.
+ * Comped = never capped. Treemarkables (platform owner), INFLOW_COMPED_BUSINESS_IDS,
+ * or the concierge "comp for life" flag — resolved by server/tenancy/comped.ts, the
+ * same check resolveEntitlements uses, so caps and feature gates stay in lockstep.
  */
-function isComped(businessId: string): boolean {
-  return COMPED.has(businessId) || TREEMARKABLES_BUSINESS_IDS.includes(businessId);
-}
 
 const ENTITLED = new Set(["active", "trialing", "past_due"]);
 
@@ -66,7 +57,7 @@ function nzMonthStartUtc(): Date {
 
 /** Resolve the business's cap for a metric (null = unlimited) and its overage policy. */
 async function resolveCap(metric: Metric, businessId: string): Promise<{ cap: number | null; overage: string }> {
-  if (isComped(businessId)) return { cap: null, overage: "soft_stop" };
+  if (await isCompedBusiness(businessId)) return { cap: null, overage: "soft_stop" };
 
   const sub = await getSubscriptionByBusiness(businessId);
   let plan: typeof subscriptionPlans.$inferSelect | undefined;
@@ -155,7 +146,7 @@ export async function guard(metric: Metric, businessId: string, feature?: string
 
 /** Resolve the active-job cap for a business (null = unlimited). */
 async function resolveJobCap(businessId: string): Promise<number | null> {
-  if (isComped(businessId)) return null;
+  if (await isCompedBusiness(businessId)) return null;
   const sub = await getSubscriptionByBusiness(businessId);
   let plan: typeof subscriptionPlans.$inferSelect | undefined;
   if (sub && ENTITLED.has(sub.status) && sub.planId) {
