@@ -17264,8 +17264,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   app.get('/api/notifications', async (req: Request, res: Response) => {
     try {
       const userId = req.query.userId as string;
+      // Bounded server-side (default 100, max 500) — see storage.getAllNotifications.
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
-      
+
       const notifications = await storage.getAllNotifications(userId, limit);
       
       res.json({
@@ -21131,7 +21132,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       fleet.sort((a, b) => a.daysUntil - b.daysUntil);
 
       // Jobs running today on the NZ calendar — honours multi-day date sets.
-      const { jobs } = await storage.getAllJobs({ limit: 100000, excludeArchived: true });
+      // SQL prefilter first: this endpoint is polled every 60s per open /today
+      // tab and used to pull EVERY non-archived job in the tenant each time.
+      const jobs = await storage.getJobsScheduledAroundNZDate(todayStr);
       const jobsToday = jobs
         .filter((j: any) => jobRunsOnNZDate(j, todayStr))
         .map((j: any) => ({
@@ -24425,21 +24428,19 @@ Transcription: ${transcriptText}`;
           // .createNotification (same as the job-number / quote paths) and dedup
           // by the inbound Message-ID so re-deliveries / the poller don't double
           // up, while genuinely distinct replies each notify.
-          const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-          const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+          // Targeted existence query (was: download every notification from the
+          // last 24h and scan in JS — see NotificationExistsOpts in storage.ts).
           const alreadyNotified = inboundMessageId
-            ? recentNotifs.some(
-                (n) =>
-                  n.type === 'email_reply' &&
-                  (n.metadata as any)?.emailMessageId === inboundMessageId,
-              )
-            : recentNotifs.some(
-                (n) =>
-                  n.type === 'email_reply' &&
-                  n.jobId === job.id &&
-                  Date.now() - new Date(n.createdAt as any).getTime() <
-                    5 * 60 * 1000,
-              );
+            ? await storage.hasNotificationSince({
+                type: 'email_reply',
+                since: new Date(Date.now() - 24 * 60 * 60 * 1000),
+                metadata: { key: 'emailMessageId', value: inboundMessageId },
+              })
+            : await storage.hasNotificationSince({
+                type: 'email_reply',
+                since: new Date(Date.now() - 5 * 60 * 1000),
+                jobId: job.id,
+              });
           if (!alreadyNotified) {
             const previewText = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
             await storage.createNotification({
@@ -24547,21 +24548,19 @@ Transcription: ${transcriptText}`;
             // for a whole day. This also dedups against gmailReplyService's
             // poller, which stamps the same emailMessageId. Falls back to a
             // short per-job window only when the email carries no Message-ID.
-            const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+            // Targeted existence query (was: download every notification from the
+            // last 24h and scan in JS — see NotificationExistsOpts in storage.ts).
             const alreadyNotified = inboundMessageId
-              ? recentNotifs.some(
-                  (n) =>
-                    n.type === 'email_reply' &&
-                    (n.metadata as any)?.emailMessageId === inboundMessageId,
-                )
-              : recentNotifs.some(
-                  (n) =>
-                    n.type === 'email_reply' &&
-                    n.jobId === job.id &&
-                    Date.now() - new Date(n.createdAt as any).getTime() <
-                      5 * 60 * 1000,
-                );
+              ? await storage.hasNotificationSince({
+                  type: 'email_reply',
+                  since: new Date(Date.now() - 24 * 60 * 60 * 1000),
+                  metadata: { key: 'emailMessageId', value: inboundMessageId },
+                })
+              : await storage.hasNotificationSince({
+                  type: 'email_reply',
+                  since: new Date(Date.now() - 5 * 60 * 1000),
+                  jobId: job.id,
+                });
 
             if (!alreadyNotified) {
               const notificationData = {
@@ -24668,21 +24667,19 @@ Transcription: ${transcriptText}`;
             // for a whole day. This also dedups against gmailReplyService's
             // poller, which stamps the same emailMessageId. Falls back to a
             // short per-job window only when the email carries no Message-ID.
-            const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+            // Targeted existence query (was: download every notification from the
+            // last 24h and scan in JS — see NotificationExistsOpts in storage.ts).
             const alreadyNotified = inboundMessageId
-              ? recentNotifs.some(
-                  (n) =>
-                    n.type === 'email_reply' &&
-                    (n.metadata as any)?.emailMessageId === inboundMessageId,
-                )
-              : recentNotifs.some(
-                  (n) =>
-                    n.type === 'email_reply' &&
-                    n.jobId === job.id &&
-                    Date.now() - new Date(n.createdAt as any).getTime() <
-                      5 * 60 * 1000,
-                );
+              ? await storage.hasNotificationSince({
+                  type: 'email_reply',
+                  since: new Date(Date.now() - 24 * 60 * 60 * 1000),
+                  metadata: { key: 'emailMessageId', value: inboundMessageId },
+                })
+              : await storage.hasNotificationSince({
+                  type: 'email_reply',
+                  since: new Date(Date.now() - 5 * 60 * 1000),
+                  jobId: job.id,
+                });
 
             if (!alreadyNotified) {
               const notificationData = {

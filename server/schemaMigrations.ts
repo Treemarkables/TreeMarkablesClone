@@ -723,6 +723,28 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE businesses ADD COLUMN IF NOT EXISTS comped_at timestamp`,
     ],
   },
+  {
+    // Notification de-dup + bell reads used to full-scan `notifications` (155k
+    // rows on prod). These back the targeted hasNotificationSince() lookups,
+    // the bounded bell list/summary, and the retention sweep (dbHygiene.ts).
+    name: "notifications-dedupe-indexes",
+    statements: [
+      `CREATE INDEX IF NOT EXISTS notifications_type_job_created_idx
+         ON notifications (type, job_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS notifications_type_quote_created_idx
+         ON notifications (type, quote_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS notifications_archived_created_idx
+         ON notifications (archived, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS notifications_email_message_id_idx
+         ON notifications ((metadata->>'emailMessageId'))
+         WHERE metadata ? 'emailMessageId'`,
+      `CREATE INDEX IF NOT EXISTS notifications_message_id_idx
+         ON notifications ((metadata->>'messageId'))
+         WHERE metadata ? 'messageId'`,
+      `CREATE INDEX IF NOT EXISTS invoices_job_id_idx ON invoices (job_id)`,
+      `CREATE INDEX IF NOT EXISTS jobs_status_completed_date_idx ON jobs (status, completed_date)`,
+    ],
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

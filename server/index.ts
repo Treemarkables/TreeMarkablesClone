@@ -1488,6 +1488,8 @@ The {businessName} Team';
       startHealthCheckWorker();
       const { startGoogleCalendarPoller } = await import('./services/googleCalendarSync');
       startGoogleCalendarPoller();
+      const { startDbHygieneWorker } = await import('./services/dbHygiene');
+      startDbHygieneWorker();
     } catch (err) {
       log(`⚠️ Background worker startup warning: ${(err as Error).message}`, "startup");
     }

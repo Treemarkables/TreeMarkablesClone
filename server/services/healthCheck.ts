@@ -351,6 +351,44 @@ async function sendAlert(failures: CheckResult[]): Promise<void> {
   }
 }
 
+/**
+ * Generic owner alert on the health-check channel (email + admin push). Used by
+ * other guards (dbHygiene.ts) so every "something needs a human" signal lands in
+ * the same inbox with the same shape.
+ */
+export async function alertOwner(opts: {
+  subject: string;
+  intro: string;
+  lines: Array<{ label: string; detail: string }>;
+  outro?: string;
+  pushTitle: string;
+  pushBody: string;
+}): Promise<void> {
+  const when = new Date().toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' });
+  const text =
+    `${opts.intro}\n\n${opts.lines.map((l) => `- ${l.label}: ${l.detail}`).join('\n')}\n\n` +
+    `Checked: ${when} NZ.${opts.outro ? `\n${opts.outro}` : ''}`;
+  const html =
+    `<p>${opts.intro}</p><ul>${opts.lines
+      .map((l) => `<li><strong>${l.label}:</strong> ${l.detail}</li>`)
+      .join('')}</ul><p>Checked ${when} NZ.${opts.outro ? ` ${opts.outro}` : ''}</p>`;
+  try {
+    await emailService.sendEmail({ to: await ownerEmail(), subject: opts.subject, text, html });
+  } catch (e) {
+    console.error('[health] owner alert email failed:', (e as Error).message);
+  }
+  try {
+    await notificationHelper.pushToAdminsWithCustomerMessages({
+      title: opts.pushTitle,
+      body: opts.pushBody,
+      clickAction: '/today',
+      data: { type: 'health_alert' },
+    });
+  } catch (e) {
+    console.error('[health] owner alert push failed:', (e as Error).message);
+  }
+}
+
 async function sendRecovery(): Promise<void> {
   const subject = 'Treemarkables health check recovered';
   const text = 'The previously failing health check is passing again. All monitored systems are back to healthy.';
