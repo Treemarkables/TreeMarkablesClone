@@ -808,20 +808,11 @@ export default function StaffSchedule() {
         </div>
       )}
 
-      {/* ── Day map: where the day's jobs are, with risk flags front and centre ── */}
+      {/* ── Timeline grid + job map (map sits to the right on desktop, under the
+          grid on phones; collapses to a rail so the roster keeps its width) ── */}
       {!isWeekMode && (
-        <ScheduleDayMap
-          dateStr={dateStr}
-          jobs={dayJobs}
-          jobColorMap={jobColorMap}
-          customerMap={customerMap}
-          onOpenJob={openJob}
-        />
-      )}
-
-      {/* ── Timeline grid ── */}
-      {!isWeekMode && (
-      <div ref={timelineRef} className="flex-1 overflow-auto">
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
+      <div ref={timelineRef} className="flex-1 min-w-0 overflow-auto">
         <div style={{ minWidth: STAFF_COL_W + hourLabels.length * MIN_HOUR_COL_W }}>
 
           {/* Hour header */}
@@ -1108,6 +1099,14 @@ export default function StaffSchedule() {
             })
           )}
         </div>
+      </div>
+      <ScheduleDayMap
+        dateStr={dateStr}
+        jobs={dayJobs}
+        jobColorMap={jobColorMap}
+        customerMap={customerMap}
+        onOpenJob={openJob}
+      />
       </div>
       )}
 
