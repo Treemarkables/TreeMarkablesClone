@@ -173,6 +173,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { EquipmentQuickPick, insertAtCaret } from "@/components/EquipmentQuickPick";
 import {
   Popover,
   PopoverContent,
@@ -902,6 +903,22 @@ export function GlobalJobCard({
     ta.style.height = "auto";
     ta.style.height = ta.scrollHeight + "px";
   }, [internalNotesDraft, internalNotesPopupOpen]);
+  // Equipment quick-pick → drop the name at the caret and hand focus back so
+  // the user can keep typing.
+  const insertEquipmentIntoNotesPopup = (name: string) => {
+    const { next, caret } = insertAtCaret(
+      internalNotesDraft,
+      name,
+      internalNotesPopupRef.current,
+    );
+    setInternalNotesDraft(next);
+    setTimeout(() => {
+      const el = internalNotesPopupRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(caret, caret);
+    }, 0);
+  };
 
   // Line item management state
   const [isAddingLineItem, setIsAddingLineItem] = useState(false);
@@ -11625,20 +11642,23 @@ The Treemarkables Team`;
                 <Lock className="h-4 w-4" />
                 Internal Notes
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                onClick={() => {
-                  setSpeechToQuoteContext("internal-notes");
-                  setIsSpeechToQuoteOpen(true);
-                }}
-                data-testid="button-voice-internal-notes"
-              >
-                <Mic className="h-4 w-4 mr-1" />
-                <span className="text-xs">Voice</span>
-              </Button>
+              <div className="flex items-center gap-1">
+                <EquipmentQuickPick onPick={insertEquipmentIntoNotesPopup} />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                  onClick={() => {
+                    setSpeechToQuoteContext("internal-notes");
+                    setIsSpeechToQuoteOpen(true);
+                  }}
+                  data-testid="button-voice-internal-notes"
+                >
+                  <Mic className="h-4 w-4 mr-1" />
+                  <span className="text-xs">Voice</span>
+                </Button>
+              </div>
             </DialogTitle>
             <p className="text-center text-xs text-amber-600 mt-1">
               Staff only — never visible to customers

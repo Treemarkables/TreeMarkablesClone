@@ -29,6 +29,7 @@ import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAut
 import { JobSiteMapSection } from "@/components/JobSiteMapSection";
 import { AiPolishDescription } from "@/components/AiPolishDescription";
 import { JobTimerControl } from "@/components/JobTimerControl";
+import { EquipmentQuickPick, insertAtCaret } from "@/components/EquipmentQuickPick";
 
 // The Web Speech API (webkitSpeechRecognition) is present on `window` inside the
 // iOS Capacitor WKWebView but is a silent no-op there — recognition never starts,
@@ -789,14 +790,27 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             <Lock className="w-3.5 h-3.5" />
             Internal Notes
           </div>
-          <VoiceButton
-            context="internal-notes"
-            onTranscript={(text) => {
-              const next = internalNotes ? `${internalNotes} ${text}` : text;
-              setInternalNotes(next);
-              saveField.mutate({ internalNotes: next });
-            }}
-          />
+          <div className="flex items-center gap-1">
+            <EquipmentQuickPick
+              className="h-7 px-2 text-orange"
+              onPick={(name) => {
+                // Insert at the caret and save straight away (the blur-save
+                // already fired when the menu took focus). No refocus on
+                // mobile — keeps the keyboard down between picks.
+                const { next } = insertAtCaret(internalNotes, name, internalNotesRef.current);
+                setInternalNotes(next);
+                saveField.mutate({ internalNotes: next });
+              }}
+            />
+            <VoiceButton
+              context="internal-notes"
+              onTranscript={(text) => {
+                const next = internalNotes ? `${internalNotes} ${text}` : text;
+                setInternalNotes(next);
+                saveField.mutate({ internalNotes: next });
+              }}
+            />
+          </div>
         </div>
         <div className="text-[12.5px] font-semibold text-orange/70 mb-2.5">
           Staff only — not visible to customers
