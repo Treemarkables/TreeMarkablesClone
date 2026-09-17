@@ -110,6 +110,7 @@ import * as supplierIngest from "./services/supplierInvoiceIngest";
 import { computeJobRiskFlags } from "./services/scheduleRiskFlags";
 import { createTenant } from "./onboarding";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
+import { checkLoginThrottle, clearLoginIdentifierThrottle } from "./security/loginThrottle";
 import {
   ensureRoleTiersSeeded,
   getEmployeePermissions,
@@ -2304,30 +2305,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/auth/login - Create server-side session with employee ID or email+password
-  // Login throttle (2026-07-14 audit L3). In-memory sliding window — no store
-  // dependency; the app runs 2 instances so the effective ceiling is up to 2×
-  // per limit, which still reduces an unthrottled bcrypt oracle to a useless
-  // guessing rate. Per-IP catches spray-across-accounts; per-identifier catches
-  // a distributed attack on one account. A successful login clears its
+  // Login throttle (2026-07-14 audit L3, Wave 1 shared store). Dual-key window —
+  // 30/IP + 10/identifier per 15 min, 429. Postgres-backed so both prod instances
+  // share the ceiling (the in-memory Map doubled under instance_count: 2 and
+  // reset on deploy). Per-IP catches spray-across-accounts; per-identifier
+  // catches a distributed attack on one account. A successful login clears its
   // identifier key so a user who finally remembers their password isn't locked.
-  const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-  const LOGIN_MAX_PER_IP = 30;
-  const LOGIN_MAX_PER_IDENTIFIER = 10;
-  const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-  const bumpLoginKey = (key: string, max: number): boolean => {
-    const now = Date.now();
-    // Lazy prune so the map can't grow unbounded across the window
-    if (loginAttempts.size > 10_000) {
-      for (const [k, v] of loginAttempts) if (v.resetAt <= now) loginAttempts.delete(k);
-    }
-    const entry = loginAttempts.get(key);
-    if (!entry || entry.resetAt <= now) {
-      loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
-      return true;
-    }
-    entry.count += 1;
-    return entry.count <= max;
-  };
+  // Dedicated throttle — not stacked with the public-write limiter.
 
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
@@ -2338,9 +2322,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const identifier = (typeof email === 'string' && email.trim().toLowerCase())
         || (typeof employeeId === 'string' && employeeId)
         || '';
-      const ipOk = bumpLoginKey(`ip:${ip}`, LOGIN_MAX_PER_IP);
-      const idOk = !identifier || bumpLoginKey(`id:${identifier}`, LOGIN_MAX_PER_IDENTIFIER);
-      if (!ipOk || !idOk) {
+      const { allowed: loginAllowed } = await checkLoginThrottle({ ip, identifier });
+      if (!loginAllowed) {
         console.warn(`[SECURITY] Login throttled (ip: ${ip})`);
         return res.status(429).json({
           success: false,
@@ -2441,7 +2424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Successful login: reset this identifier's throttle window.
-      if (identifier) loginAttempts.delete(`id:${identifier}`);
+      if (identifier) await clearLoginIdentifierThrottle(identifier);
 
       // Regenerate session ID on login so any stale cookie in the browser
       // is always replaced by a fresh Set-Cookie. Also defends against
@@ -3575,12 +3558,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Per-IP rate limit for the public contact form (in-memory, resets on deploy).
-  const contactFormRateLimit = new Map<string, { count: number; resetTime: number }>();
-  const CONTACT_FORM_MAX_PER_WINDOW = 5;
-  const CONTACT_FORM_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-
-  // Contact form submission endpoint
+  // Contact form submission endpoint.
+  // Per-IP rate limit is the shared Postgres limiter (`publicMutatingRateLimit`,
+  // 5 / 10 min, same budget as /api/public/mulch-order) — not an in-memory Map.
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
       const { name, email, phone, hearAbout, message, captchaToken, leadSource, website } = req.body;
@@ -3621,24 +3601,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           message: 'Thank you! We will contact you within 24 hours for your free quote.'
         });
       }
-
-      // Per-IP rate limit — a real customer never needs more than a few
-      // submissions; a spam blast from one IP gets cut off.
-      const rlNow = Date.now();
-      const rlEntry = contactFormRateLimit.get(clientIp);
-      if (rlEntry && rlNow < rlEntry.resetTime) {
-        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
-          console.log(`[contact-spam] Rate limit hit by ${clientIp}`);
-          return res.status(429).json({
-            success: false,
-            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
-          });
-        }
-        rlEntry.count++;
-      } else {
-        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
-      }
-      if (contactFormRateLimit.size > 10000) contactFormRateLimit.clear(); // memory backstop
 
       // Cloudflare Turnstile — enforced only when BOTH keys are configured, matching
       // /api/captcha/config so the widget and the server check turn on together
@@ -4044,22 +4006,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       if (typeof website === 'string' && website.trim() !== '') {
         console.log(`[mulch-spam] Honeypot tripped by ${clientIp}`);
         return res.json({ success: true });
-      }
-
-      // Shares the contact form's per-IP budget — same anonymous-visitor class.
-      const rlNow = Date.now();
-      const rlEntry = contactFormRateLimit.get(clientIp);
-      if (rlEntry && rlNow < rlEntry.resetTime) {
-        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
-          console.log(`[mulch-spam] Rate limit hit by ${clientIp}`);
-          return res.status(429).json({
-            success: false,
-            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
-          });
-        }
-        rlEntry.count++;
-      } else {
-        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
       }
 
       const trimmedName = typeof name === 'string' ? name.trim() : '';

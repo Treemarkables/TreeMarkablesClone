@@ -745,6 +745,20 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS jobs_status_completed_date_idx ON jobs (status, completed_date)`,
     ],
   },
+  {
+    // Shared rate-limit counters (login throttle + public write limits).
+    // Global, not tenant-scoped — same class as `session`. No RLS / no
+    // app_tenant grant: both app instances read/write via the owner pool.
+    name: "rate-limits-table",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS rate_limits (
+        key text PRIMARY KEY,
+        count integer NOT NULL DEFAULT 0,
+        reset_at timestamptz NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS rate_limits_reset_at_idx ON rate_limits (reset_at)`,
+    ],
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

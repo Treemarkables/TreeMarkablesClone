@@ -8,6 +8,8 @@ import http from "http";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.ts";
 import { APP_URL } from "./config/appUrl";
+import { createHelmetMiddleware } from "./security/helmetConfig";
+import { publicMutatingRateLimit } from "./security/publicWriteRateLimit";
 import { tenantContextMiddleware } from "./tenancy/tenantMiddleware";
 import { requireApiAuth } from "./tenancy/requireApiAuth";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
@@ -100,6 +102,11 @@ const app = express();
 // Trust proxy - needed for secure cookies behind Replit's proxy
 app.set('trust proxy', 1);
 
+// App-wide security headers (HSTS / CSP / frameguard / Referrer-Policy / nosniff).
+// Must sit before routes so /login and the SPA shell are covered, not just a few
+// media endpoints. See server/security/helmetConfig.ts for CSP notes.
+app.use(createHelmetMiddleware());
+
 // Health check endpoint — registered first, outside session middleware
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
@@ -166,6 +173,10 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+
+// Shared Postgres rate limit on unauthenticated write endpoints (contact, signup,
+// proposal-accept, …). Skips login + AI (those have their own throttles).
+app.use(publicMutatingRateLimit);
 
 // Serve root-level public/ folder as static files (PDFs, guides, etc.)
 app.use(express.static(path.join(process.cwd(), 'public')));
