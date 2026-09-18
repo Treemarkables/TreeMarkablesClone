@@ -10,7 +10,7 @@ import {
   type AuditLogInput,
 } from "./auditLog.ts";
 
-describe("audit_log helpers", () => {
+describe("audit_log helpers", { concurrency: 1 }, () => {
   const captured: AuditLogInput[] = [];
 
   beforeEach(() => {
@@ -53,23 +53,28 @@ describe("audit_log helpers", () => {
   });
 
   it("records login success and failure without throwing", async () => {
+    await writeAuditLog({
+      action: AUDIT_ACTIONS.LOGIN_FAILURE,
+      success: false,
+      ip: "198.51.100.2",
+      userAgent: "test",
+      metadata: { reason: "bad_password", password: "should-not-land" },
+    });
     recordAuthEvent(
       { ip: "198.51.100.2", headers: { "user-agent": "test" } },
       {
-        action: AUDIT_ACTIONS.LOGIN_FAILURE,
-        success: false,
-        metadata: { reason: "bad_password", password: "should-not-land" },
+        action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+        success: true,
+        businessId: "biz-1",
+        actorEmployeeId: "emp-1",
+        targetEmployeeId: "emp-1",
       },
     );
     await writeAuditLog({
-      action: AUDIT_ACTIONS.LOGIN_SUCCESS,
-      success: true,
-      businessId: "biz-1",
+      action: AUDIT_ACTIONS.PASSWORD_CHANGE,
       actorEmployeeId: "emp-1",
-      targetEmployeeId: "emp-1",
+      targetEmployeeId: "emp-2",
     });
-    // recordAuthEvent is fire-and-forget; drain the microtask.
-    await writeAuditLog({ action: AUDIT_ACTIONS.PASSWORD_CHANGE, actorEmployeeId: "emp-1", targetEmployeeId: "emp-2" });
     await new Promise((r) => setImmediate(r));
     const actions = captured.map((e) => e.action);
     assert.ok(actions.includes(AUDIT_ACTIONS.LOGIN_FAILURE));
