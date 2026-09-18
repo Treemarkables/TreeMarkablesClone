@@ -1,49 +1,48 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, type AuthUser } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { apiRequest } from '@/lib/queryClient';
 import { Loader2 } from 'lucide-react';
+
+type LoginStep = 'password' | 'totp' | 'enroll' | 'recovery';
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { login, loginPending, isAuthenticated } = useAuth();
+  const { login, loginPending, isAuthenticated, completeMfa, mfaPending, adoptSession } = useAuth();
   const [error, setError] = useState('');
-  // True once we've successfully posted a login this mount — used to gate
-  // the auto-redirect so we don't yank the user away if they happen to land
-  // on /login while already authenticated (e.g. via the back button).
-  //
-  // Must be STATE, not a ref: the redirect effect below has to re-run when
-  // this flips. The previous ref version stranded users on /login whenever
-  // isAuthenticated was already true before they submitted (valid session
-  // cookie + PWA/bookmark landing on /login) — the login POST succeeded but
-  // isAuthenticated never changed, so the effect never fired and the ref
-  // write couldn't wake it either.
   const [justLoggedIn, setJustLoggedIn] = useState(false);
+  const [step, setStep] = useState<LoginStep>('password');
+  const [totpCode, setTotpCode] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [useRecovery, setUseRecovery] = useState(false);
+  const [enrollSecret, setEnrollSecret] = useState('');
+  const [enrollUri, setEnrollUri] = useState('');
+  const [enrollBusy, setEnrollBusy] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const [pendingUser, setPendingUser] = useState<AuthUser | null>(null);
 
-  // Drive the redirect off the reactive auth state instead of calling
-  // setLocation imperatively right after await login(). Previously the
-  // setCurrentUser inside React Query's onSuccess landed in one microtask
-  // and setLocation in the next; if wouter's location update painted first,
-  // AuthenticatedRoute on /dispatch saw isAuthenticated === false and
-  // bounced the user back to /login with no error shown — looking exactly
-  // like "I had to enter my password twice."
   useEffect(() => {
     if (justLoggedIn && isAuthenticated) {
       setLocation('/dispatch');
     }
   }, [justLoggedIn, isAuthenticated, setLocation]);
 
+  const finishWithUser = (user: AuthUser) => {
+    adoptSession(user);
+    setJustLoggedIn(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
 
-    // Read from the form directly so browser-autofilled values are picked up
-    // even when the React onChange never fired (Chrome/Safari autofill quirk).
     const form = e.currentTarget;
     const readField = (name: string) =>
       (form.elements.namedItem(name) as HTMLInputElement | null)?.value ?? '';
@@ -51,10 +50,6 @@ export default function Login() {
     let email = readField('email').trim();
     let password = readField('password');
 
-    // Password managers (Google PW Manager / Touch-ID flow) sometimes fire the
-    // form's submit a tick before the autofilled values have propagated to
-    // the input's .value. If we read empty fields right now, wait a beat and
-    // try again instead of bouncing the user with "please enter both".
     if (!email || !password) {
       await new Promise((resolve) => setTimeout(resolve, 120));
       email = readField('email').trim();
@@ -68,14 +63,18 @@ export default function Login() {
 
     try {
       const result = await login({ email, password });
+      if (result?.mfaRequired) {
+        setStep('totp');
+        return;
+      }
+      if (result?.mfaEnrollmentRequired) {
+        setStep('enroll');
+        await startEnroll();
+        return;
+      }
       if (result?.success && result?.data) {
-        // The redirect effect above navigates on the next render — whether
-        // isAuthenticated flips now or was already true before the submit.
         setJustLoggedIn(true);
       } else if (result?.success) {
-        // Server said success but didn't send the employee payload — very
-        // unusual, but if it ever happens we'd silently strand the user on
-        // /login without an error. Surface it instead of swallowing it.
         console.error('[Login] success=true but missing data:', result);
         setError('Login succeeded but no user data returned. Please try again.');
       } else {
@@ -85,6 +84,72 @@ export default function Login() {
       setError(err.message || 'Invalid email or password');
     }
   };
+
+  const handleTotp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const code = useRecovery ? recoveryCode.trim() : totpCode.trim();
+    if (!code) {
+      setError(useRecovery ? 'Enter a recovery code' : 'Enter the 6-digit code');
+      return;
+    }
+    try {
+      const result = await completeMfa({ code, recovery: useRecovery });
+      if (result?.success && result?.data) {
+        setJustLoggedIn(true);
+      } else {
+        setError(result?.message || 'That code is not valid');
+      }
+    } catch (err: any) {
+      setError(err.message || 'That code is not valid');
+    }
+  };
+
+  const startEnroll = async () => {
+    setEnrollBusy(true);
+    setError('');
+    try {
+      const res = await apiRequest('POST', '/api/auth/mfa/setup');
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || 'Could not start authenticator setup');
+      setEnrollSecret(json.data.secretGrouped || json.data.secret);
+      setEnrollUri(json.data.otpauthUri);
+    } catch (err: any) {
+      setError(err.message || 'Could not start authenticator setup');
+    } finally {
+      setEnrollBusy(false);
+    }
+  };
+
+  const handleEnroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (totpCode.trim().length !== 6) {
+      setError('Enter the 6-digit code from your authenticator app');
+      return;
+    }
+    setEnrollBusy(true);
+    try {
+      const res = await apiRequest('POST', '/api/auth/mfa/enable', { code: totpCode.trim() });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || 'Could not enable authenticator');
+      const codes: string[] | undefined = json.data?.recoveryCodes;
+      const { recoveryCodes: _ignored, ...user } = json.data as AuthUser & { recoveryCodes?: string[] };
+      if (codes && codes.length > 0) {
+        setRecoveryCodes(codes);
+        setPendingUser(user);
+        setStep('recovery');
+      } else {
+        finishWithUser(user);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Could not enable authenticator');
+    } finally {
+      setEnrollBusy(false);
+    }
+  };
+
+  const busy = loginPending || mfaPending || enrollBusy;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 dark:from-gray-900 dark:to-gray-800 p-4">
@@ -97,64 +162,224 @@ export default function Login() {
               className="w-16 h-16 rounded-full"
             />
           </div>
-          <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
+          <CardTitle className="text-2xl font-bold">
+            {step === 'password' && 'Welcome Back'}
+            {step === 'totp' && 'Authenticator code'}
+            {step === 'enroll' && 'Set up authenticator'}
+            {step === 'recovery' && 'Save your recovery codes'}
+          </CardTitle>
           <CardDescription>
-            Sign in to access your Inflow dashboard
+            {step === 'password' && 'Sign in to access your Inflow dashboard'}
+            {step === 'totp' && (useRecovery
+              ? 'Enter one of the recovery codes you saved when you turned this on'
+              : 'Open your authenticator app and enter the 6-digit code')}
+            {step === 'enroll' && 'Your organisation requires an authenticator app before you can continue'}
+            {step === 'recovery' && 'Store these somewhere safe. They will not be shown again.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            <div className="space-y-2">
-              <Label htmlFor="email" data-testid="label-email">
-                Email
-              </Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Enter your email"
-                disabled={loginPending}
-                data-testid="input-email"
-                autoComplete="email"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" data-testid="label-password">
-                Password
-              </Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Enter your password"
-                disabled={loginPending}
-                data-testid="input-password"
-                autoComplete="current-password"
-              />
-            </div>
+          {step === 'password' && (
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              <div className="space-y-2">
+                <Label htmlFor="email" data-testid="label-email">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  disabled={busy}
+                  data-testid="input-email"
+                  autoComplete="email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" data-testid="label-password">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  disabled={busy}
+                  data-testid="input-password"
+                  autoComplete="current-password"
+                />
+              </div>
 
-            {error && (
-              <Alert variant="destructive" data-testid="alert-error">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+              {error && (
+                <Alert variant="destructive" data-testid="alert-error">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loginPending}
-              data-testid="button-login"
-            >
-              {loginPending ? (
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={busy}
+                data-testid="button-login"
+              >
+                {loginPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  'Login'
+                )}
+              </Button>
+            </form>
+          )}
+
+          {step === 'totp' && (
+            <form onSubmit={handleTotp} className="space-y-4">
+              {useRecovery ? (
+                <div className="space-y-2">
+                  <Label htmlFor="recovery-code">Recovery code</Label>
+                  <Input
+                    id="recovery-code"
+                    value={recoveryCode}
+                    onChange={(e) => setRecoveryCode(e.target.value)}
+                    placeholder="ABCD-EFGH"
+                    autoComplete="one-time-code"
+                    disabled={busy}
+                    data-testid="input-mfa-recovery"
+                  />
+                </div>
+              ) : (
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={totpCode}
+                    onChange={setTotpCode}
+                    disabled={busy}
+                    data-testid="input-mfa-totp"
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+              )}
+
+              {error && (
+                <Alert variant="destructive" data-testid="alert-error">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <Button type="submit" className="w-full" disabled={busy} data-testid="button-mfa-verify">
+                {mfaPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Checking...
+                  </>
+                ) : (
+                  'Continue'
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                disabled={busy}
+                onClick={() => {
+                  setUseRecovery(!useRecovery);
+                  setError('');
+                }}
+              >
+                {useRecovery ? 'Use authenticator code' : 'Use a recovery code'}
+              </Button>
+            </form>
+          )}
+
+          {step === 'enroll' && (
+            <form onSubmit={handleEnroll} className="space-y-4">
+              {enrollSecret ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  <p className="text-sm text-muted-foreground">
+                    Add this account in Google Authenticator, 1Password, or Authy, then enter the code it shows.
+                  </p>
+                  <div className="rounded-md border border-border bg-muted/40 p-3 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Setup key</p>
+                    <p className="font-mono text-sm tracking-wider break-all" data-testid="text-mfa-secret">
+                      {enrollSecret}
+                    </p>
+                  </div>
+                  {enrollUri && (
+                    <Button type="button" variant="outline" className="w-full" asChild>
+                      <a href={enrollUri}>Open in authenticator app</a>
+                    </Button>
+                  )}
+                  <div className="flex justify-center">
+                    <InputOTP
+                      maxLength={6}
+                      value={totpCode}
+                      onChange={setTotpCode}
+                      disabled={busy}
+                      data-testid="input-mfa-enroll-code"
+                    >
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
                 </>
               ) : (
-                'Login'
+                <p className="text-sm text-muted-foreground text-center">Preparing authenticator setup...</p>
               )}
-            </Button>
-          </form>
+
+              {error && (
+                <Alert variant="destructive" data-testid="alert-error">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <Button type="submit" className="w-full" disabled={busy || !enrollSecret} data-testid="button-mfa-enroll">
+                {enrollBusy ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Checking...
+                  </>
+                ) : (
+                  'Verify and continue'
+                )}
+              </Button>
+            </form>
+          )}
+
+          {step === 'recovery' && recoveryCodes && (
+            <div className="space-y-4">
+              <ul className="grid grid-cols-2 gap-2 font-mono text-sm">
+                {recoveryCodes.map((code) => (
+                  <li key={code} className="rounded-md border border-border px-2 py-1 text-center">
+                    {code}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                className="w-full"
+                data-testid="button-mfa-recovery-continue"
+                onClick={() => {
+                  if (pendingUser) finishWithUser(pendingUser);
+                }}
+              >
+                I have saved these codes
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -30,6 +30,8 @@ const OWNER_PATHS = [
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/dev-test-login",
+  // Wave 2: TOTP challenge / enroll-at-login run before employeeId is set.
+  "/api/auth/mfa",
   "/api/signup",
   "/api/stripe/webhook",
   "/api/health",

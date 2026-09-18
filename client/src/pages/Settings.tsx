@@ -102,8 +102,8 @@ const settingsSections: SettingSection[] = [
       },
       {
         id: "security",
-        title: "Security & API",
-        description: "Password settings, API keys and access control",
+        title: "Security",
+        description: "Authenticator app, signed-in devices and sign out everywhere",
         icon: KeyRound,
         path: "/settings/security"
       },

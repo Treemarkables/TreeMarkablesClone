@@ -13,6 +13,14 @@ declare module 'express-session' {
   interface SessionData {
     employeeId?: string;
     businessId?: string;
+    pendingMfaEmployeeId?: string;
+    pendingMfaBusinessId?: string;
+    pendingMfaPurpose?: 'challenge' | 'enroll';
+    pendingTotpSecret?: string;
+    sessionCreatedAt?: string;
+    userAgent?: string;
+    ip?: string;
+    mfaVerified?: boolean;
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
@@ -111,6 +119,9 @@ import { computeJobRiskFlags } from "./services/scheduleRiskFlags";
 import { createTenant } from "./onboarding";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import { checkLoginThrottle, clearLoginIdentifierThrottle } from "./security/loginThrottle";
+import { disableMfa, getMfaRow, mfaLoginGate } from "./security/mfaService";
+import { beginPendingMfaSession, establishEmployeeSession } from "./security/authSession";
+import { registerMfaAndSessionRoutes } from "./security/mfaRoutes";
 import {
   ensureRoleTiersSeeded,
   getEmployeePermissions,
@@ -2405,86 +2416,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Mirror /api/auth/me's payload (permissions + plan entitlements) so the
-      // client's user object is complete from the first render — the login
-      // response is cached as the current user (and seeds the /me query), so a
-      // slimmer payload here left PlanGated nav (Safety, One Dashboard) hidden.
-      await ensureRoleTiersSeeded().catch(() => {});
-      const loginPermsSet = await getEmployeePermissions(employee).catch(() => new Set<string>());
-      let loginPlanKey = 'freemium';
-      let loginEntitlements: string[] = [];
-      if (employee.businessId) {
-        // resolveEntitlements handles the comped Treemarkables case (full
-        // Business tier + every add-on) — no special-casing here.
-        try {
-          const ent = await resolveEntitlements(employee.businessId);
-          loginPlanKey = ent.planKey;
-          loginEntitlements = Array.from(ent.entitlements);
-        } catch { /* fail-open: empty entitlements */ }
-      }
-
       // Successful login: reset this identifier's throttle window.
       if (identifier) await clearLoginIdentifierThrottle(identifier);
 
-      // Regenerate session ID on login so any stale cookie in the browser
-      // is always replaced by a fresh Set-Cookie. Also defends against
-      // session fixation.
-      req.session.regenerate((regenErr) => {
-        if (regenErr) {
-          console.error('Session regenerate error:', regenErr);
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to create session'
-          });
-        }
+      // Wave 2 MFA: enrolled users must enter a TOTP (or recovery) code.
+      // Unenrolled field users skip this unless the org has flipped
+      // mfa_enforcement to `required` (default is optional).
+      const mfaGate = await mfaLoginGate(employee);
+      if (mfaGate === "challenge" || mfaGate === "enroll") {
+        return beginPendingMfaSession(req, res, employee, mfaGate);
+      }
 
-        req.session.employeeId = employee.id;
-        // Tenancy: stamp the session with the employee's business so requests can be
-        // tenant-scoped (single-tenant today → always the Treemarkables id).
-        req.session.businessId = employee.businessId ?? undefined;
-
-        req.session.save((err) => {
-          if (err) {
-            console.error('Session save error:', err);
-            return res.status(500).json({
-              success: false,
-              message: 'Failed to create session'
-            });
-          }
-
-          // Migration safety: kill any legacy domain-scoped session cookie
-          // (.treemarkables.co.nz) that may still be in the browser jar from
-          // before the host-only cookie migration. Without this, the browser
-          // sends both old and new cookies and the server can read the old
-          // (invalid) one first, returning 401 and forcing a second login.
-          res.clearCookie('treemarkables.sid', {
-            path: '/',
-            httpOnly: true,
-            secure: true,
-            sameSite: 'none',
-            domain: '.treemarkables.co.nz',
-          });
-
-          res.json({
-            success: true,
-            data: {
-              id: employee.id,
-              firstName: employee.firstName,
-              lastName: employee.lastName,
-              email: employee.email,
-              role: employee.role,
-              phone: employee.phone,
-              status: employee.status,
-              // Tenant discriminator — client-side tenant gating (e.g. the
-              // platform-operator Settings tiles) keys off this.
-              businessId: employee.businessId ?? null,
-              permissions: Array.from(loginPermsSet),
-              planKey: loginPlanKey,
-              entitlements: loginEntitlements,
-            }
-          });
-        });
-      });
+      return establishEmployeeSession(req, res, employee, { mfaVerified: false, mfaEnabled: false });
     } catch (error) {
       console.error('Login error:', error);
       res.status(500).json({
@@ -2535,6 +2478,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch { /* fail-open: empty entitlements */ }
       }
 
+      const mfaRow = await getMfaRow(employee.id).catch(() => undefined);
+
       res.json({
         success: true,
         data: {
@@ -2555,6 +2500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           permissions: Array.from(permsSet),
           planKey,
           entitlements,
+          mfaEnabled: Boolean(mfaRow?.enabled),
         }
       });
     } catch (error) {
@@ -2610,6 +2556,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  registerMfaAndSessionRoutes(app, { requireSession });
+
   // DELETE /api/auth/account - Permanently delete the signed-in user's own account.
   // Required by App Store Guideline 5.1.1(v): an app that supports account creation
   // must let the user initiate deletion from within the app. We scrub all personal
@@ -2630,6 +2578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.anonymizeEmployeeForDeletion(employeeId);
+      await disableMfa(employeeId).catch(() => {});
       console.log('[ACCOUNT-DELETE] Scrubbed + deactivated employee:', employeeId, 'business:', employee.businessId);
 
       req.session.destroy((err) => {

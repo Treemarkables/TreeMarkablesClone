@@ -41,3 +41,32 @@ export async function clearLoginIdentifierThrottle(identifier: string): Promise<
   if (!identifier) return;
   await resetRateLimitKey(`login:id:${identifier}`);
 }
+
+// MFA verify/recovery is a separate window so a typo'd authenticator code does
+// not burn the password-login identifier budget (and vice versa).
+export const MFA_MAX_PER_IDENTIFIER = 10;
+
+export async function checkMfaThrottle(opts: {
+  ip: string;
+  employeeId: string;
+}): Promise<{ allowed: boolean }> {
+  const ipResult = await incrementRateLimit(`mfa:ip:${opts.ip}`, LOGIN_WINDOW_MS);
+  if (ipResult.count > LOGIN_MAX_PER_IP) {
+    return { allowed: false };
+  }
+  if (opts.employeeId) {
+    const idResult = await incrementRateLimit(
+      `mfa:id:${opts.employeeId}`,
+      LOGIN_WINDOW_MS,
+    );
+    if (idResult.count > MFA_MAX_PER_IDENTIFIER) {
+      return { allowed: false };
+    }
+  }
+  return { allowed: true };
+}
+
+export async function clearMfaThrottle(employeeId: string): Promise<void> {
+  if (!employeeId) return;
+  await resetRateLimitKey(`mfa:id:${employeeId}`);
+}

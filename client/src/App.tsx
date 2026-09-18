@@ -148,6 +148,7 @@ const DocumentBuilderPage = lazy(() => import("@/pages/DocumentBuilderPage"));
 const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
 const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
 const SettingsAccount = lazy(() => import("@/pages/SettingsAccount"));
+const SettingsSecurity = lazy(() => import("@/pages/SettingsSecurity"));
 const SettingsChannels = lazy(() => import("@/pages/SettingsChannels"));
 const SettingsSuppliers = lazy(() => import("@/pages/SettingsSuppliers"));
 const SupplierInvoices = lazy(() => import("@/pages/SupplierInvoices"));
@@ -1695,10 +1696,7 @@ function Router() {
       </Route>
       <Route path="/settings/security">
         <SidebarLayout>
-          <SettingsPlaceholder 
-            title="Security & API"
-            description="Password settings, API keys and access control"
-          />
+          <SettingsSecurity />
         </SidebarLayout>
       </Route>
       <Route path="/settings/forms">
