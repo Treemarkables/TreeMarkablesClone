@@ -1,0 +1,25 @@
+# Weekly npm updates for the app lockfile (Wave 3).
+# Dependabot PRs still edit package.json — that is the point of the alert;
+# humans review before merge (package.json stays tooling-owned for agents).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+  - package-ecosystem: npm
+    directory: /inflow-site
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+  - package-ecosystem: npm
+    directory: /golf-site
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3

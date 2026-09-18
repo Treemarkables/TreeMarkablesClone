@@ -1,0 +1,61 @@
+{
+  "comment": "High/critical GHSA ids that npm audit reports on the committed lockfile today. package.json is off-limits in this repo, so these cannot be bumped in Wave 3 without a dedicated dependency PR. scripts/npmAuditCi.mjs fails the typecheck CI job on any OTHER high/critical advisory. Review and drop rows when a bump PR lands. expires is a reminder, not an automatic un-allow.",
+  "ghsas": [
+    {
+      "id": "GHSA-gpj5-g38j-94v9",
+      "package": "drizzle-orm",
+      "severity": "high",
+      "reason": "Direct dep (^0.39.3). Fix is 0.45.2 (semver-major). Identifier-escaping SQL injection; needs a dedicated ORM bump + query audit, not a drive-by Wave 3 change.",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-jmr9-qjv8-65gv",
+      "package": "extract-zip",
+      "severity": "high",
+      "reason": "Transitive via puppeteer ^24.40.0. Fix is puppeteer 25.x (semver-major). extract-zip is not called on untrusted archives in our PDF/screenshot path.",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-7pqw-9j4j-h8q3",
+      "package": "extract-zip",
+      "severity": "high",
+      "reason": "Same puppeteer → extract-zip chain as GHSA-jmr9-qjv8-65gv. Needs the puppeteer 25 bump.",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-p6gq-j5cr-w38f",
+      "package": "nodemailer",
+      "severity": "high",
+      "reason": "Direct dep (^7.0.6). Fix is nodemailer 10.x (semver-major) or ≥9.0.1 for this id. We do not pass message-level `raw` / disableFileAccess bypasses. Dedicated mailer bump PR.",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-2x7j-588g-ccc2",
+      "package": "nodemailer",
+      "severity": "high",
+      "reason": "Direct dep (^7.0.6). Quadratic addressparser DoS; fix is ≥9.1.0 / 10.x. Dedicated mailer bump PR (package.json off-limits here).",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-c2qf-rxjj-qqgw",
+      "package": "semver",
+      "severity": "high",
+      "reason": "Transitive via imap ^0.8.17 → utf7 → semver 5.x ReDoS. imap is unmaintained; replacing it is a Gmail-poller project, not Wave 3.",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-f88m-g3jw-g9cj",
+      "package": "sharp",
+      "severity": "high",
+      "reason": "Direct dep (^0.34.4). Fix is sharp 0.35.x (semver-minor flagged as major by npm). libvips CVEs; photo pipeline needs a dedicated sharp bump + regression check.",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-rgj7-g3m4-5g8c",
+      "package": "sharp",
+      "severity": "high",
+      "reason": "Same sharp 0.34.4 pin; libheif CVEs fixed in 0.35.4. Dedicated bump PR.",
+      "expires": "2026-12-18"
+    }
+  ]
+}

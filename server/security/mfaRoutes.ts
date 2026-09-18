@@ -33,6 +33,7 @@ import {
   listEmployeeSessions,
   toSessionListItem,
 } from "./sessionHygiene";
+import { AUDIT_ACTIONS, recordAuthEvent } from "./auditLog";
 
 type Middleware = (req: Request, res: Response, next: () => void) => void | Promise<void>;
 
@@ -221,6 +222,14 @@ export function registerMfaAndSessionRoutes(
 
       const match = await verifyStoredTotp(pending.employeeId, code);
       if (!match.valid) {
+        recordAuthEvent(req, {
+          action: AUDIT_ACTIONS.LOGIN_FAILURE,
+          success: false,
+          businessId: pending.businessId ?? null,
+          actorEmployeeId: pending.employeeId,
+          targetEmployeeId: pending.employeeId,
+          metadata: { reason: "mfa_invalid" },
+        });
         return res.status(401).json({ success: false, message: "That code is not valid. Try the next one from the app." });
       }
       const employee = await storage.getEmployee(pending.employeeId);
@@ -244,6 +253,14 @@ export function registerMfaAndSessionRoutes(
       if (!(await throttleOrReject(req, res, pending.employeeId))) return;
       const match = await consumeRecoveryCode(pending.employeeId, req.body?.code);
       if (!match.valid) {
+        recordAuthEvent(req, {
+          action: AUDIT_ACTIONS.LOGIN_FAILURE,
+          success: false,
+          businessId: pending.businessId ?? null,
+          actorEmployeeId: pending.employeeId,
+          targetEmployeeId: pending.employeeId,
+          metadata: { reason: "mfa_recovery_invalid" },
+        });
         return res.status(401).json({ success: false, message: "That recovery code is not valid" });
       }
       const employee = await storage.getEmployee(pending.employeeId);

@@ -8,6 +8,7 @@ import type { Employee } from "@shared/schema";
 import { resolveEntitlements } from "../tenancy/entitlements";
 import { ensureRoleTiersSeeded, getEmployeePermissions } from "../permissions";
 import { MFA_PENDING_MAX_AGE_MS, type PendingMfaPurpose } from "./mfaGate";
+import { AUDIT_ACTIONS, recordAuthEvent } from "./auditLog";
 
 export { MFA_PENDING_MAX_AGE_MS };
 export type { PendingMfaPurpose };
@@ -155,6 +156,17 @@ export async function establishEmployeeSession(
     delete req.session.pendingMfaPurpose;
     delete req.session.pendingTotpSecret;
     stampSessionClientMeta(req);
+    recordAuthEvent(req, {
+      action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+      success: true,
+      businessId: employee.businessId ?? null,
+      actorEmployeeId: employee.id,
+      targetEmployeeId: employee.id,
+      metadata: {
+        method: opts?.mfaVerified ? "mfa" : "password",
+        mfaVerified: Boolean(opts?.mfaVerified),
+      },
+    });
     saveAndRespond(req, res, { success: true, data: payload });
   });
 }

@@ -1922,6 +1922,28 @@ export const employeeMfaRecoveryCodes = pgTable("employee_mfa_recovery_codes", {
 export type EmployeeMfa = typeof employeeMfa.$inferSelect;
 export type EmployeeMfaRecoveryCode = typeof employeeMfaRecoveryCodes.$inferSelect;
 
+// Auth / security audit trail (Wave 3). Neon may already have this table;
+// boot migration is CREATE TABLE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS so
+// we never reshape a primary key. Writes go through ownerDb (login is an
+// owner-path, same as MFA) and fail-open so a missing column cannot lock
+// field login. business_settings.audit_logging is a leftover toggle and is
+// NOT a kill-switch for these security events.
+export const auditLog = pgTable("audit_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id"),
+  actorEmployeeId: varchar("actor_employee_id"),
+  targetEmployeeId: varchar("target_employee_id"),
+  action: text("action").notNull(),
+  success: boolean("success").notNull().default(true),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type AuditLog = typeof auditLog.$inferSelect;
+export type InsertAuditLog = typeof auditLog.$inferInsert;
+
 // Schedule/Calendar Events Schema
 export const scheduleEvents = pgTable("schedule_events", {
   businessId: varchar("business_id"),

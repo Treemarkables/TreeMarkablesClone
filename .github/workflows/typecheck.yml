@@ -5,6 +5,10 @@
 # error — see scripts/typecheckChanged.mjs. Advisory infrastructure only:
 # it does not block the DO autodeploy (that triggers on push to main), it
 # just surfaces a red X on the PR before merging.
+#
+# Wave 3 also runs npm audit (high/critical) against the committed lockfile.
+# Known noise is allowlisted in docs/security/npm-audit-allowlist.json —
+# a new high/critical GHSA still fails this job.
 name: typecheck
 
 on:
@@ -24,7 +28,10 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+
+      - name: npm audit (high/critical)
+        run: node scripts/npmAuditCi.mjs
 
       - name: Typecheck changed files
         run: node scripts/typecheckChanged.mjs origin/${{ github.base_ref }}

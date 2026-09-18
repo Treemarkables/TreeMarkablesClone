@@ -122,6 +122,7 @@ import { checkLoginThrottle, clearLoginIdentifierThrottle } from "./security/log
 import { disableMfa, getMfaRow, mfaLoginGate } from "./security/mfaService";
 import { beginPendingMfaSession, establishEmployeeSession } from "./security/authSession";
 import { registerMfaAndSessionRoutes } from "./security/mfaRoutes";
+import { AUDIT_ACTIONS, recordAuthEvent } from "./security/auditLog";
 import {
   ensureRoleTiersSeeded,
   getEmployeePermissions,
@@ -2336,6 +2337,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { allowed: loginAllowed } = await checkLoginThrottle({ ip, identifier });
       if (!loginAllowed) {
         console.warn(`[SECURITY] Login throttled (ip: ${ip})`);
+        recordAuthEvent(req, {
+          action: AUDIT_ACTIONS.LOGIN_FAILURE,
+          success: false,
+          metadata: { reason: "throttled", identifier },
+        });
         return res.status(429).json({
           success: false,
           message: 'Too many login attempts. Try again in a few minutes.'
@@ -2348,6 +2354,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         employee = await storage.getEmployeeByEmail(email);
 
         if (!employee) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            metadata: { reason: "unknown_email", identifier },
+          });
           return res.status(401).json({
             success: false,
             message: 'Invalid email or password'
@@ -2356,6 +2367,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Verify password if it exists
         if (!employee.password) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            businessId: employee.businessId ?? null,
+            actorEmployeeId: employee.id,
+            targetEmployeeId: employee.id,
+            metadata: { reason: "password_not_configured", identifier },
+          });
           return res.status(401).json({
             success: false,
             message: 'Password authentication not configured for this account'
@@ -2366,6 +2385,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const passwordMatch = await bcrypt.compare(password, employee.password);
 
         if (!passwordMatch) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            businessId: employee.businessId ?? null,
+            actorEmployeeId: employee.id,
+            targetEmployeeId: employee.id,
+            metadata: { reason: "bad_password", identifier },
+          });
           return res.status(401).json({
             success: false,
             message: 'Invalid email or password'
@@ -2379,6 +2406,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (!allowEmployeeIdLogin) {
           console.warn(`[SECURITY] Attempted employeeId login blocked (employeeId: ${employeeId}, env: ${process.env.NODE_ENV})`);
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            metadata: { reason: "employee_id_login_blocked", identifier },
+          });
           return res.status(401).json({
             success: false,
             message: 'Invalid credentials'
@@ -2389,6 +2421,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         employee = await storage.getEmployee(employeeId);
 
         if (!employee) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            metadata: { reason: "invalid_employee_id", identifier },
+          });
           return res.status(401).json({
             success: false,
             message: 'Invalid employee ID'
@@ -2409,6 +2446,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (employee.businessId && !TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
         const biz = await storage.getBusinessById(employee.businessId);
         if (biz?.status === 'suspended') {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            businessId: employee.businessId ?? null,
+            actorEmployeeId: employee.id,
+            targetEmployeeId: employee.id,
+            metadata: { reason: "suspended", identifier },
+          });
           return res.status(403).json({
             success: false,
             message: 'This account has been suspended. Please contact support.',
@@ -18784,7 +18829,43 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       delete dataToUpdate.createdAt;
       delete dataToUpdate.updatedAt;
 
+      const beforeEmployee = isAdmin ? await storage.getEmployee(req.params.id) : null;
       const employee = await storage.updateEmployee(req.params.id, dataToUpdate);
+      if (isAdmin) {
+        const roleChanged =
+          (dataToUpdate.role !== undefined && dataToUpdate.role !== beforeEmployee?.role) ||
+          (dataToUpdate.roleTierId !== undefined && dataToUpdate.roleTierId !== beforeEmployee?.roleTierId);
+        const permsChanged = dataToUpdate.permissionOverrides !== undefined;
+        if (roleChanged) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.ROLE_CHANGE,
+            success: true,
+            businessId: caller.businessId ?? beforeEmployee?.businessId ?? null,
+            actorEmployeeId: callerId,
+            targetEmployeeId: req.params.id,
+            metadata: {
+              via: "put_employee",
+              beforeRole: beforeEmployee?.role ?? null,
+              afterRole: employee.role ?? null,
+              beforeRoleTierId: beforeEmployee?.roleTierId ?? null,
+              afterRoleTierId: employee.roleTierId ?? null,
+            },
+          });
+        }
+        if (permsChanged) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+            success: true,
+            businessId: caller.businessId ?? beforeEmployee?.businessId ?? null,
+            actorEmployeeId: callerId,
+            targetEmployeeId: req.params.id,
+            metadata: {
+              via: "put_employee",
+              permissionOverrides: dataToUpdate.permissionOverrides,
+            },
+          });
+        }
+      }
       res.json({
         success: true,
         data: sanitizeEmployee(employee),
@@ -18847,6 +18928,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // Update employee with hashed password
       const employee = await storage.updateEmployee(req.params.id, {
         password: hashedPassword
+      });
+
+      recordAuthEvent(req, {
+        action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+        success: true,
+        businessId: caller.businessId ?? employee.businessId ?? null,
+        actorEmployeeId: callerId,
+        targetEmployeeId: req.params.id,
+        metadata: { via: "patch_password", self: req.params.id === callerId },
       });
       
       res.json({
@@ -18961,6 +19051,22 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       const updated = await storage.updateRoleTier(req.params.id, updates);
 
+      if (Array.isArray(body.permissions)) {
+        recordAuthEvent(req, {
+          action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+          success: true,
+          businessId: req.session.businessId ?? null,
+          actorEmployeeId: req.session.employeeId ?? null,
+          targetEmployeeId: null,
+          metadata: {
+            via: "put_role_tier",
+            tierId: req.params.id,
+            tierName: updated.name,
+            permissions: body.permissions,
+          },
+        });
+      }
+
       if (body.isDefault === true) {
         const all = await storage.getAllRoleTiers();
         await Promise.all(
@@ -19012,7 +19118,20 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         const tier = await storage.getRoleTier(roleTierId);
         if (!tier) return res.status(404).json({ success: false, message: 'Tier not found' });
       }
+      const before = await storage.getEmployee(req.params.id);
       const updated = await storage.updateEmployee(req.params.id, { roleTierId } as any);
+      recordAuthEvent(req, {
+        action: AUDIT_ACTIONS.ROLE_CHANGE,
+        success: true,
+        businessId: req.session.businessId ?? before?.businessId ?? updated.businessId ?? null,
+        actorEmployeeId: req.session.employeeId ?? null,
+        targetEmployeeId: req.params.id,
+        metadata: {
+          via: "patch_role_tier",
+          beforeRoleTierId: before?.roleTierId ?? null,
+          afterRoleTierId: roleTierId ?? null,
+        },
+      });
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error setting employee tier:', error);
@@ -19032,7 +19151,20 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (!check.ok) {
         return res.status(400).json({ success: false, message: `Unknown permission keys: ${check.bad.join(', ')}` });
       }
+      const before = await storage.getEmployee(req.params.id);
       const updated = await storage.updateEmployee(req.params.id, { permissionOverrides: overrides } as any);
+      recordAuthEvent(req, {
+        action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+        success: true,
+        businessId: req.session.businessId ?? before?.businessId ?? updated.businessId ?? null,
+        actorEmployeeId: req.session.employeeId ?? null,
+        targetEmployeeId: req.params.id,
+        metadata: {
+          via: "patch_permissions",
+          before: before?.permissionOverrides ?? null,
+          after: overrides,
+        },
+      });
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error updating employee permission overrides:', error);
@@ -19130,6 +19262,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // Update employee with new password
       await storage.updateEmployee(employee.id, {
         password: hashedPassword
+      });
+
+      recordAuthEvent(req, {
+        action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+        success: true,
+        businessId: req.session.businessId ?? employee.businessId ?? null,
+        actorEmployeeId: req.session.employeeId ?? null,
+        targetEmployeeId: employee.id,
+        metadata: { via: "emergency_password_reset", identifier: email.toLowerCase() },
       });
       
       res.json({

@@ -21,7 +21,7 @@ attached_assets/screenshots/*
 
 # Dependencies
 node_modules/
-package-lock.json
+# package-lock.json is committed (Wave 3 Dependabot + npm audit CI).
 yarn.lock
 
 # Build output
