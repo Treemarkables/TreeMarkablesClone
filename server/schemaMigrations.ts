@@ -759,6 +759,57 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS rate_limits_reset_at_idx ON rate_limits (reset_at)`,
     ],
   },
+  {
+    // Wave 2: optional TOTP MFA per employee + org enforce-later switch.
+    // Secrets are AES-GCM ciphertext. Recovery codes are HMAC hashes.
+    // Default mfa_enforcement='optional' so unenrolled field login is unchanged.
+    name: "employee-mfa",
+    statements: [
+      `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS mfa_enforcement text NOT NULL DEFAULT 'optional'`,
+      `CREATE TABLE IF NOT EXISTS employee_mfa (
+        employee_id varchar PRIMARY KEY REFERENCES employees(id) ON DELETE CASCADE,
+        business_id varchar,
+        totp_secret_ciphertext text NOT NULL,
+        enabled boolean NOT NULL DEFAULT false,
+        enrolled_at timestamp,
+        last_verified_at timestamp,
+        last_used_counter integer,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS employee_mfa_business_idx ON employee_mfa (business_id)`,
+      `CREATE TABLE IF NOT EXISTS employee_mfa_recovery_codes (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        employee_id varchar NOT NULL REFERENCES employee_mfa(employee_id) ON DELETE CASCADE,
+        business_id varchar,
+        code_hash text NOT NULL,
+        used_at timestamp,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS employee_mfa_recovery_employee_idx ON employee_mfa_recovery_codes (employee_id)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      for (const table of ["employee_mfa", "employee_mfa_recovery_codes"]) {
+        await client.query(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+        const pol = await client.query(
+          `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = $1::regclass LIMIT 1`,
+          [table],
+        );
+        if (pol.rowCount === 0) {
+          await client.query(
+            `CREATE POLICY tenant_isolation ON ${table}
+               USING (business_id = nullif(current_setting('app.current_business', true), ''))
+               WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+          );
+          console.log(`[schema] created tenant_isolation policy on ${table}`);
+        }
+        if ((hasRole.rowCount ?? 0) > 0) {
+          await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO app_tenant`);
+        }
+      }
+    },
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;

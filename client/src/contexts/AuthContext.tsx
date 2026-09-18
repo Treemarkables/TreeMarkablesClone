@@ -13,6 +13,7 @@ export interface AuthUser extends Employee {
   // "addon:*"), for plan-based UI gating. Mirrors the server feature gates.
   planKey?: string;
   entitlements?: string[];
+  mfaEnabled?: boolean;
 }
 
 interface AuthContextType {
@@ -33,6 +34,9 @@ interface AuthContextType {
   can: (requires: string) => boolean;
   login: (credentials: { employeeId?: string; email?: string; password?: string }) => Promise<any>;
   loginPending: boolean;
+  completeMfa: (opts: { code: string; recovery?: boolean }) => Promise<any>;
+  mfaPending: boolean;
+  adoptSession: (user: AuthUser) => void;
   logout: () => void;
 }
 
@@ -133,9 +137,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.success && data.data) {
         console.log('Login Success - User Data:', data.data);
         console.log('Login Success - Role:', data.data.role, typeof data.data.role);
-        setCurrentUser(data.data);
+        const { recoveryCodes: _codes, ...user } = data.data as AuthUser & { recoveryCodes?: string[] };
+        setCurrentUser(user);
         // Set the query data directly instead of invalidating to prevent race condition
-        queryClient.setQueryData(['/api/auth/me'], { success: true, data: data.data });
+        queryClient.setQueryData(['/api/auth/me'], { success: true, data: user });
+      }
+    },
+  });
+
+  const mfaMutation = useMutation({
+    mutationFn: async (opts: { code: string; recovery?: boolean }) => {
+      await queryClient.cancelQueries({ queryKey: ['/api/auth/me'] });
+      const path = opts.recovery ? '/api/auth/mfa/verify-recovery' : '/api/auth/mfa/verify';
+      const res = await apiRequest('POST', path, { code: opts.code });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.success && data.data) {
+        const { recoveryCodes: _codes, ...user } = data.data as AuthUser & { recoveryCodes?: string[] };
+        setCurrentUser(user);
+        queryClient.setQueryData(['/api/auth/me'], { success: true, data: user });
       }
     },
   });
@@ -185,6 +206,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await loginMutation.mutateAsync(credentials);
     lastLoginTimeRef.current = Date.now();
     return result;
+  };
+
+  const completeMfa = async (opts: { code: string; recovery?: boolean }) => {
+    const result = await mfaMutation.mutateAsync(opts);
+    lastLoginTimeRef.current = Date.now();
+    return result;
+  };
+
+  const adoptSession = (user: AuthUser) => {
+    lastLoginTimeRef.current = Date.now();
+    const { recoveryCodes: _codes, ...safe } = user as AuthUser & { recoveryCodes?: string[] };
+    setCurrentUser(safe);
+    queryClient.setQueryData(['/api/auth/me'], { success: true, data: safe });
   };
 
   const logout = () => {
@@ -314,6 +348,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         can,
         login,
         loginPending: loginMutation.isPending,
+        completeMfa,
+        mfaPending: mfaMutation.isPending,
+        adoptSession,
         logout,
       }}
     >

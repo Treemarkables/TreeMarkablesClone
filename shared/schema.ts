@@ -1524,6 +1524,12 @@ export const businessSettings = pgTable("business_settings", {
   // (server/aiKnowledge.ts): voice agent, speech-to-quote, and future surfaces.
   aiKnowledge: text("ai_knowledge").default(""),
 
+  // Wave 2 MFA: optional per user today. `required` is the enforce-later switch
+  // (login then challenges unenrolled users to set up TOTP before a full session).
+  // Default `optional` so field/mobile login is unchanged for anyone who has
+  // not enrolled. Not exposed on the public business-settings PUT.
+  mfaEnforcement: text("mfa_enforcement").notNull().default("optional"), // 'optional' | 'required'
+
   // Metadata
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -1535,6 +1541,9 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
   id: true,
   createdAt: true,
   updatedAt: true,
+  // Wave 2: flipping this to `required` would lock field crew who have not
+  // enrolled. Not a self-serve Settings field — set later via SQL/concierge.
+  mfaEnforcement: true,
 }).extend({
   // Add validation constraints for numeric fields
   autoFollowUpDays: z.number().int().min(1).max(30).optional(),
@@ -1882,6 +1891,36 @@ export const updateEmployeeSchema = insertEmployeeSchema.partial();
 export type Employee = typeof employees.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type UpdateEmployee = z.infer<typeof updateEmployeeSchema>;
+
+export const MFA_ENFORCEMENT = ["optional", "required"] as const;
+export type MfaEnforcement = (typeof MFA_ENFORCEMENT)[number];
+
+// Per-employee TOTP authenticator (Wave 2). Secret is AES-GCM ciphertext, never
+// plaintext. Login only challenges when `enabled` is true (unenrolled field
+// users keep password-only login).
+export const employeeMfa = pgTable("employee_mfa", {
+  employeeId: varchar("employee_id").primaryKey().references(() => employees.id, { onDelete: "cascade" }),
+  businessId: varchar("business_id"),
+  totpSecretCiphertext: text("totp_secret_ciphertext").notNull(),
+  enabled: boolean("enabled").notNull().default(false),
+  enrolledAt: timestamp("enrolled_at"),
+  lastVerifiedAt: timestamp("last_verified_at"),
+  lastUsedCounter: integer("last_used_counter"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const employeeMfaRecoveryCodes = pgTable("employee_mfa_recovery_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => employeeMfa.employeeId, { onDelete: "cascade" }),
+  businessId: varchar("business_id"),
+  codeHash: text("code_hash").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type EmployeeMfa = typeof employeeMfa.$inferSelect;
+export type EmployeeMfaRecoveryCode = typeof employeeMfaRecoveryCodes.$inferSelect;
 
 // Schedule/Calendar Events Schema
 export const scheduleEvents = pgTable("schedule_events", {
