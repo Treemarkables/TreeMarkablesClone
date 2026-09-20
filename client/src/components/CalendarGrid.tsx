@@ -328,13 +328,13 @@ export function CalendarGrid({
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div
-      className="w-full h-full flex flex-col"
+      className="w-full h-full flex flex-col gap-2"
       onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
       onTouchStart={handleSwipeTouchStart}
       onTouchEnd={handleSwipeTouchEnd}
     >
       {/* Navigation Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-white flex-shrink-0 flex-wrap gap-2">
+      <div className="flex items-center justify-between px-4 py-3 inflow-chrome flex-shrink-0 flex-wrap gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -384,6 +384,7 @@ export function CalendarGrid({
               />
             </div>
           )}
+          <div className="inline-flex items-center rounded-full bg-muted p-1 gap-0.5">
           {(["day", "week", "2weeks", "4weeks"] as ViewMode[]).map((v) => (
             <Button
               key={v}
@@ -391,6 +392,7 @@ export function CalendarGrid({
               size="sm"
               onClick={() => setViewMode(v)}
               data-testid={`button-view-${v}`}
+              className="rounded-full"
             >
               {v === "2weeks"
                 ? "2 wks"
@@ -399,6 +401,7 @@ export function CalendarGrid({
                   : v.charAt(0).toUpperCase() + v.slice(1)}
             </Button>
           ))}
+          </div>
         </div>
       </div>
 
@@ -407,7 +410,9 @@ export function CalendarGrid({
         dayRevenue !== null &&
         displayDayRevenue !== null && (
           <div
-            className="border-b bg-gray-50 flex-shrink-0"
+            className={`rounded-2xl flex-shrink-0 ${
+              displayDayRevenue >= DAY_TARGET ? "bg-emerald-50" : "bg-muted/60"
+            }`}
             data-testid="day-revenue-bar"
           >
             <div className="flex items-center gap-3 px-4 py-2">
@@ -470,7 +475,7 @@ export function CalendarGrid({
 
       {/* Grid */}
       <div
-        className="flex-1 overflow-auto"
+        className="flex-1 min-h-0 overflow-auto inflow-chrome"
         onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
       >
         <div
@@ -478,11 +483,11 @@ export function CalendarGrid({
           style={viewMode === "day" ? { minWidth: GANTT_COL_W + ganttHourLabels.length * GANTT_MIN_COL_W } : undefined}
         >
           {/* Header row */}
-          <div className="sticky top-0 z-10 flex bg-white border-b">
+          <div className="sticky top-0 z-10 flex bg-card border-b">
             {viewMode === "day" ? (
               <>
                 <div
-                  className="flex-shrink-0 border-r bg-gray-50 font-semibold p-2 text-sm sticky left-0 z-20 flex items-end"
+                  className="flex-shrink-0 border-r bg-card font-semibold p-2 text-sm sticky left-0 z-20 flex items-end"
                   style={{ width: GANTT_COL_W }}
                 >
                   CREW
@@ -552,8 +557,8 @@ export function CalendarGrid({
                 >
                   {/* Name column */}
                   <div
-                    className="flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10"
-                    style={{ width: GANTT_COL_W, backgroundColor: '#f9fafb' }}
+                    className="flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10 bg-card"
+                    style={{ width: GANTT_COL_W }}
                   >
                     <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-[10px] font-bold flex-shrink-0">
                       ?
@@ -604,7 +609,7 @@ export function CalendarGrid({
                           onDragEnd={() => setDayViewDragOver(null)}
                           onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
                           title={`${custName}${timeLabel ? ' — ' + timeLabel : ''} (unassigned — drag to assign crew)`}
-                          className="absolute rounded text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400 cursor-grab active:cursor-grabbing"
+                          className="absolute rounded-2xl text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400 cursor-grab active:cursor-grabbing"
                           style={{
                             left: `${Math.max(0, startPct)}%`,
                             width: `${blockW}%`,
@@ -676,8 +681,10 @@ export function CalendarGrid({
                 {/* Name column */}
                 {viewMode === "day" ? (
                   <div
-                    className="flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10"
-                    style={{ width: GANTT_COL_W, backgroundColor: gPalette.row + '80' }}
+                    className={`flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10 ${
+                      empDayItems.length > 0 ? "bg-blue-50" : "bg-card"
+                    }`}
+                    style={{ width: GANTT_COL_W }}
                   >
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
@@ -709,8 +716,13 @@ export function CalendarGrid({
                 {viewMode === "day" ? (
                   /* ── Gantt timeline bar ─────────────────────────────── */
                   <div
-                    className={`flex-1 relative transition-colors duration-100 ${dayViewDragOver === employee.id ? 'ring-2 ring-inset ring-blue-400' : ''}`}
-                    style={{ backgroundColor: dayViewDragOver === employee.id ? gPalette.row : gPalette.row + "55" }}
+                    className={`flex-1 relative transition-colors duration-100 ${
+                      dayViewDragOver === employee.id
+                        ? "ring-2 ring-inset ring-blue-400 bg-blue-50"
+                        : empDayItems.length > 0
+                          ? "bg-blue-50/40"
+                          : "bg-card"
+                    }`}
                     onDragOver={(e) => {
                       e.preventDefault();
                       e.dataTransfer.dropEffect = "move";
@@ -772,7 +784,7 @@ export function CalendarGrid({
                       return (
                         <>
                           <div
-                            className="absolute pointer-events-none rounded border-2 border-dashed border-blue-500 bg-blue-400/25 flex items-center justify-center px-1 overflow-hidden"
+                            className="absolute pointer-events-none rounded-2xl border-2 border-dashed border-blue-500 bg-blue-400/25 flex items-center justify-center px-1 overflow-hidden"
                             style={{
                               left: `${leftPct}%`,
                               width: `${widthPct}%`,
@@ -812,14 +824,14 @@ export function CalendarGrid({
                           key={job.id}
                           onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
                           title={`${custName} — ${timeLabel}`}
-                          className="absolute rounded text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                          className="absolute rounded-2xl text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
                           style={{
                             left: `${Math.max(0, startPct)}%`,
                             width: `${blockW}%`,
                             top: ls.top,
                             height: ls.height,
                             backgroundColor: c.bg,
-                            borderLeft: `3px solid ${c.border}`,
+                            border: `1px solid ${c.border}33`,
                             minWidth: 32,
                           }}
                         >
@@ -908,7 +920,7 @@ export function CalendarGrid({
                             return (
                               <div
                                 key={job.id}
-                                className="text-xs p-1.5 rounded border cursor-pointer mb-1"
+                                className="text-xs p-1.5 rounded-xl border cursor-pointer mb-1"
                                 style={{ backgroundColor: c.bg, borderColor: c.border, color: c.text }}
                                 onClick={() => {
                                   setSelectedJobId(job.id);
