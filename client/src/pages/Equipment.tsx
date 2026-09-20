@@ -538,7 +538,7 @@ export default function Equipment() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Equipment Management</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Equipment Management</h1>
           <p className="text-sm md:text-base text-gray-600 mt-1">Track and manage your equipment inventory</p>
           {(overdueCheckouts.length > 0 || overdueMaintenance.length > 0) && (
             <div className="mt-2 space-y-1">

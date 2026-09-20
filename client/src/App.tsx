@@ -943,7 +943,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               )}
             </div>
           </header>
-          <main className="flex-1 w-full max-w-full min-w-0 min-h-0 relative overflow-hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+          <main className={`flex-1 w-full max-w-full min-w-0 min-h-0 relative overflow-hidden ${isDispatchPage ? "" : "md:inflow-chrome"}`} style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             {/* Global pull-to-refresh: swipe down from the top of any page to
                 refetch. Dispatch has its own (wired to its queries), so the
                 global one stands down there. Touch-only — desktop unaffected. */}

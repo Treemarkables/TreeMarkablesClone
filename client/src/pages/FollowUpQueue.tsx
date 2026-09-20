@@ -365,11 +365,11 @@ export default function FollowUpQueue() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-0">
+          <div className="inflow-list">
             {filteredQuotes.map((quote) => (
               <div
                 key={quote.id}
-                className="p-4 border-b hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                className="inflow-chrome-item p-4 cursor-pointer transition-colors hover:bg-muted/40"
                 onClick={() => openJobCard(quote)}
                 data-testid={`card-quote-${quote.id}`}
               >

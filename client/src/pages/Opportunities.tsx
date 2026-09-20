@@ -513,7 +513,7 @@ export default function Opportunities() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white w-full overflow-x-hidden">
+    <div className="flex flex-col h-full bg-background w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b w-full gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -693,7 +693,7 @@ export default function Opportunities() {
             </p>
           </div>
         ) : (
-          <div className="divide-y">
+          <div className="inflow-list">
             {console.log(
               "🔍 [v13 DEBUG] Rendering conversations:",
               conversations.length,
@@ -708,7 +708,7 @@ export default function Opportunities() {
               return (
                 <div
                   key={conversation.id}
-                  className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover-elevate active-elevate-2 ${selectedIds.has(conversation.id) ? "bg-primary/10" : ""}`}
+                  className={`inflow-chrome-item flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover-elevate active-elevate-2 ${selectedIds.has(conversation.id) ? "bg-primary/10" : ""}`}
                   data-testid={`conversation-item-${conversation.id}`}
                 >
                   {/* Selection Checkbox */}

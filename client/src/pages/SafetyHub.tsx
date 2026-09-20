@@ -109,7 +109,7 @@ function ModuleGrid({ title, cards }: { title: string; cards: ModuleCard[] }) {
           const Icon = c.icon;
           return (
             <Link key={c.href} href={c.href} data-testid={`link-safety-${c.href.split("/").pop()}`}>
-              <Card className="bg-card border border-border rounded-lg h-full cursor-pointer transition-shadow hover:shadow-md">
+              <Card className="h-full cursor-pointer">
                 <CardContent className="p-4 flex gap-3 items-start">
                   <span className={`flex items-center justify-center w-10 h-10 rounded-full shrink-0 ${c.iconClass}`}>
                     <Icon className="h-5 w-5" />
