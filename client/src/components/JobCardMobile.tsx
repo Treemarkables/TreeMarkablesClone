@@ -133,6 +133,8 @@ export interface JobCardMobileProps {
     timeTracking?: () => void;
     profitTracker?: () => void;
     queueJob?: () => void;
+    /** One-button complete → invoice → email → "send to Xero too?" flow. */
+    completeAndInvoice?: () => void;
     sendToXero?: () => void;
     /** True while the send-to-Xero request is in flight — drives the
      *  tile's "Sending…" state so a tap gives visible feedback. */
@@ -523,6 +525,15 @@ export function JobCardMobile({
                 <ActionTile label="Schedule" icon={Calendar} colour="blue" onClick={actions?.schedule ?? actionStub("Schedule")} />
                 <ActionTile label="Quote" icon={FileText} colour="amber" onClick={actions?.quote ?? actionStub("Quote")} />
                 <ActionTile label="Invoice" icon={CreditCard} colour="green" onClick={actions?.invoice ?? actionStub("Invoice")} />
+                {actions?.completeAndInvoice && (
+                  <ActionTile
+                    label="Complete & Invoice"
+                    icon={CheckCircle}
+                    colour="green"
+                    onClick={actions.completeAndInvoice}
+                    testId="action-tile-complete-and-invoice"
+                  />
+                )}
                 <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actions?.proposal ?? actionStub("Proposal")} />
                 <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
                 <ActionTile label="On My Way" icon={Navigation} colour="orange" onClick={() => setShowOnMyWay(true)} />

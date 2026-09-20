@@ -151,6 +151,8 @@ export interface JobCardDesktopProps {
     schedule?: () => void;
     timeTracking?: () => void;
     profitTracker?: () => void;
+    /** One-button complete → invoice → email → "send to Xero too?" flow. */
+    completeAndInvoice?: () => void;
     sendToXero?: () => void;
     /** True while the send-to-Xero request is in flight — drives the
      *  menu item's "Sending…" state so a click gives visible feedback. */
@@ -695,6 +697,10 @@ export function JobCardDesktop({
             {actionBtn("Quote", FileText, "bg-brand-lime", "text-brand-lime-foreground", handleQuote)}
             {actionBtn("Invoice", CreditCard, "bg-brand-lime", "text-brand-lime-foreground", handleInvoice)}
             {actionBtn("Proposal", FilePen, "bg-brand-lime", "text-brand-lime-foreground", handleProposal)}
+            {/* One click when the job's done: complete → invoice → email, then
+                the dialog asks whether to push it to Xero too. */}
+            {actions?.completeAndInvoice &&
+              actionBtn("Complete & Invoice", CheckCircle, "bg-brand-lime", "text-brand-lime-foreground", actions.completeAndInvoice)}
 
             {/* More menu — items render only if their handler is supplied,
                 so the menu shrinks gracefully if the parent doesn't wire

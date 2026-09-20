@@ -39,6 +39,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { InvoiceTemplate } from "@/components/InvoiceTemplate";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
+import { extractInvoiceLineItems } from "@/lib/invoiceLineItemSources";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { DocumentTemplate, Customer, Job, InvoiceSectionConfig } from "@shared/schema";
@@ -234,110 +235,12 @@ export function InvoiceBuilder({
   // diverged: auto-init only read proposal.sections[].lineItems and missed
   // top-level proposal.lineItems, so it fell through to the job's unpriced
   // placeholder ($0.00) and the user had to click Import to get the real price.
-  const extractLineItemsFromSources = (): InvoiceLineItem[] => {
-    const proposals = proposalsResponse?.data || [];
-    const quotes = quotesResponse?.data || [];
-
-    const proposal =
-      proposals.find((p: any) => p.status === "accepted") ||
-      proposals.find((p: any) => p.status === "sent") ||
-      proposals[0];
-    const quote =
-      quotes.find((q: any) => q.status === "accepted") ||
-      quotes.find((q: any) => q.status === "sent") ||
-      quotes[0];
-
-    const items: InvoiceLineItem[] = [];
-
-    // Proposal items may live at the top level OR nested inside sections.
-    const proposalItemArrays: any[][] = [];
-    if (Array.isArray(proposal?.lineItems)) {
-      proposalItemArrays.push(proposal.lineItems);
-    } else if (Array.isArray(proposal?.sections)) {
-      proposal.sections.forEach((section: any) => {
-        if (Array.isArray(section.lineItems)) {
-          proposalItemArrays.push(section.lineItems);
-        }
-      });
-    }
-    proposalItemArrays.forEach((arr) => {
-      arr.forEach((item: any) => {
-        items.push({
-          id: Math.random().toString(),
-          description: item.description || "",
-          quantity: item.quantity || 1,
-          unitPrice: parseFloat(item.unitPrice || item.rate || 0),
-          total: parseFloat(item.total || item.totalPrice || item.amount || 0),
-        });
-      });
+  const extractLineItemsFromSources = (): InvoiceLineItem[] =>
+    extractInvoiceLineItems({
+      proposals: proposalsResponse?.data,
+      quotes: quotesResponse?.data,
+      jobLineItems: job.lineItems as any[] | null,
     });
-
-    // Carry the proposal-level discount onto the invoice as a negative line
-    // item. Proposals store discountAmount as ex-GST dollars against the
-    // pre-discount `subtotal`; invoices have no discount column, so without
-    // this row an invoice built from a discounted proposal (e.g. a VIP
-    // percentage discount) reverts to the full pre-discount price.
-    if (items.length > 0) {
-      const discountDollars =
-        parseFloat(proposal?.discountAmount?.toString() || "0") || 0;
-      if (discountDollars > 0) {
-        const preDiscountSubtotal =
-          parseFloat(proposal?.subtotal?.toString() || "0") || 0;
-        const percent =
-          proposal?.discountType === "percentage" && preDiscountSubtotal > 0
-            ? Math.round((discountDollars / preDiscountSubtotal) * 10000) / 100
-            : null;
-        items.push({
-          id: Math.random().toString(),
-          description: percent ? `Discount (${percent}%)` : "Discount",
-          quantity: 1,
-          unitPrice: -discountDollars,
-          total: -discountDollars,
-        });
-      }
-    }
-
-    // Fall back to the quote's line items.
-    if (items.length === 0 && Array.isArray(quote?.lineItems)) {
-      quote.lineItems.forEach((item: any) => {
-        items.push({
-          id: Math.random().toString(),
-          description: item.description || "",
-          quantity: item.quantity || 1,
-          unitPrice: parseFloat(item.unitPrice || item.rate || 0),
-          total: parseFloat(item.total || item.amount || 0),
-        });
-      });
-    }
-
-    // Last resort: the job's own line items (set via the Quote tab). These can
-    // be unpriced placeholders (e.g. a "Tree care" category row at $0.00).
-    if (
-      items.length === 0 &&
-      Array.isArray(job.lineItems) &&
-      job.lineItems.length > 0
-    ) {
-      (job.lineItems as any[]).forEach((item: any) => {
-        items.push({
-          id: item.id || Math.random().toString(),
-          description: item.description || "",
-          quantity: item.quantity || 1,
-          unitPrice: item.unitPrice || item.rate || 0,
-          total:
-            item.total ||
-            item.amount ||
-            (item.quantity || 1) * (item.unitPrice || item.rate || 0) ||
-            0,
-          category: item.category,
-          serviceId: item.serviceId,
-          materialId: item.materialId,
-          unitCost: item.unitCost,
-        });
-      });
-    }
-
-    return items;
-  };
 
   // Initialize fields when modal opens or when job changes.
   //
