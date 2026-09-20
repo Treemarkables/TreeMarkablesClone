@@ -787,11 +787,16 @@ function LineItemsBlock({
   materials,
   onUpdate,
   onDraftTotalChange,
+  autoEditItemId,
+  onAutoEditStarted,
 }: {
   block: WysiwygBlock;
   materials: Array<{ id: string; name: string; itemNumber?: string; price?: number; category?: string }>;
   onUpdate: (updates: Partial<WysiwygBlock>) => void;
   onDraftTotalChange?: (extra: number) => void;
+  // Item to open straight into the row editor on mount (the create-mode starter item).
+  autoEditItemId?: string | null;
+  onAutoEditStarted?: () => void;
 }) {
   const [draft, setDraft] = useState<DraftLineItem>(defaultDraft());
   const [showAdd, setShowAdd] = useState(false);
@@ -956,6 +961,19 @@ function LineItemsBlock({
     setEditingId(item.id ?? null);
     setEditDraft(itemToEdit(item));
   };
+
+  // Open the auto-added starter item in the editor once, so a new proposal
+  // lands ready for the price to be typed.
+  useEffect(() => {
+    if (!autoEditItemId) return;
+    const item = block.lineItems.find((i) => i.id === autoEditItemId);
+    if (!item) return;
+    startEdit(item);
+    // One-shot: the parent clears the id so a remount (e.g. preview toggle)
+    // doesn't reopen the editor.
+    onAutoEditStarted?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEditItemId, block.lineItems]);
 
   const commitEdit = () => {
     if (!editingId) return;
@@ -1308,8 +1326,11 @@ export function ProposalBuilderV2({
   });
   const { data: jobData } = useQuery({ queryKey: ["/api/jobs", jobId], enabled: !!jobId && isOpen });
   const { data: customerData } = useQuery({ queryKey: ["/api/customers", customerId], enabled: !!customerId && isOpen });
-  const { data: diaryData } = useQuery({ queryKey: ["/api/jobs", jobId, "diary"], enabled: !!jobId && isOpen });
-  const { data: jobPhotosData } = useQuery({ queryKey: ["/api/jobs", jobId, "photos"], enabled: !!jobId && isOpen });
+  // refetchOnMount "always": create mode auto-pulls every job photo into the
+  // new proposal, and job-card uploads don't reliably invalidate these keys —
+  // a cached copy would silently miss the photos the user just added.
+  const { data: diaryData, isFetching: diaryFetching } = useQuery({ queryKey: ["/api/jobs", jobId, "diary"], enabled: !!jobId && isOpen, refetchOnMount: "always" });
+  const { data: jobPhotosData, isFetching: jobPhotosFetching } = useQuery({ queryKey: ["/api/jobs", jobId, "photos"], enabled: !!jobId && isOpen, refetchOnMount: "always" });
   const { data: existingData } = useQuery({
     queryKey: ["/api/proposals", proposalId],
     enabled: !!proposalId && mode === "edit" && isOpen,
@@ -1427,6 +1448,10 @@ export function ProposalBuilderV2({
   const initCreateRef = useRef(false);
   const initEditRef = useRef<string | null>(null);
   const editHasLineItemsRef = useRef(false);
+  // Create-mode prefill: the starter line item to open in the editor, and the
+  // original URLs of auto-added job photos (for the annotated-PNG swap).
+  const [autoEditItemId, setAutoEditItemId] = useState<string | null>(null);
+  const autoPhotoSourcesRef = useRef<string[]>([]);
 
   // ── Initialization guards ──────────────────────────────────────────────────
 
@@ -1435,6 +1460,8 @@ export function ProposalBuilderV2({
       initCreateRef.current = false;
       initEditRef.current = null;
       editHasLineItemsRef.current = false;
+      autoPhotoSourcesRef.current = [];
+      setAutoEditItemId(null);
       setDraftId(null);
       setBlocks([]);
       setProposalTitle("Treemarkables Quote");
@@ -1610,6 +1637,8 @@ export function ProposalBuilderV2({
     if (initCreateRef.current) return;
     // Wait for at least job data or confirm no job
     if (jobId && !job) return;
+    // …and for the job's photos, so they can be pulled in below in one pass.
+    if (jobId && (diaryFetching || jobPhotosFetching)) return;
     initCreateRef.current = true;
 
     setProposalTitle((job as { title?: string } | null)?.title || "Treemarkables Quote");
@@ -1639,7 +1668,33 @@ export function ProposalBuilderV2({
       sortOrder: 0,
     });
 
-    // Block 2: prefill line items — first from parent prop, then from job JSONB as fallback
+    // Block 2: every photo already on the job (diary + before/after), so the
+    // user doesn't have to re-pick them one by one. Removable per photo.
+    if (diaryPhotos.length > 0) {
+      const stamp = Date.now();
+      builtBlocks.push({
+        id: "block-photos",
+        type: "photos",
+        title: "Photos",
+        description: "",
+        photos: diaryPhotos.map((src, i) => {
+          const url = resolveAnnotated(src);
+          return {
+            id: `auto-${stamp}-${i}`,
+            url,
+            filename: url.split("/").pop() || "job-photo",
+            type: "before",
+            category: "documentation",
+            capturedAt: new Date().toISOString(),
+          };
+        }),
+        lineItems: [],
+        sortOrder: builtBlocks.length,
+      });
+      autoPhotoSourcesRef.current = diaryPhotos;
+    }
+
+    // Block 3: prefill line items — first from parent prop, then from job JSONB as fallback
     const propItems = Array.isArray(incomingLineItems) && (incomingLineItems as unknown[]).length > 0
       ? incomingLineItems as IncomingLineItemRaw[]
       : null;
@@ -1682,15 +1737,72 @@ export function ProposalBuilderV2({
         description: "",
         photos: [],
         lineItems: items,
-        sortOrder: 1,
+        sortOrder: builtBlocks.length,
       });
+    } else {
+      // Nothing to prefill — seed one starter item and open it in the editor,
+      // so the only thing left to do is price it.
+      const starterId = `item-starter-${Date.now()}`;
+      builtBlocks.push({
+        id: "block-lineitems",
+        type: "lineItems",
+        title: "Line Items",
+        description: "",
+        photos: [],
+        lineItems: [{
+          id: starterId,
+          description:
+            (job as { serviceType?: string } | null)?.serviceType ||
+            (job as { title?: string } | null)?.title ||
+            "",
+          quantity: 1,
+          unitPrice: 0,
+          totalPrice: 0,
+          unit: "each",
+          category: "",
+          isOptional: false,
+          selected: true,
+          pricingType: "normal",
+          choices: [],
+          priceIncludesTax: false,
+          costPrice: 0,
+          markupPct: 0,
+        }],
+        sortOrder: builtBlocks.length,
+      });
+      setAutoEditItemId(starterId);
     }
 
     setBlocks((cur) => {
       const hasContent = cur.some((b) => b.lineItems.length > 0 || b.photos.length > 0 || b.description);
       return hasContent ? cur : builtBlocks;
     });
-  }, [job, isOpen, mode, jobDescription, incomingLineItems, jobId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job, isOpen, mode, jobDescription, incomingLineItems, jobId, diaryFetching, jobPhotosFetching]);
+
+  // The annotation lookup usually lands after the init above. Swap any
+  // auto-added photo that's still showing its original over to the annotated
+  // PNG so the proposal carries the markup, same as picking it "From Diary".
+  useEffect(() => {
+    const sources = autoPhotoSourcesRef.current;
+    if (mode !== "create" || sources.length === 0) return;
+    const swaps = new Map(sources.filter((s) => annotatedByUrl[s]).map((s) => [s, annotatedByUrl[s]]));
+    if (swaps.size === 0) return;
+    setBlocks((cur) => {
+      let changed = false;
+      const next = cur.map((b) => {
+        if (!b.photos.some((p) => p.id.startsWith("auto-") && swaps.has(p.url))) return b;
+        changed = true;
+        return {
+          ...b,
+          photos: b.photos.map((p) =>
+            p.id.startsWith("auto-") && swaps.has(p.url) ? { ...p, url: swaps.get(p.url) as string } : p
+          ),
+        };
+      });
+      return changed ? next : cur;
+    });
+  }, [annotatedByUrl, mode]);
 
   // If mode=edit, pre-set draftId on open
   useEffect(() => {
@@ -2535,6 +2647,8 @@ export function ProposalBuilderV2({
                             materials={materials}
                             onUpdate={(u) => updateBlock(block.id, u)}
                             onDraftTotalChange={setDraftTotalExtra}
+                            autoEditItemId={autoEditItemId}
+                            onAutoEditStarted={() => setAutoEditItemId(null)}
                           />
                         )}
                       </div>
