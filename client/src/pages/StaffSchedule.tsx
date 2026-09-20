@@ -889,7 +889,7 @@ export default function StaffSchedule() {
                         key={slot.id}
                         onClick={() => openJob(job)}
                         title={`${label} — ${timeLabel} (unassigned)`}
-                        className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                        className="absolute rounded-2xl text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
                         style={{
                           left: `${left}%`,
                           width: `${width}%`,
@@ -1038,7 +1038,7 @@ export default function StaffSchedule() {
                           key={slot.id}
                           onClick={() => openJob(job)}
                           title={`${label} — ${timeLabel}`}
-                          className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                          className="absolute rounded-2xl text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
                           style={{
                             left: `${left}%`,
                             width: `${width}%`,
