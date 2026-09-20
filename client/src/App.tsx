@@ -409,9 +409,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   }, []);
   
   return (
-    <div className="flex h-screen overflow-hidden w-full">
+    <div className="flex h-screen overflow-hidden w-full bg-background">
       <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
-        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden md:p-2 md:gap-2">
           {/* Mobile header - sidebar toggle, logo, and actions */}
           {/* Sizing budget: on /dispatch an admin sees nine controls in this
               row (logo, bug, bell, +, paste, filter, lanes, search, account).
@@ -670,7 +670,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           </header>
           
           {/* Desktop header - full menu */}
-          <header className="hidden md:flex items-center justify-between p-2 border-b bg-background">
+          <header className="hidden md:flex items-center justify-between px-4 py-2 inflow-chrome shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
               <LogoSidebarTrigger size={36} />
               {businessName && (
@@ -943,7 +943,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               )}
             </div>
           </header>
-          <main className="flex-1 w-full max-w-full min-w-0 min-h-0 relative md:pt-6" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+          <main className="flex-1 w-full max-w-full min-w-0 min-h-0 relative overflow-hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             {/* Global pull-to-refresh: swipe down from the top of any page to
                 refetch. Dispatch has its own (wired to its queries), so the
                 global one stands down there. Touch-only — desktop unaffected. */}

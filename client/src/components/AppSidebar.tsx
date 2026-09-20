@@ -738,9 +738,9 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     );
   }
 
-  // Desktop: use the standard shadcn Sidebar component
+  // Desktop: floating rounded card — Dispatch Board mockup 1 chrome.
   return (
-    <Sidebar>
+    <Sidebar variant="floating">
       <SidebarNavContent {...navProps} />
     </Sidebar>
   );

@@ -2844,7 +2844,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       <div className="flex flex-col flex-1 min-h-0">
         {/* Desktop Layout: Split Screen with Resizable Panels */}
         <div
-          className="hidden lg:flex flex-1 min-h-0 p-4 overflow-hidden"
+          className="hidden lg:flex flex-1 min-h-0 p-2 overflow-hidden"
           data-testid="dispatch-desktop-layout"
         >
           <ResizablePanelGroup direction="horizontal" className="h-full w-full">
@@ -2875,7 +2875,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     className="h-full pr-2"
                     onDragOver={(e) => e.preventDefault()}
                   >
-                    <Card
+                    <div
                       className="h-full overflow-hidden"
                       onDragOver={(e) => e.preventDefault()}
                     >
@@ -2885,7 +2885,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         onJobDrop={handleCalendarJobDrop}
                         draggingJob={draggingJob}
                       />
-                    </Card>
+                    </div>
                   </div>
                 </ResizablePanel>
 
@@ -2901,10 +2901,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     data-testid="job-cards-container"
                   >
                     <Card
-                      className="overflow-x-hidden flex flex-col flex-1 min-h-0"
+                      className="overflow-x-hidden flex flex-col flex-1 min-h-0 inflow-chrome rounded-3xl"
                       style={{ pointerEvents: "auto" }}
                     >
-                      <CardHeader className="flex-shrink-0 border-b pb-3">
+                      <CardHeader className="flex-shrink-0 border-b pb-3 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-base">
                             {panelTitle}
@@ -2942,7 +2942,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               }
                             }}
                             onEnter={performDeepSearch}
-                            className="pl-8 pr-8 h-8 text-sm"
+                            className="pl-8 pr-8 h-8 text-sm rounded-xl"
                             testId="desktop-job-search-input"
                           />
                           {isDeepSearchActive && (
@@ -2990,7 +2990,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
                       <CardContent className="flex-1 overflow-y-auto p-0">
                         {/* Job Cards - Updated to match mobile design */}
-                        <div className="divide-y divide-gray-100">
+                        <div className="flex flex-col gap-2 p-2">
                           {getTodaysJobs().map((job) => {
                             const customerName =
                               job.customerName || "Unknown Customer";
@@ -3058,12 +3058,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             return (
                               <div
                                 key={job.id}
-                                className="bg-white hover:bg-gray-50 cursor-pointer transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_120px]"
-                                style={(() => {
-                                  const firstId = job.assignedTeam?.[0];
-                                  const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
-                                  return pal ? { borderLeft: `3px solid ${pal.dot}` } : {};
-                                })()}
+                                className="bg-card border border-border rounded-2xl hover:bg-muted/40 cursor-pointer transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_120px]"
                                 draggable
                                 onDragStart={(e) => {
                                   e.dataTransfer.setData("jobId", job.id);
@@ -3435,7 +3430,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               ]);
             }}
           >
-          <div className="divide-y divide-gray-100 w-full">
+          <div className="flex flex-col gap-2 p-2 w-full">
               {getTodaysJobs().map((job: any) => {
                 const customerName = job.customerName || "Unknown Customer";
                 const total = dailyTotalByJobId.get(job.id) ?? calculateDailyTotal(job);
@@ -3541,12 +3536,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 return (
                   <div
                     key={job.id}
-                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_130px]"
-                    style={(() => {
-                      const firstId = job.assignedTeam?.[0];
-                      const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
-                      return pal ? { borderLeft: `3px solid ${pal.dot}` } : {};
-                    })()}
+                    className="bg-card border border-border rounded-2xl hover:bg-muted/40 cursor-pointer transition-colors w-full overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_130px]"
                     onClick={() => handleEditJob(job)}
                     role="button"
                     tabIndex={0}
