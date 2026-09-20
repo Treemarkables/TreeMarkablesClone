@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react';
 import { Employee } from '@shared/schema';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
+import { AUTH_ME_TIMEOUT_MS } from '@/lib/nativeBootRecovery';
 
 // Authenticated user payload returned by /api/auth/me — includes resolved permissions
 export interface AuthUser extends Employee {
@@ -98,10 +99,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: meResponse, isError: authQueryError } = useQuery<{ success: boolean; data: AuthUser | null }>({
     queryKey: ['/api/auth/me'],
     queryFn: async () => {
-      // Custom query function that handles 401 gracefully
-      const res = await fetch('/api/auth/me', {
-        credentials: 'include',
-      });
+      // Custom query function that handles 401 gracefully. A timeout is
+      // required in the Capacitor WKWebView: a hung /api/auth/me used to
+      // leave isLoading=true forever (empty cream/white full-screen) when
+      // localStorage had no cached user. Aborting lets the bookkeeping
+      // effect mark the initial check complete and paint login/dispatch.
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), AUTH_ME_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch('/api/auth/me', {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
       
       // If not authenticated, return null instead of throwing
       if (res.status === 401) {
@@ -114,7 +127,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       return await res.json();
     },
-    retry: 2,
+    retry: (failureCount, error) => {
+      const name = (error as Error)?.name || '';
+      // One retry after a hung /me abort; don't sit on the boot gate for 30s+.
+      if (name === 'AbortError') return failureCount < 1;
+      return failureCount < 2;
+    },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
     staleTime: 5 * 60 * 1000,   // treat auth as fresh for 5 min — no background churn
     gcTime: 10 * 60 * 1000,      // keep in cache 10 min so re-navigation is instant

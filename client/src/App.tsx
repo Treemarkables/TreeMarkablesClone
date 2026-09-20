@@ -190,6 +190,17 @@ function ScrollToTop() {
 function PageSpinner() {
   return null;
 }
+
+// Auth-gate placeholder. Must not be an empty cream/white full-screen — on
+// TestFlight that is indistinguishable from a dead WKWebView. Match the
+// index.html / native boot shell until /api/auth/me resolves (or times out).
+function BootPlaceholder() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#1a1a1a] text-[#f5f5f0]">
+      <p className="text-base font-medium">Opening Inflow</p>
+    </div>
+  );
+}
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NotificationBell } from "@/components/NotificationBell";
 import { InstallPrompt } from "@/components/InstallPrompt";
@@ -207,7 +218,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // Wait for auth check to complete before redirecting. Render a neutral
   // background (no spinner) so there's no loading ring on startup.
   if (isLoading) {
-    return <div className="min-h-screen bg-background" />;
+    return <BootPlaceholder />;
   }
   
   // Redirect to login if not authenticated
@@ -232,7 +243,7 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
   // Wait for auth check to complete before redirecting. Render a neutral
   // background (no spinner) so there's no loading ring on startup.
   if (isLoading) {
-    return <div className="min-h-screen bg-background" />;
+    return <BootPlaceholder />;
   }
   
   // Redirect to login if not authenticated
@@ -1149,7 +1160,7 @@ function Router() {
     // Home page — this prevents the visible "Home ↔ Dispatch" flicker on every server restart.
     // No spinner: just the background, so there's no loading ring on startup.
     if (isLoading) {
-      return <div className="min-h-screen bg-background" />;
+      return <BootPlaceholder />;
     }
     if (isAuthenticated) {
       return <Redirect to="/dispatch" />;

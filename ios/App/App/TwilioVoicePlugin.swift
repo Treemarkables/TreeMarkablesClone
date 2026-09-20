@@ -808,5 +808,10 @@ class MainViewController: CAPBridgeViewController {
         // VoIP push handling at launch, so JS bridge calls and the live push
         // registry share one plugin instance.
         bridge?.registerPluginInstance(TwilioVoicePlugin.shared)
+        // Cold-start / process-death recovery for the remote server.url webview.
+        // Without this, a hung first load or a dead WK content process stays
+        // white until the user force-quits.
+        view.backgroundColor = UIColor(red: 26 / 255, green: 26 / 255, blue: 26 / 255, alpha: 1)
+        WebViewBootRecovery.shared.attach(webView: webView)
     }
 }
