@@ -162,7 +162,7 @@ export function StaffMultiWeekGrid({
       : {}),
     marginLeft: slot.isRunStart ? 2 : -2,
     marginRight: slot.isRunEnd ? 2 : -2,
-    borderRadius: `${slot.isRunStart ? 4 : 0}px ${slot.isRunEnd ? 4 : 0}px ${slot.isRunEnd ? 4 : 0}px ${slot.isRunStart ? 4 : 0}px`,
+    borderRadius: `${slot.isRunStart ? '1rem' : 0} ${slot.isRunEnd ? '1rem' : 0} ${slot.isRunEnd ? '1rem' : 0} ${slot.isRunStart ? '1rem' : 0}`,
   });
 
   const renderJobChip = (slot: MultiWeekCellSlot, dashed: boolean) => {
