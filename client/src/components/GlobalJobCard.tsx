@@ -91,6 +91,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilderV2 } from "./ProposalBuilderV2";
 import { InvoiceBuilder } from "./InvoiceBuilder";
+import { CompleteAndInvoiceDialog } from "./CompleteAndInvoiceDialog";
 import { JobDiarySection } from "./JobDiarySection";
 import { JobVideos } from "./JobVideos";
 import { JobChecklistPanel } from "./JobChecklistPanel";
@@ -742,6 +743,7 @@ export function GlobalJobCard({
   // Booking cancellation state
   const [cancelBookingDialogOpen, setCancelBookingDialogOpen] = useState(false);
   const [showXeroResetConfirm, setShowXeroResetConfirm] = useState(false);
+  const [showCompleteAndInvoice, setShowCompleteAndInvoice] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState<string | null>(null);
 
   // Call picker state — shown when both job contact and tenant have a number
@@ -10623,6 +10625,8 @@ The Treemarkables Team`;
     proposal: () => setIsProposalBuilderOpen(true),
     timeTracking: () => setIsTimeTrackingOpen(true),
     profitTracker: () => setIsProfitTrackerOpen(true),
+    // One-button "job's done": complete → invoice → email → ask about Xero.
+    completeAndInvoice: () => setShowCompleteAndInvoice(true),
     sendToXero: handleSendToXeroClick,
     // Lets the cards render a live "Sending…" state on their Xero buttons —
     // previously a tap gave zero feedback until the toast (or nothing at all
@@ -11904,6 +11908,19 @@ The Treemarkables Team`;
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Complete & Invoice — opens ON TOP of the mobile actions sheet, same
+          as the Xero reset dialog below (closing the sheet first races Radix's
+          pointer-events cleanup). */}
+      {editingJob?.id && (
+        <CompleteAndInvoiceDialog
+          jobId={editingJob.id}
+          open={showCompleteAndInvoice}
+          onOpenChange={setShowCompleteAndInvoice}
+          onOpenInvoiceBuilder={() => setIsInvoiceModalOpen(true)}
+          sendToXero={() => sendToXeroMutation.mutateAsync()}
+        />
+      )}
 
       {/* Xero Re-send Confirmation Dialog */}
       <AlertDialog
