@@ -1,6 +1,7 @@
 // Firebase Cloud Messaging configuration for push notifications
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage, type Messaging } from 'firebase/messaging';
+import { isNativeApp } from './platform';
 
 let app: any;
 let messaging: Messaging | null = null;
@@ -100,17 +101,23 @@ export async function requestNotificationPermission(): Promise<string | null> {
     }
 
     // Get the existing service worker registration so Firebase uses sw.js
-    // instead of looking for firebase-messaging-sw.js (which doesn't exist)
+    // instead of looking for firebase-messaging-sw.js (which doesn't exist).
+    // NEVER register a caching SW inside the Capacitor WKWebView — iOS push
+    // is native FCM/APNs, and a Workbox-style cache is a cold-start white
+    // screen waiting to happen (stale hashed /assets after a deploy).
     let swRegistration: ServiceWorkerRegistration | undefined;
     try {
-      await navigator.serviceWorker.ready;
-      swRegistration = await navigator.serviceWorker.getRegistration('/sw.js') || undefined;
-      if (swRegistration) {
-        console.log('✅ Using existing service worker registration');
+      if (isNativeApp()) {
+        console.log('ℹ️ Native Capacitor shell — skipping web service worker registration');
       } else {
-        // Register sw.js if not already registered
-        swRegistration = await navigator.serviceWorker.register('/sw.js');
-        console.log('✅ Service worker registered');
+        await navigator.serviceWorker.ready;
+        swRegistration = await navigator.serviceWorker.getRegistration('/sw.js') || undefined;
+        if (swRegistration) {
+          console.log('✅ Using existing service worker registration');
+        } else {
+          swRegistration = await navigator.serviceWorker.register('/sw.js');
+          console.log('✅ Service worker registered');
+        }
       }
     } catch (swError) {
       console.warn('⚠️ Could not get service worker registration, proceeding without:', swError);

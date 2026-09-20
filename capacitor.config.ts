@@ -5,12 +5,16 @@ const config: CapacitorConfig = {
   appName: "Inflow",
   webDir: "dist/public",
   server: {
-    // The native shells load the live app from its own domain.
+    // Live remote SPA — this is NOT an offline bundled app. Cold start paints
+    // about:blank until this URL loads. WebViewBootRecovery.swift re-loads
+    // this same URL if the first navigation hangs or the content process dies.
     url: "https://app.inflowapp.co.nz",
     cleartext: false,
   },
   ios: {
     contentInset: "automatic",
+    // Match index.html #inflow-boot / LaunchScreen handoff so about:blank is
+    // not a white flash after the splash image dismisses.
     backgroundColor: "#1a1a1a",
     scrollEnabled: false,
     // Push taps are handled natively by NotificationHandler (AppDelegate+Firebase.swift),

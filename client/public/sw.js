@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v16-mutation-bypass';
-const STATIC_CACHE = 'treemarkables-static-v16-mutation-bypass';
-const API_CACHE = 'treemarkables-api-v16-mutation-bypass';
+const CACHE_NAME = 'treemarkables-v17-ios-boot';
+const STATIC_CACHE = 'treemarkables-static-v17-ios-boot';
+const API_CACHE = 'treemarkables-api-v17-ios-boot';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -10,14 +10,14 @@ const urlsToCache = [
 
 // Install event - cache critical assets
 self.addEventListener('install', function(event) {
-  console.log('[SW v16] Installing - forcing immediate activation');
+  console.log('[SW v17] Installing - forcing immediate activation');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('[SW v16] Installed - skipping waiting');
+        console.log('[SW v17] Installed - skipping waiting');
         return self.skipWaiting();
       })
   );
@@ -25,20 +25,20 @@ self.addEventListener('install', function(event) {
 
 // Activate event - clean up ALL old caches
 self.addEventListener('activate', function(event) {
-  console.log('[SW v16] Activating - deleting ALL old caches');
+  console.log('[SW v17] Activating - deleting ALL old caches');
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
-      console.log('[SW v16] Found caches:', cacheNames);
+      console.log('[SW v17] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          if (!cacheName.includes('v16-mutation-bypass')) {
-            console.log('[SW v16] DELETING old cache:', cacheName);
+          if (!cacheName.includes('v17-ios-boot')) {
+            console.log('[SW v17] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('[SW v16] Taking control of all clients');
+      console.log('[SW v17] Taking control of all clients');
       return self.clients.claim();
     })
   );
@@ -115,7 +115,10 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Navigation requests - ALWAYS fetch fresh HTML (never cache index.html)
+  // Navigation requests - ALWAYS fetch fresh HTML (never cache index.html).
+  // A cached SPA shell that points at deleted /assets/index-HASH.js is the
+  // classic PWA/WKWebView white screen. No offline document fallback that
+  // looks like a successful app load.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request, { cache: 'reload' })
@@ -129,8 +132,15 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // JS and CSS files - ALWAYS network first so code changes appear immediately
-  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.ts') || url.pathname.endsWith('.css') || url.pathname.includes('/assets/')) {
+  // Hashed Vite assets — network only. Cache-fallback here is how a deploy
+  // leaves the shell running a deleted chunk (white screen until force quit).
+  if (url.pathname.includes('/assets/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Other JS/CSS — network first, cache only as a last resort
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.ts') || url.pathname.endsWith('.css')) {
     event.respondWith(
       fetch(event.request)
         .then(function(response) {

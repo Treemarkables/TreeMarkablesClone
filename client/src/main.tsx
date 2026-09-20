@@ -5,6 +5,7 @@ import App from "./App";
 import "./index.css";
 import { isReloadUnsafe } from "./lib/foregroundReloadGuard";
 import { isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
+import { markAppBooted, startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
 
 // Sentry frontend init — disabled when VITE_SENTRY_DSN is unset so local
 // development without a DSN doesn't spam Sentry.
@@ -132,12 +133,18 @@ document.addEventListener('visibilitychange', () => {
   });
 });
 
-// Keep cache cleanup to remove any old service worker / cache that was left behind
+// Keep cache cleanup to remove any old service worker / cache that was left behind.
+// Capacitor WKWebView can still pick up /sw.js if web-push registration re-adds
+// it (see firebase.ts — native shell must not register a caching SW).
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(registrations => {
     registrations.forEach(registration => registration.unregister());
   });
 }
+
+// Boot / frozen-resume recovery for the TestFlight Capacitor shell (and PWA).
+// Native WebViewBootRecovery.swift is the backstop when this JS never runs.
+startNativeBootWatchdogs();
 
 if ('caches' in window) {
   caches.keys().then(keys => {
@@ -148,3 +155,4 @@ if ('caches' in window) {
 createRoot(document.getElementById("root")!).render(
   <App />
 );
+markAppBooted();
