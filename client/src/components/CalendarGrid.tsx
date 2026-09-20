@@ -681,11 +681,10 @@ export function CalendarGrid({
                 {/* Name column */}
                 {viewMode === "day" ? (
                   <div
-                    className="flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10"
-                    style={{
-                      width: GANTT_COL_W,
-                      backgroundColor: empDayItems.length > 0 ? '#F4F7FF' : '#FFFFFF',
-                    }}
+                    className={`flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10 ${
+                      empDayItems.length > 0 ? "bg-blue-50" : "bg-card"
+                    }`}
+                    style={{ width: GANTT_COL_W }}
                   >
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
@@ -717,14 +716,13 @@ export function CalendarGrid({
                 {viewMode === "day" ? (
                   /* ── Gantt timeline bar ─────────────────────────────── */
                   <div
-                    className={`flex-1 relative transition-colors duration-100 ${dayViewDragOver === employee.id ? 'ring-2 ring-inset ring-blue-400' : ''}`}
-                    style={{
-                      backgroundColor: dayViewDragOver === employee.id
-                        ? '#EEF2FF'
+                    className={`flex-1 relative transition-colors duration-100 ${
+                      dayViewDragOver === employee.id
+                        ? "ring-2 ring-inset ring-blue-400 bg-blue-50"
                         : empDayItems.length > 0
-                          ? '#F8FAFF'
-                          : '#FFFFFF',
-                    }}
+                          ? "bg-blue-50/40"
+                          : "bg-card"
+                    }`}
                     onDragOver={(e) => {
                       e.preventDefault();
                       e.dataTransfer.dropEffect = "move";
