@@ -641,7 +641,7 @@ export default function StaffSchedule() {
   // ── Render ──
   return (
     <div
-      className="flex flex-col h-full bg-white overflow-hidden"
+      className="flex flex-col h-full bg-background overflow-hidden"
       onTouchStart={handleSwipeTouchStart}
       onTouchEnd={handleSwipeTouchEnd}
     >

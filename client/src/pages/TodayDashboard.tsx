@@ -334,7 +334,7 @@ export default function TodayDashboard() {
     <div className="container mx-auto px-4 py-6 max-w-5xl">
       <div className="flex items-baseline justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold">Today</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{today}</p>
         </div>
         <span className="text-xs text-muted-foreground flex items-center gap-1">

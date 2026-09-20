@@ -357,8 +357,8 @@
   .card-clean {
     background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
-    border-radius: 8px;
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    border-radius: 1.5rem;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 28px rgb(15 23 42 / 0.05);
     transition: all 0.2s ease;
   }
   
@@ -366,14 +366,30 @@
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
   }
 
-  /* Dispatch Board mockup 1 — floating rounded-rectangle chrome.
-     Live Inflow colours stay on the existing tokens (white cards, ink
-     borders). Do not restyle this into a new navy/green palette. */
+  /* Inflow rounded-rectangle chrome — Dispatch Board mockup 1, now global.
+     Live colours stay on existing tokens (white cards, ink borders, black
+     active pills, lime accent). Do not restyle this into a new navy/green
+     palette. */
   .inflow-chrome {
     background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
     border-radius: 1.5rem;
     box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 28px rgb(15 23 42 / 0.05);
+  }
+
+  /* List rows / compact tiles inside a chrome panel. */
+  .inflow-chrome-item {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 1rem;
+  }
+
+  /* Stack of chrome-item rows — matches Dispatch quotes rail spacing. */
+  .inflow-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
   }
   
   

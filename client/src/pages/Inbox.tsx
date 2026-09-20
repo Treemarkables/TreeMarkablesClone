@@ -511,7 +511,7 @@ export default function Inbox() {
 
       {/* Conversations List */}
       <ScrollArea className="flex-1">
-        <div className="divide-y">
+        <div className="inflow-list">
           {filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
@@ -528,7 +528,7 @@ export default function Inbox() {
             filteredConversations.map((conversation) => (
               <div
                 key={conversation.id}
-                className={`p-4 hover-elevate active-elevate-2 ${
+                className={`inflow-chrome-item p-4 hover-elevate active-elevate-2 ${
                   (conversation.unreadCount || 0) > 0 ? "bg-accent/50" : ""
                 } ${selectedIds.has(conversation.id) ? "bg-primary/10" : ""}`}
                 data-testid={`conversation-item-${conversation.id}`}

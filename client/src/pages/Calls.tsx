@@ -334,7 +334,7 @@ export default function Calls() {
                 return (
                   <div
                     key={call.id}
-                    className="flex flex-col gap-3 p-4 border rounded-lg"
+                    className="inflow-chrome-item flex flex-col gap-3 p-4"
                     data-testid={`call-row-${call.id}`}
                   >
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
