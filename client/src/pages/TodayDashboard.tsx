@@ -1,486 +1,390 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Truck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { apiRequest } from "@/lib/queryClient";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import {
-  Truck,
-  Wrench,
-  Calendar,
-  AlertTriangle,
-  ClipboardCheck,
-  RefreshCw,
-  LocateFixed,
-  Loader2,
-  StickyNote,
-  TrendingUp,
-  Flag,
-  Cloud,
-  ShieldCheck,
-  CheckCircle2,
-  Mail,
-  Circle,
-  Clock,
-} from "lucide-react";
+  TODAY_COPY,
+  applyTodayView,
+  jobsCountLabel,
+  notesCountLabel,
+  parsePickerValue,
+  pickerValue,
+  type TodayOverviewData,
+  type TodayPerson,
+  type TodayView,
+} from "@shared/todayPage";
 
-interface FleetItem {
-  equipmentId: string;
-  name: string;
-  type: string | null;
-  registrationNumber: string | null;
-  kind: "rego" | "cof" | "service";
-  label: string;
-  dueDate: string;
-  daysUntil: number;
-  severity: "overdue" | "critical" | "warning" | "info";
-}
-
-interface ActivityItem {
-  id: string;
-  type: string;
-  timestamp: string;
-  actorName: string;
-  title: string;
-  summary: string | null;
-  photos: string[];
-  timeSpent: number | null;
-}
-
-interface LiveTimer {
-  employeeId: string;
-  employeeName: string;
-  startedAt: string;
-}
-
-interface JobToday {
-  id: string;
-  title: string;
-  status: string;
-  scheduledStartTime: string | null;
-  customerName: string | null;
-  address: string | null;
-  activity: ActivityItem[];
-  liveTimers: LiveTimer[];
-}
-
-interface TodayOverview {
-  date: string;
-  fleet: FleetItem[];
-  jobsToday: JobToday[];
-  counts: { needsAttention: number; dueSoon: number; jobsToday: number };
-}
-
-// Phrase a whole-day countdown the way someone reading it at 7am would say it.
-function dueLabel(days: number): string {
-  if (days < 0) return days === -1 ? "Expired yesterday" : `Expired ${Math.abs(days)} days ago`;
-  if (days === 0) return "Due today";
-  if (days === 1) return "Due tomorrow";
-  return `Due in ${days} days`;
-}
-
-// Map severity to a Shadcn Badge variant. destructive carries the urgent tone;
-// outline stays quiet for the further-out items.
-function severityVariant(severity: FleetItem["severity"]): "destructive" | "secondary" | "outline" {
-  if (severity === "overdue" || severity === "critical") return "destructive";
-  if (severity === "warning") return "secondary";
-  return "outline";
-}
-
-function fleetIcon(kind: FleetItem["kind"]) {
-  return kind === "service" ? (
-    <Wrench className="h-5 w-5 text-muted-foreground shrink-0" />
-  ) : (
-    <Truck className="h-5 w-5 text-muted-foreground shrink-0" />
-  );
-}
-
-// Diary entryType → timeline icon.
-function ActivityIcon({ type }: { type: string }) {
-  const cls = "h-4 w-4 text-muted-foreground shrink-0 mt-0.5";
-  switch (type) {
-    case "note": return <StickyNote className={cls} />;
-    case "progress": return <TrendingUp className={cls} />;
-    case "issue": return <AlertTriangle className={cls} />;
-    case "milestone": return <Flag className={cls} />;
-    case "weather": return <Cloud className={cls} />;
-    case "equipment": return <Wrench className={cls} />;
-    case "safety": return <ShieldCheck className={cls} />;
-    case "completion": return <CheckCircle2 className={cls} />;
-    case "email": return <Mail className={cls} />;
-    default: return <Circle className={cls} />;
-  }
-}
-
-// ISO timestamp → "9:14 am" in NZ time.
-function nzTime(iso: string): string {
-  return new Date(iso)
-    .toLocaleTimeString("en-NZ", {
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: "Pacific/Auckland",
-    })
-    .toLowerCase();
-}
-
-function statusVariant(status: string): "default" | "secondary" | "outline" {
-  if (status === "in_progress") return "default";
-  if (status === "completed" || status === "invoice" || status === "invoiced") return "secondary";
-  return "outline";
-}
-
-function statusLabel(status: string): string {
-  return status
-    .split("_")
-    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
-    .join(" ");
-}
-
-const MAX_TIMELINE_ITEMS = 6;
-const MAX_PHOTO_THUMBS = 8;
-
-function TodayJobCard({
-  job,
-  onOpen,
-  distanceKm,
-  nearest,
-}: {
-  job: JobToday;
-  onOpen: (jobId: string) => void;
-  distanceKm?: number;
-  nearest?: boolean;
-}) {
-  const photos = Array.from(new Set(job.activity.flatMap((a) => a.photos)));
-  const timeline = job.activity.slice(0, MAX_TIMELINE_ITEMS);
-  const hiddenCount = job.activity.length - timeline.length;
-
+function PersonAvatar({ person, size = "md" }: { person: TodayPerson; size?: "sm" | "md" }) {
+  const dim = size === "sm" ? "h-6 w-6 text-[10px]" : "h-7 w-7 text-[11px]";
   return (
-    <li>
-      <div
-        role="button"
-        tabIndex={0}
-        data-testid={`today-job-${job.id}`}
-        onClick={() => onOpen(job.id)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onOpen(job.id);
-          }
-        }}
-        className="px-6 py-4 cursor-pointer hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-medium text-muted-foreground w-16 shrink-0">
-            {job.scheduledStartTime || "—"}
-          </span>
-          <p className="text-sm font-medium truncate flex-1 min-w-0">{job.title}</p>
-          {distanceKm !== undefined && (
-            <Badge variant={nearest ? "default" : "outline"} className="shrink-0">
-              {distanceKm < 0.15 ? "You're here" : `${distanceKm} km`}
-            </Badge>
-          )}
-          <Badge variant={statusVariant(job.status)}>{statusLabel(job.status)}</Badge>
-          {job.liveTimers.map((t) => (
-            <Badge
-              key={t.employeeId}
-              variant="outline"
-              className="text-green-700 dark:text-green-400 border-green-600/40 gap-1"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-              </span>
-              {t.employeeName} on site — since {nzTime(t.startedAt)}
-            </Badge>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground truncate mt-0.5 pl-[4.75rem]">
-          {[job.customerName, job.address].filter(Boolean).join(" · ")}
-        </p>
-
-        {photos.length > 0 && (
-          <div className="flex gap-2 mt-3 pl-[4.75rem] flex-wrap">
-            {photos.slice(0, MAX_PHOTO_THUMBS).map((url) => (
-              <img
-                key={url}
-                src={url}
-                alt="Job photo from today"
-                loading="lazy"
-                className="h-14 w-14 rounded-md object-cover border"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-            ))}
-            {photos.length > MAX_PHOTO_THUMBS && (
-              <div className="h-14 w-14 rounded-md border flex items-center justify-center text-xs text-muted-foreground">
-                +{photos.length - MAX_PHOTO_THUMBS}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-3 pl-[4.75rem] space-y-2">
-          {timeline.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No activity yet today.</p>
-          ) : (
-            timeline.map((item) => (
-              <div key={item.id} className="flex items-start gap-2">
-                <ActivityIcon type={item.type} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs">
-                    <span className="font-medium">{item.actorName}</span>{" "}
-                    <span className="text-muted-foreground">
-                      — {item.title}
-                      {item.timeSpent ? ` (${item.timeSpent} min)` : ""}
-                    </span>{" "}
-                    <span className="text-muted-foreground/70">· {nzTime(item.timestamp)}</span>
-                  </p>
-                  {item.summary && (
-                    <p className="text-xs text-muted-foreground truncate">{item.summary}</p>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-          {hiddenCount > 0 && (
-            <p className="text-xs text-muted-foreground">+{hiddenCount} more today</p>
-          )}
-        </div>
-      </div>
-    </li>
+    <span
+      className={`${dim} rounded-full font-semibold text-white flex items-center justify-center shrink-0`}
+      style={{ backgroundColor: person.color }}
+      title={person.displayName}
+    >
+      {person.initials}
+    </span>
   );
 }
 
 export default function TodayDashboard() {
-  const { data, isLoading } = useQuery<{ success: boolean; data: TodayOverview }>({
+  const { currentUser } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [view, setView] = useState<TodayView>("all");
+  const [picker, setPicker] = useState("");
+  const [note, setNote] = useState("");
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [isJobCardOpen, setIsJobCardOpen] = useState(false);
+  const addBarRef = useRef<HTMLFormElement>(null);
+  const noteInputRef = useRef<HTMLInputElement>(null);
+
+  const { data, isLoading } = useQuery<{ success: boolean; data: TodayOverviewData }>({
     queryKey: ["/api/today-overview"],
     refetchInterval: 60_000,
   });
-  const { toast } = useToast();
 
-  // "Near me" — geolocate, then sort today's schedule by distance. Distances
-  // come from /api/near-me/jobs (server geocodes today's job addresses).
-  const [distances, setDistances] = useState<Map<string, number> | null>(null);
-  const [locating, setLocating] = useState(false);
+  const overview = useMemo(() => {
+    const raw = data?.data;
+    if (!raw) return null;
+    const employeeId = currentUser?.id || raw.currentEmployeeId;
+    return applyTodayView(raw, view, employeeId);
+  }, [data, view, currentUser?.id]);
 
-  const handleNearMe = () => {
-    if (!navigator.geolocation) {
-      toast({
-        title: "Location unavailable",
-        description: "This device doesn't support location.",
-        variant: "destructive",
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const parsed = parsePickerValue(picker);
+      if (!parsed) throw new Error(TODAY_COPY.pickWhoNeeded);
+      const trimmed = note.trim();
+      if (!trimmed) throw new Error(TODAY_COPY.noteNeeded);
+      const res = await apiRequest("POST", "/api/today-extra-instructions", {
+        date: overview?.date,
+        scope: parsed.scope,
+        personId: parsed.scope === "person" ? parsed.id : undefined,
+        crewId: parsed.scope === "crew" ? parsed.id : undefined,
+        note: trimmed,
       });
-      return;
-    }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const res = await fetch(
-            `/api/near-me/jobs?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`,
-            { credentials: "include" },
-          );
-          if (!res.ok) throw new Error("near-me failed");
-          const body = await res.json();
-          const map = new Map<string, number>();
-          for (const j of body?.data ?? []) map.set(j.id, j.distanceKm);
-          setDistances(map);
-        } catch {
-          toast({
-            title: "Couldn't sort by distance",
-            description: "Please try again.",
-            variant: "destructive",
-          });
-        } finally {
-          setLocating(false);
-        }
-      },
-      () => {
-        setLocating(false);
-        toast({
-          title: "Location permission needed",
-          description: "Allow location access to sort jobs by distance.",
-          variant: "destructive",
-        });
-      },
-      { enableHighAccuracy: true, timeout: 15000 },
-    );
+      return res.json();
+    },
+    onSuccess: () => {
+      setNote("");
+      queryClient.invalidateQueries({ queryKey: ["/api/today-overview"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || TODAY_COPY.failedToSave, variant: "destructive" });
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/today-extra-instructions/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/today-overview"] });
+    },
+    onError: () => {
+      toast({ title: TODAY_COPY.failedToRemove, variant: "destructive" });
+    },
+  });
+
+  const focusAddBar = () => {
+    addBarRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    noteInputRef.current?.focus();
   };
 
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [isJobCardOpen, setIsJobCardOpen] = useState(false);
-  const handleJobClick = (jobId: string) => {
+  const openJob = (jobId: string) => {
     setSelectedJobId(jobId);
     setIsJobCardOpen(true);
   };
-  const handleCloseJobCard = () => setIsJobCardOpen(false);
 
-  const overview = data?.data;
-  const fleet = overview?.fleet ?? [];
-  const jobsToday = overview?.jobsToday ?? [];
-  const counts = overview?.counts ?? { needsAttention: 0, dueSoon: 0, jobsToday: 0 };
+  const counts = overview?.counts ?? {
+    jobsToday: 0,
+    crewsLive: 0,
+    peopleOut: 0,
+    bookedLabel: "$0",
+    extraNotes: 0,
+  };
 
-  const today = new Date().toLocaleDateString("en-NZ", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "Pacific/Auckland",
-  });
+  const summary = [
+    { value: String(counts.jobsToday), label: TODAY_COPY.jobsToday, accent: true },
+    { value: String(counts.crewsLive), label: TODAY_COPY.crewsLive },
+    { value: String(counts.peopleOut), label: TODAY_COPY.peopleOut },
+    { value: counts.bookedLabel, label: TODAY_COPY.booked },
+    { value: String(counts.extraNotes), label: TODAY_COPY.extraNotes },
+  ];
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-5xl">
-      <div className="flex items-baseline justify-between mb-6">
+    <div className="container mx-auto px-4 py-6 max-w-6xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{today}</p>
-        </div>
-        <span className="text-xs text-muted-foreground flex items-center gap-1">
-          <RefreshCw className="h-3 w-3" />
-          live
-        </span>
-      </div>
-
-      {/* Summary tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-        <Card className={counts.needsAttention > 0 ? "border-destructive/40" : ""}>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Needs attention</p>
-            <p
-              className={`text-2xl font-semibold mt-1 ${
-                counts.needsAttention > 0 ? "text-destructive" : ""
-              }`}
-            >
-              {counts.needsAttention}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Due soon</p>
-            <p className="text-2xl font-semibold mt-1">{counts.dueSoon}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Jobs today</p>
-            <p className="text-2xl font-semibold mt-1">{counts.jobsToday}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Fleet compliance */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <AlertTriangle className="h-4 w-4" />
-            Fleet compliance
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <p className="px-6 py-6 text-sm text-muted-foreground">Loading…</p>
-          ) : fleet.length === 0 ? (
-            <p className="px-6 py-6 text-sm text-muted-foreground">
-              Nothing due in the next 30 days. Add registration, CoF and service
-              dates on the{" "}
-              <Link href="/equipment" className="underline">
-                equipment register
-              </Link>{" "}
-              to track them here.
-            </p>
-          ) : (
-            <ul className="divide-y">
-              {fleet.map((item) => (
-                <li
-                  key={`${item.equipmentId}-${item.kind}`}
-                  className="flex items-center gap-3 px-6 py-3"
-                >
-                  {fleetIcon(item.kind)}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {item.name}
-                      {item.registrationNumber ? ` — ${item.registrationNumber}` : ""}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{item.label}</p>
-                  </div>
-                  <Badge variant={severityVariant(item.severity)}>
-                    {dueLabel(item.daysUntil)}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Today's schedule */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between gap-2 text-base">
-            <span className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Today's schedule
-            </span>
-            {jobsToday.length > 1 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNearMe}
-                disabled={locating}
-                data-testid="button-near-me"
-              >
-                {locating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <LocateFixed className="h-4 w-4 mr-1.5" />
-                    {distances ? "Re-sort" : "Near me"}
-                  </>
-                )}
-              </Button>
+          <h1 className="text-3xl font-semibold tracking-tight">Today</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {overview ? (
+              <>
+                {overview.dateLabel}
+                {overview.businessName ? ` · ${overview.businessName}` : ""}
+              </>
+            ) : (
+              TODAY_COPY.loading
             )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+          </p>
+        </div>
+        <div
+          className="inline-flex items-center self-start rounded-full bg-muted p-0.5"
+          data-testid="today-view-toggle"
+        >
+          <Button
+            size="sm"
+            variant={view === "all" ? "default" : "ghost"}
+            onClick={() => setView("all")}
+            data-testid="today-view-all-crews"
+          >
+            {TODAY_COPY.allCrews}
+          </Button>
+          <Button
+            size="sm"
+            variant={view === "me" ? "default" : "ghost"}
+            onClick={() => setView("me")}
+            data-testid="today-view-just-me"
+          >
+            {TODAY_COPY.justMe}
+          </Button>
+        </div>
+      </div>
+
+      <div className="inflow-chrome overflow-hidden mb-4" data-testid="today-morning-summary">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+          {summary.map((item) => (
+            <div
+              key={item.label}
+              className={`px-5 py-4 border-border/70 ${item.accent ? "border-l-4 border-l-brand-lime" : ""} sm:border-r sm:last:border-r-0`}
+            >
+              <p className="text-2xl font-semibold tracking-tight">{item.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{item.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <section className="inflow-chrome overflow-hidden mb-4" data-testid="today-notes-strip">
+        <div className="flex items-center gap-3 bg-primary text-primary-foreground px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold leading-tight">{TODAY_COPY.todayNotes}</p>
+            <p className="text-xs text-primary-foreground/70 truncate">{TODAY_COPY.notesSubtitle}</p>
+          </div>
+          <Button
+            size="sm"
+            className="bg-brand-lime text-brand-lime-foreground border-brand-lime-border shrink-0"
+            onClick={focusAddBar}
+            data-testid="today-notes-add"
+          >
+            <Plus className="h-4 w-4" />
+            {TODAY_COPY.add}
+          </Button>
+        </div>
+        <div className="p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {isLoading ? (
-            <p className="px-6 py-6 text-sm text-muted-foreground">Loading…</p>
-          ) : jobsToday.length === 0 ? (
-            <p className="px-6 py-6 text-sm text-muted-foreground flex items-center gap-2">
-              <ClipboardCheck className="h-4 w-4" />
-              No jobs scheduled for today.
-            </p>
+            <p className="text-sm text-muted-foreground px-1 py-2">{TODAY_COPY.loading}</p>
+          ) : overview && overview.notes.length === 0 ? (
+            <p className="text-sm text-muted-foreground px-1 py-2">{TODAY_COPY.noNotes}</p>
           ) : (
-            <ul className="divide-y">
-              {(distances
-                ? [...jobsToday].sort(
-                    (a, b) =>
-                      (distances.get(a.id) ?? Infinity) - (distances.get(b.id) ?? Infinity),
-                  )
-                : jobsToday
-              ).map((job, index) => {
-                const km = distances?.get(job.id);
-                return (
-                  <TodayJobCard
-                    key={job.id}
-                    job={job}
-                    onOpen={handleJobClick}
-                    distanceKm={km}
-                    nearest={!!distances && index === 0 && km !== undefined}
-                  />
-                );
-              })}
-            </ul>
+            overview?.notes.map((item) => (
+              <div
+                key={item.id}
+                data-testid={`today-note-${item.id}`}
+                className={`inflow-chrome-item relative px-3 py-3 ${
+                  item.scope === "crew" ? "bg-brand-lime/40 border-brand-lime-border" : "bg-muted/60"
+                }`}
+              >
+                <div className="flex items-start gap-2 pr-6">
+                  {item.scope === "crew" ? (
+                    <span className="h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+                      <Truck className="h-3.5 w-3.5" />
+                    </span>
+                  ) : (
+                    <span
+                      className="h-7 w-7 rounded-full text-[11px] font-semibold text-white flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: item.color }}
+                    >
+                      {item.targetName.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{item.targetName}</p>
+                    <p className="text-sm text-foreground/80 leading-snug">{item.note}</p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-1 right-1 h-8 w-8"
+                  aria-label="Remove extra instruction"
+                  onClick={() => removeMutation.mutate(item.id)}
+                  data-testid={`today-note-remove-${item.id}`}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
+
+      <div className="space-y-4 mb-4">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">{TODAY_COPY.loading}</p>
+        ) : !overview || overview.crews.length === 0 ? (
+          <div className="inflow-chrome px-5 py-8 text-sm text-muted-foreground">
+            {view === "me" ? TODAY_COPY.noJobsForYou : TODAY_COPY.noJobsToday}
+          </div>
+        ) : (
+          overview.crews.map((crew) => (
+            <section key={crew.id} className="inflow-chrome overflow-hidden" data-testid={`today-crew-${crew.id}`}>
+              <div className="flex flex-wrap items-center gap-3 bg-primary text-primary-foreground px-4 py-2.5">
+                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: crew.color }} />
+                <h2 className="font-semibold truncate">{crew.name}</h2>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {crew.members.map((member) => (
+                    <span key={member.id} className="inline-flex items-center gap-1.5 min-w-0">
+                      <PersonAvatar person={member} size="sm" />
+                      <span className="text-sm truncate">{member.displayName}</span>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 ml-auto">
+                  <span className="rounded-full bg-brand-lime text-brand-lime-foreground text-xs font-medium px-2.5 py-0.5">
+                    {notesCountLabel(crew.notesCount)}
+                  </span>
+                  <span className="rounded-full bg-brand-lime text-brand-lime-foreground text-xs font-medium px-2.5 py-0.5">
+                    {jobsCountLabel(crew.jobs.length)}
+                  </span>
+                </div>
+              </div>
+              <ul>
+                {crew.jobs.map((job, index) => (
+                  <li key={job.id} className={index % 2 === 0 ? "bg-purple/10" : "bg-card"}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      data-testid={`today-job-${job.id}`}
+                      onClick={() => openJob(job.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openJob(job.id);
+                        }
+                      }}
+                      className="grid grid-cols-1 lg:grid-cols-[9.5rem_minmax(0,1.4fr)_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 cursor-pointer hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <p className="text-sm font-medium text-muted-foreground">{job.timeLabel}</p>
+                      <p className="text-sm font-semibold text-purple truncate">{job.title}</p>
+                      <p className="text-sm text-muted-foreground truncate">{job.address}</p>
+                      <div className="flex items-center gap-1">
+                        {job.people.map((person) => (
+                          <PersonAvatar key={person.id} person={person} size="sm" />
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {job.kit.map((item) => (
+                          <span
+                            key={item}
+                            className="rounded-full bg-purple/15 text-purple text-xs font-medium px-2.5 py-0.5"
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-sm font-semibold justify-self-end">{job.bookedLabel}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))
+        )}
+      </div>
+
+      <form
+        ref={addBarRef}
+        className="inflow-chrome bg-brand-lime/35 border-brand-lime-border px-3 py-3 flex flex-col gap-3 lg:flex-row lg:items-center"
+        data-testid="today-add-bar"
+        onSubmit={(event) => {
+          event.preventDefault();
+          saveMutation.mutate();
+        }}
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          className="justify-start text-foreground shrink-0"
+          onClick={focusAddBar}
+          data-testid="today-add-instruction"
+        >
+          <Plus className="h-4 w-4" />
+          {TODAY_COPY.addInstruction}
+        </Button>
+        <Select value={picker || undefined} onValueChange={setPicker}>
+          <SelectTrigger className="bg-card lg:w-56" data-testid="today-pick-who">
+            <SelectValue placeholder={TODAY_COPY.pickWho} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectLabel>{TODAY_COPY.people}</SelectLabel>
+              {(overview?.peopleOptions ?? []).map((person) => (
+                <SelectItem key={person.id} value={pickerValue("person", person.id)}>
+                  {person.displayName}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            {(overview?.crewOptions.length ?? 0) > 0 && (
+              <SelectGroup>
+                <SelectLabel>{TODAY_COPY.crews}</SelectLabel>
+                {overview?.crewOptions.map((crew) => (
+                  <SelectItem key={crew.id} value={pickerValue("crew", crew.id)}>
+                    {crew.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            )}
+          </SelectContent>
+        </Select>
+        <Input
+          ref={noteInputRef}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder={TODAY_COPY.pickWhoHint}
+          className="bg-card flex-1"
+          data-testid="today-note-input"
+        />
+        <Button
+          type="submit"
+          className="bg-brand-lime text-brand-lime-foreground border-brand-lime-border lg:w-24"
+          disabled={saveMutation.isPending}
+          data-testid="today-note-save"
+        >
+          {TODAY_COPY.save}
+        </Button>
+      </form>
 
       {selectedJobId && (
         <GlobalJobCard
           isOpen={isJobCardOpen}
-          onClose={handleCloseJobCard}
+          onClose={() => setIsJobCardOpen(false)}
           mode="edit"
           jobId={selectedJobId}
         />

@@ -24,6 +24,7 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
+import { buildTodayOverview, createTodayExtraInstruction, deleteTodayExtraInstruction, HttpError } from "./todayOverview";
 import { APP_URL } from "./config/appUrl";
 import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
@@ -21237,142 +21238,51 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
-      // Use the real current instant; getNZDateString converts it to the NZ
-      // calendar day exactly once. (Do NOT use getNZNow() here — it returns a
-      // tz-shifted Date, and converting that to NZ again double-shifts and rolls
-      // "today" to tomorrow during NZ afternoon/evening on a UTC server.)
-      const todayStr = getNZDateString(new Date());
-      const MS_PER_DAY = 1000 * 60 * 60 * 24;
-      const HORIZON_DAYS = 30; // how far ahead a compliance date surfaces
-
-      // Whole-day difference in the NZ calendar. Negative = overdue.
-      const daysUntil = (d: Date) => {
-        const a = new Date(`${todayStr}T00:00:00Z`).getTime();
-        const b = new Date(`${getNZDateString(d)}T00:00:00Z`).getTime();
-        return Math.round((b - a) / MS_PER_DAY);
-      };
-      const severityFor = (days: number) =>
-        days < 0 ? 'overdue' : days <= 7 ? 'critical' : days <= 14 ? 'warning' : 'info';
-
-      const allEquipment = await storage.getAllEquipment();
-      const fleet: Array<{
-        equipmentId: string; name: string; type: string | null;
-        registrationNumber: string | null; kind: string; label: string;
-        dueDate: string; daysUntil: number; severity: string;
-      }> = [];
-
-      for (const e of allEquipment) {
-        if (e.isActive === false || e.status === 'retired') continue;
-        const checks = [
-          { kind: 'rego', label: 'Registration (rego)', date: e.registrationExpiryDate },
-          { kind: 'cof', label: 'Certificate of Fitness', date: e.cofExpiryDate },
-          { kind: 'service', label: 'Scheduled service', date: e.nextMaintenanceDate },
-        ];
-        for (const c of checks) {
-          if (!c.date) continue;
-          const d = new Date(c.date);
-          if (isNaN(d.getTime())) continue;
-          const days = daysUntil(d);
-          if (days > HORIZON_DAYS) continue; // not due yet
-          fleet.push({
-            equipmentId: e.id,
-            name: e.name,
-            type: e.type ?? null,
-            registrationNumber: e.registrationNumber ?? null,
-            kind: c.kind,
-            label: c.label,
-            dueDate: d.toISOString(),
-            daysUntil: days,
-            severity: severityFor(days),
-          });
-        }
-      }
-      fleet.sort((a, b) => a.daysUntil - b.daysUntil);
-
-      // Jobs running today on the NZ calendar — honours multi-day date sets.
-      // SQL prefilter first: this endpoint is polled every 60s per open /today
-      // tab and used to pull EVERY non-archived job in the tenant each time.
-      const jobs = await storage.getJobsScheduledAroundNZDate(todayStr);
-      const jobsToday = jobs
-        .filter((j: any) => jobRunsOnNZDate(j, todayStr))
-        .map((j: any) => ({
-          id: j.id,
-          title: j.title || j.jobNumber || 'Job',
-          status: j.status,
-          scheduledStartTime: j.scheduledStartTime ?? null,
-          customerName: j.customerName ?? null,
-          address: j.address ?? null,
-        }))
-        .sort((a, b) =>
-          (a.scheduledStartTime || '99:99').localeCompare(b.scheduledStartTime || '99:99')
-        );
-
-      // Everything diaried on today's jobs since NZ midnight, in one query.
-      // Diary rows are the de-facto activity log (photo uploads, notes, timer
-      // stops, milestones all write one) with a denormalized authorName.
-      const jobIds = jobsToday.map(j => j.id);
-      const nzMidnightUtc = nzTimeToUTC(todayStr, '00:00');
-      const diaryToday = (await storage.getJobDiaryEntriesForJobsSince(jobIds, nzMidnightUtc))
-        .filter(e => e.createdAt && getNZDateString(e.createdAt) === todayStr);
-
-      const activityByJob = new Map<string, Array<{
-        id: string; type: string; timestamp: string; actorName: string;
-        title: string; summary: string | null; photos: string[]; timeSpent: number | null;
-      }>>();
-      for (const e of diaryToday) {
-        const photos = [...(e.photos ?? [])];
-        if (e.photoUrl && !photos.includes(e.photoUrl)) photos.push(e.photoUrl);
-        const list = activityByJob.get(e.jobId) ?? [];
-        list.push({
-          id: e.id,
-          type: e.entryType,
-          timestamp: e.createdAt!.toISOString(),
-          actorName: e.authorName,
-          title: e.title,
-          summary: e.description ? e.description.slice(0, 140) : null,
-          photos,
-          timeSpent: e.timeSpent ?? null,
-        });
-        activityByJob.set(e.jobId, list);
-      }
-
-      // Live clock-ins on today's jobs — drives the "on site now" badges.
-      const jobIdSet = new Set(jobIds);
-      const runningTimers = (await storage.getAllActiveTimers()).filter(t => jobIdSet.has(t.jobId));
-      const enrichedTimers = await enrichTimers(runningTimers);
-      const timersByJob = new Map<string, Array<{ employeeId: string; employeeName: string; startedAt: string }>>();
-      for (const t of enrichedTimers) {
-        const list = timersByJob.get(t.jobId) ?? [];
-        list.push({
-          employeeId: t.employeeId,
-          employeeName: t.employeeName,
-          startedAt: t.startedAt instanceof Date ? t.startedAt.toISOString() : String(t.startedAt),
-        });
-        timersByJob.set(t.jobId, list);
-      }
-
-      const jobsTodayWithActivity = jobsToday.map(j => ({
-        ...j,
-        activity: (activityByJob.get(j.id) ?? []).slice(0, 30),
-        liveTimers: timersByJob.get(j.id) ?? [],
-      }));
-
-      res.json({
-        success: true,
-        data: {
-          date: todayStr,
-          fleet,
-          jobsToday: jobsTodayWithActivity,
-          counts: {
-            needsAttention: fleet.filter(f => f.severity === 'overdue' || f.severity === 'critical').length,
-            dueSoon: fleet.filter(f => f.severity === 'warning' || f.severity === 'info').length,
-            jobsToday: jobsToday.length,
-          },
-        },
-      });
+      const data = await buildTodayOverview(req.session.employeeId);
+      res.json({ success: true, data });
     } catch (error) {
       console.error('Error building today overview:', error);
       res.status(500).json({ success: false, message: 'Error building today overview' });
+    }
+  });
+
+  app.post('/api/today-extra-instructions', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const scope = req.body?.scope === 'crew' ? 'crew' : req.body?.scope === 'person' ? 'person' : null;
+      if (!scope) {
+        return res.status(400).json({ success: false, message: 'scope must be person or crew' });
+      }
+      const row = await createTodayExtraInstruction({
+        employeeId: req.session.employeeId,
+        date: typeof req.body?.date === 'string' ? req.body.date : undefined,
+        scope,
+        personId: typeof req.body?.personId === 'string' ? req.body.personId : undefined,
+        crewId: typeof req.body?.crewId === 'string' ? req.body.crewId : undefined,
+        note: typeof req.body?.note === 'string' ? req.body.note : '',
+      });
+      res.json({ success: true, data: row });
+    } catch (error) {
+      const status = error instanceof HttpError ? error.status : 500;
+      const message = error instanceof Error ? error.message : "Failed to save extra instruction";
+      if (status >= 500) console.error('Error saving extra instruction:', error);
+      res.status(status).json({ success: false, message });
+    }
+  });
+
+  app.delete('/api/today-extra-instructions/:id', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const removed = await deleteTodayExtraInstruction(req.params.id);
+      if (!removed) return res.status(404).json({ success: false, message: 'Extra instruction not found' });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error removing extra instruction:', error);
+      res.status(500).json({ success: false, message: 'Failed to remove extra instruction' });
     }
   });
 

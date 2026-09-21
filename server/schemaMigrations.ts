@@ -860,6 +860,44 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Today page extra instructions (ops notes for a person or a whole crew
+    // on an NZ calendar day). Sits next to daily_job_notes; does not store
+    // job equipment / kit.
+    name: "daily-ops-notes-table",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS daily_ops_notes (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        date text NOT NULL,
+        scope text NOT NULL,
+        person_id varchar,
+        crew_id varchar,
+        note text NOT NULL,
+        created_by varchar,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS daily_ops_notes_business_date_idx ON daily_ops_notes (business_id, date)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      await client.query(`ALTER TABLE daily_ops_notes ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = 'daily_ops_notes'::regclass LIMIT 1`,
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON daily_ops_notes
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+        console.log(`[schema] created tenant_isolation policy on daily_ops_notes`);
+      }
+      if ((hasRole.rowCount ?? 0) > 0) {
+        await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON daily_ops_notes TO app_tenant`);
+      }
+    },
+  },
 ];
 
 let migrationPromise: Promise<void> | null = null;
