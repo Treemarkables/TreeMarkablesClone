@@ -8,10 +8,9 @@
  * Scope:
  *   - Customer card (read-only display + map link)
  *   - Job Description (editable, auto-save on blur)
- *   - Internal Notes (orange-tinted, auto-save on blur)
+ *   - Internal Notes (orange staff only card: notes, Voice, equipment chips)
  *   - Status / Lead Source / Quote Method selects
  *   - Customer confirmed checkbox
- *   - Job-level equipment chips (locked heavy plant catalogue)
  *
  * Not yet ported (defer to Phase B.5 or C):
  *   - Contacts card (Job Contact / Tenant Details)
@@ -816,9 +815,13 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           className="w-full bg-card border border-orange/25 rounded-xl px-3.5 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/70 outline-none focus:ring-2 focus:ring-orange/60 resize-none overflow-hidden"
           data-testid="internal-notes"
         />
+        <div className="mt-3 pt-3 border-t border-orange/25">
+          <div className="text-[12.5px] font-semibold text-orange mb-2">
+            Equipment
+          </div>
+          <JobEquipmentChips jobId={jobId} selected={job?.equipment} />
+        </div>
       </div>
-
-      <JobEquipmentChips jobId={jobId} selected={job?.equipment} />
 
       {/* ── Status grid ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
