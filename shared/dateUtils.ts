@@ -8,7 +8,7 @@
  * - When saving, we convert NZ local time → UTC
  */
 
-import { fromZonedTime, toZonedTime, format as formatTz } from 'date-fns-tz';
+import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 
 const NZ_TIMEZONE = 'Pacific/Auckland';
 
@@ -47,14 +47,14 @@ export function nzTimeToUTC(dateStr: string, timeStr: string): Date {
  * // Returns { date: '2025-10-17', time: '10:00' }
  */
 export function utcToNZTime(utcDate: Date): { date: string; time: string } {
-  // Use formatTz to format the UTC date directly in NZ timezone
-  // This avoids double conversion issues
-  const dateStr = formatTz(utcDate, 'yyyy-MM-dd', { timeZone: NZ_TIMEZONE });
-  const timeStr = formatTz(utcDate, 'HH:mm', { timeZone: NZ_TIMEZONE });
-  
+  // formatInTimeZone — not format(date, pattern, { timeZone }). date-fns-tz v3
+  // only honours `timeZone` inside format() when the pattern contains a zone
+  // token (x, X, O, z). yyyy-MM-dd / HH:mm were therefore formatted in the
+  // host zone. Production runs UTC, so a 5:30am NZ clock-in was stored as the
+  // previous calendar day and the checklist looked up the wrong day.
   return {
-    date: dateStr,
-    time: timeStr
+    date: formatInTimeZone(utcDate, NZ_TIMEZONE, 'yyyy-MM-dd'),
+    time: formatInTimeZone(utcDate, NZ_TIMEZONE, 'HH:mm'),
   };
 }
 

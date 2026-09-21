@@ -15411,21 +15411,31 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // allocated — the picker sends them alongside the ids. Applied before the
       // timers start so the notification below can name the right tasks. A missing
       // entry means "leave their role alone", not "clear it".
+      //
+      // Roles are applied for every id in the map, not only people whose timer is
+      // about to start. The picker shows role chips for staff already clocked in
+      // on this job (locked, not in employeeIds). Dropping those chips was why
+      // Start could succeed and the checklist still showed the roles unassigned.
       const todayNZ = getNZDateString(new Date());
-      const roleInput = (req.body?.roles && typeof req.body.roles === 'object')
+      const roleInput = (req.body?.roles && typeof req.body.roles === 'object' && !Array.isArray(req.body.roles))
         ? req.body.roles as Record<string, unknown>
         : {};
       const clockedIn: string[] = [];
+      const roleHolders: string[] = [];
+
+      for (const [employeeId, requestedRole] of Object.entries(roleInput)) {
+        if (!isRoleKey(requestedRole)) continue;
+        const employee = await storage.getEmployee(employeeId);
+        if (!employee) continue; // unknown/other-tenant id — skip
+        await upsertDayRole(employeeId, todayNZ, requestedRole, req.session.employeeId ?? null);
+        roleHolders.push(employeeId);
+      }
 
       const started: any[] = [];
       const switchedJobIds = new Set<string>();
       for (const employeeId of employeeIds) {
         const employee = await storage.getEmployee(employeeId);
         if (!employee) continue; // unknown/other-tenant id — skip
-        const requestedRole = roleInput[employeeId];
-        if (isRoleKey(requestedRole)) {
-          await upsertDayRole(employeeId, todayNZ, requestedRole, req.session.employeeId ?? null);
-        }
         clockedIn.push(employeeId);
         const running = await storage.getActiveTimerForEmployee(employeeId);
         if (running) {
@@ -15446,7 +15456,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       });
 
       // After the response — a push that fails must never fail the clock-in.
-      void notifyCrewOfRoles(job, clockedIn, todayNZ, req.session.employeeId ?? null)
+      // Include people whose role was just set even if their timer was already running.
+      const notifyIds = Array.from(new Set([...clockedIn, ...roleHolders]));
+      void notifyCrewOfRoles(job, notifyIds, todayNZ, req.session.employeeId ?? null)
         .catch(err => console.error('Error notifying crew of roles:', err));
     } catch (error) {
       console.error('Error starting timer(s):', error);

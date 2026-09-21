@@ -177,7 +177,6 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
   // Already collapsed to one row per person and sorted by name server-side.
   const crew = crewResp?.data?.crew;
   const staffOnJob = useMemo(() => crew ?? [], [crew]);
-  const crewDate = crewResp?.data?.date ?? getNZDateString(new Date());
   const crewIds = useMemo(
     () => new Set(staffOnJob.map((s) => s.employeeId)),
     [staffOnJob],
@@ -203,9 +202,48 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
   const setDayRole = useMutation({
     mutationFn: async (vars: { employeeId: string; date: string; dayRole: RoleKey | null }) => {
       const res = await apiRequest("PUT", "/api/staff-assignments/day-role", vars);
-      return res.json();
+      const json = await res.json();
+      if (json?.success === false) {
+        throw new Error(json?.message || "Couldn't save role");
+      }
+      return json;
     },
-    onSuccess: () => {
+    // The chip is controlled by the crew-today cache. Without this, the tap
+    // does nothing until a refetch lands — and a slower refetch from an
+    // earlier tap can land last and wipe the roles that did save.
+    onMutate: async (vars) => {
+      const key = ["/api/jobs", jobId, "crew-today"] as const;
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<{
+        success?: boolean;
+        data?: { date: string; crew: CrewMember[] };
+      }>(key);
+      if (prev?.data?.crew) {
+        queryClient.setQueryData(key, {
+          ...prev,
+          data: {
+            ...prev.data,
+            crew: prev.data.crew.map((member) =>
+              member.employeeId === vars.employeeId
+                ? { ...member, dayRole: vars.dayRole }
+                : member,
+            ),
+          },
+        });
+      }
+      return { prev };
+    },
+    onError: (err: Error, _vars, ctx) => {
+      if (ctx?.prev !== undefined) {
+        queryClient.setQueryData(["/api/jobs", jobId, "crew-today"], ctx.prev);
+      }
+      toast({
+        title: "Couldn't save role",
+        description: err.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({
         predicate: (q) =>
           Array.isArray(q.queryKey)
@@ -213,6 +251,7 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
           && (q.queryKey[2] === "staff-assignments" || q.queryKey[2] === "crew-today"),
       });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/day-roles"] });
     },
   });
 
@@ -439,11 +478,13 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
                 key={s.employeeId}
                 staff={s}
                 progress={progressByEmployee.get(s.employeeId) ?? null}
-                disabled={setDayRole.isPending}
                 onSelect={(role) =>
                   setDayRole.mutate({
                     employeeId: s.employeeId,
-                    date: crewDate,
+                    // Auckland date at tap time, not a crew-today payload that
+                    // may still be yesterday's (cached across midnight, or
+                    // computed on a UTC server before the date fix).
+                    date: getNZDateString(new Date()),
                     dayRole: role,
                   })
                 }
@@ -500,13 +541,13 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
 function RoleAssignRow({
   staff,
   progress,
-  disabled,
+  disabled = false,
   onSelect,
 }: {
   staff: CrewMember;
   /** Null when they hold no role — there's nothing to be a percentage of. */
   progress: { done: number; total: number; percent: number } | null;
-  disabled: boolean;
+  disabled?: boolean;
   onSelect: (role: RoleKey | null) => void;
 }) {
   const name = staff.employeeName.trim() || "Unknown crew";

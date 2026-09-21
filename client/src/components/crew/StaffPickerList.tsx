@@ -47,21 +47,40 @@ export function StaffPickerList({
           const below = renderBelow?.(emp, selected);
           return (
             <li key={emp.id}>
-              <label
+              {/* Not a <label> around the Radix checkbox. A label click fires
+                  onCheckedChange and then activates the control again, so the
+                  row toggles twice and the selection (and its role chips)
+                  disappears. One click on the row toggles once. */}
+              <div
+                role="checkbox"
+                aria-checked={selected}
+                aria-disabled={locked}
+                tabIndex={locked ? -1 : 0}
                 className={`flex items-center gap-3 rounded-md px-3 py-2.5 ${
                   locked ? "opacity-60" : "cursor-pointer hover:bg-muted/60"
                 }`}
                 data-testid={`${testIdPrefix}-${emp.id}`}
+                onClick={() => {
+                  if (!locked) onToggle(emp.id);
+                }}
+                onKeyDown={(e) => {
+                  if (locked) return;
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    onToggle(emp.id);
+                  }
+                }}
               >
                 <Checkbox
                   checked={selected}
                   disabled={locked}
-                  onCheckedChange={() => onToggle(emp.id)}
+                  tabIndex={-1}
+                  className="pointer-events-none"
                 />
                 <span className="text-sm font-medium flex-1 truncate">{name}</span>
                 {renderTrailing?.(emp)}
-              </label>
-              {/* Outside the label so tapping a role chip doesn't also toggle the checkbox. */}
+              </div>
+              {/* Outside the row so tapping a role chip doesn't also toggle the checkbox. */}
               {below ? <div className="pl-11 pr-3 pb-2">{below}</div> : null}
             </li>
           );
