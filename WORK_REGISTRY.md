@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Diary Book sets Lead to Quote — branch `cursor/diary-book-sets-quote-8381` — 2026-09-21 — diary Book (`POST /api/calendar/quick-book`) only: on successful book, `jobs.status` lead → `quote`. Do not change `statusAfterBooking` (crew schedule / dispatch still leave a lead as a lead). [PR #573]
 - Create → Mulch on jobs/despatch — branch `cursor/create-mulch-job-856e` — 2026-09-21 — add Mulch to the despatch Create/New menu using existing job status `mulch` (same POST /api/jobs draft path as Lead/Quote, then filter to Mulch). No new entity. Do not merge until owner reviews. [PR #572]
 - Job Details equipment chips inside Internal Notes — branch `cursor/equipment-chips-in-notes-51c2` — 2026-09-21 — move the locked plant chips into the orange staff only notes card on JobDetailsPanel. Same catalogue, same jobs.equipment save, Today kit chips unchanged. No standalone Equipment section. [PR #569]
 - URGENT push tap opens dispatch not job card — branch `cursor/push-tap-opens-job-card-4c3d` — 2026-09-21 — notification click deep-link: persist payload→route until the job card opens; don't let frozen-resume / `/`→`/dispatch` wipe `?job=`. No parallel push-nav rewrite. [PR #568]

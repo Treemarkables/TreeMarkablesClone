@@ -171,7 +171,7 @@ import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString, nzTimeToUTC } from "@shared/dateUtils";
 import { ROLE_LABEL as ROLE_LABELS, isRoleKey } from "@shared/crewRoles";
 import { composeCustomerAddress } from "@shared/customerAddress";
-import { statusAfterBooking } from "@shared/jobStatus";
+import { statusAfterBooking, statusAfterDiaryBook } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { runLaneEntryAutomations, onQuoteSentToLane } from "./services/laneAutomationService";
 import { workflowAutomationService } from "./services/workflowAutomation";
@@ -20448,9 +20448,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       if (eventId) {
         // If jobId provided, add a diary entry about the booking AND advance
-        // the job's status if booking implies a transition. Without this, a
-        // lead with a confirmed quote-visit appointment stayed as 'lead' even
-        // though the next step (the on-site quote) was locked in.
+        // the job's status when this Book implies a transition. A lead booked
+        // from the diary (quoting visit) becomes 'quote'. Other statuses use
+        // the shared booking rule (quote → work_order only).
         if (jobId) {
           try {
             await storage.createJobDiaryEntry({
@@ -20467,7 +20467,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
           try {
             const job = await storage.getJob(jobId);
-            const nextStatus = statusAfterBooking(job?.status);
+            const nextStatus = statusAfterDiaryBook(job?.status);
             if (job && nextStatus && nextStatus !== job.status) {
               await storage.updateJob(jobId, { status: nextStatus });
               console.log(`📊 Quick-book advanced job ${job.jobNumber} status: ${job.status} → ${nextStatus}`);
