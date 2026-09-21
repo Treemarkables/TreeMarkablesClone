@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 
 import { useAuth, type AuthUser } from '@/contexts/AuthContext';
+import { peekNotificationNav } from '@/lib/notificationNav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,7 +31,8 @@ export default function Login() {
 
   useEffect(() => {
     if (justLoggedIn && isAuthenticated) {
-      setLocation('/dispatch');
+      const pending = peekNotificationNav();
+      setLocation(pending || '/dispatch');
     }
   }, [justLoggedIn, isAuthenticated, setLocation]);
 

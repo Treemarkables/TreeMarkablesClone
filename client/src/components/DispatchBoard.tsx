@@ -100,6 +100,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
+import {
+  entryFromNotificationPath,
+  jobIdFromNotificationPath,
+  tabFromNotificationPath,
+} from "@shared/notificationDeepLink";
+import {
+  ackNativeNotificationTap,
+  clearDispatchOpenJob,
+  clearNotificationNav,
+  peekDispatchOpenJob,
+  peekNotificationNav,
+} from "@/lib/notificationNav";
 import type { JobTemplate } from "@shared/schema";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { requestDiaryHighlight } from "@/components/JobDiarySection";
@@ -911,22 +923,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       }
     }
 
-    // Open a specific job card when navigating from Create Lead flows
-    const pendingJobId = sessionStorage.getItem("dispatch_open_job");
-    if (pendingJobId) {
-      sessionStorage.removeItem("dispatch_open_job");
-      fetch(`/api/jobs/${pendingJobId}`, { credentials: "include" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          const jobData = data?.data ?? data;
-          if (jobData?.id) {
-            setShowGlobalJobCard(true);
-            setGlobalJobCardMode("edit");
-            setJobToEdit(jobData as JobAssignment);
-          }
-        })
-        .catch(console.error);
-    }
+    // Job-card deep links (Create Lead `dispatch_open_job`, push taps) are
+    // opened by the URL/notification-navigation effect below so a pending
+    // id survives until that handler runs.
   }, []); // Run only on mount
 
   // Keep the ref in sync so event-listener closures always see the latest editing state
@@ -958,12 +957,29 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             : "")
         : window.location.search;
       const params = new URLSearchParams(search);
-      const jobId = params.get("job");
-      const tab = params.get("tab");
+      let jobId = params.get("job");
+      let tab = params.get("tab");
       const newJob = params.get("newJob");
       // Optional deep-link target: a specific diary entry to scroll to and
       // highlight (e.g. the email reply a notification is about).
-      const entryId = params.get("entry");
+      let entryId = params.get("entry");
+
+      if (!jobId) {
+        const pendingPath = peekNotificationNav() || sourceUrl || "";
+        if (pendingPath) {
+          jobId = jobIdFromNotificationPath(pendingPath);
+          tab = tab || tabFromNotificationPath(pendingPath);
+          entryId = entryId || entryFromNotificationPath(pendingPath);
+        }
+      }
+      if (!jobId) {
+        const stored = peekDispatchOpenJob();
+        if (stored) {
+          jobId = stored.jobId;
+          tab = tab || stored.tab || null;
+          entryId = entryId || stored.entry || null;
+        }
+      }
 
       // Handle ?newJob=true — open the create job flow (same as the global
       // top-bar "+ New Job" button, which navigates here with this param).
@@ -990,19 +1006,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       if (jobId) {
         console.log("🔔 Processing job from URL parameter:", { jobId, tab });
 
-        // Wait until jobs data is loaded before acting
-        if (!jobsData?.data) {
-          console.log(
-            "🔔 jobsData not yet loaded — will retry when it arrives",
-          );
-          return;
-        }
-
-        // Find the job in the loaded data
-        const job = jobsData.data.find((j: any) => j.id === jobId);
-
-        console.log("🔔 Job search result:", { found: !!job, jobId });
-
         // Push notifications use ?tab=diary to deep-link a customer message
         // reply to the diary view. On mobile the Diary is its own tab; on
         // desktop the diary panel is always visible alongside Details, so the
@@ -1015,12 +1018,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             ? (tab as "details" | "billing" | "checklist" | "diary")
             : undefined;
 
+        const markHandled = () => {
+          window.dispatchEvent(new Event("notification-navigation-handled"));
+          ackNativeNotificationTap();
+          clearNotificationNav();
+          clearDispatchOpenJob();
+        };
+
         const openJob = (jobData: any) => {
           // Already viewing this job — don't remount the card, but if the
           // notification asked for a specific tab (e.g. diary) tell the card
           // to switch to it.
           if (showGlobalJobCard && jobToEdit?.id === jobId) {
-            window.history.replaceState({}, "", "/dispatch");
+            markHandled();
             if (tabParam) {
               window.dispatchEvent(
                 new CustomEvent("job-card-switch-tab", { detail: tabParam }),
@@ -1031,7 +1041,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             if (entryId) requestDiaryHighlight(entryId);
             return;
           }
-          window.history.replaceState({}, "", "/dispatch");
           setInitialSidebarTab(tabParam);
           setShowGlobalJobCard(true);
           setGlobalJobCardMode("edit");
@@ -1039,15 +1048,27 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           // Card is mounting fresh — park the highlight target so the diary
           // picks it up from the module bus the moment it mounts.
           if (entryId) requestDiaryHighlight(entryId);
+          markHandled();
+          // Strip the query only after the card is opening. Doing this first
+          // meant a frozen-resume reload landed on bare /dispatch.
+          window.setTimeout(() => {
+            if (window.location.pathname === "/dispatch") {
+              window.history.replaceState({}, "", "/dispatch");
+            }
+          }, 2000);
         };
 
-        if (job) {
-          openJob(job);
+        const cached = jobsData?.data?.find((j: any) => j.id === jobId);
+        console.log("🔔 Job search result:", { found: !!cached, jobId });
+
+        if (cached) {
+          openJob(cached);
         } else {
-          // Job not in current page — fetch it directly by ID
-          console.log("🔔 Job not in cache, fetching directly:", jobId);
-          window.history.replaceState({}, "", "/dispatch");
-          fetch(`/api/jobs/${jobId}`)
+          // Job not in the loaded page (or jobs list still fetching) — go
+          // straight to GET /api/jobs/:id. Waiting for the 500-job list used
+          // to miss the notification-navigation event entirely.
+          console.log("🔔 Fetching job directly:", jobId);
+          fetch(`/api/jobs/${jobId}`, { credentials: "include" })
             .then((r) => (r.ok ? r.json() : null))
             .then((data) => {
               const fetched = data?.data ?? data;

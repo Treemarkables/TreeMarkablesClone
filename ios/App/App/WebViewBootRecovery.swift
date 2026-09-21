@@ -133,14 +133,26 @@ final class WebViewBootRecovery {
     }
 
     private func remoteAppURL() -> URL {
-        if let file = Bundle.main.url(forResource: "capacitor.config", withExtension: "json"),
-           let data = try? Data(contentsOf: file),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let server = json["server"] as? [String: Any],
-           let remote = server["url"] as? String,
-           let parsed = URL(string: remote) {
-            return parsed
+        let base: URL = {
+            if let file = Bundle.main.url(forResource: "capacitor.config", withExtension: "json"),
+               let data = try? Data(contentsOf: file),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let server = json["server"] as? [String: Any],
+               let remote = server["url"] as? String,
+               let parsed = URL(string: remote) {
+                return parsed
+            }
+            return URL(string: "https://app.inflowapp.co.nz")!
+        }()
+        // Cold-start recovery used to load the origin with no path, wiping a
+        // notification tap that had already been injected as /dispatch?job=.
+        if let path = NotificationDeepLinkStore.current() {
+            let trimmed = base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let suffix = path.hasPrefix("/") ? path : "/" + path
+            if let withPath = URL(string: trimmed + suffix) {
+                return withPath
+            }
         }
-        return URL(string: "https://app.inflowapp.co.nz")!
+        return base
     }
 }

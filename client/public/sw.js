@@ -195,7 +195,7 @@ self.addEventListener('push', function(event) {
       var data = payload.data || {};
       title = notif.title || payload.title || title;
       body = notif.body || payload.body || body;
-      clickUrl = data.clickAction || notif.click_action || clickUrl;
+      clickUrl = resolvePushClickUrl(data, notif) || clickUrl;
       tag = data.type || tag;
     } catch (e) {
       // Plain text fallback
@@ -208,7 +208,7 @@ self.addEventListener('push', function(event) {
     icon: '/tree-icon-192.png',
     badge: '/tree-icon-192.png',
     tag: tag,
-    data: { clickUrl: clickUrl },
+    data: { clickUrl: clickUrl, clickAction: clickUrl },
     vibrate: [100, 50, 100],
   };
 
@@ -217,16 +217,42 @@ self.addEventListener('push', function(event) {
   );
 });
 
+function resolvePushClickUrl(data, notif) {
+  data = data || {};
+  notif = notif || {};
+  var nested = (data.FCM_MSG && data.FCM_MSG.data) || data.data || {};
+  var click = data.clickAction || data.click_action || data.clickUrl || data.url
+    || nested.clickAction || nested.clickUrl || notif.click_action;
+  var jobId = data.jobId || nested.jobId;
+  var type = data.type || nested.type;
+  var conversationId = data.conversationId || nested.conversationId;
+  if (click && !(jobId && (click === '/dispatch' || click === '/dispatch/'))) {
+    return click;
+  }
+  if (jobId) {
+    var diary = type === 'email_reply' || type === 'sms_reply' || type === 'new_lead'
+      || type === 'proposal_sent' || type === 'photo_added' || type === 'note_added';
+    return '/dispatch?job=' + encodeURIComponent(jobId) + (diary ? '&tab=diary' : '');
+  }
+  if (conversationId) return '/conversation/' + conversationId;
+  if (type === 'invoice_payment') return '/invoices';
+  if (type === 'quote_accepted') return '/quotes';
+  if (type === 'new_conversation' || type === 'conversation_reply' || type === 'new_lead') return '/inbox';
+  return click || null;
+}
+
 // Open the app when a notification is tapped
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  var clickUrl = (event.notification.data && event.notification.data.clickUrl) || '/dispatch';
+  var data = event.notification.data || {};
+  var clickUrl = resolvePushClickUrl(data, {}) || data.clickUrl || '/dispatch';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
       for (var i = 0; i < clientList.length; i++) {
         var client = clientList[i];
         if (client.url.indexOf(self.location.origin) === 0 && 'focus' in client) {
-          client.navigate(clickUrl);
+          client.postMessage({ type: 'NOTIFICATION_CLICKED', url: clickUrl, data: data });
+          if (client.navigate) client.navigate(clickUrl);
           return client.focus();
         }
       }

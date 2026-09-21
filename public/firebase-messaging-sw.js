@@ -105,41 +105,42 @@ self.addEventListener('notificationclick', (event) => {
   }
 
   // Determine where to navigate based on notification data
-  let urlToOpen = '/dispatch'; // Default
+  let urlToOpen = '/dispatch'; // Default when the payload has no deep link
 
   if (event.notification.data) {
     // clickAction is set by the server on every notification and is the most
     // direct path. Firebase may auto-show background notifications without
     // populating type/jobId in event.notification.data, so checking clickAction
     // first ensures the tap always lands on the right screen.
-    const clickAction = event.notification.data.clickAction
-      || event.notification.data?.FCM_MSG?.data?.clickAction;
-    const { type, jobId, conversationId } = event.notification.data;
+    const data = event.notification.data;
+    const nested = data.FCM_MSG?.data || data.data || {};
+    const clickAction = data.clickAction
+      || data.click_action
+      || data.clickUrl
+      || nested.clickAction
+      || nested.clickUrl;
+    const type = data.type || nested.type;
+    const jobId = data.jobId || nested.jobId;
+    const conversationId = data.conversationId || nested.conversationId;
 
-    if (clickAction) {
+    if (clickAction && !(jobId && (clickAction === '/dispatch' || clickAction === '/dispatch/'))) {
       urlToOpen = clickAction;
+    } else if (jobId) {
+      const diary = type === 'email_reply' || type === 'sms_reply' || type === 'new_lead'
+        || type === 'proposal_sent' || type === 'photo_added' || type === 'note_added';
+      urlToOpen = `/dispatch?job=${jobId}${diary ? '&tab=diary' : ''}`;
     } else {
       switch (type) {
         case 'job_assignment':
         case 'schedule_change':
-          // Navigate directly to the specific job if we have its ID
-          urlToOpen = jobId ? `/dispatch?job=${jobId}` : '/dispatch';
+          urlToOpen = '/dispatch';
           break;
         case 'new_lead':
-          urlToOpen = jobId ? `/dispatch?job=${jobId}&tab=diary` : '/conversations';
+          urlToOpen = '/inbox';
           break;
         case 'new_conversation':
         case 'conversation_reply':
-          // Once a conversation has been converted to a lead/job, notifications
-          // deep-link to that job card's diary tab. Pre-lead conversations (no
-          // job yet) still land on the conversation detail page.
-          if (jobId) {
-            urlToOpen = `/dispatch?job=${jobId}&tab=diary`;
-          } else if (conversationId) {
-            urlToOpen = `/conversation/${conversationId}`;
-          } else {
-            urlToOpen = '/conversations';
-          }
+          urlToOpen = conversationId ? `/conversation/${conversationId}` : '/inbox';
           break;
         case 'invoice_payment':
           urlToOpen = '/invoices';

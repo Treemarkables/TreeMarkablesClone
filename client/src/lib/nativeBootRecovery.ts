@@ -82,7 +82,12 @@ export function shouldRecoverFrozenResume(opts: {
   booted: boolean;
   hiddenForMs: number;
   staleMs?: number;
+  hasPendingNotificationNav?: boolean;
 }): boolean {
+  // A notification tap is what brought us foreground — reloading would
+  // wipe the deep link (and any in-flight job-card open) and land on the
+  // bare dispatch board.
+  if (opts.hasPendingNotificationNav) return false;
   const staleMs = opts.staleMs ?? HEARTBEAT_STALE_MS;
   if (!opts.booted) {
     // A foreground that still isn't booted after being away is the
@@ -177,6 +182,30 @@ export function requestBootReload(reason: string): boolean {
 
 let watchdogStarted = false;
 
+function hasPendingNotificationDeepLink(): boolean {
+  try {
+    const raw = localStorage.getItem("pendingNotificationNav");
+    if (raw) {
+      const parsed = JSON.parse(raw) as { path?: string; ts?: number };
+      if (parsed?.path && Date.now() - (parsed.ts || 0) < 60_000) return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (sessionStorage.getItem("dispatch_open_job")) return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (new URLSearchParams(window.location.search).get("job")) return true;
+  } catch {
+    /* ignore */
+  }
+  const early = (window as unknown as { __pendingNotificationPath?: string | null }).__pendingNotificationPath;
+  return typeof early === "string" && early.length > 0;
+}
+
 export function startNativeBootWatchdogs(): void {
   if (watchdogStarted) return;
   watchdogStarted = true;
@@ -203,16 +232,23 @@ export function startNativeBootWatchdogs(): void {
     const hiddenForMs = hiddenAt == null ? 0 : now - hiddenAt;
     hiddenAt = null;
     const lastHeartbeat = bootGlobals()[HEARTBEAT_FLAG] ?? null;
-    if (
-      shouldRecoverFrozenResume({
-        now,
-        lastHeartbeatMs: lastHeartbeat,
-        booted: isAppBooted(),
-        hiddenForMs,
-      })
-    ) {
-      requestBootReload("frozen-resume");
-    }
+    // Wait a beat so a notification tap can persist its deep link before
+    // we decide to reload. Checking immediately lost the job-card path —
+    // native inject and this handler raced, and the reload landed on
+    // bare /dispatch.
+    window.setTimeout(() => {
+      if (
+        shouldRecoverFrozenResume({
+          now: Date.now(),
+          lastHeartbeatMs: lastHeartbeat,
+          booted: isAppBooted(),
+          hiddenForMs,
+          hasPendingNotificationNav: hasPendingNotificationDeepLink(),
+        })
+      ) {
+        requestBootReload("frozen-resume");
+      }
+    }, 1500);
   });
 
   window.addEventListener("pageshow", (event) => {

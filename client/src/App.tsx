@@ -207,6 +207,11 @@ import { InstallPrompt } from "@/components/InstallPrompt";
 import { useAuth } from "@/contexts/AuthContext";
 import { Redirect } from "wouter";
 import { initializeFirebase } from "@/lib/firebase";
+import {
+  ackNativeNotificationTap,
+  peekNotificationNav,
+  persistNotificationNav,
+} from "@/lib/notificationNav";
 import { useQuery } from "@tanstack/react-query";
 import { addDays, subDays } from "date-fns";
 
@@ -1048,6 +1053,7 @@ function Router() {
         const url: string | undefined = event.data?.url;
         console.log('🔔 SW NOTIFICATION_CLICKED received:', { url });
         if (url) {
+          persistNotificationNav(url);
           setLocation(url);
           // If navigating to dispatch with a job, fire the event so DispatchBoard opens that job card
           if (url.startsWith('/dispatch')) {
@@ -1078,19 +1084,27 @@ function Router() {
   //     cold tap fell through to the default `/` → `/dispatch` redirect and
   //     landed on the dashboard instead of the job/conversation.
   const navigateFromNotification = useCallback((url: string) => {
+    persistNotificationNav(url);
     setLocation(url);
-    // Fire the dispatch-board signal immediately AND again at 150ms — the first
-    // catches the case where DispatchBoard is already mounted and wouter's
-    // same-pathname setLocation doesn't trigger a re-render; the second catches
-    // the case where setLocation needed a tick to settle (or the board is still
-    // mounting after a cold start).
-    if (url.startsWith('/dispatch')) {
-      const fire = () => window.dispatchEvent(
-        new CustomEvent('notification-navigation', { detail: { url } }),
-      );
-      fire();
-      setTimeout(fire, 150);
+    // Dispatch-board dests are acked by DispatchBoard once the job card
+    // actually opens. Acking here used to stop the native retry loop before
+    // the lazy board mounted.
+    if (!url.startsWith('/dispatch')) {
+      ackNativeNotificationTap();
+      return;
     }
+    const fire = () => window.dispatchEvent(
+      new CustomEvent('notification-navigation', { detail: { url } }),
+    );
+    fire();
+    const delays = [150, 400, 1000, 2000, 4000];
+    const timers = delays.map((ms) => window.setTimeout(fire, ms));
+    const onHandled = () => {
+      timers.forEach((id) => window.clearTimeout(id));
+      window.removeEventListener('notification-navigation-handled', onHandled);
+    };
+    window.addEventListener('notification-navigation-handled', onHandled);
+    window.setTimeout(onHandled, 5000);
   }, [setLocation]);
 
   // Live listener — warm taps.
@@ -1103,10 +1117,10 @@ function Router() {
         return;
       }
       window.dispatchEvent(new Event('nativeNotificationTapAck'));
-      // Clear the persisted/early-captured copies so the cold-start consumer
-      // doesn't replay this same tap on the next reload.
-      (window as any).__pendingNotificationPath = null;
-      try { localStorage.removeItem('pendingNotificationNav'); } catch {}
+      // Keep pendingNotificationNav until DispatchBoard (or a non-dispatch
+      // route) confirms — a frozen-resume reload after this event used to
+      // find an empty store and land on the bare board.
+      persistNotificationNav(url);
       navigateFromNotification(url);
     };
     window.addEventListener('nativeNotificationTap', handler);
@@ -1114,37 +1128,27 @@ function Router() {
   }, [navigateFromNotification]);
 
   // Mount-consumer — cold taps. Runs once when the app boots and replays any
-  // deep-link the native layer captured before React was ready.
+  // deep-link the native layer captured before React was ready. Peek, don't
+  // consume: DispatchBoard clears after the job card opens so a reload in
+  // between still has the path.
   useEffect(() => {
-    // 1) In-memory global set by index.html's early-capture listener.
-    const early: string | null = (window as any).__pendingNotificationPath ?? null;
-    (window as any).__pendingNotificationPath = null;
-    if (early) {
-      console.log('🔔 Consuming early-captured notification path:', early);
-      navigateFromNotification(early);
-      try { localStorage.removeItem('pendingNotificationNav'); } catch {}
-      return;
-    }
-
-    // 2) localStorage fallback persisted natively on cold launch. Gated on a
-    //    60s freshness window so a normal app open never jumps to a stale job.
-    try {
-      const raw = localStorage.getItem('pendingNotificationNav');
-      if (raw) {
-        localStorage.removeItem('pendingNotificationNav');
-        const parsed = JSON.parse(raw);
-        if (parsed?.path && typeof parsed.path === 'string'
-            && Date.now() - (parsed.ts || 0) < 60_000) {
-          console.log('🔔 Consuming persisted notification path:', parsed.path);
-          navigateFromNotification(parsed.path);
-        }
-      }
-    } catch {
-      /* localStorage unavailable — nothing to replay */
+    const pending = peekNotificationNav();
+    if (pending) {
+      console.log('🔔 Consuming captured notification path:', pending);
+      navigateFromNotification(pending);
     }
     // Run once on mount; navigateFromNotification is stable via useCallback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // After auth finishes (cold start was sitting on BootPlaceholder), replay
+  // any still-pending notification path so we don't lose it to the `/` →
+  // `/dispatch` redirect.
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
+    const pending = peekNotificationNav();
+    if (pending) navigateFromNotification(pending);
+  }, [isLoading, isAuthenticated, navigateFromNotification]);
 
   // Detect Capacitor (iOS Inflow app) once — used to keep marketing/customer pages
   // out of the native app shell. The iOS WebView loads the same URL as the website,
@@ -1163,6 +1167,10 @@ function Router() {
       return <BootPlaceholder />;
     }
     if (isAuthenticated) {
+      const pending = peekNotificationNav();
+      if (pending) {
+        return <Redirect to={pending} />;
+      }
       return <Redirect to="/dispatch" />;
     }
     if (isNative) {
