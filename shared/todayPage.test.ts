@@ -109,13 +109,16 @@ describe("crew grouping", () => {
 });
 
 describe("kit labels", () => {
-  it("resolves equipment ids and de dupes checklist names", () => {
+  it("maps register names and ids onto the locked plant catalogue", () => {
     const labels = kitLabels(
-      ["eq-1", "Trailer"],
-      [{ equipment: "Hedge kit" }, { equipment: "Trailer" }],
+      ["eq-1", "big_truck", "bucket-truck", "Trailer"],
+      [{ equipment: "Bandit chipper" }, { equipment: "Hedge kit" }],
       new Map([["eq-1", "Chipper"]]),
     );
-    assert.deepEqual(labels, ["Hedge kit", "Trailer", "Chipper"]);
+    assert.deepEqual(labels, ["bucket truck", "big truck", "chipper"]);
+    for (const label of labels) {
+      assert.equal(label.includes("-"), false, label);
+    }
   });
 });
 

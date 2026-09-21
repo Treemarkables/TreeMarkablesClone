@@ -25,6 +25,7 @@ declare module 'express-session' {
 }
 import { storage, invoiceRevenueExGst } from "./storage";
 import { buildTodayOverview, createTodayExtraInstruction, deleteTodayExtraInstruction, HttpError } from "./todayOverview";
+import { sanitizeJobEquipment } from "@shared/jobEquipmentCatalogue";
 import { APP_URL } from "./config/appUrl";
 import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
@@ -5669,6 +5670,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     try {
       // Preprocess date fields - convert strings to Date objects
       const processedBody = { ...req.body };
+      if ('equipment' in processedBody) {
+        processedBody.equipment = sanitizeJobEquipment(processedBody.equipment);
+      }
       if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
         processedBody.scheduledDate = new Date(processedBody.scheduledDate);
       }
@@ -6737,6 +6741,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Preprocess date fields - convert strings to Date objects
       const processedBody = { ...req.body };
       delete processedBody.expectedUpdatedAt;
+      if ('equipment' in processedBody) {
+        processedBody.equipment = sanitizeJobEquipment(processedBody.equipment);
+      }
       if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
         processedBody.scheduledDate = new Date(processedBody.scheduledDate);
       }
@@ -7403,6 +7410,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     try {
       // Convert empty string customerId to null (fixes foreign key constraint error)
       const processedBody = { ...req.body };
+      if ('equipment' in processedBody) {
+        processedBody.equipment = sanitizeJobEquipment(processedBody.equipment);
+      }
       if (processedBody.customerId === '') {
         processedBody.customerId = null;
       }
