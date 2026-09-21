@@ -268,19 +268,9 @@ export function jobBookedAmount(job: {
   return total > 0 ? total / 1.15 : 0;
 }
 
-/** Job kit chips for Today: the job card writes `jobs.equipment`; Today only reads that list. */
-export function kitLabels(
-  equipmentIdsOrNames: string[] | null | undefined,
-  _checklist: Array<{ equipment: string }> | null | undefined,
-  equipmentById: Map<string, string>,
-): string[] {
-  const raw: string[] = [];
-  for (const value of equipmentIdsOrNames ?? []) {
-    const trimmed = value?.trim();
-    if (!trimmed) continue;
-    raw.push(equipmentById.get(trimmed) ?? trimmed);
-  }
-  return sanitizeJobEquipment(raw);
+/** Today kit chips: labels saved on the job card (`jobs.equipment`). */
+export function kitLabels(equipment: string[] | null | undefined): string[] {
+  return sanitizeJobEquipment(equipment);
 }
 
 export interface CrewAssignJob {

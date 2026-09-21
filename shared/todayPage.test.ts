@@ -110,24 +110,17 @@ describe("crew grouping", () => {
 
 describe("kit labels", () => {
   it("maps the job card equipment list onto the locked plant catalogue", () => {
-    const labels = kitLabels(
-      ["eq-1", "big_truck", "bucket-truck", "Trailer"],
-      [{ equipment: "Bandit chipper" }, { equipment: "Hedge kit" }],
-      new Map([["eq-1", "Chipper"]]),
-    );
-    assert.deepEqual(labels, ["bucket truck", "big truck", "chipper"]);
+    const labels = kitLabels(["eq-1", "big_truck", "bucket-truck", "Trailer"]);
+    assert.deepEqual(labels, ["bucket truck", "big truck"]);
     for (const label of labels) {
       assert.equal(label.includes("-"), false, label);
     }
   });
 
-  it("does not read the equipment register checklist for Today chips", () => {
-    const labels = kitLabels(
-      [],
-      [{ equipment: "chipper" }, { equipment: "bucket truck" }],
-      new Map(),
-    );
-    assert.deepEqual(labels, []);
+  it("does not invent kit chips when the job has no equipment saved", () => {
+    assert.deepEqual(kitLabels([]), []);
+    assert.deepEqual(kitLabels(null), []);
+    assert.deepEqual(kitLabels(undefined), []);
   });
 });
 
@@ -172,7 +165,7 @@ describe("Just me filter", () => {
             address: "12 Rata Street",
             timeLabel: "9 AM to 11 AM",
             people: [person("josh", "Josh")],
-            kit: ["Hedge kit"],
+            kit: ["chipper"],
             bookedLabel: "$1.4k",
             bookedAmount: 1400,
           },
@@ -191,7 +184,7 @@ describe("Just me filter", () => {
             address: "30 Bright Street",
             timeLabel: "1 PM to 3 PM",
             people: [person("zane", "Zane")],
-            kit: ["Climbing kit"],
+            kit: ["orchard ladder"],
             bookedLabel: "$2k",
             bookedAmount: 2000,
           },
