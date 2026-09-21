@@ -207,16 +207,12 @@ function getJobPrice(job: Job): number {
   return total > 0 ? total / 1.15 : 0;
 }
 
-// Number of NZ-local days a job spans (min 1). Used to split price + revenue
-// evenly across each day's block / KPI for multi-day jobs.
+// Number of NZ-local days a job actually runs on (min 1). Used to split price +
+// revenue evenly across each day's block / KPI for multi-day jobs. Counts the
+// scheduledDates set when present, so a Mon + Wed booking splits over 2 days,
+// not the 3-day span — matching the week-mode perDaySummary.
 function jobDayCount(job: Job): number {
-  if (!job.scheduledDate || !job.scheduledEndDate) return 1;
-  const startKey = nzDateStr(new Date(job.scheduledDate));
-  const endKey = nzDateStr(new Date(job.scheduledEndDate));
-  if (endKey <= startKey) return 1;
-  const startMs = new Date(startKey + 'T12:00:00Z').getTime();
-  const endMs = new Date(endKey + 'T12:00:00Z').getTime();
-  return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+  return Math.max(1, getJobScheduledNZDates(job).length);
 }
 
 // Price attributed to a single day of the job (exc. GST). For single-day jobs

@@ -6279,6 +6279,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             WHERE scheduled_date IS NOT NULL
               AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') <= ${date}::date
               AND DATE((COALESCE(scheduled_end_date, scheduled_date) AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') >= ${date}::date
+              -- Non-contiguous bookings (scheduled_dates set, e.g. Mon + Wed) only run on
+              -- their listed days — the span test alone paints phantom days in between.
+              AND CASE WHEN jsonb_typeof(scheduled_dates) = 'array'
+                    THEN (jsonb_array_length(scheduled_dates) = 0 OR scheduled_dates @> ${JSON.stringify([date])}::jsonb)
+                    ELSE TRUE END
               AND status NOT IN ('archived', 'unsuccessful')
             ORDER BY scheduled_date ASC`
       );
@@ -21167,6 +21172,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             WHERE scheduled_date IS NOT NULL
               AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') <= ${date}::date
               AND DATE((COALESCE(scheduled_end_date, scheduled_date) AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') >= ${date}::date
+              -- Non-contiguous bookings (scheduled_dates set, e.g. Mon + Wed) only run on
+              -- their listed days — the span test alone paints phantom days in between.
+              AND CASE WHEN jsonb_typeof(scheduled_dates) = 'array'
+                    THEN (jsonb_array_length(scheduled_dates) = 0 OR scheduled_dates @> ${JSON.stringify([date])}::jsonb)
+                    ELSE TRUE END
               AND status NOT IN ('archived', 'unsuccessful')
             ORDER BY scheduled_date ASC, scheduled_start_time ASC NULLS LAST`
       );
