@@ -4511,6 +4511,14 @@ export function JobDiarySection({
                       queryClient.invalidateQueries({
                         queryKey: ["/api/jobs", jobId, "diary"],
                       });
+                      // Status may have moved (lead → quote). Refresh the open
+                      // job and any list that filters on status.
+                      queryClient.invalidateQueries({
+                        queryKey: ["/api/jobs", jobId],
+                      });
+                      queryClient.invalidateQueries({
+                        queryKey: ["/api/jobs"],
+                      });
                     } else {
                       throw new Error(
                         data.message || "Failed to create calendar event",
