@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Today page today-05 extra instructions — branch `cursor/today-05-extra-instructions-e363` — 2026-09-21 — lock Inflow /today to Jullian-picked today-05 (morning summary, today notes for person or crew, crew-grouped jobs, empty crews hidden, All crews/Just me, bottom add bar). Extra instructions = ops notes, not job kit. New `daily_ops_notes` table next to daily_job_notes. Do not touch Dispatch calendar job cards.
 - URGENT beta tester missing from admin Subscribers — branch `cursor/fix-admin-subscribers-signup-aa61` — 2026-09-21 — successful /api/signup tenants must appear on /admin/subscribers (owner email + newest first + checklist fail-open + createTenant on ownerDb). No parallel subscriber directory. [PR #563]
 - Staff Schedule slot rounding miss after #561 — branch `cursor/staff-schedule-slot-rounding-7eb2` — 2026-09-20 — apply Dispatch job-block radius (`rounded-2xl` / 1rem, same as `.inflow-chrome-item`) to Live Roster day-Gantt slots and multi-week chips. Live colours only. Styling only. [PR #562]
 - Inflow global visual polish (after Dispatch mockup 1 / #560) — branch `cursor/inflow-global-visual-polish-4dd0` — 2026-09-20 — extend `.inflow-chrome` + shared Card/Input/Tabs/Dialog chrome globally (jobs, quotes, customers, settings, inbox). Live colours only. Styling only — no structure, routing, or palette rewrite. Do not merge until owner confirms. [PR #561]

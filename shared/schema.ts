@@ -5023,6 +5023,23 @@ export const dailyJobNotes = pgTable("daily_job_notes", {
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+// Today page extra instructions (ops notes for a person or a whole crew on an NZ day).
+// Separate from job.equipment / equipment_checklist kit chips, and from per-job
+// daily_job_notes.
+export const dailyOpsNotes = pgTable("daily_ops_notes", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: text("date").notNull(), // YYYY-MM-DD Pacific/Auckland
+  scope: text("scope").notNull(), // 'person' | 'crew'
+  personId: varchar("person_id"),
+  crewId: varchar("crew_id"),
+  note: text("note").notNull(),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  dateIdx: index("daily_ops_notes_business_date_idx").on(table.businessId, table.date),
+}));
+
 export const checklistTemplates = pgTable("checklist_templates", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -5060,10 +5077,13 @@ export type InsertRoleChecklistTask = z.infer<typeof insertRoleChecklistTaskSche
 
 export const insertDailyBriefingSchema = createInsertSchema(dailyBriefings).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertDailyJobNoteSchema = createInsertSchema(dailyJobNotes).omit({ id: true, createdAt: true });
+export const insertDailyOpsNoteSchema = createInsertSchema(dailyOpsNotes).omit({ id: true, createdAt: true });
 export type DailyBriefing = typeof dailyBriefings.$inferSelect;
 export type InsertDailyBriefing = z.infer<typeof insertDailyBriefingSchema>;
 export type DailyJobNote = typeof dailyJobNotes.$inferSelect;
 export type InsertDailyJobNote = z.infer<typeof insertDailyJobNoteSchema>;
+export type DailyOpsNote = typeof dailyOpsNotes.$inferSelect;
+export type InsertDailyOpsNote = z.infer<typeof insertDailyOpsNoteSchema>;
 
 // AI Assistant Messages
 export const assistantMessages = pgTable("assistant_messages", {

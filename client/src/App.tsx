@@ -1231,7 +1231,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* Today — daily command centre (fleet compliance + today's jobs) */}
+      {/* Today — morning summary, extra instructions, crew grouped jobs */}
       <Route path="/today">
         <ProtectedRoute>
           <SidebarLayout>
