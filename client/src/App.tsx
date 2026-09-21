@@ -476,6 +476,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         Quote
                       </DropdownMenuItem>
                       <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-mulch"))}
+                        data-testid="create-mulch-button-mobile"
+                      >
+                        Mulch
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
                         onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
                         data-testid="create-wo-button-mobile"
                       >
@@ -814,6 +820,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         data-testid="create-quote-button-desktop"
                       >
                         Quote
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-mulch"))}
+                        data-testid="create-mulch-button-desktop"
+                      >
+                        Mulch
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}

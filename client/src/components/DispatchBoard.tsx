@@ -1137,10 +1137,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     const handleNewLeadEvent = () => handleCreateLead();
     const handleNewQuoteEvent = () => handleCreateQuote();
+    const handleNewMulchEvent = () => handleCreateMulch();
     const handleNewInvoiceEvent = () => handleCreateInvoice();
     const handlePasteEvent = () => setShowCreateFromMessageDialog(true);
     window.addEventListener("dispatch-new-lead", handleNewLeadEvent);
     window.addEventListener("dispatch-new-quote", handleNewQuoteEvent);
+    window.addEventListener("dispatch-new-mulch", handleNewMulchEvent);
     window.addEventListener("dispatch-new-invoice", handleNewInvoiceEvent);
     window.addEventListener("dispatch-paste", handlePasteEvent);
 
@@ -1153,6 +1155,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       window.removeEventListener("dispatch-new-job", handleNewJobEvent);
       window.removeEventListener("dispatch-new-lead", handleNewLeadEvent);
       window.removeEventListener("dispatch-new-quote", handleNewQuoteEvent);
+      window.removeEventListener("dispatch-new-mulch", handleNewMulchEvent);
       window.removeEventListener("dispatch-new-invoice", handleNewInvoiceEvent);
       window.removeEventListener("dispatch-paste", handlePasteEvent);
     };
@@ -1536,6 +1539,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return "WO";
       case "quote":
         return "Q";
+      case "mulch":
+        return "M";
       case "lead":
         return "L";
       default:
@@ -2543,6 +2548,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     createDraftMutation.mutate({
       status: "quote",
       afterOpen: () => setJobFilters(["quote"]),
+    });
+  };
+
+  // Mulch is a job status (shared/schema.ts JobStatus) — the same value the
+  // despatch Mulch chip filters on. Select that chip so the new draft is in view.
+  const handleCreateMulch = () => {
+    createDraftMutation.mutate({
+      status: "mulch",
+      afterOpen: () => setJobFilters(["mulch"]),
     });
   };
 

@@ -832,6 +832,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           options={[
             { value: "lead", label: "Lead" },
             { value: "quote", label: "Quote" },
+            { value: "mulch", label: "Mulch" },
             { value: "work_order", label: "Work Order" },
             { value: "scheduled", label: "Scheduled" },
             { value: "completed", label: "Completed" },
