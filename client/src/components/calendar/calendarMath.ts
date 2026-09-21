@@ -167,6 +167,30 @@ export function ganttFormatMins(mins: number): string {
   return m ? `${h12}:${String(m).padStart(2, '0')} ${ampm}` : `${h12} ${ampm}`;
 }
 
+// Visible time ranges on despatch calendar cards use "to", never a hyphen/en-dash.
+export function ganttFormatRange(start: string, end: string): string {
+  const a = start.trim();
+  const b = end.trim();
+  if (a && b) return `${a} to ${b}`;
+  return a || b;
+}
+
+export function ganttStreetAddress(address: string | undefined | null): string {
+  if (!address) return "";
+  return address.split(",")[0]?.trim() || "";
+}
+
+export function ganttJobName(
+  job: Pick<CalendarJob, "title" | "jobNumber">,
+  customerName?: string,
+): string {
+  const title = job.title?.trim();
+  if (title) return title;
+  const name = customerName?.trim();
+  if (name) return name;
+  return job.jobNumber ? `#${job.jobNumber}` : "";
+}
+
 // Compute effective Gantt minutes for a job block.
 // Priority: scheduledStartTime/EndTime text → assignment UTC times → 8 AM default.
 export function effectiveGanttMins(

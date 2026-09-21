@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChevronLeft, ChevronRight, Check, MapPin, AlignJustify, MessageSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, AlignJustify, MessageSquare } from "lucide-react";
 import { useState, useMemo, useRef } from "react";
 import {
   format,
@@ -34,8 +34,10 @@ import {
   effectiveGanttMins,
   formatNZD,
   ganttFormatMins,
+  ganttFormatRange,
   ganttFormatTime,
   ganttInitials,
+  ganttJobName,
   ganttLaneStyle,
   ganttTimeToMins,
   jobDayCount,
@@ -45,6 +47,7 @@ import {
   type CalendarJob as Job,
 } from "@/components/calendar/calendarMath";
 import { useCalendarData } from "@/components/calendar/useCalendarData";
+import { DispatchGanttJobCardContent } from "@/components/calendar/DispatchGanttJobCardContent";
 
 type ViewMode = "day" | "week" | "2weeks" | "4weeks" | "month";
 
@@ -589,9 +592,14 @@ export function CalendarGrid({
                       const ls = ganttLaneStyle(lane, totalLanes);
                       const c = getJobColor(job.id);
                       const custName = getCustomerName(job);
+                      const jobName = ganttJobName(job, custName);
                       const timeLabel = job.scheduledStartTime
-                        ? `${ganttFormatTime(job.scheduledStartTime)}–${ganttFormatTime(job.scheduledEndTime)}`
+                        ? ganttFormatRange(
+                            ganttFormatTime(job.scheduledStartTime),
+                            ganttFormatTime(job.scheduledEndTime),
+                          )
                         : '';
+                      const price = getJobPrice(job);
                       return (
                         <button
                           key={job.id}
@@ -608,7 +616,7 @@ export function CalendarGrid({
                           }}
                           onDragEnd={() => setDayViewDragOver(null)}
                           onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
-                          title={`${custName}${timeLabel ? ' — ' + timeLabel : ''} (unassigned — drag to assign crew)`}
+                          title={`${jobName}${timeLabel ? ' · ' + timeLabel : ''} (unassigned, drag to assign crew)`}
                           className="absolute rounded-2xl text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400 cursor-grab active:cursor-grabbing"
                           style={{
                             left: `${Math.max(0, startPct)}%`,
@@ -623,37 +631,21 @@ export function CalendarGrid({
                             minWidth: 40,
                           }}
                         >
-                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
-                            <div className="flex items-start gap-1">
-                              <span className="text-[10px] font-semibold leading-tight flex-1 min-w-0 whitespace-normal break-words" style={{ color: c.text }}>
-                                {custName}
-                              </span>
-                              {job.customerConfirmed && (
-                                <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: c.border }} />
-                              )}
-                              {!job.customerConfirmed && job.customerReplyReceivedAt && (
-                                <MessageSquare className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={2.5} style={{ color: c.border }} />
-                              )}
-                            </div>
-                            {blockW > 8 && timeLabel && (
-                              <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
-                                {timeLabel}
-                              </span>
-                            )}
-                            {(() => {
-                              const price = getJobPrice(job);
-                              return price > 0 ? (
-                                <span className="text-[10px] font-bold leading-tight block truncate" style={{ color: c.border }}>
-                                  {formatNZD(price)}
-                                </span>
-                              ) : null;
-                            })()}
-                            {blockW > 8 && (
+                          <DispatchGanttJobCardContent
+                            address={job.address}
+                            timeLabel={timeLabel}
+                            jobName={jobName}
+                            priceLabel={price > 0 ? formatNZD(price) : null}
+                            color={c}
+                            customerConfirmed={job.customerConfirmed}
+                            customerReplyReceived={Boolean(job.customerReplyReceivedAt)}
+                            showDetails={blockW > 8}
+                            footer={
                               <span className="text-[9px] leading-tight block truncate text-gray-400">
                                 drag to assign
                               </span>
-                            )}
-                          </div>
+                            }
+                          />
                         </button>
                       );
                     })}
@@ -816,14 +808,22 @@ export function CalendarGrid({
                       const ls = ganttLaneStyle(lane, totalLanes);
                       const c = getJobColor(job.id);
                       const custName = getCustomerName(job);
+                      const jobName = ganttJobName(job, custName);
                       const timeLabel = eff.fromAssignment
-                        ? `${ganttFormatMins(eff.startMins)}–${ganttFormatMins(eff.endMins)}`
-                        : `${ganttFormatTime(job.scheduledStartTime)}–${ganttFormatTime(job.scheduledEndTime)}`;
+                        ? ganttFormatRange(
+                            ganttFormatMins(eff.startMins),
+                            ganttFormatMins(eff.endMins),
+                          )
+                        : ganttFormatRange(
+                            ganttFormatTime(job.scheduledStartTime),
+                            ganttFormatTime(job.scheduledEndTime),
+                          );
+                      const price = getJobPrice(job);
                       return (
                         <button
                           key={job.id}
                           onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
-                          title={`${custName} — ${timeLabel}`}
+                          title={`${jobName} · ${timeLabel}`}
                           className="absolute rounded-2xl text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
                           style={{
                             left: `${Math.max(0, startPct)}%`,
@@ -835,38 +835,16 @@ export function CalendarGrid({
                             minWidth: 32,
                           }}
                         >
-                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
-                            <div className="flex items-start gap-1">
-                              <span className="text-[10px] font-semibold leading-tight flex-1 min-w-0 whitespace-normal break-words" style={{ color: c.text }}>
-                                {custName}
-                              </span>
-                              {job.customerConfirmed && (
-                                <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: c.border }} />
-                              )}
-                              {!job.customerConfirmed && job.customerReplyReceivedAt && (
-                                <MessageSquare className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={2.5} style={{ color: c.border }} />
-                              )}
-                            </div>
-                            {blockW > 8 && timeLabel && (
-                              <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
-                                {timeLabel}
-                              </span>
-                            )}
-                            {(() => {
-                              const price = getJobPrice(job);
-                              return price > 0 ? (
-                                <span className="text-[10px] font-bold leading-tight block truncate" style={{ color: c.border }}>
-                                  {formatNZD(price)}
-                                </span>
-                              ) : null;
-                            })()}
-                            {job.address && (
-                              <span className="text-[9px] leading-tight flex items-start gap-0.5 whitespace-normal break-words" style={{ color: c.text, opacity: 0.7 }}>
-                                <MapPin className="w-2 h-2 shrink-0 mt-0.5" />
-                                <span className="min-w-0">{job.address.split(",")[0]}</span>
-                              </span>
-                            )}
-                          </div>
+                          <DispatchGanttJobCardContent
+                            address={job.address}
+                            timeLabel={timeLabel}
+                            jobName={jobName}
+                            priceLabel={price > 0 ? formatNZD(price) : null}
+                            color={c}
+                            customerConfirmed={job.customerConfirmed}
+                            customerReplyReceived={Boolean(job.customerReplyReceivedAt)}
+                            showDetails={blockW > 8}
+                          />
                         </button>
                       );
                     })}
