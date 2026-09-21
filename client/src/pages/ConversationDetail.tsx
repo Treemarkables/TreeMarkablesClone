@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSelectAllOnFocus } from "@/lib/selectAllOnFocus";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -105,6 +106,7 @@ function parseContactForm(content: string) {
 }
 
 export default function ConversationDetail() {
+  const selectAllAddress = useSelectAllOnFocus();
   const [, params] = useRoute("/conversation/:id");
   const [, setLocation] = useLocation();
   const conversationId = params?.id;
@@ -1058,6 +1060,7 @@ export default function ConversationDetail() {
                 onChange={(e) =>
                   setLeadForm({ ...leadForm, address: e.target.value })
                 }
+                {...selectAllAddress}
                 placeholder="Property address"
                 data-testid="input-job-address"
               />
