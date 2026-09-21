@@ -25,6 +25,8 @@ export type JobStatusVisual = {
 const JOB_STATUS: Record<string, JobStatusVisual> = {
   lead: { label: "Lead", solid: "#f59e0b", soft: "#fef3c7", softFg: "#9a3412" },
   quote: { label: "Quote", solid: "#f59e0b", soft: "#fef3c7", softFg: "#9a3412" },
+  // Matches DispatchBoard's mulch circle (lime-500).
+  mulch: { label: "Mulch", solid: "#84cc16", soft: "#ecfccb", softFg: "#3f6212" },
   work_order: { label: "Work Order", solid: "#2563eb", soft: "#eff6ff", softFg: "#1d4ed8" },
   scheduled: { label: "Scheduled", solid: "#8b5cf6", soft: "#f3e8ff", softFg: "#6b21a8" },
   completed: { label: "Completed", solid: "#16a34a", soft: "#dcfce7", softFg: "#15803d" },
