@@ -7,6 +7,7 @@ import {
   Pin,
   ClipboardList,
   ListTodo,
+  MessageSquare,
   Video,
   Search,
   BookOpen,
@@ -133,7 +134,7 @@ function SidebarNavContent({
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const safetyActive = location === "/safety" || location.startsWith("/safety/") || ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
   const financeActive = ["/metrics", "/profitability-calculator"].includes(location);
-  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox"].includes(location);
+  const opsActive = ["/calendar", "/workflows", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
   const [safetyOpen, setSafetyOpen] = useState(safetyActive);
@@ -299,6 +300,23 @@ function SidebarNavContent({
                   )}
                 </SidebarMenuItem>
               ))}
+
+              {/* Conversations — customer threads. Same /opportunities page that
+                  used to sit inside Operations & Analysis, now next to Jobs. */}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === "/opportunities" || location.startsWith("/conversation/")}
+                    className={ITEM}
+                  >
+                    <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-conversations">
+                      <NavIcon icon={MessageSquare} />
+                      <span>Conversations</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
 
               {/* Calls — recorded call log (paid add-on, any tier) */}
               {isAdmin && (
@@ -560,11 +578,6 @@ function SidebarNavContent({
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         </PlanGate>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/opportunities"}>
-                            <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-opportunities"><span>Conversations</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/follow-up-queue"}>
                             <Link href="/follow-up-queue" onClick={handleLinkClick} data-testid="link-follow-up-queue"><span>Follow-up Queue</span></Link>
