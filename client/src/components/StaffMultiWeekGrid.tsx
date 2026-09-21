@@ -148,8 +148,8 @@ export function StaffMultiWeekGrid({
     return '#ffffff';
   };
 
-  // One continuous strip per job run: square ends + edge-bleed margins on
-  // middle days so the chip visually crosses cell borders.
+  // Each day is its own job block. Radius is 1rem on every corner — the same
+  // token as Dispatch timeline cards (`rounded-2xl` / `.inflow-chrome-item`).
   const chipStyle = (slot: MultiWeekCellSlot, colors: JobColors, dashed: boolean) => ({
     backgroundColor: colors.bg,
     borderLeft: slot.isRunStart ? `3px ${dashed ? 'dashed' : 'solid'} ${colors.border}` : undefined,
@@ -160,9 +160,8 @@ export function StaffMultiWeekGrid({
           borderBottom: `1px dashed ${colors.border}`,
         }
       : {}),
-    marginLeft: slot.isRunStart ? 2 : -2,
-    marginRight: slot.isRunEnd ? 2 : -2,
-    borderRadius: `${slot.isRunStart ? '1rem' : 0} ${slot.isRunEnd ? '1rem' : 0} ${slot.isRunEnd ? '1rem' : 0} ${slot.isRunStart ? '1rem' : 0}`,
+    marginLeft: 2,
+    marginRight: 2,
   });
 
   const renderJobChip = (slot: MultiWeekCellSlot, dashed: boolean) => {
@@ -173,7 +172,7 @@ export function StaffMultiWeekGrid({
         key={slot.id}
         onClick={e => { e.stopPropagation(); onOpenJob(slot.job); }}
         title={`${label} — ${slot.timeLabel}${dashed ? ' (unassigned)' : ''}`}
-        className="block w-full text-left overflow-hidden shrink-0 hover:brightness-95 transition-all px-1 py-0.5"
+        className="block w-[calc(100%-4px)] text-left overflow-hidden shrink-0 hover:brightness-95 transition-all px-1 py-0.5 rounded-2xl"
         style={chipStyle(slot, colors, dashed)}
       >
         <span className="block text-[10px] font-semibold leading-tight truncate" style={{ color: colors.text }}>

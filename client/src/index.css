@@ -556,7 +556,7 @@ svg.lucide-loader-circle {
 }
 .diary-entry-highlight {
   animation: diaryEntryHighlightPulse 2.4s ease-out;
-  border-radius: 0.75rem;
+  border-radius: 1rem;
 }
 /* Live Roster day map — pulsing halo behind high-risk job pins */
 .roster-day-pin { background: transparent; border: 0; }

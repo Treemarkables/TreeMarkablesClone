@@ -361,7 +361,7 @@ function JobConfirmationReplyCard({
 
   return (
     <div
-      className="mx-2 mb-2 mt-1 rounded-lg border border-green-200 dark:border-green-800 bg-green-50/60 dark:bg-green-950/30 p-3"
+      className="mx-2 mb-2 mt-1 rounded-2xl border border-green-200 dark:border-green-800 bg-green-50/60 dark:bg-green-950/30 p-3"
       data-testid="card-confirmation-reply"
     >
       <div className="flex items-center justify-between gap-2 mb-2">
@@ -2525,7 +2525,7 @@ export function JobDiarySection({
                       className="group"
                       data-testid="diary-email-thread"
                     >
-                      <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                      <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                         {/* Thread header */}
                         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
                           <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
@@ -2575,7 +2575,7 @@ export function JobDiarySection({
                               <div
                                 key={msg.id}
                                 data-diary-entry-id={msg.id}
-                                className={`border-l-2 pl-3 ml-1 rounded-md transition-shadow ${accent}`}
+                                className={`border-l-2 pl-3 ml-1 rounded-2xl transition-shadow ${accent}`}
                                 data-testid={`email-thread-msg-${msg.id}`}
                               >
                                 <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -2617,7 +2617,7 @@ export function JobDiarySection({
                                     </Button>
                                   </div>
                                 </div>
-                                <div className={`rounded-md px-3 py-2 ${bubbleBg}`}>
+                                <div className={`rounded-2xl px-3 py-2 ${bubbleBg}`}>
                                   <p
                                     className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${bubbleText}`}
                                     style={{ wordBreak: "break-word" }}
@@ -2668,7 +2668,7 @@ export function JobDiarySection({
                                       | undefined
                                   )?.replyAcknowledged &&
                                   !hasOutboundReplyAfter(diaryEntries, msg) && (
-                                    <div className="mt-2 rounded-md border border-purple-200 dark:border-purple-800 overflow-hidden">
+                                    <div className="mt-2 rounded-2xl border border-purple-200 dark:border-purple-800 overflow-hidden">
                                       <SuggestedReplyDraft
                                         entry={msg}
                                         jobId={jobId}
@@ -2704,7 +2704,7 @@ export function JobDiarySection({
                       className="group"
                       data-testid="diary-sms-thread"
                     >
-                      <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                      <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                         {/* Thread header */}
                         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
                           <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
@@ -2755,7 +2755,7 @@ export function JobDiarySection({
                               <div
                                 key={msg.id}
                                 data-diary-entry-id={msg.id}
-                                className={`border-l-2 pl-3 ml-1 rounded-md transition-shadow ${accent}`}
+                                className={`border-l-2 pl-3 ml-1 rounded-2xl transition-shadow ${accent}`}
                                 data-testid={`sms-thread-msg-${msg.id}`}
                               >
                                 <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -2797,7 +2797,7 @@ export function JobDiarySection({
                                     </Button>
                                   </div>
                                 </div>
-                                <div className={`rounded-md px-3 py-2 ${bubbleBg}`}>
+                                <div className={`rounded-2xl px-3 py-2 ${bubbleBg}`}>
                                   <p
                                     className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${bubbleText}`}
                                     style={{ wordBreak: "break-word" }}
@@ -2840,7 +2840,7 @@ export function JobDiarySection({
                       className="group"
                       data-testid="diary-photo-group"
                     >
-                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                         {/* Header */}
                         <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
                           <div className="flex items-center gap-2">
@@ -3045,9 +3045,9 @@ export function JobDiarySection({
                     <div
                       key={entry.id}
                       data-diary-entry-id={entry.id}
-                      className="group rounded-xl transition-shadow"
+                      className="group rounded-2xl transition-shadow"
                     >
-                      <div className="rounded-xl overflow-hidden shadow-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                      <div className="rounded-2xl overflow-hidden shadow-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
                         {/* Header */}
                         <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 dark:border-gray-700">
                           <div className="flex items-center gap-1.5">
@@ -3330,11 +3330,11 @@ export function JobDiarySection({
                   <div
                     key={entry.id}
                     data-diary-entry-id={entry.id}
-                    className="group rounded-xl transition-shadow"
+                    className="group rounded-2xl transition-shadow"
                     data-testid={`diary-entry-${entry.type}`}
                   >
                     <div
-                      className={`rounded-xl overflow-hidden shadow-sm border ${entryStyle.border} ${entryStyle.bg} ${isClickable ? "cursor-pointer hover-elevate active-elevate-2" : ""}`}
+                      className={`rounded-2xl overflow-hidden shadow-sm border ${entryStyle.border} ${entryStyle.bg} ${isClickable ? "cursor-pointer hover-elevate active-elevate-2" : ""}`}
                       onClick={isClickable ? handleEntryClick : undefined}
                     >
                       {/* Header */}
