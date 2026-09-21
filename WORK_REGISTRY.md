@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- URGENT beta tester missing from admin Subscribers — branch `cursor/fix-admin-subscribers-signup-aa61` — 2026-09-21 — successful /api/signup tenants must appear on /admin/subscribers (owner email + newest first + checklist fail-open + createTenant on ownerDb). No parallel subscriber directory.
 - Staff Schedule slot rounding miss after #561 — branch `cursor/staff-schedule-slot-rounding-7eb2` — 2026-09-20 — apply Dispatch job-block radius (`rounded-2xl` / 1rem, same as `.inflow-chrome-item`) to Live Roster day-Gantt slots and multi-week chips. Live colours only. Styling only. [PR #562]
 - Inflow global visual polish (after Dispatch mockup 1 / #560) — branch `cursor/inflow-global-visual-polish-4dd0` — 2026-09-20 — extend `.inflow-chrome` + shared Card/Input/Tabs/Dialog chrome globally (jobs, quotes, customers, settings, inbox). Live colours only. Styling only — no structure, routing, or palette rewrite. Do not merge until owner confirms. [PR #561]
 - Dispatch Board visual refresh (mockup 1) — branch `cursor/dispatch-board-visual-refresh-2f82` — 2026-09-20 — Jullian-approved mockup 1: stronger rounded-rectangle chrome on sidebar/header/controls/timeline/job blocks/quotes. Keep live colours (white sidebar, black Dispatch pill, lime ~#D3FD63 accent, pastel blue jobs, orange Q, green Target hit). Styling only — no structure or palette rewrite. [PR #560]
