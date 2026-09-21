@@ -18,7 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
-- URGENT push tap opens dispatch not job card — branch `cursor/push-tap-opens-job-card-4c3d` — 2026-09-21 — notification click deep-link: persist payload→route until the job card opens; don't let frozen-resume / `/`→`/dispatch` wipe `?job=`. No parallel push-nav rewrite.
+- URGENT push tap opens dispatch not job card — branch `cursor/push-tap-opens-job-card-4c3d` — 2026-09-21 — notification click deep-link: persist payload→route until the job card opens; don't let frozen-resume / `/`→`/dispatch` wipe `?job=`. No parallel push-nav rewrite. [PR #568]
 - Job equipment catalogue (locked heavy plant) — branch `cursor/job-equipment-catalogue-17a7` — 2026-09-21 — job-level multi-select of Jullian’s 6 plant items on JobDetailsPanel; persist on `jobs.equipment`; Today kit chips read the same list. Do not redesign #565 calendar cards. Do not merge until owner reviews. [PR #567]
 - Despatch calendar job cards Option A (Field first) — branch `cursor/despatch-field-first-cards-fb77` — 2026-09-21 — CalendarGrid day-Gantt job blocks on /dispatch: pin+address bold, time with "to", muted job name, price chip. Do not change quotes rail, staff-schedule, or Today. [PR #565]
 - Today page today-05 extra instructions — branch `cursor/today-05-extra-instructions-e363` — 2026-09-21 — lock Inflow /today to Jullian-picked today-05 (morning summary, today notes for person or crew, crew-grouped jobs, empty crews hidden, All crews/Just me, bottom add bar). Extra instructions = ops notes, not job kit. New `daily_ops_notes` table next to daily_job_notes. Do not touch Dispatch calendar job cards. [PR #566]
