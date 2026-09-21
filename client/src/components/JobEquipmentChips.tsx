@@ -1,7 +1,8 @@
 /**
  * Compact job-level heavy plant picker. Multi-select of the locked catalogue
- * (shared on the job, not per person). Persists to jobs.equipment so Today
- * kit chips read the same list.
+ * (shared on the job, not per person). Rendered inside the Internal Notes
+ * staff only card. Persists to jobs.equipment so Today kit chips read the
+ * same list.
  */
 import { useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -64,38 +65,32 @@ export function JobEquipmentChips({
   });
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-4" data-testid="job-equipment">
-      <div className="flex items-center gap-2 text-[14px] font-bold text-foreground mb-2">
-        <span className="w-1 h-3.5 rounded-full bg-brand-lime" aria-hidden="true" />
-        Equipment
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {JOB_EQUIPMENT_CATALOGUE.map((item) => {
-          const active = current.includes(item.label);
-          return (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={active}
-              data-testid={`job-equipment-chip-${item.id}`}
-              disabled={!jobId}
-              onClick={() => {
-                const fromCache = queryClient.getQueryData<JobQuery>(["/api/jobs", jobId])
-                  ?.data?.equipment;
-                const latest = sanitizeJobEquipment(fromCache ?? current);
-                save.mutate(toggleJobEquipment(latest, item.label));
-              }}
-              className={
-                active
-                  ? "rounded-full px-2.5 py-1 text-xs font-semibold border border-brand-lime-border bg-brand-lime text-brand-lime-foreground hover-elevate disabled:opacity-60"
-                  : "rounded-full px-2.5 py-1 text-xs font-semibold border border-border bg-card text-foreground hover-elevate disabled:opacity-60"
-              }
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
+    <div className="flex flex-wrap gap-1.5" data-testid="job-equipment">
+      {JOB_EQUIPMENT_CATALOGUE.map((item) => {
+        const active = current.includes(item.label);
+        return (
+          <button
+            key={item.id}
+            type="button"
+            aria-pressed={active}
+            data-testid={`job-equipment-chip-${item.id}`}
+            disabled={!jobId}
+            onClick={() => {
+              const fromCache = queryClient.getQueryData<JobQuery>(["/api/jobs", jobId])
+                ?.data?.equipment;
+              const latest = sanitizeJobEquipment(fromCache ?? current);
+              save.mutate(toggleJobEquipment(latest, item.label));
+            }}
+            className={
+              active
+                ? "rounded-full px-2.5 py-1 text-xs font-semibold border border-brand-lime-border bg-brand-lime text-brand-lime-foreground hover-elevate disabled:opacity-60"
+                : "rounded-full px-2.5 py-1 text-xs font-semibold border border-border bg-card text-foreground hover-elevate disabled:opacity-60"
+            }
+          >
+            {item.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
