@@ -109,7 +109,7 @@ describe("crew grouping", () => {
 });
 
 describe("kit labels", () => {
-  it("maps register names and ids onto the locked plant catalogue", () => {
+  it("maps the job card equipment list onto the locked plant catalogue", () => {
     const labels = kitLabels(
       ["eq-1", "big_truck", "bucket-truck", "Trailer"],
       [{ equipment: "Bandit chipper" }, { equipment: "Hedge kit" }],
@@ -119,6 +119,15 @@ describe("kit labels", () => {
     for (const label of labels) {
       assert.equal(label.includes("-"), false, label);
     }
+  });
+
+  it("does not read the equipment register checklist for Today chips", () => {
+    const labels = kitLabels(
+      [],
+      [{ equipment: "chipper" }, { equipment: "bucket truck" }],
+      new Map(),
+    );
+    assert.deepEqual(labels, []);
   });
 });
 

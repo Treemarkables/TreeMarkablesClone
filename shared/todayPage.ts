@@ -268,16 +268,13 @@ export function jobBookedAmount(job: {
   return total > 0 ? total / 1.15 : 0;
 }
 
-/** Job kit chips for Today: map `jobs.equipment` + checklist names onto the locked plant catalogue. */
+/** Job kit chips for Today: the job card writes `jobs.equipment`; Today only reads that list. */
 export function kitLabels(
   equipmentIdsOrNames: string[] | null | undefined,
-  checklist: Array<{ equipment: string }> | null | undefined,
+  _checklist: Array<{ equipment: string }> | null | undefined,
   equipmentById: Map<string, string>,
 ): string[] {
   const raw: string[] = [];
-  for (const item of checklist ?? []) {
-    if (item.equipment) raw.push(item.equipment);
-  }
   for (const value of equipmentIdsOrNames ?? []) {
     const trimmed = value?.trim();
     if (!trimmed) continue;
