@@ -8,7 +8,7 @@
  * Scope:
  *   - Customer card (read-only display + map link)
  *   - Job Description (editable, auto-save on blur)
- *   - Internal Notes (orange staff only card: notes, Voice, equipment chips)
+ *   - Internal Notes (peach staff only card: notes, Voice, kit on this job)
  *   - Status / Lead Source / Quote Method selects
  *   - Customer confirmed checkbox
  *
@@ -784,14 +784,20 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
         />
       </div>
 
-      {/* ── Internal Notes (orange tint) ── */}
-      <div className="bg-orange/10 border border-orange/25 rounded-2xl p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 text-[14px] font-bold text-orange">
-            <Lock className="w-3.5 h-3.5" />
-            Internal Notes
+      {/* ── Internal Notes (peach staff only card) ── */}
+      <div className="bg-orange/10 border border-orange/25 rounded-2xl p-4" data-testid="internal-notes-card">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-[15px] font-bold text-orange">
+              <Lock className="w-4 h-4 shrink-0" aria-hidden="true" />
+              Internal Notes
+            </div>
+            <p className="mt-0.5 text-[12.5px] font-medium text-orange/80">
+              Staff only · not visible to customers
+            </p>
           </div>
           <VoiceButton
+            variant="pill"
             context="internal-notes"
             onTranscript={(text) => {
               const next = internalNotes ? `${internalNotes} ${text}` : text;
@@ -799,9 +805,6 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
               saveField.mutate({ internalNotes: next });
             }}
           />
-        </div>
-        <div className="text-[12.5px] font-semibold text-orange/70 mb-2.5">
-          Staff only — not visible to customers
         </div>
         <textarea
           ref={internalNotesRef}
@@ -811,14 +814,11 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             if ((job?.internalNotes ?? "") !== internalNotes) saveField.mutate({ internalNotes });
           }}
           placeholder="Add internal notes..."
-          rows={3}
-          className="w-full bg-card border border-orange/25 rounded-xl px-3.5 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/70 outline-none focus:ring-2 focus:ring-orange/60 resize-none overflow-hidden"
+          rows={4}
+          className="w-full bg-card border border-orange/20 rounded-xl px-3.5 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/70 outline-none focus:ring-2 focus:ring-orange/60 resize-none overflow-hidden"
           data-testid="internal-notes"
         />
-        <div className="mt-3 pt-3 border-t border-orange/25">
-          <div className="text-[12.5px] font-semibold text-orange mb-2">
-            Equipment
-          </div>
+        <div className="mt-4">
           <JobEquipmentChips jobId={jobId} selected={job?.equipment} />
         </div>
       </div>
@@ -1351,9 +1351,11 @@ type VoiceContext = "job-description" | "internal-notes";
 function VoiceButton({
   onTranscript,
   context,
+  variant = "text",
 }: {
   onTranscript: (text: string) => void;
   context: VoiceContext;
+  variant?: "text" | "pill";
 }) {
   // Web Speech recognition doesn't function inside the iOS Capacitor WKWebView,
   // so the native app uses the Whisper-backed SpeechToQuote recorder (MediaRecorder
@@ -1362,18 +1364,28 @@ function VoiceButton({
   // isNativeApp() is stable for the lifetime of the app, so branching on it here
   // doesn't violate the rules of hooks (each child calls its own hooks).
   if (isNativeApp()) {
-    return <NativeVoiceButton onTranscript={onTranscript} context={context} />;
+    return <NativeVoiceButton onTranscript={onTranscript} context={context} variant={variant} />;
   }
-  return <WebVoiceButton onTranscript={onTranscript} />;
+  return <WebVoiceButton onTranscript={onTranscript} variant={variant} />;
+}
+
+function voiceButtonClass(variant: "text" | "pill", listening: boolean) {
+  const tone = listening ? "text-red-600 animate-pulse" : "text-foreground";
+  if (variant === "pill") {
+    return `inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-[13px] font-semibold shadow-sm hover-elevate ${tone}`;
+  }
+  return `flex items-center gap-1 text-[14px] font-bold ${tone}`;
 }
 
 // Native app: open the Whisper recorder and append the returned transcription.
 function NativeVoiceButton({
   onTranscript,
   context,
+  variant = "text",
 }: {
   onTranscript: (text: string) => void;
   context: VoiceContext;
+  variant?: "text" | "pill";
 }) {
   const [open, setOpen] = useState(false);
 
@@ -1382,7 +1394,7 @@ function NativeVoiceButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1 text-[14px] font-bold text-foreground"
+        className={voiceButtonClass(variant, false)}
         data-testid="voice-button"
       >
         <Mic className="w-3.5 h-3.5" />
@@ -1403,7 +1415,13 @@ function NativeVoiceButton({
 }
 
 // Browsers: inline live transcription via the Web Speech API.
-function WebVoiceButton({ onTranscript }: { onTranscript: (text: string) => void }) {
+function WebVoiceButton({
+  onTranscript,
+  variant = "text",
+}: {
+  onTranscript: (text: string) => void;
+  variant?: "text" | "pill";
+}) {
   const { isListening, isSupported, toggleListening } = useSpeechToText({
     onResult: (text) => {
       const trimmed = text.trim();
@@ -1421,9 +1439,7 @@ function WebVoiceButton({ onTranscript }: { onTranscript: (text: string) => void
     <button
       type="button"
       onClick={toggleListening}
-      className={`flex items-center gap-1 text-[14px] font-bold ${
-        isListening ? "text-red-600 animate-pulse" : "text-foreground"
-      }`}
+      className={voiceButtonClass(variant, isListening)}
       data-testid="voice-button"
     >
       {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
