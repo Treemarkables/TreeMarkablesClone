@@ -117,6 +117,7 @@ import * as usageMeter from "./services/usageMeter";
 import * as supplierIngest from "./services/supplierInvoiceIngest";
 import { computeJobRiskFlags } from "./services/scheduleRiskFlags";
 import { createTenant } from "./onboarding";
+import { getSubscriberOwnerContact, listSubscriberSummaries } from "./adminSubscribers";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import { checkLoginThrottle, clearLoginIdentifierThrottle } from "./security/loginThrottle";
 import { disableMfa, getMfaRow, mfaLoginGate } from "./security/mfaService";
@@ -1086,17 +1087,22 @@ async function notifyBillingProblem(businessId: string, status: string): Promise
 async function buildOnboardingChecklist(businessId: string) {
   const settings = await storage.getBusinessSettingsForBusiness(businessId);
   const invoiceTemplate = await storage.getDefaultDocumentTemplateForBusiness(businessId, 'invoice');
-  const [{ count: channelCount }] = await db
+  // ownerDb: the concierge list calls this for EVERY tenant while the operator
+  // is RLS-pinned to Treemarkables. The request-scoped `db` proxy would either
+  // count zero rows or throw, and a throw 500'd the whole Subscribers page.
+  const [channelRow] = await ownerDb
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.tenantChannels)
     .where(and(eq(schema.tenantChannels.businessId, businessId), eq(schema.tenantChannels.isActive, true)));
-  const [{ count: importedCustomerCount }] = await db
+  const channelCount = channelRow?.count ?? 0;
+  const [importedRow] = await ownerDb
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.customers)
     .where(and(
       eq(schema.customers.businessId, businessId),
       sql`${schema.customers.importSource} IS NOT NULL AND ${schema.customers.importSource} <> 'manual'`,
     ));
+  const importedCustomerCount = importedRow?.count ?? 0;
 
   const has = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
 
@@ -1107,8 +1113,8 @@ async function buildOnboardingChecklist(businessId: string) {
     { key: 'contact', label: 'Contact details', description: 'Phone and email shown to your customers.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyPhone) && has(invoiceTemplate?.companyEmail) },
     { key: 'address', label: 'Business address', description: 'Shown on your documents.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyAddress) },
     { key: 'bank', label: 'Bank details', description: "So customers can pay your invoices — without it, no payment block shows.", path: '/settings/company', optional: false, done: has(settings?.bankAccountName) && has(settings?.bankAccountNumber) },
-    { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: (channelCount ?? 0) > 0 },
-    { key: 'importData', label: 'Import your data', description: 'Bring your customers and jobs across from ServiceM8 or a CSV export.', path: '/settings/import', optional: true, done: (importedCustomerCount ?? 0) > 0 },
+    { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: channelCount > 0 },
+    { key: 'importData', label: 'Import your data', description: 'Bring your customers and jobs across from ServiceM8 or a CSV export.', path: '/settings/import', optional: true, done: importedCustomerCount > 0 },
     { key: 'gst', label: 'GST number', description: 'Shown on tax invoices (only if GST-registered).', path: '/settings/company', optional: true, done: has(settings?.businessGstNumber) },
     { key: 'tradeVocabulary', label: 'Trade vocabulary', description: 'Improves voice-to-quote and AI accuracy for your trade.', path: '/settings/company', optional: true, done: has(settings?.tradeVocabulary) },
     { key: 'replyForward', label: 'Forward customer replies', description: 'Optionally copy job replies to your own inbox.', path: '/settings/company', optional: true, done: has(settings?.jobReplyForwardEmail) },
@@ -21892,11 +21898,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
   app.get('/api/admin/subscribers', requirePlatformAdmin, async (_req: Request, res: Response) => {
     try {
-      const businesses = await storage.listBusinesses();
-      const data = await Promise.all(businesses.map(async (b) => {
-        const cl = await buildOnboardingChecklist(b.id);
-        return { id: b.id, name: b.name, slug: b.slug, status: b.status, comped: !!b.compedAt, createdAt: b.createdAt, requiredDone: cl.requiredDone, requiredTotal: cl.requiredTotal };
-      }));
+      const data = await listSubscriberSummaries((id) => buildOnboardingChecklist(id));
       res.json({ success: true, data });
     } catch (error) {
       console.error('Error listing subscribers:', error);
@@ -21923,7 +21925,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             stripeManaged: !!sub.stripeSubscriptionId,
           }
         : null;
-      res.json({ success: true, data: { business, comped: !!business.compedAt, settings: settings ?? null, channels, checklist, plans: plans.map((p) => ({ id: p.id, key: p.key, name: p.name })), subscription } });
+      const owner = await getSubscriberOwnerContact(businessId);
+      res.json({ success: true, data: { business, comped: !!business.compedAt, settings: settings ?? null, channels, checklist, plans: plans.map((p) => ({ id: p.id, key: p.key, name: p.name })), subscription, ownerEmail: owner.ownerEmail, ownerName: owner.ownerName } });
     } catch (error) {
       console.error('Error loading subscriber:', error);
       res.status(500).json({ success: false, message: 'Error loading subscriber' });
