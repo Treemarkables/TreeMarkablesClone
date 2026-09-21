@@ -112,6 +112,19 @@ describe("native boot recovery — JS boot timeout + frozen resume", () => {
     );
   });
 
+  it("does not reload when a notification deep link is still pending", () => {
+    assert.equal(
+      shouldRecoverFrozenResume({
+        now: 30_000,
+        lastHeartbeatMs: 10_000,
+        booted: true,
+        hiddenForMs: 10_000,
+        hasPendingNotificationNav: true,
+      }),
+      false,
+    );
+  });
+
   it("caps boot reloads inside the attempt window", () => {
     const now = 1_000_000;
     assert.equal(readBootReloadAttempts(null, now), 0);
