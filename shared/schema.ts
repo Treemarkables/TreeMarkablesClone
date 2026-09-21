@@ -410,6 +410,8 @@ export const jobs = pgTable("jobs", {
   assignedTo: text("assigned_to").array(), // Employee IDs for calendar display
   estimatedDuration: integer("estimated_duration"), // hours
   actualDuration: integer("actual_duration"), // hours
+  // Job-level heavy plant from the locked catalogue in jobEquipmentCatalogue.ts.
+  // Stored as the exact UI labels (spaces, no hyphens). Shared on the job — not per person.
   equipment: text("equipment").array(),
   specialInstructions: text("special_instructions"),
   beforePhotos: text("before_photos").array(),

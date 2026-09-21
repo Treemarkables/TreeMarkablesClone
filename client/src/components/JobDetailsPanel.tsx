@@ -11,6 +11,7 @@
  *   - Internal Notes (orange-tinted, auto-save on blur)
  *   - Status / Lead Source / Quote Method selects
  *   - Customer confirmed checkbox
+ *   - Job-level equipment chips (locked heavy plant catalogue)
  *
  * Not yet ported (defer to Phase B.5 or C):
  *   - Contacts card (Job Contact / Tenant Details)
@@ -29,6 +30,7 @@ import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAut
 import { JobSiteMapSection } from "@/components/JobSiteMapSection";
 import { AiPolishDescription } from "@/components/AiPolishDescription";
 import { JobTimerControl } from "@/components/JobTimerControl";
+import { JobEquipmentChips } from "@/components/JobEquipmentChips";
 
 // The Web Speech API (webkitSpeechRecognition) is present on `window` inside the
 // iOS Capacitor WKWebView but is a silent no-op there — recognition never starts,
@@ -71,6 +73,7 @@ interface JobShape {
   tenantContactEmail?: string | null;
   tenantContactPhone?: string | null;
   tenantContactMobile?: string | null;
+  equipment?: string[] | null;
 }
 
 interface SavedContact {
@@ -814,6 +817,8 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           data-testid="internal-notes"
         />
       </div>
+
+      <JobEquipmentChips jobId={jobId} selected={job?.equipment} />
 
       {/* ── Status grid ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">

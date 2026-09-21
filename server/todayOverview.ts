@@ -69,11 +69,10 @@ function countFirstNames(employees: Array<{ firstName: string }>): Map<string, n
 
 export async function buildTodayOverview(employeeId: string): Promise<TodayOverviewData> {
   const todayStr = getNZDateString(new Date());
-  const [jobsAround, employees, teams, equipment, settings, extraNotes, assignments] = await Promise.all([
+  const [jobsAround, employees, teams, settings, extraNotes, assignments] = await Promise.all([
     storage.getJobsScheduledAroundNZDate(todayStr),
     storage.getAllEmployees(),
     db.select().from(schema.teams),
-    storage.getAllEquipment(),
     storage.getBusinessSettings(),
     db
       .select()
@@ -112,7 +111,6 @@ export async function buildTodayOverview(employeeId: string): Promise<TodayOverv
     assignmentPeople.set(assignment.jobId, list);
   }
 
-  const equipmentById = new Map(equipment.map((item) => [item.id, item.name]));
   const activeTeams = teams.filter((team) => team.isActive !== false);
 
   const jobPeopleIds = new Map<string, string[]>();
@@ -133,7 +131,7 @@ export async function buildTodayOverview(employeeId: string): Promise<TodayOverv
       address: job.address?.trim() || "",
       timeLabel: formatTimeRange(job.scheduledStartTime, job.scheduledEndTime),
       people,
-      kit: kitLabels(job.equipment, job.equipmentChecklist, equipmentById),
+      kit: kitLabels(job.equipment),
       bookedLabel: formatBookedAmount(bookedAmount),
       bookedAmount,
     });

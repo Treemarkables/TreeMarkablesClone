@@ -109,13 +109,18 @@ describe("crew grouping", () => {
 });
 
 describe("kit labels", () => {
-  it("resolves equipment ids and de dupes checklist names", () => {
-    const labels = kitLabels(
-      ["eq-1", "Trailer"],
-      [{ equipment: "Hedge kit" }, { equipment: "Trailer" }],
-      new Map([["eq-1", "Chipper"]]),
-    );
-    assert.deepEqual(labels, ["Hedge kit", "Trailer", "Chipper"]);
+  it("maps the job card equipment list onto the locked plant catalogue", () => {
+    const labels = kitLabels(["eq-1", "big_truck", "bucket-truck", "Trailer"]);
+    assert.deepEqual(labels, ["bucket truck", "big truck"]);
+    for (const label of labels) {
+      assert.equal(label.includes("-"), false, label);
+    }
+  });
+
+  it("does not invent kit chips when the job has no equipment saved", () => {
+    assert.deepEqual(kitLabels([]), []);
+    assert.deepEqual(kitLabels(null), []);
+    assert.deepEqual(kitLabels(undefined), []);
   });
 });
 
@@ -160,7 +165,7 @@ describe("Just me filter", () => {
             address: "12 Rata Street",
             timeLabel: "9 AM to 11 AM",
             people: [person("josh", "Josh")],
-            kit: ["Hedge kit"],
+            kit: ["chipper"],
             bookedLabel: "$1.4k",
             bookedAmount: 1400,
           },
@@ -179,7 +184,7 @@ describe("Just me filter", () => {
             address: "30 Bright Street",
             timeLabel: "1 PM to 3 PM",
             people: [person("zane", "Zane")],
-            kit: ["Climbing kit"],
+            kit: ["orchard ladder"],
             bookedLabel: "$2k",
             bookedAmount: 2000,
           },

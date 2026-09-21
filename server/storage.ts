@@ -98,6 +98,7 @@ import { EXPENSE_COMPANY_KEYWORDS } from "@shared/customerFilters";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
 import { appendUniquePhotoUrls } from "@shared/treePins";
+import { sanitizeJobEquipment } from "@shared/jobEquipmentCatalogue";
 
 // Compute an invoice's ex-GST revenue contribution.
 //
@@ -1934,12 +1935,16 @@ class DatabaseStorage implements IStorage {
   // ========================================
   
   async createJob(job: InsertJob): Promise<Job> {
+    const payload: InsertJob =
+      job.equipment !== undefined
+        ? { ...job, equipment: sanitizeJobEquipment(job.equipment) }
+        : job;
     // Stamp workOrderAt when a job is created directly at work_order status
     // (e.g. from proposal acceptance paths that skip the lead/quote stages).
-    if (job.status === 'work_order' && !(job as any).workOrderAt) {
-      (job as any).workOrderAt = new Date();
+    if (payload.status === 'work_order' && !(payload as any).workOrderAt) {
+      (payload as any).workOrderAt = new Date();
     }
-    const [newJob] = await db.insert(schema.jobs).values(withTenant(job)).returning();
+    const [newJob] = await db.insert(schema.jobs).values(withTenant(payload)).returning();
     return newJob;
   }
 

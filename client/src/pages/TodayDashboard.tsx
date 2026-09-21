@@ -299,7 +299,7 @@ export default function TodayDashboard() {
                           <PersonAvatar key={person.id} person={person} size="sm" />
                         ))}
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-1.5" data-testid={`today-job-kit-${job.id}`}>
                         {job.kit.map((item) => (
                           <span
                             key={item}

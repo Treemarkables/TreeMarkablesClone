@@ -6,6 +6,8 @@
  * UI copy in TODAY_COPY must not use hyphens (spaces / "to" / rephrase).
  */
 
+import { sanitizeJobEquipment } from "./jobEquipmentCatalogue.ts";
+
 export const NO_CREW_ID = "__no_crew__";
 export const NO_CREW_NAME = "No crew";
 
@@ -266,25 +268,9 @@ export function jobBookedAmount(job: {
   return total > 0 ? total / 1.15 : 0;
 }
 
-export function kitLabels(
-  equipmentIdsOrNames: string[] | null | undefined,
-  checklist: Array<{ equipment: string }> | null | undefined,
-  equipmentById: Map<string, string>,
-): string[] {
-  const seen = new Set<string>();
-  const labels: string[] = [];
-  const add = (raw: string) => {
-    const trimmed = raw.trim();
-    if (!trimmed) return;
-    const resolved = equipmentById.get(trimmed) ?? trimmed;
-    const key = resolved.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    labels.push(resolved);
-  };
-  for (const item of checklist ?? []) add(item.equipment);
-  for (const value of equipmentIdsOrNames ?? []) add(value);
-  return labels;
+/** Today kit chips: labels saved on the job card (`jobs.equipment`). */
+export function kitLabels(equipment: string[] | null | undefined): string[] {
+  return sanitizeJobEquipment(equipment);
 }
 
 export interface CrewAssignJob {
