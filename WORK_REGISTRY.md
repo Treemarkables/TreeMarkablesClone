@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Diary + roster card radius — branch `cursor/diary-despatch-radius-10c3` — 2026-09-21 — reuse Dispatch job-card radius (`rounded-2xl` / 1rem, `.inflow-chrome-item`) on Job Diary email/SMS/booking row chrome and Live Roster week chips (all corners, no square-right). Styling only. [PR #574]
 - Diary Book sets Lead to Quote — branch `cursor/diary-book-sets-quote-8381` — 2026-09-21 — diary Book (`POST /api/calendar/quick-book`) only: on successful book, `jobs.status` lead → `quote`. Do not change `statusAfterBooking` (crew schedule / dispatch still leave a lead as a lead). [PR #573]
 - Create → Mulch on jobs/despatch — branch `cursor/create-mulch-job-856e` — 2026-09-21 — add Mulch to the despatch Create/New menu using existing job status `mulch` (same POST /api/jobs draft path as Lead/Quote, then filter to Mulch). No new entity. Do not merge until owner reviews. [PR #572]
 - Job Details equipment chips inside Internal Notes — branch `cursor/equipment-chips-in-notes-51c2` — 2026-09-21 — move the locked plant chips into the orange staff only notes card on JobDetailsPanel. Same catalogue, same jobs.equipment save, Today kit chips unchanged. No standalone Equipment section. [PR #569]
