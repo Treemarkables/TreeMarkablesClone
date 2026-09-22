@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
 import { isNativeApp } from "@/lib/platform";
 import { canSaveToPhotos, saveToPhotos, isPhotosPermissionError } from "@/lib/mediaLibrary";
+import { isShareDismissed, saveFailureCopy } from "@/lib/saveMedia";
 import { formatNZTime } from "@shared/dateUtils";
 
 // Per-video state for the native (iOS app) download path. Current app builds
@@ -201,10 +202,11 @@ export default function Videos() {
       try {
         await navigator.share({ files: [nativeDownload.file] });
         setNativeDownload(null);
-      } catch (err: any) {
-        if (err?.name === "AbortError") return; // sheet closed — keep it staged
+      } catch (err) {
+        if (isShareDismissed(err)) return; // sheet closed — keep it staged
         setNativeDownload(null);
-        toast({ title: "Could not save video", variant: "destructive" });
+        const copy = saveFailureCopy("video", err);
+        toast({ title: copy.title, description: copy.description, variant: "destructive" });
       }
       return;
     }
