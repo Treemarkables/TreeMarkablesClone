@@ -38,6 +38,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { DAILY_REVENUE_TARGET_GST_LABEL, parseDailyRevenueTarget } from "@shared/dailyRevenueTarget";
 
 export default function SettingsPreferences() {
   const { toast } = useToast();
@@ -48,7 +49,7 @@ export default function SettingsPreferences() {
   const [defaultGrossMarginPct, setDefaultGrossMarginPct] =
     useState<string>("");
   const [invoicePaymentDays, setInvoicePaymentDays] = useState<string>("7");
-  const [dailyRevenueTarget, setDailyRevenueTarget] = useState<string>("3500");
+  const [dailyRevenueTarget, setDailyRevenueTarget] = useState<string>("");
   const [defaultDepositType, setDefaultDepositType] = useState<"none" | "percent" | "fixed">("none");
   const [defaultDepositValue, setDefaultDepositValue] = useState<string>("");
   const [staffPushWindowEnabled, setStaffPushWindowEnabled] = useState(true);
@@ -81,8 +82,8 @@ export default function SettingsPreferences() {
     setDefaultGrossMarginPct(pct > 0 ? String(pct) : "");
     const days = settings?.data?.invoicePaymentDays ?? 7;
     setInvoicePaymentDays(String(days));
-    const target = parseFloat(settings?.data?.dailyRevenueTarget || "3500") || 3500;
-    setDailyRevenueTarget(String(target));
+    const target = parseDailyRevenueTarget(settings?.data?.dailyRevenueTarget);
+    setDailyRevenueTarget(target == null ? "" : String(target));
     const depType = settings?.data?.defaultDepositType;
     if (depType === "percent" || depType === "fixed" || depType === "none") {
       setDefaultDepositType(depType);
@@ -124,7 +125,15 @@ export default function SettingsPreferences() {
   const handleSave = () => {
     const marginValue = parseFloat(defaultGrossMarginPct) || 0;
     const daysValue = parseInt(invoicePaymentDays, 10);
-    const targetValue = parseFloat(dailyRevenueTarget) || 3500;
+    const targetValue = parseDailyRevenueTarget(dailyRevenueTarget);
+    if (targetValue == null) {
+      toast({
+        title: "Error",
+        description: "Enter a daily revenue target greater than zero.",
+        variant: "destructive",
+      });
+      return;
+    }
     const depositValueNum = parseFloat(defaultDepositValue) || 0;
     updateSettingsMutation.mutate({
       metricsStartDate: metricsStartDate
@@ -134,7 +143,7 @@ export default function SettingsPreferences() {
         marginValue >= 0 && marginValue <= 100 ? marginValue : 0,
       invoicePaymentDays:
         !isNaN(daysValue) && daysValue >= 1 && daysValue <= 365 ? daysValue : 7,
-      dailyRevenueTarget: targetValue > 0 ? targetValue : 3500,
+      dailyRevenueTarget: targetValue,
       defaultDepositType,
       defaultDepositValue:
         defaultDepositType === "none" || depositValueNum < 0 ? 0 : depositValueNum,
@@ -388,10 +397,10 @@ export default function SettingsPreferences() {
                 htmlFor="daily-revenue-target"
                 className="text-base font-medium flex items-center gap-2"
               >
-                Daily Revenue Target (NZD)
+                Daily revenue target (NZD, {DAILY_REVENUE_TARGET_GST_LABEL})
               </Label>
               <p className="text-sm text-muted-foreground">
-                Used by the schedule revenue progress bar. Set to your typical daily revenue goal.
+                Despatch uses this amount when combining a day's jobs. The schedule revenue bar reads the same per-business setting.
               </p>
               <div className="flex items-center gap-3 mt-3">
                 <div className="relative w-40">
@@ -399,17 +408,19 @@ export default function SettingsPreferences() {
                   <Input
                     id="daily-revenue-target"
                     type="number"
-                    min="0"
+                    min="1"
                     step="100"
                     value={dailyRevenueTarget}
                     onChange={(e) => setDailyRevenueTarget(e.target.value)}
-                    placeholder="3500"
                     className="pl-7"
                     data-testid="input-daily-revenue-target"
                   />
                 </div>
-                <span className="text-sm text-muted-foreground">NZD per day</span>
+                <span className="text-sm text-muted-foreground">{DAILY_REVENUE_TARGET_GST_LABEL} per day</span>
               </div>
+              {!isLoading && parseDailyRevenueTarget(dailyRevenueTarget) == null && (
+                <p className="text-sm text-destructive">Enter an amount greater than zero</p>
+              )}
             </div>
 
             {/* Default Deposit on Proposal Acceptance */}
@@ -480,7 +491,8 @@ export default function SettingsPreferences() {
                 disabled={
                   updateSettingsMutation.isPending ||
                   isLoading ||
-                  (!marginValid && defaultGrossMarginPct !== "")
+                  (!marginValid && defaultGrossMarginPct !== "") ||
+                  parseDailyRevenueTarget(dailyRevenueTarget) == null
                 }
                 data-testid="button-save-preferences"
               >

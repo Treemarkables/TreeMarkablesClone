@@ -269,8 +269,28 @@ export function formatNZD(amount: number): string {
     : `$${amount >= 1000 ? (amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1) + "k" : Math.round(amount).toLocaleString()}`;
 }
 
-export function revenueColor(amount: number, target: number): string {
+export function revenueColor(amount: number, target: number | null): string {
+  if (target == null || target <= 0) return "text-foreground bg-muted border-border";
   if (amount >= target) return "text-green-700 bg-green-50 border-green-200";
   if (amount >= target * 0.7) return "text-amber-700 bg-amber-50 border-amber-200";
   return "text-red-700 bg-red-50 border-red-200";
+}
+
+export function revenueBarClass(amount: number, target: number | null): string {
+  if (target == null || target <= 0) return "bg-muted-foreground/30";
+  if (amount >= target) return "bg-green-500";
+  if (amount >= target * 0.7) return "bg-amber-400";
+  return "bg-red-400";
+}
+
+export function revenueBarPercent(amount: number, target: number | null): number {
+  if (target == null || target <= 0) return 0;
+  return Math.min(100, (amount / target) * 100);
+}
+
+export function revenueChipClass(amount: number, target: number | null): string {
+  if (target == null || target <= 0) return "text-muted-foreground bg-muted";
+  if (amount >= target) return "text-green-700 bg-green-50";
+  if (amount >= target * 0.7) return "text-amber-700 bg-amber-50";
+  return "text-red-700 bg-red-50";
 }

@@ -6,6 +6,7 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Check, MapPin, MessageSquare } from "lucide-react";
+import { DAILY_REVENUE_TARGET_GST_LABEL } from "@shared/dailyRevenueTarget";
 import {
   GANTT_COL_W,
   GANTT_END_H,
@@ -17,6 +18,8 @@ import {
   buildGanttHourLabels,
   effectiveGanttMins,
   formatNZD,
+  revenueBarClass,
+  revenueBarPercent,
   ganttFormatMins,
   ganttFormatTime,
   ganttInitials,
@@ -112,22 +115,23 @@ export function DayView({ currentDate, onJobClick, data, dnd }: DayViewProps) {
             const dayJobs = getUniqueJobsForDate(currentDate);
             return (
               <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {dayJobs.length} job{dayJobs.length !== 1 ? "s" : ""} · target {formatNZD(DAY_TARGET)} exc. GST
+                {dayJobs.length} job{dayJobs.length !== 1 ? "s" : ""}
+                {DAY_TARGET == null ? "" : ` · target ${formatNZD(DAY_TARGET)} ${DAILY_REVENUE_TARGET_GST_LABEL}`}
               </span>
             );
           })()}
           <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden min-w-[60px]">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${dayRevenue >= DAY_TARGET ? "bg-green-500" : dayRevenue >= DAY_TARGET * 0.7 ? "bg-amber-400" : "bg-red-400"}`}
-              style={{ width: `${Math.min(100, (dayRevenue / DAY_TARGET) * 100)}%` }}
+              className={`h-full rounded-full transition-all duration-500 ${revenueBarClass(dayRevenue, DAY_TARGET)}`}
+              style={{ width: `${revenueBarPercent(dayRevenue, DAY_TARGET)}%` }}
             />
           </div>
-          {displayDayRevenue >= DAY_TARGET && (
+          {DAY_TARGET != null && displayDayRevenue >= DAY_TARGET && (
             <span className="text-xs font-medium text-green-700 whitespace-nowrap">
               Target hit!
             </span>
           )}
-          {displayDayRevenue > 0 && displayDayRevenue < DAY_TARGET && (
+          {DAY_TARGET != null && displayDayRevenue > 0 && displayDayRevenue < DAY_TARGET && (
             <span className="text-xs text-muted-foreground whitespace-nowrap">
               {formatNZD(DAY_TARGET - displayDayRevenue)} to go
             </span>

@@ -136,6 +136,7 @@ interface ApiResponse<T> {
 import { GrossMarginCalculator } from "@/components/GrossMarginCalculator";
 import { StaffTimeTracker } from "@/components/StaffTimeTracker";
 import { CalendarGrid } from "@/components/CalendarGrid";
+import { DailyRevenueTargetControl } from "@/components/DailyRevenueTargetControl";
 import {
   DndContext,
   DragEndEvent,
@@ -3369,6 +3370,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           onTouchStart={handleSwipeTouchStart}
           onTouchEnd={handleSwipeTouchEnd}
         >
+          {/* Daily revenue target — same per-business setting as Settings and the desktop day bar. */}
+          <div className="flex-shrink-0 border-b bg-background px-3 py-1.5">
+            <DailyRevenueTargetControl />
+          </div>
           {/* Search strip — pinned below main header */}
           <div className="flex-shrink-0 z-50">
           {showMobileSearch && (

@@ -40,7 +40,7 @@ interface StaffMultiWeekGridProps {
   perDaySummary: Map<string, { revenue: number; jobCount: number }>;
   jobColorMap: Map<string, JobColors>;
   customerMap: Map<string, string>;
-  dailyTarget: number;
+  dailyTarget: number | null;
   todayKey: string;
   onOpenJob: (job: Job) => void;
   onDrillToDay: (dateKey: string) => void;
@@ -313,11 +313,13 @@ export function StaffMultiWeekGrid({
         const chipClass =
           summary.jobCount === 0
             ? 'text-gray-300'
-            : summary.revenue >= dailyTarget
-              ? 'text-green-700 bg-green-100'
-              : summary.revenue >= dailyTarget * 0.7
-                ? 'text-amber-700 bg-amber-100'
-                : 'text-red-700 bg-red-100';
+            : dailyTarget == null
+              ? 'text-gray-600'
+              : summary.revenue >= dailyTarget
+                ? 'text-green-700 bg-green-100'
+                : summary.revenue >= dailyTarget * 0.7
+                  ? 'text-amber-700 bg-amber-100'
+                  : 'text-red-700 bg-red-100';
         return (
           <div
             key={`rev-${meta.dateKey}`}

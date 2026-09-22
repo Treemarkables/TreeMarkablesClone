@@ -47,10 +47,14 @@ import {
   jobDayCount,
   jobRevenue,
   makeGanttMinsToPercent,
+  revenueBarClass,
+  revenueBarPercent,
+  revenueChipClass,
   revenueColor as sharedRevenueColor,
   type CalendarJob as Job,
 } from "@/components/calendar/calendarMath";
 import { useCalendarData } from "@/components/calendar/useCalendarData";
+import { DailyRevenueTargetControl } from "@/components/DailyRevenueTargetControl";
 import { DispatchGanttJobCardContent } from "@/components/calendar/DispatchGanttJobCardContent";
 
 type ViewMode = "day" | "week" | "2weeks" | "4weeks" | "month";
@@ -402,6 +406,7 @@ export function CalendarGrid({
               />
             </div>
           )}
+          {viewMode !== "day" && <DailyRevenueTargetControl />}
           <div className="inline-flex items-center rounded-full bg-muted p-1 gap-0.5">
           {(["day", "week", "2weeks", "4weeks"] as ViewMode[]).map((v) => (
             <Button
@@ -429,11 +434,11 @@ export function CalendarGrid({
         displayDayRevenue !== null && (
           <div
             className={`rounded-2xl flex-shrink-0 ${
-              displayDayRevenue >= DAY_TARGET ? "bg-emerald-50" : "bg-muted/60"
+              DAY_TARGET != null && displayDayRevenue >= DAY_TARGET ? "bg-emerald-50" : "bg-muted/60"
             }`}
             data-testid="day-revenue-bar"
           >
-            <div className="flex items-center gap-3 px-4 py-2">
+            <div className="flex items-center gap-3 px-4 py-2 flex-wrap">
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {format(currentDate, "d MMM")} jobs:
               </span>
@@ -448,24 +453,26 @@ export function CalendarGrid({
                 const dayJobs = getUniqueJobsForDate(currentDate);
                 return (
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {dayJobs.length} job{dayJobs.length !== 1 ? "s" : ""} · target {formatNZD(DAY_TARGET)} exc. GST
+                    {dayJobs.length} job{dayJobs.length !== 1 ? "s" : ""}
                   </span>
                 );
               })()}
+              <span className="text-xs text-muted-foreground">·</span>
+              <DailyRevenueTargetControl />
               <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${dayRevenue >= DAY_TARGET ? "bg-green-500" : dayRevenue >= DAY_TARGET * 0.7 ? "bg-amber-400" : "bg-red-400"}`}
+                  className={`h-full rounded-full transition-all duration-500 ${revenueBarClass(dayRevenue, DAY_TARGET)}`}
                   style={{
-                    width: `${Math.min(100, (dayRevenue / DAY_TARGET) * 100)}%`,
+                    width: `${revenueBarPercent(dayRevenue, DAY_TARGET)}%`,
                   }}
                 />
               </div>
-              {displayDayRevenue >= DAY_TARGET && (
+              {DAY_TARGET != null && displayDayRevenue >= DAY_TARGET && (
                 <span className="text-xs font-medium text-green-700 whitespace-nowrap">
                   Target hit!
                 </span>
               )}
-              {displayDayRevenue > 0 && displayDayRevenue < DAY_TARGET && (
+              {DAY_TARGET != null && displayDayRevenue > 0 && displayDayRevenue < DAY_TARGET && (
                 <span className="text-xs text-muted-foreground whitespace-nowrap">
                   {formatNZD(DAY_TARGET - displayDayRevenue)} to go
                 </span>
@@ -541,7 +548,7 @@ export function CalendarGrid({
                       </div>
                       {rev > 0 && (
                         <div
-                          className={`mt-1 text-[10px] font-medium px-1 py-0.5 rounded ${rev >= DAY_TARGET ? "text-green-700 bg-green-50" : rev >= DAY_TARGET * 0.7 ? "text-amber-700 bg-amber-50" : "text-red-700 bg-red-50"}`}
+                          className={`mt-1 text-[10px] font-medium px-1 py-0.5 rounded ${revenueChipClass(rev, DAY_TARGET)}`}
                         >
                           {formatNZD(rev)}
                         </div>
