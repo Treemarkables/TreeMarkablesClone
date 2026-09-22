@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Job diary Reply first click — branch `cursor/diary-reply-first-click-9886` — 2026-09-22 — diary email/SMS Reply (and Follow up) opens the composer on the first press. Mousedown was blurring a focused job-card field / collapsing address suggestions and shifting the button before click. [PR #577]
 - Despatch Active Jobs default Unscheduled — branch `cursor/despatch-unscheduled-default-226a` — 2026-09-22 — booking leaves the Unscheduled rail for Scheduled via hasUpcomingBookingNZ; status stays work_order. Default filter is Unscheduled. Single-day drop clears stale scheduledDates so the partition flips immediately. [PR #576]
 - Conversations on primary sidebar + address select-all — branch `cursor/sidebar-conversations-142e` — 2026-09-21 — sidebar: lift admin Conversations (`/opportunities`) into Core Dashboard after All Jobs. Address: first click/focus selects the whole value via `useSelectAllOnFocus` on `AddressAutocomplete` (and lead address inputs). [PR #575]
 - Diary + roster card radius — branch `cursor/diary-despatch-radius-10c3` — 2026-09-21 — reuse Dispatch job-card radius (`rounded-2xl` / 1rem, `.inflow-chrome-item`) on Job Diary email/SMS/booking row chrome and Live Roster week chips (all corners, no square-right). Styling only. [PR #574]
