@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Inflow Ops Phase 1 — branch `cursor/inflow-ops-phase1-9dd7` — 2026-09-22 — JSON reads for Despatch-unscheduled work orders and Monday–Sunday NZ week revenue vs the per-business daily target, plus an admin-or-scoped-key write of that target only. Contract: `docs/OPS_API.md`. No booking, SMS, or gear-conflict engine. [PR #581]
 - Despatch daily revenue target — branch `cursor/despatch-daily-revenue-target-dd8b` — 2026-09-22 — per-business `daily_revenue_target` (existing field). Treemarkables seeded once to 4000 NZD exc. GST. Settings + Despatch editor share `useDailyRevenueTarget`. No hardcoded bundling target. [PR #580]
 - URGENT iOS TestFlight black screen (boot) — branch `cursor/ios-black-screen-boot-hotfix-47c1` — 2026-09-22 — Capacitor WKWebView paints #1a1a1a (#556) then markAppBooted + null Suspense fallback leave a blank black root; #568 pending-nav can also block frozen-resume. Hotfix: BootPlaceholder Suspense, defer boot flag, re-read heartbeat, TTL-only deep-link skip. Do not merge until owner reviews on TestFlight.
 - Job contact name/email after Conversations create — branch `cursor/job-contact-conversation-fill-8395` — 2026-09-22 — conversation lead/job create copied phone only; fill empty job-contact name/email from customer (then diary/thread) on create and on job open. Status change does not wipe contact. [PR #578]
