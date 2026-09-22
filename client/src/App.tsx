@@ -20,6 +20,7 @@ import { WebCallButton } from "@/components/WebCallButton";
 // NOTE: useState/useEffect/useCallback are imported further down (imports are
 // hoisted module-wide, so the hooks below can use them).
 import { lazy, Suspense, startTransition } from "react";
+import { markAppBooted } from "@/lib/nativeBootRecovery";
 
 // ---------------------------------------------------------------------------
 // Flash-free navigation. Wouter v3 reads the browser location through
@@ -184,22 +185,26 @@ function ScrollToTop() {
   return null;
 }
 
-// Fallback shown while a lazy-loaded route chunk is fetched. Renders nothing
-// (no spinner) — the sidebar shell stays visible and the content area simply
-// fills in once the chunk arrives. Used by both Suspense boundaries.
-function PageSpinner() {
-  return null;
-}
-
-// Auth-gate placeholder. Must not be an empty cream/white full-screen — on
-// TestFlight that is indistinguishable from a dead WKWebView. Match the
-// index.html / native boot shell until /api/auth/me resolves (or times out).
+// Auth-gate + cold-start Suspense placeholder. Must not be an empty cream/white
+// (or empty near-black) full-screen — on TestFlight that is indistinguishable
+// from a dead WKWebView. Match the index.html / native boot shell until
+// /api/auth/me resolves (or times out) AND until the first lazy route chunk
+// (Login / Dispatch) actually mounts. The outer Suspense used to fall back to
+// PageSpinner→null; after #556 painted body/#webview #1a1a1a that was a pure
+// black screen for the whole cold-start chunk download.
 function BootPlaceholder() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#1a1a1a] text-[#f5f5f0]">
       <p className="text-base font-medium">Opening Inflow</p>
     </div>
   );
+}
+
+// Inner (sidebar) Suspense fallback: still null so in-app page swaps keep the
+// chrome visible without a full-screen boot flash. Cold start uses
+// BootPlaceholder on the outer Suspense instead.
+function PageSpinner() {
+  return null;
 }
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -1913,6 +1918,15 @@ function App() {
     }
   }, []);
 
+  // Tell the Capacitor boot watchdogs (index.html + native WebViewBootRecovery)
+  // that React has committed at least once. Must NOT run from main.tsx right
+  // after createRoot().render() — that marked __INFLOW_BOOTED before any UI
+  // painted, hid the #inflow-boot shell, and left a near-black empty root while
+  // Login/Dispatch lazy chunks loaded (TestFlight "black screen").
+  useEffect(() => {
+    markAppBooted();
+  }, []);
+
   // Watchdog for Radix Dialog/Sheet leaving `body { pointer-events: none }`
   // stuck after rapid nested open/close cycles (notably in the job card).
   // When that happens every click on the page is dead — including the
@@ -1966,8 +1980,9 @@ function App() {
     <ErrorBoundary>
       {/* hook=useTransitionedLocation defers route swaps into a React
           transition, so navigating to a not-yet-loaded lazy page keeps the
-          current page visible instead of flashing the (null) Suspense
-          fallback while the chunk downloads. */}
+          current page visible instead of flashing the Suspense fallback while
+          the chunk downloads. Cold start still needs BootPlaceholder (above)
+          because there is no prior page to keep on screen. */}
       <WouterRouter hook={useTransitionedLocation}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
@@ -1982,7 +1997,7 @@ function App() {
                   Login, Home, marketing and the customer-facing viewers, plus
                   Router's own early <Home/> return. Sidebar pages resolve at the
                   inner boundary above before reaching here. */}
-              <Suspense fallback={<PageSpinner />}>
+              <Suspense fallback={<BootPlaceholder />}>
                 <Router />
               </Suspense>
             </WebCallProvider>

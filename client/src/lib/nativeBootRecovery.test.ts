@@ -125,6 +125,35 @@ describe("native boot recovery — JS boot timeout + frozen resume", () => {
     );
   });
 
+  it("still recovers a frozen resume when no deep link is pending", () => {
+    assert.equal(
+      shouldRecoverFrozenResume({
+        now: 30_000,
+        lastHeartbeatMs: 10_000,
+        booted: true,
+        hiddenForMs: 10_000,
+        hasPendingNotificationNav: false,
+      }),
+      true,
+    );
+  });
+
+  it("treats a fresh heartbeat after grace as healthy (not frozen)", () => {
+    // Watchdog re-reads __INFLOW_HEARTBEAT_MS after the 1.5s grace. A page
+    // that resumed ticking must not force-reload just because the pre-grace
+    // sample was stale from backgrounding.
+    assert.equal(
+      shouldRecoverFrozenResume({
+        now: 30_000,
+        lastHeartbeatMs: 29_000,
+        booted: true,
+        hiddenForMs: 20_000,
+        hasPendingNotificationNav: false,
+      }),
+      false,
+    );
+  });
+
   it("caps boot reloads inside the attempt window", () => {
     const now = 1_000_000;
     assert.equal(readBootReloadAttempts(null, now), 0);
