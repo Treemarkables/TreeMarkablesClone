@@ -5,7 +5,7 @@ import App from "./App";
 import "./index.css";
 import { isReloadUnsafe } from "./lib/foregroundReloadGuard";
 import { isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
-import { markAppBooted, startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
+import { startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
 
 // Sentry frontend init — disabled when VITE_SENTRY_DSN is unset so local
 // development without a DSN doesn't spam Sentry.
@@ -152,7 +152,10 @@ if ('caches' in window) {
   });
 }
 
+// markAppBooted() lives in App's first useEffect — not here. Calling it
+// synchronously after render() hid #inflow-boot before Login/Dispatch painted
+// and told native WebViewBootRecovery the shell was healthy while #root was
+// still empty on the #1a1a1a Capacitor background (TestFlight black screen).
 createRoot(document.getElementById("root")!).render(
   <App />
 );
-markAppBooted();

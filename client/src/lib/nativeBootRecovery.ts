@@ -183,17 +183,17 @@ export function requestBootReload(reason: string): boolean {
 let watchdogStarted = false;
 
 function hasPendingNotificationDeepLink(): boolean {
+  // Only treat a *fresh* notification deep-link as blocking frozen-resume
+  // reload. #568 also checked sessionStorage dispatch_open_job with no TTL —
+  // if the job card never opened (chunk hang / black root), that key stayed
+  // forever and disabled the only JS recovery path for the rest of the
+  // WebView session. ?job= in the live URL still counts (user mid-open).
   try {
     const raw = localStorage.getItem("pendingNotificationNav");
     if (raw) {
       const parsed = JSON.parse(raw) as { path?: string; ts?: number };
       if (parsed?.path && Date.now() - (parsed.ts || 0) < 60_000) return true;
     }
-  } catch {
-    /* ignore */
-  }
-  try {
-    if (sessionStorage.getItem("dispatch_open_job")) return true;
   } catch {
     /* ignore */
   }
@@ -231,16 +231,20 @@ export function startNativeBootWatchdogs(): void {
     }
     const hiddenForMs = hiddenAt == null ? 0 : now - hiddenAt;
     hiddenAt = null;
-    const lastHeartbeat = bootGlobals()[HEARTBEAT_FLAG] ?? null;
     // Wait a beat so a notification tap can persist its deep link before
     // we decide to reload. Checking immediately lost the job-card path —
     // native inject and this handler raced, and the reload landed on
     // bare /dispatch.
+    //
+    // Re-read the heartbeat AFTER the grace window. Capturing it at
+    // visibilitychange (pre-#568) made every >12s background look frozen
+    // even when JS had resumed and was ticking again — force-reload every
+    // warm open, which raced chunk load and painted the black empty root.
     window.setTimeout(() => {
       if (
         shouldRecoverFrozenResume({
           now: Date.now(),
-          lastHeartbeatMs: lastHeartbeat,
+          lastHeartbeatMs: bootGlobals()[HEARTBEAT_FLAG] ?? null,
           booted: isAppBooted(),
           hiddenForMs,
           hasPendingNotificationNav: hasPendingNotificationDeepLink(),
