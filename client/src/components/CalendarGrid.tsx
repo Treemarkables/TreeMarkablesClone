@@ -19,6 +19,10 @@ import {
 } from "date-fns";
 import { nzTimeToUTC } from "@shared/dateUtils";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  DISPATCH_JOBS_QUERY_KEY,
+  patchDispatchJobInCache,
+} from "@/lib/dispatchJobsCache";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { JobCardErrorBoundary } from "@/components/JobCardErrorBoundary";
 import { useToast } from "@/hooks/use-toast";
@@ -256,7 +260,33 @@ export function CalendarGrid({
     const startDateTime = nzTimeToUTC(nzDateStr, startTimeStr);
     const endDateTime = nzTimeToUTC(nzDateStr, endTimeStr);
 
+    // A drag onto a single calendar cell is a single-day placement: pin the
+    // job to that one NZ day and its new time-of-day. Clear scheduledEndDate
+    // and scheduledDates — a leftover span (or a past day set) keeps the job
+    // on every old day and leaves it in the Unscheduled rail, because
+    // hasUpcomingBookingNZ prefers scheduledDates over scheduledDate.
+    // Write the job first so the staff-assignment expansion below reads the
+    // single new day, not the stale set. Status is not changed here.
+    const schedulePatch = {
+      scheduledDate: startDateTime.toISOString(),
+      scheduledEndDate: null,
+      scheduledDates: null,
+      scheduledStartTime: startTimeStr,
+      scheduledEndTime: endTimeStr,
+    };
+
     try {
+      await patchDispatchJobInCache(jobId, schedulePatch);
+
+      const jobRes = await fetch(`/api/jobs/${jobId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(schedulePatch),
+      });
+      if (!jobRes.ok) {
+        throw new Error("Failed to update job schedule");
+      }
+
       if (assignmentId) {
         await fetch(`/api/staff-assignments/${assignmentId}`, {
           method: "PUT",
@@ -288,29 +318,14 @@ export function CalendarGrid({
         });
       }
 
-      // A drag onto a single calendar cell is a single-day placement: pin the
-      // job to that one NZ day and its new time-of-day. We MUST also clear any
-      // stale scheduledEndDate — otherwise a job that previously had an end
-      // date keeps it, leaving scheduledDate..scheduledEndDate spanning weeks.
-      // That phantom span makes the job render on every day in the range (wrong
-      // date) and splits its price across all those days on the roster.
-      await fetch(`/api/jobs/${jobId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scheduledDate: startDateTime.toISOString(),
-          scheduledEndDate: null,
-          scheduledStartTime: startTimeStr,
-          scheduledEndTime: endTimeStr,
-        }),
-      });
-
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
       queryClient.invalidateQueries({
         queryKey: ["/api/jobs?limit=10000&offset=0"],
       });
+      queryClient.invalidateQueries({ queryKey: [DISPATCH_JOBS_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
     } catch {
+      queryClient.invalidateQueries({ queryKey: [DISPATCH_JOBS_QUERY_KEY] });
       toast({
         title: "Reschedule failed",
         description: "Could not update the job time.",

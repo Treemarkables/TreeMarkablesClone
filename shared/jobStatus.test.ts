@@ -23,4 +23,8 @@ describe("statusAfterBooking", () => {
     assert.equal(statusAfterBooking("lead"), null);
     assert.equal(statusAfterBooking("quote"), "work_order");
   });
+
+  it("leaves a work_order as a work_order when it is booked", () => {
+    assert.equal(statusAfterBooking("work_order"), null);
+  });
 });

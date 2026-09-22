@@ -304,7 +304,8 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   const dispatchLanes = lanesResponse?.data || [];
   // Status and lane are mutually-exclusive views. Selecting one clears the other.
   // Status filters are multi-select: toggling a status adds/removes it from the
-  // active set ([] = All), so e.g. W/O + Scheduled can be viewed together.
+  // active set ([] = All), so e.g. Unscheduled + Scheduled can be viewed together.
+  // A fresh session starts on Unscheduled (DEFAULT_DISPATCH_JOB_FILTERS).
   const toggleStatus = (v: string) => {
     setDispatchFilters(
       dispatchFilters.includes(v)
