@@ -5,6 +5,7 @@ import { useRoute, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Conversation, ConversationMessage, Job } from "@shared/schema";
+import { fillEmptyJobContact } from "@shared/jobContactFill";
 import {
   ArrowLeft,
   Send,
@@ -512,6 +513,17 @@ export default function ConversationDetail() {
         jobContactMobile: isMobileNumber ? formValues.phone || "" : "",
         conversationId: conversationId,
       };
+      // Phone alone was stored on the job; name and email stayed on the
+      // customer, so Job Contact rendered blank while diary mail still had
+      // an address. Copy the dialog's name and email onto the empty columns.
+      Object.assign(
+        jobData,
+        fillEmptyJobContact(jobData, {
+          name: formValues.name,
+          email: formValues.email,
+          phone: formValues.phone,
+        }),
+      );
 
       const jobRes = await apiRequest("POST", "/api/jobs", jobData);
       const jobResponseData = (await jobRes.json()) as { data: Job };

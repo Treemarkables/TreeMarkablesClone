@@ -172,6 +172,8 @@ import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString,
 import { ROLE_LABEL as ROLE_LABELS, isRoleKey } from "@shared/crewRoles";
 import { composeCustomerAddress } from "@shared/customerAddress";
 import { statusAfterBooking, statusAfterDiaryBook } from "@shared/jobStatus";
+import { fillEmptyJobContactFromSources } from "@shared/jobContactFill";
+import { backfillEmptyJobContact } from "./jobContactBackfill";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { runLaneEntryAutomations, onQuoteSentToLane } from "./services/laneAutomationService";
 import { workflowAutomationService } from "./services/workflowAutomation";
@@ -4169,7 +4171,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
       
-      // Create job with 'lead' status
+      // Create job with 'lead' status.
+      // Phone is split into mobile vs landline. Name and email from the
+      // conversation form (then the customer row) fill any job-contact
+      // columns still empty — a phone on its own is not a complete contact.
       const jobNumber = await storage.getNextJobNumber();
       const jobData = {
         customerId: customer.id,
@@ -4186,6 +4191,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         jobContactPhone: isMobileNumber ? '' : (phone || ''),
         jobContactMobile: isMobileNumber ? (phone || '') : '',
       };
+      Object.assign(jobData, fillEmptyJobContactFromSources(jobData, [
+        { name, email, phone },
+        { name: customer.name, email: customer.email, phone: customer.phone, mobile: customer.mobile },
+      ]));
       
       const job = await storage.createJob(jobData);
 
@@ -5833,6 +5842,18 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
               console.log(`✅ Auto-set lead source to "repeat" — customer has ${priorJobs.length} prior job(s)`);
             }
           }
+          // Conversation create links an existing customer and used to copy
+          // only the phone onto the job. Fill name and email (and a phone,
+          // when the job has none) from that customer. Non-empty job fields
+          // are left as the client sent them.
+          Object.assign(processedBody, fillEmptyJobContactFromSources(processedBody, [
+            {
+              name: existingCustomer.name,
+              email: existingCustomer.email,
+              phone: existingCustomer.phone,
+              mobile: existingCustomer.mobile,
+            },
+          ]));
         }
       }
 
@@ -6593,7 +6614,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.get('/api/jobs/:id', async (req: Request, res: Response) => {
     try {
-      const job = await storage.getJob(req.params.id);
+      let job = await storage.getJob(req.params.id);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
@@ -6614,6 +6635,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           // client's existing /api/customers lookup.
           console.error('Error resolving customer for job payload:', custErr);
         }
+      }
+      // Fill empty job-contact name/email from the customer (then diary or
+      // the conversation thread) the first time this job is opened. A later
+      // status-only save does not clear those columns.
+      try {
+        job = await backfillEmptyJobContact(job, customer ? {
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          mobile: customer.mobile,
+        } : null);
+      } catch (fillErr) {
+        console.error('Error filling empty job contact:', fillErr);
       }
       // Display default for historical jobs: if a job has no lead source but its
       // customer has OTHER jobs on file, surface it as "repeat" so the job card
@@ -12449,8 +12483,11 @@ Return only the rewritten description, nothing else.`,
         }
       }
 
-      // Save phone number to job contact and customer so reply matching works
-      if (jobId && job && !job.jobContactPhone) {
+      // Save phone number to job contact and customer so reply matching works.
+      // Skip when either phone column is already set — conversation create puts
+      // an NZ mobile in jobContactMobile and leaves jobContactPhone blank, and
+      // writing the same number into the blank column showed it in both inputs.
+      if (jobId && job && !job.jobContactPhone && !job.jobContactMobile) {
         try {
           await storage.updateJob(jobId, { jobContactPhone: phone });
           console.log(`📱 Saved phone ${phone} to job ${jobId} contact`);
@@ -22350,7 +22387,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         if (jobId) {
           try {
             const job = await storage.getJob(jobId);
-            if (job && !job.jobContactPhone) {
+            if (job && !job.jobContactPhone && !job.jobContactMobile) {
               await storage.updateJob(jobId, { jobContactPhone: to });
               console.log(`📱 Saved phone ${to} to job ${jobId} contact`);
             }
