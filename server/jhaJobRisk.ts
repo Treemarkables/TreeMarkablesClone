@@ -26,7 +26,7 @@ export async function loadRiskLinksForJobs(
   jobIds: readonly string[],
   nzDate: string = getNZDateString(new Date()),
 ): Promise<Map<string, JobRiskAssessmentLink>> {
-  const unique = [...new Set(jobIds.filter((id) => !!id))];
+  const unique = Array.from(new Set(jobIds.filter((id) => !!id)));
   if (unique.length === 0) return new Map();
   const { from, to } = windowAroundNzDate(nzDate);
   const rows = await db
