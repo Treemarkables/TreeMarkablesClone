@@ -712,6 +712,69 @@ function TabScrollContainer({
   return <ScrollArea className="flex-1">{children}</ScrollArea>;
 }
 
+const TAP_SLOP_PX = 12;
+
+/**
+ * Diary Reply sits next to job-card fields that save on blur, and next to
+ * document mousedown listeners (address suggestions) that collapse their
+ * popup. Either one runs on the press and moves this button before mouseup,
+ * so the click never fires — the first press only blurs the field, and the
+ * composer opens on the second press.
+ *
+ * Cancelling mousedown keeps focus where it is and stops the event reaching
+ * those document listeners, so the button is still under the pointer when
+ * the click is dispatched. A finger-tap delivers touchend to the element
+ * that received touchstart even if the row moved; run the action there and
+ * ignore the synthetic click that would otherwise miss.
+ */
+function firstPressHandlers(action: () => void) {
+  return {
+    type: "button" as const,
+    onMouseDown: (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    onTouchStart: (e: React.TouchEvent<HTMLButtonElement>) => {
+      const t = e.changedTouches[0];
+      const el = e.currentTarget;
+      el.dataset.pressX = String(t.clientX);
+      el.dataset.pressY = String(t.clientY);
+      const gen = String((Number(el.dataset.pressGen) || 0) + 1);
+      el.dataset.pressGen = gen;
+      delete el.dataset.pressHandled;
+    },
+    onTouchEnd: (e: React.TouchEvent<HTMLButtonElement>) => {
+      const t = e.changedTouches[0];
+      const el = e.currentTarget;
+      const x = Number(el.dataset.pressX ?? t.clientX);
+      const y = Number(el.dataset.pressY ?? t.clientY);
+      const dx = t.clientX - x;
+      const dy = t.clientY - y;
+      const gen = el.dataset.pressGen || "1";
+      // Cancel the synthetic click. A drag that starts on Reply would otherwise
+      // open the composer when the finger lifts. If that click never arrives,
+      // drop the guard so the next press still works.
+      e.preventDefault();
+      el.dataset.pressHandled = gen;
+      window.setTimeout(() => {
+        if (el.dataset.pressHandled === gen) delete el.dataset.pressHandled;
+      }, 450);
+      if (dx * dx + dy * dy > TAP_SLOP_PX * TAP_SLOP_PX) return;
+      e.stopPropagation();
+      action();
+    },
+    onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.currentTarget.dataset.pressHandled) {
+        delete e.currentTarget.dataset.pressHandled;
+        return;
+      }
+      action();
+    },
+  };
+}
+
 export function JobDiarySection({
   jobId,
   customerId,
@@ -2631,10 +2694,9 @@ export function JobDiarySection({
                                       size="sm"
                                       variant="ghost"
                                       className="h-6 text-[10px] px-2 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        startReplyFromEntry(msg);
-                                      }}
+                                      {...firstPressHandlers(() =>
+                                        startReplyFromEntry(msg),
+                                      )}
                                       data-testid={`button-reply-${msg.id}`}
                                     >
                                       <Reply className="w-3 h-3 mr-0.5" /> Reply
@@ -2811,11 +2873,10 @@ export function JobDiarySection({
                                       size="sm"
                                       variant="ghost"
                                       className="h-6 text-[10px] px-2 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
+                                      {...firstPressHandlers(() => {
                                         setReplyToPhone(replyPhone);
                                         setActiveComposer("sms");
-                                      }}
+                                      })}
                                       data-testid={`button-reply-sms-thread-${msg.id}`}
                                     >
                                       <Reply className="w-3 h-3 mr-0.5" /> Reply
@@ -3149,8 +3210,7 @@ export function JobDiarySection({
                                       ? "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
                                       : "text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800"
                                   }`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
+                                  {...firstPressHandlers(() => {
                                     const replyEmail =
                                       entry.metadata?.emailAddress ||
                                       entry.metadata?.recipient ||
@@ -3166,7 +3226,7 @@ export function JobDiarySection({
                                     setReplyToEmail(replyEmail);
                                     setReplySubject(originalSubject);
                                     setActiveComposer("email");
-                                  }}
+                                  })}
                                   data-testid={`button-reply-email-${entry.id}`}
                                 >
                                   <Reply className="w-3 h-3 mr-0.5" />
@@ -3225,13 +3285,12 @@ export function JobDiarySection({
                                         ? "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
                                         : "text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800"
                                     }`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
+                                    {...firstPressHandlers(() => {
                                       const replyPhone =
                                         entry.metadata?.phoneNumber || "";
                                       setReplyToPhone(replyPhone);
                                       setActiveComposer("sms");
-                                    }}
+                                    })}
                                     data-testid={`button-reply-sms-${entry.id}`}
                                   >
                                     <Reply className="w-3 h-3 mr-0.5" />
@@ -3681,8 +3740,7 @@ export function JobDiarySection({
                                     size="sm"
                                     variant="outline"
                                     className="h-7 text-xs"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
+                                    {...firstPressHandlers(() => {
                                       console.log(
                                         "📧 Email reply metadata:",
                                         entry.metadata,
@@ -3703,7 +3761,7 @@ export function JobDiarySection({
                                       setReplyToEmail(replyEmail);
                                       setReplySubject(originalSubject);
                                       setActiveComposer("email");
-                                    }}
+                                    })}
                                     data-testid={`button-reply-email-${entry.id}`}
                                   >
                                     <Mail className="w-3 h-3 mr-1" />
@@ -3718,8 +3776,7 @@ export function JobDiarySection({
                                     size="sm"
                                     variant="outline"
                                     className="h-7 text-xs"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
+                                    {...firstPressHandlers(() => {
                                       console.log(
                                         "📱 SMS reply metadata:",
                                         entry.metadata,
@@ -3728,7 +3785,7 @@ export function JobDiarySection({
                                         entry.metadata?.phoneNumber || "",
                                       );
                                       setActiveComposer("sms");
-                                    }}
+                                    })}
                                     data-testid={`button-reply-sms-${entry.id}`}
                                   >
                                     <MessageSquare className="w-3 h-3 mr-1" />
@@ -3877,7 +3934,9 @@ export function JobDiarySection({
         {/* Composer Dialogs */}
         <Dialog
           open={activeComposer === "note"}
-          onOpenChange={() => setActiveComposer(null)}
+          onOpenChange={(open) => {
+            if (!open) setActiveComposer(null);
+          }}
         >
           <DialogContent className="max-w-md">
             <DialogHeader>
@@ -3938,7 +3997,9 @@ export function JobDiarySection({
 
         <Dialog
           open={activeComposer === "sms"}
-          onOpenChange={() => setActiveComposer(null)}
+          onOpenChange={(open) => {
+            if (!open) setActiveComposer(null);
+          }}
         >
           <DialogContent className="max-w-md">
             <DialogHeader>
@@ -4040,7 +4101,9 @@ export function JobDiarySection({
 
         <Dialog
           open={activeComposer === "email"}
-          onOpenChange={() => setActiveComposer(null)}
+          onOpenChange={(open) => {
+            if (!open) setActiveComposer(null);
+          }}
         >
           <DialogContent className="max-w-lg">
             <DialogHeader>
