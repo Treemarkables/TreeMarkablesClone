@@ -17,6 +17,7 @@
 // ============================================================================
 import type { PoolClient } from "pg";
 import { pool } from "./db";
+import { TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
 
 interface Migration {
   // Stable name shown in logs. Append-only — do not rename existing entries.
@@ -896,6 +897,40 @@ const MIGRATIONS: Migration[] = [
       if ((hasRole.rowCount ?? 0) > 0) {
         await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON daily_ops_notes TO app_tenant`);
       }
+    },
+  },
+  {
+    // One-shot Treemarkables seed: daily revenue KPI 4000 NZD exc. GST.
+    // schema_data_seeds records that the seed ran, so a later choice of 3500
+    // is not overwritten on the next boot. Other businesses keep their stored
+    // value (column default 3500 when they have never set one).
+    name: "treemarkables-daily-revenue-target-4000",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS schema_data_seeds (
+        name text PRIMARY KEY,
+        applied_at timestamp NOT NULL DEFAULT now()
+      )`,
+    ],
+    postChecks: async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO schema_data_seeds (name)
+         VALUES ('treemarkables-daily-revenue-target-4000')
+         ON CONFLICT (name) DO NOTHING
+         RETURNING name`,
+      );
+      if ((inserted.rowCount ?? 0) === 0) return;
+      await client.query(
+        `UPDATE business_settings
+            SET daily_revenue_target = 4000,
+                updated_at = now()
+          WHERE (
+            business_name ILIKE 'treemarkables'
+            OR id = 'default'
+            OR business_id = ANY($1::text[])
+          )
+          AND (daily_revenue_target IS NULL OR daily_revenue_target = 3500)`,
+        [[...TREEMARKABLES_BUSINESS_IDS]],
+      );
     },
   },
 ];

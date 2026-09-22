@@ -9,6 +9,7 @@
 // not make the day look under target.
 import { useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { parseDailyRevenueTarget } from "@shared/dailyRevenueTarget";
 import { toZonedTime } from "date-fns-tz";
 import {
   getNZDateString,
@@ -367,7 +368,8 @@ export function useCalendarData(filter?: CalendarFilter) {
   );
 
   // ── Revenue (unfiltered — business-wide metric) ────────────────────────────
-  const DAY_TARGET = Number(businessSettingsData?.data?.dailyRevenueTarget) || 3500;
+  // Stored per business. Null until settings load or when unset — never a hardcoded target.
+  const DAY_TARGET = parseDailyRevenueTarget(businessSettingsData?.data?.dailyRevenueTarget);
   const businessName = businessSettingsData?.data?.businessName || "";
 
   // Returns the unique set of revenue-generating jobs on a given date (no duplicates across staff rows)

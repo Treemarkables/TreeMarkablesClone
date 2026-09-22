@@ -1469,7 +1469,10 @@ export const businessSettings = pgTable("business_settings", {
   // Analytics Defaults
   defaultGrossMarginPct: decimal("default_gross_margin_pct", { precision: 5, scale: 2 }).notNull().default("0"),
 
-  // AI Dispatch Settings
+  // Despatch daily revenue KPI, NZD exclusive of GST ("exc. GST" in the UI).
+  // Per business. The column default (3500) applies to tenants that have not
+  // set one. Treemarkables is seeded once to 4000 — see schemaMigrations.
+  // Bundling and the schedule bar must read this column, never a constant.
   dailyRevenueTarget: decimal("daily_revenue_target", { precision: 10, scale: 2 }).default("3500"),
 
   // Invoice Settings
@@ -1590,7 +1593,17 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
 });
 
 // Business Settings Update Schema - partial with same constraints
-export const updateBusinessSettingsSchema = insertBusinessSettingsSchema.partial();
+export const updateBusinessSettingsSchema = insertBusinessSettingsSchema.partial().superRefine((data, ctx) => {
+  if (data.dailyRevenueTarget == null) return;
+  const amount = Number(data.dailyRevenueTarget);
+  if (data.dailyRevenueTarget === "" || !Number.isFinite(amount) || amount <= 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["dailyRevenueTarget"],
+      message: "Daily revenue target must be a positive NZD amount (exc. GST)",
+    });
+  }
+});
 
 // Log of compliance-expiry reminders already sent, so the daily scan fires each
 // (vehicle, kind, expiry-date, lead-time) combination exactly once. When a vehicle

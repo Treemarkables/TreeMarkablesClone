@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, MapPin, AlignJustify, Check, Reply, MessageS
 import { useState, useMemo, useRef, useEffect } from 'react';
 import type { Job as BaseJob, Employee } from '@shared/schema';
 import { getJobScheduledNZDates } from '@shared/dateUtils';
+import { DAILY_REVENUE_TARGET_GST_LABEL, parseDailyRevenueTarget } from '@shared/dailyRevenueTarget';
 
 type Job = BaseJob & {
   confirmationReplySentAt?: string | Date | null;
@@ -320,7 +321,7 @@ export default function StaffSchedule() {
   // Excludes only statuses that don't represent confirmed revenue — matches
   // CalendarGrid's REVENUE_EXCLUDE set. `completed`/`invoiced`/`paid` jobs
   // DID generate revenue and must stay in the tally on past days.
-  const DAILY_TARGET = Number(businessSettingsData?.data?.dailyRevenueTarget) || 3500;
+  const DAILY_TARGET = parseDailyRevenueTarget(businessSettingsData?.data?.dailyRevenueTarget);
   const revenueInfo = useMemo(() => {
     const REVENUE_EXCLUDE = new Set(['archived', 'unsuccessful', 'cancelled', 'quote', 'lead']);
     const revenueJobs = dayJobs.filter(j => !REVENUE_EXCLUDE.has(j.status));
@@ -331,9 +332,9 @@ export default function StaffSchedule() {
     return {
       scheduledRevenue,
       dailyTarget: DAILY_TARGET,
-      percentComplete: DAILY_TARGET > 0 ? Math.round((scheduledRevenue / DAILY_TARGET) * 100) : 0,
+      percentComplete: DAILY_TARGET != null && DAILY_TARGET > 0 ? Math.round((scheduledRevenue / DAILY_TARGET) * 100) : 0,
       jobCount: revenueJobs.length,
-      belowTarget: scheduledRevenue < DAILY_TARGET,
+      belowTarget: DAILY_TARGET == null ? null : scheduledRevenue < DAILY_TARGET,
     };
   }, [dayJobs, DAILY_TARGET]);
 
@@ -553,7 +554,11 @@ export default function StaffSchedule() {
       const dow = new Date(k + 'T12:00:00Z').getUTCDay();
       return dow !== 0 && dow !== 6;
     }).length;
-    return { revenue, jobCount: jobIds.size, target: DAILY_TARGET * weekdayCount };
+    return {
+      revenue,
+      jobCount: jobIds.size,
+      target: DAILY_TARGET == null ? null : DAILY_TARGET * weekdayCount,
+    };
   }, [perDaySummary, unassignedByDate, slotsByEmployeeByDate, rangeDates, DAILY_TARGET]);
 
   // Dynamic timeline start — default 8 AM, but expand backwards if the day
@@ -728,22 +733,31 @@ export default function StaffSchedule() {
           <span className="text-xs text-gray-500 whitespace-nowrap">Period revenue:</span>
           <span
             className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
-              periodSummary.revenue < periodSummary.target
-                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                : 'bg-green-50 text-green-700 border-green-200'
+              periodSummary.target == null
+                ? 'bg-gray-50 text-gray-700 border-gray-200'
+                : periodSummary.revenue < periodSummary.target
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-green-50 text-green-700 border-green-200'
             }`}
           >
             ${periodSummary.revenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
           </span>
           <span className="text-xs text-gray-400 whitespace-nowrap">
-            {periodSummary.jobCount} job{periodSummary.jobCount !== 1 ? 's' : ''} · target ${periodSummary.target.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} exc. GST
+            {periodSummary.jobCount} job{periodSummary.jobCount !== 1 ? 's' : ''}
+            {periodSummary.target == null
+              ? ''
+              : ` · target $${periodSummary.target.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} ${DAILY_REVENUE_TARGET_GST_LABEL}`}
           </span>
           <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
-                periodSummary.revenue < periodSummary.target ? 'bg-amber-400' : 'bg-green-500'
+                periodSummary.target == null
+                  ? 'bg-gray-300'
+                  : periodSummary.revenue < periodSummary.target
+                    ? 'bg-amber-400'
+                    : 'bg-green-500'
               }`}
-              style={{ width: `${periodSummary.target > 0 ? Math.min(100, Math.round((periodSummary.revenue / periodSummary.target) * 100)) : 0}%` }}
+              style={{ width: `${periodSummary.target != null && periodSummary.target > 0 ? Math.min(100, Math.round((periodSummary.revenue / periodSummary.target) * 100)) : 0}%` }}
             />
           </div>
         </div>
@@ -752,34 +766,43 @@ export default function StaffSchedule() {
         <span className="text-xs text-gray-500 whitespace-nowrap">
           {format(selectedDate, 'd MMM')} revenue:
         </span>
-        <span
-          className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
-            revenueInfo.belowTarget
-              ? 'bg-amber-50 text-amber-700 border-amber-200'
-              : 'bg-green-50 text-green-700 border-green-200'
-          }`}
-        >
-          ${revenueInfo.scheduledRevenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
-        </span>
-        <span className="text-xs text-gray-400 whitespace-nowrap">
-          {revenueInfo.jobCount} job{revenueInfo.jobCount !== 1 ? 's' : ''} · target ${revenueInfo.dailyTarget.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} exc. GST
-        </span>
-        <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              revenueInfo.belowTarget ? 'bg-amber-400' : 'bg-green-500'
+          <span
+            className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
+              revenueInfo.belowTarget == null
+                ? 'bg-gray-50 text-gray-700 border-gray-200'
+                : revenueInfo.belowTarget
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-green-50 text-green-700 border-green-200'
             }`}
-            style={{ width: `${Math.min(100, revenueInfo.percentComplete)}%` }}
-          />
-        </div>
-        {!revenueInfo.belowTarget && (
-          <span className="text-xs font-medium text-green-700 whitespace-nowrap">Target hit!</span>
-        )}
-        {revenueInfo.belowTarget && revenueInfo.scheduledRevenue > 0 && (
-          <span className="text-xs text-gray-400 whitespace-nowrap">
-            ${(revenueInfo.dailyTarget - revenueInfo.scheduledRevenue).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} to go
+          >
+            ${revenueInfo.scheduledRevenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
           </span>
-        )}
+          <span className="text-xs text-gray-400 whitespace-nowrap">
+            {revenueInfo.jobCount} job{revenueInfo.jobCount !== 1 ? 's' : ''}
+            {revenueInfo.dailyTarget == null
+              ? ''
+              : ` · target $${revenueInfo.dailyTarget.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} ${DAILY_REVENUE_TARGET_GST_LABEL}`}
+          </span>
+          <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                revenueInfo.belowTarget == null
+                  ? 'bg-gray-300'
+                  : revenueInfo.belowTarget
+                    ? 'bg-amber-400'
+                    : 'bg-green-500'
+              }`}
+              style={{ width: `${Math.min(100, revenueInfo.percentComplete)}%` }}
+            />
+          </div>
+          {revenueInfo.belowTarget === false && (
+            <span className="text-xs font-medium text-green-700 whitespace-nowrap">Target hit!</span>
+          )}
+          {revenueInfo.belowTarget === true && revenueInfo.scheduledRevenue > 0 && revenueInfo.dailyTarget != null && (
+            <span className="text-xs text-gray-400 whitespace-nowrap">
+              ${(revenueInfo.dailyTarget - revenueInfo.scheduledRevenue).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} to go
+            </span>
+          )}
       </div>
       )}
 

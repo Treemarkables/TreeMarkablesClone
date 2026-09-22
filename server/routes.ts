@@ -21649,6 +21649,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (typeof rawBody.defaultGrossMarginPct === 'number') {
         rawBody.defaultGrossMarginPct = String(rawBody.defaultGrossMarginPct);
       }
+      // Per-business Despatch KPI (NZD exc. GST). Bundling must read the stored row.
       if (typeof rawBody.dailyRevenueTarget === 'number') {
         rawBody.dailyRevenueTarget = String(rawBody.dailyRevenueTarget);
       }
