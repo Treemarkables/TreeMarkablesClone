@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -74,6 +74,26 @@ const jhaFormSchema = z.object({
 
 type JHAFormValues = z.infer<typeof jhaFormSchema>;
 
+interface JhaJobOption {
+  id: string;
+  jobNumber?: string | null;
+  title?: string | null;
+  address?: string | null;
+  customerName?: string | null;
+}
+
+function meaningfulSite(address: string | null | undefined): string {
+  const value = address?.trim() ?? "";
+  if (!value || /^address not specified$/i.test(value)) return "";
+  return value;
+}
+
+function jhaJobLabel(job: JhaJobOption): string {
+  const who = job.customerName?.trim() || (job.jobNumber ? `Job ${job.jobNumber}` : "Job");
+  const where = meaningfulSite(job.address) || job.title?.trim() || "";
+  return where ? `${who} · ${where}` : who;
+}
+
 const PPE_OPTIONS = [
   "Protective eye wear",
   "Gloves",
@@ -111,6 +131,9 @@ export default function JHAAssessment() {
   const searchParams = new URLSearchParams(window.location.search);
   const assessmentId = searchParams.get("id");
   const isEditing = !!assessmentId;
+  const urlJobId = searchParams.get("jobId") || "";
+  const [selectedJobId, setSelectedJobId] = useState(urlJobId);
+  const locationPrefilledFor = useRef<string | null>(null);
 
   // Fetch existing assessment if editing
   const { data: existingAssessmentData, isLoading: loadingExisting } =
@@ -118,6 +141,7 @@ export default function JHAAssessment() {
       success: boolean;
       data: {
         id: string;
+        jobId: string | null;
         activityDescription: string | null;
         ppeRequired: string[] | null;
         teamLeader: string | null;
@@ -150,6 +174,43 @@ export default function JHAAssessment() {
       ],
       enabled: isEditing,
     });
+
+  const { data: todayJobsResp } = useQuery<{ success: boolean; data: JhaJobOption[] }>({
+    queryKey: ["/api/jha/today-jobs"],
+  });
+  const todayJobs = todayJobsResp?.data ?? [];
+  const linkedMissing =
+    todayJobsResp && selectedJobId && !todayJobs.some((job) => job.id === selectedJobId)
+      ? selectedJobId
+      : "";
+  const { data: linkedJobResp } = useQuery<{
+    success?: boolean;
+    data?: {
+      id: string;
+      jobNumber?: string | number | null;
+      title?: string | null;
+      address?: string | null;
+      customerName?: string | null;
+    };
+  }>({
+    queryKey: ["/api/jobs", linkedMissing],
+    enabled: !!linkedMissing,
+  });
+
+  const jobOptions = useMemo(() => {
+    const options = [...todayJobs];
+    const linked = linkedJobResp?.data;
+    if (linked?.id && !options.some((job) => job.id === linked.id)) {
+      options.unshift({
+        id: linked.id,
+        jobNumber: linked.jobNumber != null ? String(linked.jobNumber) : null,
+        title: linked.title ?? null,
+        address: linked.address ?? null,
+        customerName: linked.customerName ?? null,
+      });
+    }
+    return options;
+  }, [todayJobs, linkedJobResp]);
 
   // Fetch hazard templates
   const { data: templatesData, isLoading: templatesLoading } = useQuery<{
@@ -191,6 +252,9 @@ export default function JHAAssessment() {
   // Load existing assessment data into form when editing
   useEffect(() => {
     if (existingAssessment && isEditing) {
+      if (existingAssessment.jobId) {
+        setSelectedJobId(String(existingAssessment.jobId));
+      }
       form.reset({
         activityDescription: existingAssessment.activityDescription || "",
         ppeRequired: existingAssessment.ppeRequired || [],
@@ -217,17 +281,31 @@ export default function JHAAssessment() {
     }
   }, [existingAssessment, isEditing, form]);
 
+  // Deep link / picker: copy the job address into Location when it is still empty.
+  useEffect(() => {
+    if (isEditing || !selectedJobId || locationPrefilledFor.current === selectedJobId) return;
+    const job = jobOptions.find((option) => option.id === selectedJobId);
+    if (!job) return;
+    locationPrefilledFor.current = selectedJobId;
+    const site = meaningfulSite(job.address);
+    if (site && !form.getValues("location")?.trim()) {
+      form.setValue("location", site);
+    }
+  }, [isEditing, selectedJobId, jobOptions, form]);
+
   const selectedHazards = form.watch("selectedHazards");
 
   const createAssessmentMutation = useMutation({
     mutationFn: async (
-      data: JHAFormValues & { sharedSignature: string; photos: string[] },
+      data: JHAFormValues & { sharedSignature: string; photos: string[]; jobId?: string | null },
     ) => {
       // Editing an existing JHA with only a new signature added: use the
       // dedicated append endpoint so we don't re-validate/rewrite the whole
       // assessment. This is by far the most common "edit" — a worker joined
       // the job after the initial signing and needs to sign too.
-      if (isEditing && assessmentId && data.sharedSignature) {
+      // A changed job link still goes through the full save so jobId persists.
+      const jobUnchanged = !!data.jobId && data.jobId === existingAssessment?.jobId;
+      if (isEditing && assessmentId && data.sharedSignature && jobUnchanged) {
         const res = await fetch(
           `/api/jha/assessments/${assessmentId}/signatures`,
           {
@@ -286,8 +364,12 @@ export default function JHAAssessment() {
       }
       return res;
     },
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/assessments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/today-overview"] });
+      if (variables.jobId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", variables.jobId] });
+      }
       navigate("/jha-history");
     },
     onError: (error: Error) => {
@@ -530,6 +612,15 @@ export default function JHAAssessment() {
       return;
     }
 
+    if (!selectedJobId) {
+      toast({
+        title: "Job required",
+        description: "Select today's job before completing the risk assessment",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Upload any pending photos before creating the assessment
     let finalPhotos = [...photos];
     if (!isEditing && pendingPhotoFiles.length > 0) {
@@ -569,6 +660,7 @@ export default function JHAAssessment() {
       ...data,
       sharedSignature: sharedSignature || "",
       photos: finalPhotos,
+      jobId: selectedJobId,
     });
   };
 
@@ -641,6 +733,43 @@ export default function JHAAssessment() {
               <CardTitle className="text-lg">Job Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="jha-job">
+                  Today&apos;s job *
+                </label>
+                <Select
+                  value={jobOptions.some((job) => job.id === selectedJobId) ? selectedJobId : undefined}
+                  onValueChange={(value) => {
+                    const next = jobOptions.find((job) => job.id === value);
+                    const previous = jobOptions.find((job) => job.id === selectedJobId);
+                    const current = form.getValues("location")?.trim() ?? "";
+                    const previousSite = meaningfulSite(previous?.address);
+                    const nextSite = meaningfulSite(next?.address);
+                    if (nextSite && (!current || current === previousSite)) {
+                      form.setValue("location", nextSite);
+                    }
+                    locationPrefilledFor.current = value;
+                    setSelectedJobId(value);
+                  }}
+                >
+                  <SelectTrigger id="jha-job" data-testid="select-jha-job">
+                    <SelectValue placeholder="Select today's job" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jobOptions.map((job) => (
+                      <SelectItem key={job.id} value={job.id} data-testid={`jha-job-option-${job.id}`}>
+                        {jhaJobLabel(job)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {todayJobsResp && jobOptions.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No jobs are scheduled today. Open this from the job card so the job is attached.
+                  </p>
+                )}
+              </div>
+
               <FormField
                 control={form.control}
                 name="activityDescription"

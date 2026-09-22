@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { JobRiskStatusChip } from "@/components/JobRiskStatusChip";
 import {
   TODAY_COPY,
   applyTodayView,
@@ -292,7 +293,13 @@ export default function TodayDashboard() {
                       className="grid grid-cols-1 lg:grid-cols-[9.5rem_minmax(0,1.4fr)_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 cursor-pointer hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <p className="text-sm font-medium text-muted-foreground">{job.timeLabel}</p>
-                      <p className="text-sm font-semibold text-purple truncate">{job.title}</p>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="text-sm font-semibold text-purple truncate min-w-0">{job.title}</p>
+                        <JobRiskStatusChip
+                          status={job.riskAssessmentStatus}
+                          testId={`today-job-risk-${job.id}`}
+                        />
+                      </div>
                       <p className="text-sm text-muted-foreground truncate">{job.address}</p>
                       <div className="flex items-center gap-1">
                         {job.people.map((person) => (
