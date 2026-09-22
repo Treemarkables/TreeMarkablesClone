@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Job contact name/email after Conversations create — branch `cursor/job-contact-conversation-fill-8395` — 2026-09-22 — conversation lead/job create copied phone only; fill empty job-contact name/email from customer (then diary/thread) on create and on job open. Status change does not wipe contact. [PR #578]
 - Job diary Reply first click — branch `cursor/diary-reply-first-click-9886` — 2026-09-22 — diary email/SMS Reply (and Follow up) opens the composer on the first press. Mousedown was blurring a focused job-card field / collapsing address suggestions and shifting the button before click. [PR #577]
 - Despatch Active Jobs default Unscheduled — branch `cursor/despatch-unscheduled-default-226a` — 2026-09-22 — booking leaves the Unscheduled rail for Scheduled via hasUpcomingBookingNZ; status stays work_order. Default filter is Unscheduled. Single-day drop clears stale scheduledDates so the partition flips immediately. [PR #576]
 - Conversations on primary sidebar + address select-all — branch `cursor/sidebar-conversations-142e` — 2026-09-21 — sidebar: lift admin Conversations (`/opportunities`) into Core Dashboard after All Jobs. Address: first click/focus selects the whole value via `useSelectAllOnFocus` on `AddressAutocomplete` (and lead address inputs). [PR #575]

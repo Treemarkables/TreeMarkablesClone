@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { Conversation, ConversationMessage } from "@shared/schema";
+import { fillEmptyJobContact } from "@shared/jobContactFill";
 import { insertLeadSchema } from "@shared/schema";
 import { SiFacebook } from "react-icons/si";
 import {
@@ -339,6 +340,14 @@ export default function Opportunities() {
         jobContactMobile: isMobileNumber ? leadData.phone || "" : "",
         conversationId: sourceConversationId,
       };
+      Object.assign(
+        jobData,
+        fillEmptyJobContact(jobData, {
+          name: leadData.name,
+          email: leadData.email,
+          phone: leadData.phone,
+        }),
+      );
 
       console.log("🔵 Creating job with data:", jobData);
       const jobRes = await apiRequest("POST", "/api/jobs", jobData);
