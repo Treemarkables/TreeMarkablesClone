@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Despatch Active Jobs default Unscheduled — branch `cursor/despatch-unscheduled-default-226a` — 2026-09-22 — booking leaves the Unscheduled rail for Scheduled via hasUpcomingBookingNZ; status stays work_order. Default filter is Unscheduled. Single-day drop clears stale scheduledDates so the partition flips immediately.
 - Conversations on primary sidebar + address select-all — branch `cursor/sidebar-conversations-142e` — 2026-09-21 — sidebar: lift admin Conversations (`/opportunities`) into Core Dashboard after All Jobs. Address: first click/focus selects the whole value via `useSelectAllOnFocus` on `AddressAutocomplete` (and lead address inputs). [PR #575]
 - Diary + roster card radius — branch `cursor/diary-despatch-radius-10c3` — 2026-09-21 — reuse Dispatch job-card radius (`rounded-2xl` / 1rem, `.inflow-chrome-item`) on Job Diary email/SMS/booking row chrome and Live Roster week chips (all corners, no square-right). Styling only. [PR #574]
 - Diary Book sets Lead to Quote — branch `cursor/diary-book-sets-quote-8381` — 2026-09-21 — diary Book (`POST /api/calendar/quick-book`) only: on successful book, `jobs.status` lead → `quote`. Do not change `statusAfterBooking` (crew schedule / dispatch still leave a lead as a lead). [PR #573]

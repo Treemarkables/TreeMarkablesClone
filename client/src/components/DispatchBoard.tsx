@@ -99,6 +99,10 @@ import { statusAfterBooking } from "@shared/jobStatus";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import {
+  DISPATCH_JOBS_QUERY_KEY,
+  patchDispatchJobInCache,
+} from "@/lib/dispatchJobsCache";
 import { useLocation } from "wouter";
 import {
   entryFromNotificationPath,
@@ -892,8 +896,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   });
 
   // Fetch all active jobs — excludes completed and archived; limit 500 (far more than needed)
-  const JOBS_QUERY_KEY =
-    "/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true";
+  const JOBS_QUERY_KEY = DISPATCH_JOBS_QUERY_KEY;
   const {
     data: jobsData,
     isLoading: jobsLoading,
@@ -2278,9 +2281,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // stale scheduledEndDate (and pin the new time-of-day) so the job doesn't
     // keep an old end date — a leftover scheduledDate..scheduledEndDate span
     // makes the job show on every day in the range and splits its price per day.
-    const updates: any = {
+    // scheduledDates must be cleared too: hasUpcomingBookingNZ prefers that set
+    // over scheduledDate, so a past day list would leave the job in Unscheduled
+    // after this booking. Status stays work_order (statusAfterBooking only
+    // advances a quote).
+    const updates: Record<string, unknown> = {
       scheduledDate: startDateTime.toISOString(),
       scheduledEndDate: null,
+      scheduledDates: null,
       scheduledStartTime: startTimeStr,
       scheduledEndTime: utcToNZTime(endDateTime).time,
       estimatedDuration: fractionalDurationHours,
@@ -2299,25 +2307,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // card moves out of the Unscheduled pile the instant the drop is
     // confirmed. Invalidating ["/api/jobs"] alone doesn't touch this list —
     // its key is the full parameterized JOBS_QUERY_KEY — so without this the
-    // card lingered until the 30s poll.
-    queryClient.setQueryData([JOBS_QUERY_KEY], (prev: any) =>
-      prev?.data
-        ? {
-            ...prev,
-            data: prev.data.map((j: any) =>
-              j.id === jobId ? { ...j, ...updates } : j,
-            ),
-          }
-        : prev,
-    );
+    // card lingered until the 30s poll. cancelQueries inside the helper stops
+    // an in-flight poll from painting the pre-booking row back over the patch.
+    await patchDispatchJobInCache(jobId, updates);
 
     (async () => {
       try {
-        await fetch(`/api/jobs/${jobId}`, {
+        const jobRes = await fetch(`/api/jobs/${jobId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(updates),
         });
+        if (!jobRes.ok) {
+          throw new Error("Failed to update job schedule");
+        }
 
         // Same flags as GlobalJobCard.saveSchedule — the dialog's automation
         // checkboxes drive the booking-confirmation email and reminders;
@@ -3330,7 +3333,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             <div className="p-8 text-center text-gray-500">
                               <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
                               <p className="text-sm">
-                                No jobs scheduled for this date
+                                {jobFilters.length === 1 && jobFilters[0] === "work_order"
+                                  ? "No unscheduled work orders. Booked jobs are under Scheduled."
+                                  : "No jobs scheduled for this date"}
                               </p>
                               <Button
                                 size="sm"
@@ -3732,9 +3737,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               {getTodaysJobs().length === 0 && (
                 <div className="p-8 text-center text-gray-500 bg-white">
                   <Calendar className="h-10 w-10 mx-auto mb-3 text-gray-300" />
-                  <p className="text-base mb-1">No jobs found</p>
+                  <p className="text-base mb-1">
+                    {jobFilters.length === 1 && jobFilters[0] === "work_order"
+                      ? "No unscheduled work orders"
+                      : "No jobs found"}
+                  </p>
                   <p className="text-sm text-gray-400 mb-4">
-                    Create your first job to get started
+                    {jobFilters.length === 1 && jobFilters[0] === "work_order"
+                      ? "Booked jobs are under Scheduled."
+                      : "Create your first job to get started"}
                   </p>
                   <Button size="default" onClick={handleCreateJob}>
                     <Plus className="h-4 w-4 mr-2" />

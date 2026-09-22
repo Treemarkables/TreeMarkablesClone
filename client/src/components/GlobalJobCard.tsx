@@ -189,6 +189,10 @@ import {
 } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import {
+  DISPATCH_JOBS_QUERY_KEY,
+  patchDispatchJobInCache,
+} from "@/lib/dispatchJobsCache";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import {
   insertJobSchema,
@@ -3889,17 +3893,26 @@ The Treemarkables Team`;
       });
       setStaffConflicts([]);
 
+      // Same fields the rail's hasUpcomingBookingNZ reads. Patch the dispatch
+      // list now so an Unscheduled card leaves that pile before the requests
+      // return. Single-day clears scheduledDates; multi-day sends the day set.
+      // Status is only included when statusAfterBooking advances a quote.
+      const schedulePatch: Record<string, unknown> = {
+        scheduledDate: startTimeISO,
+        scheduledEndDate: scheduledEndDateISO,
+        scheduledDates: isMultiDay ? allDays : null,
+        scheduledStartTime: timeStr,
+        scheduledEndTime: endTimeNZ.time,
+        ...(nextStatus ? { status: nextStatus } : {}),
+      };
+      await patchDispatchJobInCache(editingJob.id, schedulePatch);
+
       const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scheduledDate: startTimeISO, // Send full UTC ISO string (first day)
-          scheduledEndDate: scheduledEndDateISO, // null for single-day jobs (last day)
-          scheduledDates: isMultiDay ? allDays : null, // explicit day set (may skip days); null clears it for single-day
-          scheduledStartTime: timeStr, // NZ local time (HH:MM format)
-          scheduledEndTime: endTimeNZ.time, // NZ local time (HH:MM format)
+          ...schedulePatch,
           assignedTo: uniqueEmployeeIds,
-          ...(nextStatus ? { status: nextStatus } : {}),
         }),
       });
 
@@ -4111,6 +4124,7 @@ The Treemarkables Team`;
       }
     } catch (error) {
       console.error("Error scheduling job:", error);
+      queryClient.invalidateQueries({ queryKey: [DISPATCH_JOBS_QUERY_KEY] });
       toast({
         title: "Scheduling Error",
         description:
