@@ -1,3 +1,4 @@
+import type { InsertJob } from "@shared/schema";
 import { storage } from "./storage";
 import {
   contactFromThread,
@@ -75,7 +76,7 @@ export async function backfillEmptyJobContact<T extends RepairableJob>(
   if (Object.keys(patch).length === 0) return job;
 
   try {
-    const updated = await storage.updateJob(job.id, patch);
+    const updated = await storage.updateJob(job.id, patch as Partial<InsertJob>);
     if (!updated) return job;
     console.log(
       `Filled empty job-contact fields on job ${job.id} (${Object.keys(patch).join(", ")})`,
