@@ -1135,8 +1135,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // falls back to reading window.location (which is what we want for
     // back/forward navigation).
     const handlePopState = () => handleUrlChange();
+    // Wouter v3's location hook is the pathname only. A bell tap that
+    // setLocation("/dispatch?job=&tab=diary") while Despatch is already
+    // open does not change `location`, so this effect would not re-read
+    // the search. pushState/replaceState still fire (wouter patches them).
+    const handleHistory = () => handleUrlChange();
     window.addEventListener("notification-navigation", handleNotificationNav);
     window.addEventListener("popstate", handlePopState);
+    window.addEventListener("pushState", handleHistory);
+    window.addEventListener("replaceState", handleHistory);
     window.addEventListener("dispatch-new-job", handleNewJobEvent);
 
     const handleNewLeadEvent = () => handleCreateLead();
@@ -1156,6 +1163,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         handleNotificationNav,
       );
       window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("pushState", handleHistory);
+      window.removeEventListener("replaceState", handleHistory);
       window.removeEventListener("dispatch-new-job", handleNewJobEvent);
       window.removeEventListener("dispatch-new-lead", handleNewLeadEvent);
       window.removeEventListener("dispatch-new-quote", handleNewQuoteEvent);
