@@ -7,12 +7,12 @@ export default function Contact() {
     <>
       <Section className="pb-10">
         <div className="max-w-3xl mx-auto text-center">
-          <span className="eyebrow">Contact</span>
+          <span className="eyebrow">Sign up</span>
           <h1 className="heading-display text-5xl md:text-6xl mt-5">
-            Tell us about your business.
+            Create your account.
           </h1>
           <p className="mt-6 text-lg text-ink-500 leading-relaxed max-w-prose mx-auto">
-            We're onboarding a small group of NZ trades businesses one at a time. Drop in a few details and we'll be in touch personally.
+            Continue to the Inflow app and set a password. That registers your business, an admin login, and a free subscription.
           </p>
         </div>
       </Section>
@@ -36,16 +36,16 @@ export default function Contact() {
                 title="What happens next"
                 body={
                   <ol className="space-y-3 list-decimal list-inside marker:text-ink-400">
-                    <li>We read what you sent and reply within 1–2 working days.</li>
-                    <li>Quick call to understand your workflow.</li>
-                    <li>Hand-onboarding — we set up your account with you.</li>
+                    <li>You set a password on the Inflow app.</li>
+                    <li>We create your business and admin login.</li>
+                    <li>You're on the free plan and can sign in.</li>
                   </ol>
                 }
               />
               <Block
                 title="Already using Inflow?"
                 body={
-                  <a className="underline decoration-lime-deep" href={BRAND.appUrl}>
+                  <a className="underline decoration-lime-deep" href={BRAND.loginUrl}>
                     Sign in to your account →
                   </a>
                 }

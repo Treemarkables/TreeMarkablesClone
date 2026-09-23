@@ -54,8 +54,8 @@ export default function Header() {
           <LinkButton href={BRAND.loginUrl} external variant="ghost" size="md">
             Log in
           </LinkButton>
-          <LinkButton href="/contact" variant="primary" size="md">
-            Request access
+          <LinkButton href={BRAND.signupUrl} external variant="primary" size="md">
+            Sign up
           </LinkButton>
         </div>
 
@@ -98,8 +98,8 @@ export default function Header() {
               <LinkButton href={BRAND.loginUrl} external variant="ghost" size="md" className="border border-ink-200">
                 Log in
               </LinkButton>
-              <LinkButton href="/contact" variant="primary" size="md">
-                Request access
+              <LinkButton href={BRAND.signupUrl} external variant="primary" size="md">
+                Sign up
               </LinkButton>
             </div>
           </nav>

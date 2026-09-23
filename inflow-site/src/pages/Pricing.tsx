@@ -1,5 +1,7 @@
 import { Section, Container } from "@/components/Container";
 import { LinkButton } from "@/components/Button";
+import { BRAND } from "@/lib/brand";
+import { LIVE_APP_SIGNUP_URL, signupHref } from "@/lib/signupLink";
 
 type Tier = {
   name: string;
@@ -13,8 +15,11 @@ type Tier = {
   features: string[];
 };
 
-// CTAs route to the request-access flow while onboarding is concierge (self-serve
-// signup + the Inflow app domain come later). One internal page, no brand leak.
+// Each plan continues on the app signup page. POST /api/signup creates the tenant.
+function planSignup(plan: "freemium" | "crew" | "business"): string {
+  return signupHref(BRAND.signupUrl, { plan }) ?? LIVE_APP_SIGNUP_URL;
+}
+
 const tiers: Tier[] = [
   {
     name: "Freemium",
@@ -23,7 +28,7 @@ const tiers: Tier[] = [
     price: "$0",
     priceNote: "Free for 30 days · up to 3 users",
     cta: "Start for free",
-    href: "/contact",
+    href: planSignup("freemium"),
     features: [
       "Up to 3 users",
       "Jobs, scheduling & dispatch",
@@ -40,7 +45,7 @@ const tiers: Tier[] = [
     price: "$89",
     priceNote: "+ GST · billed monthly",
     cta: "Start with Crew",
-    href: "/contact",
+    href: planSignup("crew"),
     highlight: true,
     features: [
       "Everything in Freemium, plus:",
@@ -62,7 +67,7 @@ const tiers: Tier[] = [
     price: "$150",
     priceNote: "+ GST · billed monthly",
     cta: "Start with Business",
-    href: "/contact",
+    href: planSignup("business"),
     features: [
       "Everything in Crew, plus:",
       "Workflow automation",
@@ -96,7 +101,7 @@ const faqs = [
   },
   {
     q: "How does onboarding work?",
-    a: "Right now we hand-onboard every business personally. Tell us about yours and we'll set up your account with you — and if you're moving from another tool, we'll help bring across your customers and get your team going.",
+    a: "Create your account on the app — we set up your business, admin login, and free plan straight away. If you're moving from another tool, email us and we'll help bring your customers across.",
   },
   {
     q: "Can I cancel anytime?",
@@ -176,6 +181,7 @@ export default function Pricing() {
               <div className="mt-8">
                 <LinkButton
                   href={t.href}
+                  external
                   variant={t.highlight ? "secondary" : "primary"}
                   size="md"
                   className="w-full"
