@@ -142,7 +142,12 @@ async function processSMSReplies() {
           authorRole: 'customer',
           tags: ['sms', 'reply', 'communication', 'customer-reply'],
           createdAt: receivedTimestamp,
-          metadata: { phoneNumber: reply.Originator, direction: 'inbound' }
+          metadata: {
+            phoneNumber: reply.Originator,
+            // Email replies use this same marker. Outbound SMS receipts store
+            // phoneNumber only, so a content-null row was easy to misread as outbound.
+            direction: 'incoming',
+          }
         })).returning();
 
         // Deep-link the bell and the push to this diary row. A bare
