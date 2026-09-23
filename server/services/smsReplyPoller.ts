@@ -1,7 +1,7 @@
 import { retrieveSMSReplies } from './smsEveryoneClient';
 import { db } from '../db';
 import { jobs, jobDiaryEntries, customers, notifications, conversations, conversationMessages } from '@shared/schema';
-import { eq, and, or, sql, desc } from 'drizzle-orm';
+import { eq, and, or, sql } from 'drizzle-orm';
 import { fromZonedTime } from 'date-fns-tz';
 import { broadcast } from '../sseManager';
 import { runWithBusiness, withTenant } from '../tenancy/tenantStore';
@@ -234,45 +234,72 @@ async function processSMSReplies() {
           console.error('📱 Error sending SMS-reply push notification:', pushErr);
         }
 
-        // File the reply on Conversations as well as the job diary. The old
-        // lookup read conversations.participant_contact, which is not a column,
-        // so the insert never ran unless that query happened to succeed.
+        // conversations has no phone column. Matching participantContact threw
+        // on every reply and the catch dropped the message, so inbound SMS
+        // never reached conversation_messages. Match the customer's thread,
+        // then phone digits on the customer or their job contacts.
         try {
           const businessId = recipientBusinessId ?? matchedJob.businessId;
-          const phoneTail = senderPhone.slice(-8);
+          const customerId = matchedJob.customerId || matchedCustomer?.id || null;
+          const phoneTail = senderPhone.replace(/\D/g, '').slice(-8);
           const phoneLike = `%${phoneTail}%`;
-          const [existing] = phoneTail && businessId
-            ? await db
-                .select({ id: conversations.id, unreadCount: conversations.unreadCount })
-                .from(conversations)
-                .leftJoin(customers, eq(conversations.customerId, customers.id))
-                .where(
-                  and(
-                    eq(conversations.businessId, businessId),
-                    or(
-                      sql`EXISTS (
-                        SELECT 1 FROM conversation_messages m
-                        WHERE m.conversation_id = ${conversations.id}
-                          AND REGEXP_REPLACE(COALESCE(m.from_contact, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}
-                      )`,
-                      sql`REGEXP_REPLACE(COALESCE(${customers.phone}, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}`,
-                      sql`REGEXP_REPLACE(COALESCE(${customers.mobile}, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}`,
-                    ),
-                  ),
-                )
-                .orderBy(desc(conversations.lastMessageAt))
-                .limit(1)
-            : [];
+          const threadOrder = [
+            sql`CASE WHEN ${conversations.status} = 'open' THEN 0 ELSE 1 END`,
+            sql`${conversations.lastMessageAt} DESC NULLS LAST`,
+          ];
+
+          let existing: { id: string; unreadCount: number | null } | undefined;
+          if (businessId && customerId) {
+            const [byCustomer] = await db
+              .select({ id: conversations.id, unreadCount: conversations.unreadCount })
+              .from(conversations)
+              .where(and(
+                eq(conversations.businessId, businessId),
+                eq(conversations.customerId, customerId),
+              ))
+              .orderBy(...threadOrder)
+              .limit(1);
+            existing = byCustomer;
+          }
+
+          if (!existing && businessId && phoneTail) {
+            const [byPhone] = await db
+              .select({ id: conversations.id, unreadCount: conversations.unreadCount })
+              .from(conversations)
+              .leftJoin(customers, eq(conversations.customerId, customers.id))
+              .where(and(
+                eq(conversations.businessId, businessId),
+                or(
+                  sql`REGEXP_REPLACE(COALESCE(${customers.phone}, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}`,
+                  sql`REGEXP_REPLACE(COALESCE(${customers.mobile}, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}`,
+                  sql`EXISTS (
+                    SELECT 1 FROM jobs j
+                    WHERE j.customer_id = ${conversations.customerId}
+                      AND j.business_id = ${conversations.businessId}
+                      AND (
+                        REGEXP_REPLACE(COALESCE(j.job_contact_phone, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}
+                        OR REGEXP_REPLACE(COALESCE(j.job_contact_mobile, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}
+                        OR REGEXP_REPLACE(COALESCE(j.billing_contact_phone, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}
+                        OR REGEXP_REPLACE(COALESCE(j.billing_contact_mobile, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}
+                      )
+                  )`,
+                ),
+              ))
+              .orderBy(...threadOrder)
+              .limit(1);
+            existing = byPhone;
+          }
 
           let conversationId = existing?.id;
           const nextUnread = (existing?.unreadCount ?? 0) + 1;
-          if (!conversationId) {
+          if (!conversationId && businessId) {
             const [created] = await db.insert(conversations).values(withTenant({
+              businessId,
               title: `SMS from ${customerName}`,
               status: 'open',
               priority: 'medium',
               source: 'sms',
-              customerId: matchedJob.customerId,
+              ...(customerId ? { customerId } : {}),
               tags: ['sms', 'customer-reply'],
               lastMessageAt: receivedTimestamp,
               lastMessageBy: 'customer',
@@ -283,6 +310,7 @@ async function processSMSReplies() {
 
           if (conversationId) {
             await db.insert(conversationMessages).values(withTenant({
+              ...(businessId ? { businessId } : {}),
               conversationId,
               type: 'message',
               content: messageBody,
@@ -292,6 +320,10 @@ async function processSMSReplies() {
               platform: 'sms',
               isRead: false,
               createdAt: receivedTimestamp,
+              metadata: {
+                jobId: matchedJob.id,
+                phoneNumber: reply.Originator,
+              },
             }));
 
             await db
