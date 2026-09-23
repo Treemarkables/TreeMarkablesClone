@@ -43,6 +43,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { JobRiskAssessmentBar, riskStatusFromUnknown } from "@/components/JobRiskStatusChip";
 import {
   Sheet,
   SheetTrigger,
@@ -401,6 +402,16 @@ export function JobCardMobile({
           </Button>
         </div>
       </div>
+
+      {job && (
+        <div className="px-4 pb-2" data-testid="job-card-mobile-risk">
+          <JobRiskAssessmentBar
+            jobId={jobId}
+            status={riskStatusFromUnknown(job.riskAssessmentStatus)}
+            assessmentId={typeof job.riskAssessmentId === "string" ? job.riskAssessmentId : null}
+          />
+        </div>
+      )}
 
       {/* ── Tab strip ── */}
       <div className="flex items-center border-b border-border px-3 gap-1.5 flex-shrink-0 overflow-x-auto overflow-y-hidden" data-testid="job-card-mobile-tabs">

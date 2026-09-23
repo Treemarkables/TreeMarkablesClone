@@ -25,6 +25,8 @@ declare module 'express-session' {
 }
 import { storage, invoiceRevenueExGst } from "./storage";
 import { buildTodayOverview, createTodayExtraInstruction, deleteTodayExtraInstruction, HttpError } from "./todayOverview";
+import { loadRiskLinksForJobs } from "./jhaJobRisk";
+import { jhaCompletionRequiresJob, normalizeJhaJobId } from "@shared/jhaJobRisk";
 import { sanitizeJobEquipment } from "@shared/jobEquipmentCatalogue";
 import { APP_URL } from "./config/appUrl";
 import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
@@ -6667,7 +6669,22 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           console.error('Error deriving repeat lead source for job:', ljErr);
         }
       }
-      res.json({ success: true, data: { ...job, leadSource, customerName, customer } });
+      let riskAssessmentStatus: "none" | "draft" | "completed" = "none";
+      let riskAssessmentId: string | null = null;
+      try {
+        const links = await loadRiskLinksForJobs([job.id]);
+        const link = links.get(job.id);
+        if (link) {
+          riskAssessmentStatus = link.riskAssessmentStatus;
+          riskAssessmentId = link.riskAssessmentId;
+        }
+      } catch (riskErr) {
+        console.error("Error loading JHA status for job:", riskErr);
+      }
+      res.json({
+        success: true,
+        data: { ...job, leadSource, customerName, customer, riskAssessmentStatus, riskAssessmentId },
+      });
     } catch (error) {
       console.error('Error fetching job:', error);
       res.status(500).json({ success: false, message: 'Error fetching job' });
@@ -32353,6 +32370,35 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Today's scheduled jobs for the morning JHA picker (address + customer).
+  app.get("/api/jha/today-jobs", async (req, res) => {
+    try {
+      const todayStr = getNZDateString(new Date());
+      const jobs = await storage.getJobsScheduledAroundNZDate(todayStr);
+      const today = jobs
+        .filter((job) => jobRunsOnNZDate(job, todayStr))
+        .sort((a, b) =>
+          (a.scheduledStartTime || "99:99").localeCompare(b.scheduledStartTime || "99:99"),
+        );
+      res.json({
+        success: true,
+        data: today.map((job) => ({
+          id: job.id,
+          jobNumber: job.jobNumber,
+          title: job.title,
+          address: job.address,
+          customerName: job.customerName,
+          scheduledStartTime: job.scheduledStartTime,
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to fetch today's jobs",
+      });
+    }
+  });
+
   // JHA Assessments
   app.get("/api/jha/assessments", async (req, res) => {
     try {
@@ -32404,6 +32450,23 @@ Transcription: ${transcriptText}`;
 
       const validated = jhaPayloadSchema.parse(req.body);
       const { selectedHazards, sharedSignature, photos, ...assessmentData } = validated;
+
+      // Completing a morning JHA attaches it to a job card. Drafts are not
+      // created on this path — POST always stores status completed.
+      const linkedJobId = normalizeJhaJobId(assessmentData.jobId);
+      if (!linkedJobId) {
+        return res.status(400).json({
+          success: false,
+          message: "Select today's job before completing the risk assessment",
+        });
+      }
+      const linkedJob = await storage.getJob(linkedJobId);
+      if (!linkedJob) {
+        return res.status(400).json({
+          success: false,
+          message: "That job could not be found. Pick a job from today's list.",
+        });
+      }
       
       // Calculate overall risk rating safely
       const overallRiskRating = selectedHazards.length > 0 
@@ -32415,12 +32478,12 @@ Transcription: ${transcriptText}`;
         activityDescription: assessmentData.activityDescription,
         ppeRequired: assessmentData.ppeRequired || [],
         teamLeader: assessmentData.teamLeader || null,
-        location: assessmentData.location || null,
+        location: assessmentData.location || linkedJob.address || null,
         comments: assessmentData.comments || null,
         photos: photos || [],
         status: 'completed',
         overallRiskRating,
-        jobId: assessmentData.jobId || null,
+        jobId: linkedJobId,
         date: new Date(),
         gpsCoordinates: null,
         teamLeaderId: null,
@@ -32516,6 +32579,23 @@ Transcription: ${transcriptText}`;
 
       const validated = jhaPayloadSchema.parse(req.body);
       const { selectedHazards, sharedSignature, photos, ...assessmentData } = validated;
+
+      const linkedJobId = normalizeJhaJobId(assessmentData.jobId);
+      if (jhaCompletionRequiresJob(existing.status) && !linkedJobId) {
+        return res.status(400).json({
+          success: false,
+          message: "Select today's job before completing the risk assessment",
+        });
+      }
+      if (linkedJobId) {
+        const linkedJob = await storage.getJob(linkedJobId);
+        if (!linkedJob) {
+          return res.status(400).json({
+            success: false,
+            message: "That job could not be found. Pick a job from today's list.",
+          });
+        }
+      }
       
       // Recalculate overall risk rating
       const overallRiskRating = selectedHazards.length > 0 
@@ -32536,7 +32616,7 @@ Transcription: ${transcriptText}`;
           comments: assessmentData.comments || null,
           photos: photos || [],
           overallRiskRating,
-          jobId: assessmentData.jobId || null,
+          jobId: linkedJobId,
           updatedAt: new Date()
         })
         .where(eq(schema.jhaAssessments.id, req.params.id));

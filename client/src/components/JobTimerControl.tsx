@@ -13,6 +13,7 @@
  * back-costing and gross margin server-side.
  */
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Play, Square, Timer, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { getNZDateString } from "@shared/dateUtils";
 import type { RoleKey } from "@/lib/crewRoles";
@@ -37,6 +48,11 @@ import {
 } from "@/components/crew/ClockOutChecklistSheet";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  jhaAssessmentHref,
+  type JobRiskAssessmentLink,
+  type RiskAssessmentStatus,
+} from "@shared/jhaJobRisk";
 
 interface RunningTimer {
   id: string;
@@ -67,8 +83,10 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentUser } = useAuth();
+  const [, navigate] = useLocation();
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [riskPromptOpen, setRiskPromptOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [roles, setRoles] = useState<Record<string, RoleKey | null>>({});
   const [outstanding, setOutstanding] = useState<OutstandingItem[] | null>(null);
@@ -273,6 +291,58 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
 
   const anyPending = startMutation.isPending || stopMutation.isPending || stopAllMutation.isPending;
 
+  const { data: jobResp } = useQuery<{
+    data?: { riskAssessmentStatus?: RiskAssessmentStatus; riskAssessmentId?: string | null };
+  }>({
+    queryKey: ["/api/jobs", jobId],
+    enabled: !!jobId,
+    staleTime: 15_000,
+  });
+
+  const riskLink = (): JobRiskAssessmentLink => {
+    const cached = queryClient.getQueryData<{
+      data?: { riskAssessmentStatus?: RiskAssessmentStatus; riskAssessmentId?: string | null };
+    }>(["/api/jobs", jobId]);
+    const data = cached?.data ?? jobResp?.data;
+    const status = data?.riskAssessmentStatus;
+    if (status === "completed" || status === "draft" || status === "none") {
+      return {
+        riskAssessmentStatus: status,
+        riskAssessmentId: data?.riskAssessmentId ?? null,
+      };
+    }
+    return { riskAssessmentStatus: "none", riskAssessmentId: null };
+  };
+
+  // Soft reminder only. Continue anyway still opens the same clock-in picker.
+  const handleStartPress = async () => {
+    let link = riskLink();
+    const known = queryClient.getQueryData<{
+      data?: { riskAssessmentStatus?: RiskAssessmentStatus };
+    }>(["/api/jobs", jobId])?.data?.riskAssessmentStatus;
+    if (known !== "completed" && known !== "draft" && known !== "none") {
+      try {
+        const fresh = await queryClient.fetchQuery<{
+          data?: { riskAssessmentStatus?: RiskAssessmentStatus; riskAssessmentId?: string | null };
+        }>({ queryKey: ["/api/jobs", jobId] });
+        const status = fresh?.data?.riskAssessmentStatus;
+        if (status === "completed" || status === "draft" || status === "none") {
+          link = {
+            riskAssessmentStatus: status,
+            riskAssessmentId: fresh?.data?.riskAssessmentId ?? null,
+          };
+        }
+      } catch {
+        link = { riskAssessmentStatus: "none", riskAssessmentId: null };
+      }
+    }
+    if (link.riskAssessmentStatus === "completed") {
+      openPicker();
+      return;
+    }
+    setRiskPromptOpen(true);
+  };
+
   return (
     <div
       className="rounded-lg border border-border bg-card px-4 py-3"
@@ -313,7 +383,7 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
               )}
             </Button>
           )}
-          <Button size="sm" onClick={openPicker} disabled={anyPending} data-testid="button-timer-start">
+          <Button size="sm" onClick={() => { void handleStartPress(); }} disabled={anyPending} data-testid="button-timer-start">
             <Play className="h-4 w-4 mr-1.5" />
             Start
           </Button>
@@ -488,6 +558,31 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={riskPromptOpen} onOpenChange={setRiskPromptOpen}>
+        <AlertDialogContent data-testid="dialog-risk-reminder">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Complete risk assessment for this job?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The morning risk assessment for this job is not done yet. You can complete it now, or start and finish it later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => openPicker()}
+              data-testid="button-risk-continue"
+            >
+              Continue anyway
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => navigate(jhaAssessmentHref(jobId, riskLink()))}
+              data-testid="button-risk-do-now"
+            >
+              Do it now
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ClockOutChecklistSheet
         jobId={jobId}

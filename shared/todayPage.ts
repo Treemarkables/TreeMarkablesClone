@@ -7,6 +7,7 @@
  */
 
 import { sanitizeJobEquipment } from "./jobEquipmentCatalogue.ts";
+import type { RiskAssessmentStatus } from "./jhaJobRisk.ts";
 
 export const NO_CREW_ID = "__no_crew__";
 export const NO_CREW_NAME = "No crew";
@@ -77,6 +78,8 @@ export interface TodayJobRow {
   kit: string[];
   bookedLabel: string;
   bookedAmount: number;
+  riskAssessmentStatus: RiskAssessmentStatus;
+  riskAssessmentId: string | null;
 }
 
 export interface TodayCrewGroup {

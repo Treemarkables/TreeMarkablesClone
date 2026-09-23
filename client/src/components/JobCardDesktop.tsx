@@ -68,6 +68,7 @@ import {
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
 import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
 import { Button } from "@/components/ui/button";
+import { JobRiskAssessmentBar, riskStatusFromUnknown } from "@/components/JobRiskStatusChip";
 import {
   Dialog,
   DialogContent,
@@ -527,7 +528,8 @@ export function JobCardDesktop({
       <div className="bg-background rounded-2xl shadow-xl border border-border w-full max-w-[1480px] h-[92vh] flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
-        <div className="bg-card px-6 py-4 border-b border-border flex items-center justify-between gap-4 flex-shrink-0">
+        <div className="bg-card border-b border-border flex-shrink-0">
+        <div className="px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <h2 className="text-[22px] font-extrabold tracking-tight text-foreground truncate">
               Job {jobNumber ?? ""}
@@ -564,6 +566,17 @@ export function JobCardDesktop({
               <XIcon className="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        {job && (
+          <div className="px-6 pb-3" data-testid="job-card-desktop-risk">
+            <JobRiskAssessmentBar
+              jobId={jobId}
+              status={riskStatusFromUnknown(job.riskAssessmentStatus)}
+              assessmentId={typeof job.riskAssessmentId === "string" ? job.riskAssessmentId : null}
+            />
+          </div>
+        )}
         </div>
 
         {/* ── Split-screen body ── */}
