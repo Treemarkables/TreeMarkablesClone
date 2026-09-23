@@ -1,11 +1,16 @@
+import { LIVE_APP_ORIGIN, resolveAppSignupUrl } from "./signupLink";
+
 export const BRAND = {
   name: "Inflow",
   tagline: "The operating system for trades businesses.",
   domain: "inflowapp.co.nz",
   contactEmail: "hello@inflowapp.co.nz",
-  appUrl: "https://app.inflowapp.co.nz",
+  appUrl: LIVE_APP_ORIGIN,
   // Direct entry to the app's login screen.
-  loginUrl: "https://app.inflowapp.co.nz/login",
+  loginUrl: `${LIVE_APP_ORIGIN}/login`,
+  // Self-serve signup. The app posts to POST /api/signup (createTenant).
+  // VITE_APP_SIGNUP_URL overrides this for a non-production app only.
+  signupUrl: resolveAppSignupUrl(import.meta.env.VITE_APP_SIGNUP_URL),
 } as const;
 
 export const NAV = [

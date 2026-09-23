@@ -39,7 +39,7 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
   },
   "/contact": {
     title: "Contact — Inflow",
-    description: "Tell us about your business. We're onboarding NZ trades businesses one at a time.",
+    description: "Create your Inflow account. Signup on the app registers your business, admin login, and free plan.",
   },
   "/support": {
     title: "Support — Inflow",

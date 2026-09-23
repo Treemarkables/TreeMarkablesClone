@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Section, Container } from "@/components/Container";
 import { LinkButton } from "@/components/Button";
+import { BRAND } from "@/lib/brand";
 
 const featureHighlights = [
   {
@@ -82,15 +83,15 @@ export default function Home() {
                 Inflow is the operating system for trades and field-service businesses. Jobs, quotes, invoices, customers, staff, safety — all in one place, built for the field.
               </p>
               <div className="mt-8 flex flex-wrap gap-3 justify-center">
-                <LinkButton href="/contact" variant="primary" size="lg">
-                  Request access
+                <LinkButton href={BRAND.signupUrl} external variant="primary" size="lg">
+                  Sign up
                 </LinkButton>
                 <LinkButton href="/features" variant="ghost" size="lg" className="border border-ink-200">
                   See what's inside
                 </LinkButton>
               </div>
               <p className="mt-6 text-sm text-ink-500">
-                Currently onboarding a small group of NZ trades businesses. Tell us about yours.
+                Free to start. You'll set a password in the app — that registers your business.
               </p>
             </div>
 
@@ -225,11 +226,11 @@ export default function Home() {
             Stop running your business out of five different apps.
           </h2>
           <p className="mt-6 text-ink-300 text-lg max-w-prose mx-auto">
-            We're letting a small group of NZ trades businesses in early. Tell us about yours and we'll get you set up.
+            Create your account on the app. We register your business, an admin login, and a free subscription.
           </p>
           <div className="mt-8 flex justify-center">
-            <LinkButton href="/contact" variant="secondary" size="lg">
-              Request access
+            <LinkButton href={BRAND.signupUrl} external variant="secondary" size="lg">
+              Sign up
             </LinkButton>
           </div>
         </Container>

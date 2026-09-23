@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Section, Container } from "@/components/Container";
 import { LinkButton } from "@/components/Button";
+import { BRAND } from "@/lib/brand";
 
 type Tier = "All plans" | "Crew & up" | "Business" | "Add-on";
 
@@ -1242,8 +1243,8 @@ export default function Features() {
           </div>
 
           <div className="mt-8 text-center">
-            <LinkButton href="/contact" variant="primary" size="md">
-              Request access
+            <LinkButton href={BRAND.signupUrl} external variant="primary" size="md">
+              Sign up
             </LinkButton>
           </div>
         </Container>
@@ -1256,11 +1257,11 @@ export default function Features() {
             See it in your business.
           </h2>
           <p className="mt-6 text-ink-300 max-w-prose mx-auto">
-            We'll walk you through a personalised setup based on the work you do.
+            Create your account on the app. You'll set a password, and we register your business on the free plan.
           </p>
           <div className="mt-8 flex justify-center gap-3">
-            <LinkButton href="/contact" variant="secondary" size="lg">
-              Request access
+            <LinkButton href={BRAND.signupUrl} external variant="secondary" size="lg">
+              Sign up
             </LinkButton>
           </div>
         </Container>
@@ -1333,8 +1334,8 @@ function FeatureModal({ active, onClose }: { active: Active; onClose: () => void
           </ul>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <LinkButton href="/contact" variant="primary" size="md">
-              Request access
+            <LinkButton href={BRAND.signupUrl} external variant="primary" size="md">
+              Sign up
             </LinkButton>
           </div>
         </div>

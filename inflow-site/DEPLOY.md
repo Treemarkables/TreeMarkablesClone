@@ -24,8 +24,10 @@ The code lives in the `inflow-site/` subdirectory of the TreeMarkablesClone mono
    (i.e. `inflow-site/dist`).
 
 3. **[dashboard]** Environment variables (optional):
-   - `VITE_REQUEST_ACCESS_ENDPOINT` — POST endpoint for the "Request access" form.
-     If unset, the form falls back to its no-endpoint behaviour (see `RequestAccessForm.tsx`).
+   - `VITE_APP_SIGNUP_URL` — only if Sign up should point somewhere other than
+     `https://app.inflowapp.co.nz/signup`. Leave unset in production.
+     Account creation is `POST /api/signup` on the app (business + admin + freemium).
+     Do not set a mailto address or a generic form endpoint.
 
 4. **[dashboard]** Custom domain: Pages project → **Custom domains → Set up a domain** →
    add `inflowapp.co.nz` and `www.inflowapp.co.nz`. Because DNS is already on Cloudflare,
