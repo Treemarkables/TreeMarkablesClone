@@ -116,6 +116,90 @@ function isBareDispatch(path: string): boolean {
   return path === "/dispatch" || path === "/dispatch/";
 }
 
+/** In-app bell rows. Same set the bell used to special-case inline. */
+const BELL_DIARY_TYPES = new Set([
+  "email_reply",
+  "sms_reply",
+  "proposal_sent",
+  "photo_added",
+  "note_added",
+  "holding_message_pending",
+]);
+
+export type BellNotificationInput = {
+  type?: string | null;
+  jobId?: string | null;
+  diaryEntryId?: string | null;
+  actionUrl?: string | null;
+  proposalId?: string | null;
+  quoteId?: string | null;
+  leadId?: string | null;
+  customerId?: string | null;
+  metadata?: { conversationId?: unknown } | null;
+};
+
+/**
+ * Where a tap on an in-app bell row should go.
+ *
+ * Job-matched email/SMS replies always open that job's diary (and the entry,
+ * when we have one), even if the stored actionUrl is a bare `/dispatch` or
+ * `/dispatch?job=` with no diary tab. Conversation replies that are not on a
+ * job open the conversation. A bare `/dispatch` is never the destination when
+ * a job or conversation id is present.
+ */
+export function resolveBellNotificationPath(
+  notification: BellNotificationInput | null | undefined,
+): string | null {
+  if (!notification) return null;
+  const type = asString(notification.type);
+  const jobId = asString(notification.jobId);
+  const entry = asString(notification.diaryEntryId);
+  const metadata = isPlainObject(notification.metadata) ? notification.metadata : {};
+  const conversationId = asString(metadata.conversationId);
+  const actionUrl = internalPathFromHref(asString(notification.actionUrl)) ?? "";
+
+  if (BELL_DIARY_TYPES.has(type)) {
+    // jobId column is the normal case. Older or partial rows sometimes only
+    // have the id inside actionUrl (`/dispatch?job=` with no diary tab).
+    const linkedJob =
+      jobId || (actionUrl ? jobIdFromNotificationPath(actionUrl) || "" : "");
+    if (linkedJob) {
+      const linkedEntry =
+        entry || (actionUrl ? entryFromNotificationPath(actionUrl) || "" : "");
+      return jobDeepLink(linkedJob, type, "diary", linkedEntry);
+    }
+  }
+
+  // Conversation rows must not be swallowed by a stale `/dispatch` actionUrl.
+  if (
+    conversationId &&
+    (type === "new_conversation" || type === "conversation_reply")
+  ) {
+    return `/conversation/${conversationId}`;
+  }
+  if (actionUrl.startsWith("/conversation/")) return actionUrl;
+
+  if (actionUrl.startsWith("/")) {
+    if (isBareDispatch(actionUrl)) {
+      if (jobId) return jobDeepLink(jobId, type, "", "");
+      if (conversationId) return `/conversation/${conversationId}`;
+    }
+    return actionUrl;
+  }
+
+  if (conversationId) return `/conversation/${conversationId}`;
+  if (jobId) return jobDeepLink(jobId, type, "", entry);
+  const proposalId = asString(notification.proposalId);
+  if (proposalId) return `/proposal/${proposalId}?preview=true`;
+  const quoteId = asString(notification.quoteId);
+  if (quoteId) return `/quote/${quoteId}`;
+  const leadId = asString(notification.leadId);
+  if (leadId) return `/opportunities?lead=${leadId}`;
+  const customerId = asString(notification.customerId);
+  if (customerId) return `/clients?customer=${customerId}`;
+  return null;
+}
+
 /**
  * Map a push payload to an in-app path.
  * Returns null when the notification is not deep-linkable (caller may fall

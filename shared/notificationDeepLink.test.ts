@@ -4,6 +4,7 @@ import {
   flattenNotificationPayload,
   jobIdFromNotificationPath,
   parseStoredNotificationNav,
+  resolveBellNotificationPath,
   resolveNotificationPath,
   serializeStoredNotificationNav,
   tabFromNotificationPath,
@@ -123,6 +124,82 @@ describe("resolveNotificationPath — payload → route", () => {
 
   it("falls back to /dispatch only for job types that lost their id", () => {
     assert.equal(resolveNotificationPath({ type: "job_assignment" }), "/dispatch");
+  });
+});
+
+describe("resolveBellNotificationPath — in-app bell tap", () => {
+  it("opens the job diary for an email reply whose actionUrl is bare despatch", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "email_reply",
+        jobId: "job-1",
+        diaryEntryId: "entry-9",
+        actionUrl: "/dispatch",
+      }),
+      "/dispatch?job=job-1&tab=diary&entry=entry-9",
+    );
+  });
+
+  it("adds the diary tab when an SMS reply actionUrl names the job but not the thread", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "sms_reply",
+        jobId: "job-2",
+        actionUrl: "/dispatch?job=job-2",
+      }),
+      "/dispatch?job=job-2&tab=diary",
+    );
+  });
+
+  it("reads the job out of actionUrl when the jobId column is empty", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "email_reply",
+        actionUrl: "/dispatch?job=job-3&entry=e-3",
+      }),
+      "/dispatch?job=job-3&tab=diary&entry=e-3",
+    );
+  });
+
+  it("opens the conversation for a reply that is not filed on a job", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "new_conversation",
+        actionUrl: "/conversation/c-1",
+        metadata: { conversationId: "c-1" },
+      }),
+      "/conversation/c-1",
+    );
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "new_conversation",
+        actionUrl: "/dispatch",
+        metadata: { conversationId: "c-2" },
+      }),
+      "/conversation/c-2",
+    );
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "conversation_reply",
+        metadata: { conversationId: "c-3" },
+      }),
+      "/conversation/c-3",
+    );
+  });
+
+  it("keeps a non-diary job notification on the job card", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "job_status_change",
+        jobId: "job-4",
+        actionUrl: "/dispatch",
+      }),
+      "/dispatch?job=job-4",
+    );
+  });
+
+  it("returns null when the row has no target", () => {
+    assert.equal(resolveBellNotificationPath({ type: "system_alert" }), null);
   });
 });
 

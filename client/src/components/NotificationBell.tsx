@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   Bell,
@@ -49,6 +49,11 @@ import {
   useBellPreferences,
   isNotificationVisible,
 } from "@/lib/notificationFilter";
+import { resolveBellNotificationPath } from "@shared/notificationDeepLink";
+import {
+  clearNotificationNav,
+  persistNotificationNav,
+} from "@/lib/notificationNav";
 
 interface NotificationWithDetails {
   id: string;
@@ -64,6 +69,7 @@ interface NotificationWithDetails {
   leadId?: string;
   customerId?: string;
   jobId?: string;
+  diaryEntryId?: string | null;
   quoteId?: string;
   proposalId?: string;
   expiresAt?: string | null;
@@ -245,41 +251,10 @@ export function NotificationBell() {
             const latestNotification: NotificationWithDetails | undefined =
               data?.data;
 
-            // Build the URL based on notification details
-            let targetUrl = "/dispatch"; // Default fallback
-
-            if (latestNotification) {
-              const diaryTypes = [
-                "email_reply",
-                "sms_reply",
-                "proposal_sent",
-                "photo_added",
-                "note_added",
-                "holding_message_pending",
-              ];
-              // Diary-activity notifications always open the diary tab — even
-              // when an older row carries a stale actionUrl (e.g. '/dispatch?
-              // job=X' with no '&tab=diary'). Add '&entry=' when we know the
-              // diary entry so the message is scrolled to and highlighted.
-              if (
-                diaryTypes.includes(latestNotification.type) &&
-                latestNotification.jobId
-              ) {
-                targetUrl = `/dispatch?job=${latestNotification.jobId}&tab=diary${latestNotification.diaryEntryId ? `&entry=${latestNotification.diaryEntryId}` : ""}`;
-              } else if (latestNotification.actionUrl) {
-                targetUrl = latestNotification.actionUrl;
-              } else if (latestNotification.jobId) {
-                targetUrl = `/dispatch?job=${latestNotification.jobId}`;
-              } else if (latestNotification.proposalId) {
-                targetUrl = `/proposal/${latestNotification.proposalId}?preview=true`;
-              } else if (latestNotification.quoteId) {
-                targetUrl = `/quote/${latestNotification.quoteId}`;
-              } else if (latestNotification.leadId) {
-                targetUrl = `/opportunities?lead=${latestNotification.leadId}`;
-              } else if (latestNotification.customerId) {
-                targetUrl = `/clients?customer=${latestNotification.customerId}`;
-              }
-            }
+            // Same destination as a tap on the bell row. Falls back to the
+            // board only when the row has no job, conversation, or link.
+            const targetUrl =
+              resolveBellNotificationPath(latestNotification) || "/dispatch";
 
             // Always show notification with title and URL (even if fallback)
             notificationService.showNotification(
@@ -448,156 +423,46 @@ export function NotificationBell() {
   const visibleTotal = notifications.length;
 
   const handleNotificationClick = (notification: NotificationWithDetails) => {
+    const url = resolveBellNotificationPath(notification);
     console.log("🔔 Notification clicked:", {
       id: notification.id,
       type: notification.type,
       proposalId: notification.proposalId,
       jobId: notification.jobId,
+      diaryEntryId: notification.diaryEntryId,
       quoteId: notification.quoteId,
       leadId: notification.leadId,
       customerId: notification.customerId,
       actionUrl: notification.actionUrl,
+      url,
     });
 
     if (!notification.isRead) {
       markAsReadMutation.mutate(notification.id);
     }
 
-    // Close popover first to ensure clean navigation
-    setIsOpen(false);
-
-    // Diary-activity notifications (email/SMS replies, photos, notes,
-    // proposals, holding messages) always belong on the job's diary tab. Many
-    // older rows in the DB carry a stale actionUrl from before the in-diary
-    // deep-link existed — e.g. '/dispatch?job=X' with no '&tab=diary', or
-    // '/communications?tab=pending'. Override those here so legacy
-    // notifications also land on the diary (and scroll to the entry when we
-    // know it) without needing a DB backfill. The diary-URL builder below
-    // adds '&entry=' when diaryEntryId is present.
-    const diaryTypes = [
-      "email_reply",
-      "sms_reply",
-      "proposal_sent",
-      "photo_added",
-      "note_added",
-      "holding_message_pending",
-    ];
-    const overrideToJobDiary =
-      !!notification.jobId && diaryTypes.includes(notification.type);
-
-    // Navigate to action URL if provided and it's an internal route
-    if (
-      !overrideToJobDiary &&
-      notification.actionUrl &&
-      notification.actionUrl.startsWith("/")
-    ) {
-      console.log("🔀 Navigating via actionUrl:", notification.actionUrl);
-
-      // Use setTimeout to ensure popover closes before navigation
-      setTimeout(() => {
-        setLocation(notification.actionUrl!);
-
-        // Dispatch custom event to notify components of URL change
-        window.dispatchEvent(
-          new CustomEvent("notification-navigation", {
-            detail: { url: notification.actionUrl },
-          }),
-        );
-      }, 50);
-      return;
-    }
-
-    // Check metadata for conversationId (for older notifications or alternative storage)
-    if (notification.metadata?.conversationId) {
-      const url = `/conversation/${notification.metadata.conversationId}`;
-      console.log("🔀 Navigating via conversationId:", url);
-      setLocation(url);
-
-      // Dispatch custom event to notify components of URL change
-      window.dispatchEvent(
-        new CustomEvent("notification-navigation", {
-          detail: { url },
-        }),
-      );
-
+    if (!url) {
+      console.log("⚠️ No navigation target found for notification");
       setIsOpen(false);
       return;
     }
 
-    // PRIORITY: If notification has a jobId, always open the job card modal
-    // This ensures all job-related notifications open the job card, regardless of type
-    if (notification.jobId) {
-      // Diary-related notifications open the diary tab (see diaryTypes above).
-      if (diaryTypes.includes(notification.type)) {
-        const url = `/dispatch?job=${notification.jobId}&tab=diary${notification.diaryEntryId ? `&entry=${notification.diaryEntryId}` : ""}`;
-        console.log("🔀 Navigating to job card with diary tab:", url);
-        setLocation(url);
-
-        // Dispatch custom event to notify DispatchBoard
-        window.dispatchEvent(
-          new CustomEvent("notification-navigation", {
-            detail: { url },
-          }),
-        );
-
-        setIsOpen(false);
-        return;
-      }
-
-      // Default: open job card without specific tab
-      const url = `/dispatch?job=${notification.jobId}`;
-      console.log("🔀 Navigating to job card:", url);
-      setLocation(url);
-
-      // Dispatch custom event to notify DispatchBoard
-      window.dispatchEvent(
-        new CustomEvent("notification-navigation", {
-          detail: { url },
-        }),
-      );
-
-      setIsOpen(false);
-      return;
+    // Persist job deep links so Despatch still opens the card if this tap
+    // races the board mount. Conversation (and other) routes navigate on
+    // their own — don't leave a stale job path that would override them.
+    if (url.startsWith("/dispatch") || url.startsWith("/jobs/")) {
+      persistNotificationNav(url);
+    } else {
+      clearNotificationNav();
     }
 
-    // Handle proposal notifications (only if no jobId)
-    if (notification.proposalId) {
-      const url = `/proposal/${notification.proposalId}?preview=true`;
-      console.log("🔀 Navigating to proposal:", url);
-      setLocation(url);
-      setIsOpen(false);
-      return;
-    }
-
-    // Handle quote notifications (only if no jobId)
-    if (notification.quoteId) {
-      const url = `/quote/${notification.quoteId}`;
-      console.log("🔀 Navigating to quote:", url);
-      setLocation(url);
-      setIsOpen(false);
-      return;
-    }
-
-    // Handle lead notifications
-    if (notification.leadId) {
-      const url = `/opportunities?lead=${notification.leadId}`;
-      console.log("🔀 Navigating to lead:", url);
-      setLocation(url);
-      setIsOpen(false);
-      return;
-    }
-
-    // Handle customer notifications
-    if (notification.customerId) {
-      const url = `/clients?customer=${notification.customerId}`;
-      console.log("🔀 Navigating to customer:", url);
-      setLocation(url);
-      setIsOpen(false);
-      return;
-    }
-
-    // If no navigation target, just close
-    console.log("⚠️ No navigation target found for notification");
+    // Wouter's location is the pathname only, so a search-only change while
+    // already on /dispatch does not re-render the board. The event (and the
+    // history listener on DispatchBoard) carries the job/diary target.
+    setLocation(url);
+    window.dispatchEvent(
+      new CustomEvent("notification-navigation", { detail: { url } }),
+    );
     setIsOpen(false);
   };
 
@@ -623,6 +488,27 @@ export function NotificationBell() {
     if (notification.quoteNumber) return `Quote #${notification.quoteNumber}`;
     return "";
   };
+
+  // The dismiss backdrop is a separate body portal at z-[110]. Radix copies
+  // the panel's *computed* z-index onto the popper wrapper, and a static
+  // element reports z-index "auto" even with a z-[120] class — so the
+  // wrapper stayed under the backdrop and every tap hit the backdrop
+  // (close only) instead of the row. `relative` makes z-[120] a real
+  // computed value so the panel stacks above the backdrop. Re-apply after
+  // open in case the popper measures before the class is painted.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const lift = () => {
+      const panel = document.querySelector(
+        '[data-testid="dropdown-notifications"]',
+      );
+      const wrapper = panel?.closest("[data-radix-popper-content-wrapper]");
+      if (wrapper instanceof HTMLElement) wrapper.style.zIndex = "120";
+    };
+    lift();
+    const id = requestAnimationFrame(lift);
+    return () => cancelAnimationFrame(id);
+  }, [isOpen]);
 
   // modal: an outside click closes the panel without also landing on
   // whatever is underneath (e.g. opening a job card on the dispatch board).
@@ -680,7 +566,7 @@ export function NotificationBell() {
         // animation's animationend fires, and intermittently misses it — the
         // panel then sticks around with body pointer-events:none (modal),
         // freezing the app. Closing must unmount immediately.
-        className="w-96 p-0 data-[state=closed]:!animate-none"
+        className="relative z-[120] w-96 p-0 data-[state=closed]:!animate-none"
         align="end"
         // The backdrop above is the sole outside-close path. Left to its own
         // devices Radix dismisses on pointerdown-outside, which unmounts the
@@ -780,7 +666,10 @@ export function NotificationBell() {
                           ? "bg-gradient-to-r from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-blue-950/20 dark:via-purple-950/10 dark:to-pink-950/20 border-l-2 border-l-blue-500"
                           : "hover:bg-muted/50"
                       }`}
-                      onClick={() => handleNotificationClick(notification)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleNotificationClick(notification);
+                      }}
                       data-testid={`notification-item-${notification.id}`}
                     >
                       <div className="flex items-start gap-3">
@@ -832,7 +721,10 @@ export function NotificationBell() {
                                     <MoreVertical className="h-3 w-3" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="relative z-[200]"
+                                >
                                   {!notification.isRead && (
                                     <DropdownMenuItem
                                       onClick={(e) => {
