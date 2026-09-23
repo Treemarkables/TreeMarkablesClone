@@ -22,7 +22,8 @@ export default function Signup() {
   // Prefill arrives from the commercial site (?businessName=&firstName=&lastName=&email=&plan=).
   // The plan is also selectable here. Paid → Stripe; free → app.
   const prefill = readSignupPrefill(window.location.search);
-  const [planKey, setPlanKey] = useState(prefill.planKey);
+  // string, not the prefill union: the live plan list can include keys beyond freemium/crew/business.
+  const [planKey, setPlanKey] = useState<string>(prefill.planKey);
   const planLabel = planKey === "crew" ? "Crew" : planKey === "business" ? "Business" : "Free";
 
   // Live plans so the picker shows the current prices (never hardcoded).
