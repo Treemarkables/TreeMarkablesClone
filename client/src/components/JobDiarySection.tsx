@@ -1292,7 +1292,7 @@ export function JobDiarySection({
                           ? "call"
                           : "job_event",
             title: entry.title,
-            content: entry.description,
+            content: entry.description || entry.content || "",
             author: entry.authorName || entry.author_name || "System",
             timestamp: entry.createdAt || entry.created_at,
             photoUrl: photoUrl,
@@ -3031,8 +3031,8 @@ export function JobDiarySection({
                 // Special rendering for SMS and Email entries (chat-style bubbles)
                 if (entry.type === "sms" || entry.type === "email") {
                   // Check both title and content for better detection
-                  const titleLower = entry.title.toLowerCase();
-                  const contentLower = entry.content.toLowerCase();
+                  const titleLower = (entry.title || "").toLowerCase();
+                  const contentLower = (entry.content || "").toLowerCase();
                   const isSent =
                     titleLower.includes("sent") ||
                     contentLower.includes("email sent to") ||

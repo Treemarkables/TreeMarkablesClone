@@ -1,7 +1,7 @@
 import { retrieveSMSReplies } from './smsEveryoneClient';
 import { db } from '../db';
 import { jobs, jobDiaryEntries, customers, notifications, conversations, conversationMessages } from '@shared/schema';
-import { eq, and, or, sql, desc } from 'drizzle-orm';
+import { eq, and, or, sql } from 'drizzle-orm';
 import { fromZonedTime } from 'date-fns-tz';
 import { broadcast } from '../sseManager';
 import { runWithBusiness, withTenant } from '../tenancy/tenantStore';
@@ -131,27 +131,40 @@ async function processSMSReplies() {
           'Pacific/Auckland'
         );
         
-        await db.insert(jobDiaryEntries).values(withTenant({
+        const messageBody = reply.MessageText || '';
+        const [diaryEntry] = await db.insert(jobDiaryEntries).values(withTenant({
           jobId: matchedJob.id,
           entryType: 'sms',
           title: '📱 SMS Reply Received',
-          description: `SMS reply from ${customerName} (${reply.Originator}):\n\n${reply.MessageText}`,
+          description: messageBody,
+          content: messageBody,
           authorName: customerName,
           authorRole: 'customer',
           tags: ['sms', 'reply', 'communication', 'customer-reply'],
           createdAt: receivedTimestamp,
-          metadata: { phoneNumber: reply.Originator }
-        }));
+          metadata: {
+            phoneNumber: reply.Originator,
+            direction: 'inbound',
+          }
+        })).returning();
+
+        // Deep-link the bell and the push to this diary row. A bare
+        // /dispatch?job= opens Despatch and the reply looks missing.
+        const diaryEntryId = diaryEntry?.id;
+        const diaryLink = diaryEntryId
+          ? `/dispatch?job=${matchedJob.id}&tab=diary&entry=${diaryEntryId}`
+          : `/dispatch?job=${matchedJob.id}&tab=diary`;
 
         // Create notification for SMS reply
         await db.insert(notifications).values(withTenant({
           title: `📱 SMS Reply from ${customerName}`,
-          message: `${reply.MessageText.substring(0, 100)}${reply.MessageText.length > 100 ? '...' : ''}`,
+          message: `${messageBody.substring(0, 100)}${messageBody.length > 100 ? '...' : ''}`,
           type: 'sms_reply',
           priority: 'medium',
           jobId: matchedJob.id,
           customerId: matchedJob.customerId,
-          actionUrl: `/dispatch?job=${matchedJob.id}`,
+          ...(diaryEntryId && { diaryEntryId }),
+          actionUrl: diaryLink,
           createdAt: receivedTimestamp
         }));
 
@@ -167,7 +180,7 @@ async function processSMSReplies() {
         onLaneJobEvent(matchedJob.id, 'customer_replied').catch(err => console.error('[Lanes] sms-reply trigger error:', err));
 
         // Extract email address from SMS body if present and update job/customer
-        const emailMatch = reply.MessageText.match(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Z|a-z]{2,}\b/);
+        const emailMatch = messageBody.match(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Z|a-z]{2,}\b/);
         if (emailMatch) {
           const extractedEmail = emailMatch[0].toLowerCase();
           console.log(`📧 Extracted email from SMS reply: ${extractedEmail}`);
@@ -182,7 +195,7 @@ async function processSMSReplies() {
         }
 
         // Extract full name from SMS body (e.g. "Kasia Green" on its own line, or "Full name is ...")
-        const nameMatch = reply.MessageText.match(/(?:full\s*name\s*(?:is|:)\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
+        const nameMatch = messageBody.match(/(?:full\s*name\s*(?:is|:)\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
         if (nameMatch) {
           const fullName = nameMatch[1].trim();
           const nameParts = fullName.split(/\s+/);
@@ -202,16 +215,18 @@ async function processSMSReplies() {
 
         try {
           const { pushToAdminsWithCustomerMessages } = await import('./notificationHelper.js');
-          const smsPreview = reply.MessageText.substring(0, 120) + (reply.MessageText.length > 120 ? '…' : '');
+          const smsPreview = messageBody.substring(0, 120) + (messageBody.length > 120 ? '…' : '');
           const pushCount = await pushToAdminsWithCustomerMessages({
             title: `SMS Reply — ${customerName}`,
             body: smsPreview,
-            clickAction: `/dispatch?job=${matchedJob.id}&tab=diary`,
+            clickAction: diaryLink,
             data: {
               type: 'sms_reply',
               jobId: matchedJob.id,
               customerId: matchedJob.customerId || '',
               jobNumber: String(matchedJob.jobNumber),
+              tab: 'diary',
+              ...(diaryEntryId && { entry: diaryEntryId }),
             },
           });
           console.log(`📲 Pushed SMS-reply notification to ${pushCount} admin(s) for job #${matchedJob.jobNumber}`);
@@ -219,51 +234,110 @@ async function processSMSReplies() {
           console.error('📱 Error sending SMS-reply push notification:', pushErr);
         }
 
-        // Also add SMS reply to conversations if there's an active conversation with this phone
+        // conversations has no phone column. Matching participantContact threw
+        // on every reply and the catch dropped the message, so inbound SMS
+        // never reached conversation_messages. Match the customer's thread,
+        // then phone digits on the customer or their job contacts.
         try {
-          // Find conversation by phone number (check participantContact field)
-          const phoneToMatch = senderPhone.slice(-9); // Last 9 digits for matching
-          const matchingConversations = await db
-            .select()
-            .from(conversations)
-            .where(
-              and(
-                // Scope to the matched job's tenant so we never attach this reply to a
-                // different business's conversation (raw owner read — not RLS-scoped here).
-                eq(conversations.businessId, matchedJob.businessId),
-                sql`REGEXP_REPLACE(${conversations.participantContact}, '[^0-9]', '', 'g') LIKE '%' || ${phoneToMatch} || '%'`
-              )
-            )
-            .orderBy(desc(conversations.lastMessageAt))
-            .limit(1);
+          const businessId = recipientBusinessId ?? matchedJob.businessId;
+          const customerId = matchedJob.customerId || matchedCustomer?.id || null;
+          const phoneTail = senderPhone.replace(/\D/g, '').slice(-8);
+          const phoneLike = `%${phoneTail}%`;
+          const threadOrder = [
+            sql`CASE WHEN ${conversations.status} = 'open' THEN 0 ELSE 1 END`,
+            sql`${conversations.lastMessageAt} DESC NULLS LAST`,
+          ];
 
-          if (matchingConversations.length > 0) {
-            const conversation = matchingConversations[0];
-            
-            // Add the SMS reply as a conversation message
+          let existing: { id: string; unreadCount: number | null } | undefined;
+          if (businessId && customerId) {
+            const [byCustomer] = await db
+              .select({ id: conversations.id, unreadCount: conversations.unreadCount })
+              .from(conversations)
+              .where(and(
+                eq(conversations.businessId, businessId),
+                eq(conversations.customerId, customerId),
+              ))
+              .orderBy(...threadOrder)
+              .limit(1);
+            existing = byCustomer;
+          }
+
+          if (!existing && businessId && phoneTail) {
+            const [byPhone] = await db
+              .select({ id: conversations.id, unreadCount: conversations.unreadCount })
+              .from(conversations)
+              .leftJoin(customers, eq(conversations.customerId, customers.id))
+              .where(and(
+                eq(conversations.businessId, businessId),
+                or(
+                  sql`REGEXP_REPLACE(COALESCE(${customers.phone}, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}`,
+                  sql`REGEXP_REPLACE(COALESCE(${customers.mobile}, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}`,
+                  sql`EXISTS (
+                    SELECT 1 FROM jobs j
+                    WHERE j.customer_id = ${conversations.customerId}
+                      AND j.business_id = ${conversations.businessId}
+                      AND (
+                        REGEXP_REPLACE(COALESCE(j.job_contact_phone, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}
+                        OR REGEXP_REPLACE(COALESCE(j.job_contact_mobile, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}
+                        OR REGEXP_REPLACE(COALESCE(j.billing_contact_phone, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}
+                        OR REGEXP_REPLACE(COALESCE(j.billing_contact_mobile, ''), '[^0-9]', '', 'g') LIKE ${phoneLike}
+                      )
+                  )`,
+                ),
+              ))
+              .orderBy(...threadOrder)
+              .limit(1);
+            existing = byPhone;
+          }
+
+          let conversationId = existing?.id;
+          const nextUnread = (existing?.unreadCount ?? 0) + 1;
+          if (!conversationId && businessId) {
+            const [created] = await db.insert(conversations).values(withTenant({
+              businessId,
+              title: `SMS from ${customerName}`,
+              status: 'open',
+              priority: 'medium',
+              source: 'sms',
+              ...(customerId ? { customerId } : {}),
+              tags: ['sms', 'customer-reply'],
+              lastMessageAt: receivedTimestamp,
+              lastMessageBy: 'customer',
+              unreadCount: nextUnread,
+            })).returning({ id: conversations.id });
+            conversationId = created?.id;
+          }
+
+          if (conversationId) {
             await db.insert(conversationMessages).values(withTenant({
-              conversationId: conversation.id,
+              ...(businessId ? { businessId } : {}),
+              conversationId,
               type: 'message',
-              content: reply.MessageText,
+              content: messageBody,
               direction: 'inbound',
               fromName: customerName,
               fromContact: reply.Originator,
               platform: 'sms',
               isRead: false,
-              createdAt: receivedTimestamp
+              createdAt: receivedTimestamp,
+              metadata: {
+                jobId: matchedJob.id,
+                phoneNumber: reply.Originator,
+              },
             }));
 
-            // Update conversation's lastMessageAt
             await db
               .update(conversations)
               .set({
+                status: 'open',
                 lastMessageAt: receivedTimestamp,
                 lastMessageBy: 'customer',
-                updatedAt: receivedTimestamp
+                updatedAt: receivedTimestamp,
+                unreadCount: nextUnread,
               })
-              .where(eq(conversations.id, conversation.id));
+              .where(eq(conversations.id, conversationId));
 
-            console.log(`📱 ✅ Also added SMS reply to conversation ${conversation.id}`);
+            console.log(`📱 ✅ Added SMS reply to conversation ${conversationId}`);
           }
         } catch (convError) {
           console.error('📱 Error adding SMS reply to conversation:', convError);
