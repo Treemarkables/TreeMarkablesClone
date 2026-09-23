@@ -144,9 +144,7 @@ async function processSMSReplies() {
           createdAt: receivedTimestamp,
           metadata: {
             phoneNumber: reply.Originator,
-            // Email replies use this same marker. Outbound SMS receipts store
-            // phoneNumber only, so a content-null row was easy to misread as outbound.
-            direction: 'incoming',
+            direction: 'inbound',
           }
         })).returning();
 
