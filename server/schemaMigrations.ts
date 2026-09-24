@@ -591,7 +591,7 @@ const MIGRATIONS: Migration[] = [
                         day_role,
                         updated_at
                    FROM job_staff_assignments
-                  WHERE day_role IN ('A', 'B', 'C')
+                  WHERE day_role IN ('A', 'B', 'C', 'R')
                ) src
               ORDER BY employee_id, nz_date, updated_at DESC
            ) picked

@@ -31,6 +31,68 @@ export const EMPTY_JOB_RISK: JobRiskAssessmentLink = {
   riskAssessmentId: null,
 };
 
+/**
+ * Checklist item that belongs to the Risk assessment role. Ticking it, or
+ * linking a completed morning JHA, both clear the job's due state.
+ */
+export const RISK_ASSESSMENT_CHECKLIST_ITEM_ID = "risk-assessment";
+
+/**
+ * A checklist tick clears "Risk needed" without throwing away a draft id, so
+ * Start can still reopen that draft if the tick is later removed. A completed
+ * JHA already wins and is left as-is. Callers must pass true only when the
+ * tick falls on the same NZ day as the due check — the row is once per job,
+ * and a previous day's tick does not cover this morning.
+ */
+export function riskLinkClearedByChecklist(
+  link: JobRiskAssessmentLink,
+  checklistItemDone: boolean,
+): JobRiskAssessmentLink {
+  if (link.riskAssessmentStatus === "completed" || !checklistItemDone) return link;
+  return {
+    riskAssessmentStatus: "completed",
+    riskAssessmentId: link.riskAssessmentId,
+  };
+}
+
+/** True when a job-level checklist tick was recorded on this NZ calendar day. */
+export function checklistCompletionClearsRiskDue(
+  completedAt: Date | string | null | undefined,
+  nzDate: string,
+): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nzDate)) return false;
+  return nzDay(completedAt) === nzDate;
+}
+
+/**
+ * Done ids for role outstanding / snapshots. A completed JHA for `nzDate`
+ * counts as the Risk assessment item. A checklist tick counts only on the
+ * NZ day it was recorded, so yesterday's tick does not hide this morning.
+ */
+export function doneIdsIncludingLinkedJha(
+  completions: readonly { itemId: string; completedAt?: Date | string | null }[],
+  link: JobRiskAssessmentLink | null | undefined,
+  nzDate: string,
+): Set<string> {
+  const done = new Set<string>();
+  for (const row of completions) {
+    if (row.itemId !== RISK_ASSESSMENT_CHECKLIST_ITEM_ID) {
+      done.add(row.itemId);
+      continue;
+    }
+    if (
+      link?.riskAssessmentStatus === "completed"
+      || checklistCompletionClearsRiskDue(row.completedAt, nzDate)
+    ) {
+      done.add(row.itemId);
+    }
+  }
+  if (link?.riskAssessmentStatus === "completed") {
+    done.add(RISK_ASSESSMENT_CHECKLIST_ITEM_ID);
+  }
+  return done;
+}
+
 export function normalizeJhaJobId(value: unknown): string | null {
   if (value == null) return null;
   const id = String(value).trim();

@@ -574,6 +574,7 @@ export function JobCardDesktop({
               jobId={jobId}
               status={riskStatusFromUnknown(job.riskAssessmentStatus)}
               assessmentId={typeof job.riskAssessmentId === "string" ? job.riskAssessmentId : null}
+              onOpenChecklist={roleChecklistEnabled ? () => setActiveTab("checklist") : undefined}
             />
           </div>
         )}

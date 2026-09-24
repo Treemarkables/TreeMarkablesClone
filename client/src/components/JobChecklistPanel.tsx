@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -28,8 +29,13 @@ import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { SpeechToQuote } from "@/components/SpeechToQuote";
 import { formatNZTime, getNZDateString } from "@shared/dateUtils";
 import type { RoleChecklistTask } from "@shared/schema";
-import { ROLE_KEYS, ROLE_LABEL, type RoleKey } from "@/lib/crewRoles";
+import { isRoleKey, ROLE_KEYS, ROLE_LABEL, type RoleKey } from "@/lib/crewRoles";
 import { primaryDayRole, rolesFromDayRolePayload } from "@shared/crewDayRoles";
+import {
+  jhaAssessmentHref,
+  RISK_ASSESSMENT_CHECKLIST_ITEM_ID,
+  type RiskAssessmentStatus,
+} from "@shared/jhaJobRisk";
 import { RoleChips } from "@/components/crew/RoleChips";
 import { CrewPickerDialog } from "@/components/crew/CrewPickerDialog";
 
@@ -99,8 +105,10 @@ function rolesFor(member: CrewMember): RoleKey[] {
 // seed data on the server so the panel never renders empty.
 const FALLBACK_ROLE_ITEMS: Record<RoleKey, ChecklistItem[]> = {
   A: [
-    { id: "risk-assessment", label: "Risk assessment", Icon: Shield },
     { id: "content-creation", label: "Content creation", Icon: Camera },
+  ],
+  R: [
+    { id: RISK_ASSESSMENT_CHECKLIST_ITEM_ID, label: "Risk assessment", Icon: Shield },
   ],
   B: [
     { id: "alert-customer-late", label: "Alert customer if running late", Icon: PhoneCall },
@@ -114,9 +122,15 @@ const FALLBACK_ROLE_ITEMS: Record<RoleKey, ChecklistItem[]> = {
   ],
 };
 
+function riskStatusFromJob(value: unknown): RiskAssessmentStatus {
+  if (value === "completed" || value === "draft" || value === "none") return value;
+  return "none";
+}
+
 export function JobChecklistPanel({ jobId }: { jobId: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const isTempJob = jobId.startsWith("temp-");
 
   // Tasks are now driven by the role_checklist_tasks table so users can
@@ -133,9 +147,9 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
   const roleItems = useMemo<Record<RoleKey, ChecklistItem[]>>(() => {
     const tasks = tasksResp?.data;
     if (!tasks || tasks.length === 0) return FALLBACK_ROLE_ITEMS;
-    const groups: Record<RoleKey, ChecklistItem[]> = { A: [], B: [], C: [] };
+    const groups: Record<RoleKey, ChecklistItem[]> = { A: [], B: [], C: [], R: [] };
     const enabled = tasks
-      .filter((t) => t.isEnabled && (t.roleKey === "A" || t.roleKey === "B" || t.roleKey === "C"))
+      .filter((t) => t.isEnabled && isRoleKey(t.roleKey))
       .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     for (const t of enabled) {
       groups[t.roleKey as RoleKey].push({
@@ -198,7 +212,7 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
   };
 
   const staffByRole = useMemo(() => {
-    const groups: Record<RoleKey, CrewMember[]> = { A: [], B: [], C: [] };
+    const groups: Record<RoleKey, CrewMember[]> = { A: [], B: [], C: [], R: [] };
     for (const s of staffOnJob) {
       for (const role of rolesFor(s)) groups[role].push(s);
     }
@@ -296,10 +310,26 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
         variant: "destructive",
       });
     },
-    onSettled: () => {
+    onSettled: (_data, _err, vars) => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "checklist"] });
+      if (vars?.itemId === RISK_ASSESSMENT_CHECKLIST_ITEM_ID) {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/today-overview"] });
+      }
     },
   });
+
+  const { data: jobResp } = useQuery<{
+    data?: { riskAssessmentStatus?: string; riskAssessmentId?: string | null };
+  }>({
+    queryKey: ["/api/jobs", jobId],
+    enabled: !isTempJob,
+    staleTime: 15_000,
+  });
+  const riskStatus = riskStatusFromJob(jobResp?.data?.riskAssessmentStatus);
+  const riskAssessmentId = typeof jobResp?.data?.riskAssessmentId === "string"
+    ? jobResp.data.riskAssessmentId
+    : null;
 
   // Per-person completion, measured against every role they hold. Completions are
   // recorded per (job, item), not per person, so two people sharing a role see the
@@ -388,7 +418,7 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
         </h2>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Assign roles for the day, then tick off the tasks as they go. One person can
-          hold more than one role. Roles carry across every job that day.
+          hold more than one role, including risk assessment. Roles carry across every job that day.
         </p>
       </div>
 
@@ -504,6 +534,12 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
               completionByItem={completionByItem}
               onAssign={() => openPicker(roleKey)}
               onToggle={(itemId, completed) => toggleItem.mutate({ itemId, completed })}
+              onDoRiskAssessment={() =>
+                navigate(jhaAssessmentHref(jobId, {
+                  riskAssessmentStatus: riskStatus,
+                  riskAssessmentId,
+                }))
+              }
               disabled={toggleItem.isPending}
             />
           ))}
@@ -596,6 +632,7 @@ function RoleSection({
   completionByItem,
   onToggle,
   onAssign,
+  onDoRiskAssessment,
   disabled,
 }: {
   roleKey: RoleKey;
@@ -604,6 +641,7 @@ function RoleSection({
   completionByItem: Map<string, ChecklistCompletion>;
   onToggle: (itemId: string, completed: boolean) => void;
   onAssign: () => void;
+  onDoRiskAssessment: () => void;
   disabled: boolean;
 }) {
   const ownerNames = staffInRole
@@ -649,6 +687,9 @@ function RoleSection({
               completion={completion}
               disabled={disabled}
               onToggle={() => onToggle(item.id, !completion)}
+              onDoRiskAssessment={
+                item.id === RISK_ASSESSMENT_CHECKLIST_ITEM_ID ? onDoRiskAssessment : undefined
+              }
             />
           );
         })}
@@ -662,14 +703,17 @@ function ChecklistRow({
   completion,
   disabled,
   onToggle,
+  onDoRiskAssessment,
 }: {
   item: ChecklistItem;
   completion: ChecklistCompletion | null;
   disabled: boolean;
   onToggle: () => void;
+  onDoRiskAssessment?: () => void;
 }) {
   const { id, label, Icon } = item;
   const completed = !!completion;
+  const showRiskAction = !!onDoRiskAssessment && !completed;
 
   const completedMeta = completion
     ? [
@@ -680,15 +724,8 @@ function ChecklistRow({
         .join(" · ")
     : null;
 
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={disabled}
-      className="flex items-start gap-3.5 p-4 bg-card border border-border rounded-lg transition-colors hover:bg-accent/30 text-left w-full disabled:opacity-60 disabled:cursor-not-allowed"
-      data-testid={`checklist-item-${id}`}
-      aria-pressed={completed}
-    >
+  const rowBody = (
+    <>
       <div className="shrink-0 mt-0.5">
         {completed ? (
           <div className="w-[22px] h-[22px] rounded-full flex items-center justify-center bg-green">
@@ -719,6 +756,48 @@ function ChecklistRow({
           </div>
         )}
       </div>
+    </>
+  );
+
+  if (showRiskAction) {
+    return (
+      <div
+        className="flex items-center gap-2 p-4 bg-card border border-border rounded-lg"
+        data-testid={`checklist-item-${id}`}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={disabled}
+          className="flex items-start gap-3.5 text-left flex-1 min-w-0 disabled:opacity-60 disabled:cursor-not-allowed"
+          aria-pressed={completed}
+        >
+          {rowBody}
+        </button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={onDoRiskAssessment}
+          data-testid="button-do-risk-assessment"
+        >
+          Do risk assessment
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className="flex items-start gap-3.5 p-4 bg-card border border-border rounded-lg transition-colors hover:bg-accent/30 text-left w-full disabled:opacity-60 disabled:cursor-not-allowed"
+      data-testid={`checklist-item-${id}`}
+      aria-pressed={completed}
+    >
+      {rowBody}
     </button>
   );
 }

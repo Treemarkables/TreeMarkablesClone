@@ -1,5 +1,5 @@
 /**
- * The three role chips (Kaitiaki / Kaiwhangai / Kaitirotiro) for one person.
+ * Role chips (Kaitiaki / Kaiwhangai / Kaitirotiro / Risk assessment) for one person.
  *
  * Shared by the job card's "Today's roles" rows and the clock-in dialog so a role
  * is allocated the same way wherever you happen to be standing. Each chip toggles

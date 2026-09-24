@@ -9,6 +9,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { getNZDateString, jobRunsOnNZDate } from '../../shared/dateUtils.js';
 import { isRoleKey } from '../../shared/crewRoles.js';
 import { groupRolesByEmployee, joinRoleLabels, outstandingForRoles, primaryDayRole, sortRoles } from '../../shared/crewDayRoles.js';
+import { doneIdsIncludingLinkedJha, type JobRiskAssessmentLink } from '../../shared/jhaJobRisk.js';
+import { loadRiskLinksForJobs } from '../jhaJobRisk.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -298,6 +300,13 @@ async function checkOutstandingRoleTasks(): Promise<void> {
 
   const { jobs } = await storage.getAllJobs({ limit: 999999, status: 'work_order' });
   const since24h = new Date(Date.now() - DAY_MS);
+  const todaysJobIds = jobs.filter((job) => jobRunsOnNZDate(job, todayNZ)).map((job) => job.id);
+  let riskByJob = new Map<string, JobRiskAssessmentLink>();
+  try {
+    riskByJob = await loadRiskLinksForJobs(todaysJobIds, todayNZ);
+  } catch (err) {
+    console.error('[ReminderChecker] Could not load morning risk status:', err);
+  }
 
   for (const job of jobs) {
     if (!jobRunsOnNZDate(job, todayNZ)) continue;
@@ -316,7 +325,7 @@ async function checkOutstandingRoleTasks(): Promise<void> {
     if (workedToday.length === 0) continue;
 
     const completions = await storage.getJobChecklistCompletions(job.id);
-    const done = new Set(completions.map(c => c.itemId));
+    const done = doneIdsIncludingLinkedJha(completions, riskByJob.get(job.id), todayNZ);
 
     for (const employeeId of workedToday) {
       const roles = rolesByEmployee.get(employeeId) ?? [];

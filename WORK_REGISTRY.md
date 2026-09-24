@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Checklist risk assessment role — branch `cursor/checklist-risk-assessment-role-d5b5` — 2026-09-24 — morning JHA / Risk needed is an assignable Checklist role. One person can hold it plus another role. Linking or completing the JHA, or ticking the role, clears the due state. Do not merge until review. [PR #590]
 - Checklist multi-role per person — branch `cursor/checklist-multi-role-1064` — 2026-09-24 — one staff member can hold more than one Kaitiaki/Kaiwhangai/Kaitirotiro role on the same job. Unique (employee, nz date) becomes (employee, nz date, role). Do not merge until review. [PR #589]
 - Gmail reply poller also scans Spam — branch `cursor/gmail-spam-reply-poll-75b2` — 2026-09-24 — job-alias and quotes@ replies sitting in Gmail Spam are filed through the existing matcher (same diary + email_reply path). All Mail/Inbox scan stays. Message-ID dedupe; filed Spam messages move to Inbox. Do not merge until review. [PR #588]
 - URGENT iOS TestFlight black screen (cold open, after #579) — branch `cursor/ios-cold-start-black-screen-e47b` — 2026-09-24 — Capacitor snapshots isOpaque=false set in capacitorDidLoad, and didFailProvisionalNavigation never restores it, so a cold WKWebView stays black until force-quit. Also don't mark booted on the empty logged-in sidebar shell. Do not merge until review. [PR #587]

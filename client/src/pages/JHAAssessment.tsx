@@ -369,6 +369,7 @@ export default function JHAAssessment() {
       queryClient.invalidateQueries({ queryKey: ["/api/today-overview"] });
       if (variables.jobId) {
         queryClient.invalidateQueries({ queryKey: ["/api/jobs", variables.jobId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", variables.jobId, "checklist"] });
       }
       navigate("/jha-history");
     },

@@ -182,7 +182,7 @@ const settingsSections: SettingSection[] = [
       {
         id: "role-checklist-tasks",
         title: "Role Checklist Tasks",
-        description: "Customise tasks for Kaitiaki, Kaiwhangai and Kaitirotiro",
+        description: "Customise tasks for Kaitiaki, Kaiwhangai, Kaitirotiro and Risk assessment",
         icon: ClipboardList,
         path: "/settings/role-checklist-tasks"
       },

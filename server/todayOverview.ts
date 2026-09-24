@@ -28,7 +28,7 @@ import {
   type TodayPerson,
   type TodayScope,
 } from "@shared/todayPage";
-import { loadRiskLinksForJobs } from "./jhaJobRisk";
+import { loadEffectiveRiskLinksForJobs } from "./jhaJobRisk";
 import type { JobRiskAssessmentLink } from "@shared/jhaJobRisk";
 
 export class HttpError extends Error {
@@ -100,7 +100,7 @@ export async function buildTodayOverview(employeeId: string): Promise<TodayOverv
 
   let riskLinks = new Map<string, JobRiskAssessmentLink>();
   try {
-    riskLinks = await loadRiskLinksForJobs(
+    riskLinks = await loadEffectiveRiskLinksForJobs(
       jobsToday.map((job) => job.id),
       todayStr,
     );
