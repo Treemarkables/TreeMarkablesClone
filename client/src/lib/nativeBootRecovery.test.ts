@@ -3,13 +3,20 @@ import assert from "node:assert/strict";
 import {
   AUTH_ME_TIMEOUT_MS,
   BOOT_TIMEOUT_MS,
+  HEARTBEAT_ALIVE_MS,
+  LIVE_BOOT_HARD_TIMEOUT_MS,
   canAttemptBootReload,
+  classifyBootSurface,
   classifyWebViewHref,
+  cssTokenPresent,
   isAppOriginHost,
   nextBootReloadState,
   readBootReloadAttempts,
+  shellTextSignalsRealPage,
   shouldForceLoadWhilePending,
   shouldRecoverFrozenResume,
+  shouldReloadNativeProbe,
+  shouldReloadUnbootedDespiteHeartbeat,
   shouldReloadUnbootedPage,
 } from "./nativeBootRecovery.ts";
 
@@ -30,11 +37,13 @@ describe("native boot recovery — origin / blank webview", () => {
   });
 
   it("does not interrupt an in-flight first load of about:blank before the hung timeout", () => {
+    // A blank document that is still "loading" after a few seconds never
+    // committed. Waiting the old 20s is the force-quit-to-recover black screen.
     assert.equal(
       shouldForceLoadWhilePending({
         href: "about:blank",
         isLoading: true,
-        elapsedMs: 5_000,
+        elapsedMs: 3_000,
       }),
       false,
     );
@@ -42,7 +51,7 @@ describe("native boot recovery — origin / blank webview", () => {
       shouldForceLoadWhilePending({
         href: "about:blank",
         isLoading: true,
-        elapsedMs: 21_000,
+        elapsedMs: 4_000,
       }),
       true,
     );
@@ -53,7 +62,27 @@ describe("native boot recovery — origin / blank webview", () => {
       shouldForceLoadWhilePending({
         href: "about:blank",
         isLoading: false,
-        elapsedMs: 6_000,
+        elapsedMs: 1_500,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldForceLoadWhilePending({
+        href: "about:blank",
+        isLoading: false,
+        elapsedMs: 2_000,
+      }),
+      true,
+    );
+  });
+
+  it("reloads a blank webview immediately on a foreground wake once loading has stopped", () => {
+    assert.equal(
+      shouldForceLoadWhilePending({
+        href: "about:blank",
+        isLoading: false,
+        elapsedMs: 500,
+        force: true,
       }),
       true,
     );
@@ -170,5 +199,150 @@ describe("native boot recovery — JS boot timeout + frozen resume", () => {
   it("keeps the auth /me timeout short enough that the loading gate cannot hang forever", () => {
     assert.ok(AUTH_ME_TIMEOUT_MS <= 12_000);
     assert.ok(AUTH_ME_TIMEOUT_MS >= 5_000);
+  });
+
+  it("does not reload a live boot whose heartbeat is still ticking", () => {
+    assert.equal(
+      shouldReloadUnbootedDespiteHeartbeat({
+        booted: false,
+        elapsedMs: BOOT_TIMEOUT_MS,
+        heartbeatAgeMs: 1_000,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldReloadUnbootedDespiteHeartbeat({
+        booted: false,
+        elapsedMs: BOOT_TIMEOUT_MS,
+        heartbeatAgeMs: HEARTBEAT_ALIVE_MS,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldReloadUnbootedDespiteHeartbeat({
+        booted: false,
+        elapsedMs: LIVE_BOOT_HARD_TIMEOUT_MS,
+        heartbeatAgeMs: 500,
+      }),
+      true,
+    );
+  });
+});
+
+describe("native boot recovery — painted page vs empty shell", () => {
+  it("does not treat the boot placeholder or an empty dispatch main as a painted page", () => {
+    assert.equal(
+      shellTextSignalsRealPage({ rootText: "Opening Inflow", mainText: null }),
+      false,
+    );
+    assert.equal(
+      shellTextSignalsRealPage({
+        rootText: "Opening Inflow",
+        mainText: "Opening Inflow",
+      }),
+      false,
+    );
+    assert.equal(
+      shellTextSignalsRealPage({ rootText: "Dispatch header", mainText: "" }),
+      false,
+    );
+  });
+
+  it("treats login copy and a filled main as a painted page", () => {
+    assert.equal(
+      shellTextSignalsRealPage({ rootText: "Welcome Back", mainText: null }),
+      true,
+    );
+    assert.equal(
+      shellTextSignalsRealPage({
+        rootText: "header chrome",
+        mainText: "Daily target",
+      }),
+      true,
+    );
+  });
+
+  it("requires the CSS token before the inline shell may hide", () => {
+    assert.equal(cssTokenPresent(""), false);
+    assert.equal(cssTokenPresent("   "), false);
+    assert.equal(cssTokenPresent("60 33% 98%"), true);
+  });
+
+  it("classifies a booted-but-blank shell as empty and a live shell as painting", () => {
+    assert.equal(
+      classifyBootSurface({
+        booted: true,
+        bootShellVisible: false,
+        heartbeatAgeMs: 100,
+        rootText: "",
+        mainText: "",
+      }),
+      "empty",
+    );
+    assert.equal(
+      classifyBootSurface({
+        booted: false,
+        bootShellVisible: true,
+        heartbeatAgeMs: 1_000,
+        rootText: "Opening Inflow",
+        mainText: "",
+      }),
+      "painting",
+    );
+    assert.equal(
+      classifyBootSurface({
+        booted: true,
+        bootShellVisible: false,
+        heartbeatAgeMs: 100,
+        rootText: "header",
+        mainText: "Daily target",
+      }),
+      "booted",
+    );
+  });
+
+  it("does not native-reload a painting shell, and reloads an empty shell only before the first healthy boot", () => {
+    assert.equal(
+      shouldReloadNativeProbe({
+        probe: "painting",
+        elapsedMs: 30_000,
+        isLoading: false,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldReloadNativeProbe({
+        probe: "empty",
+        elapsedMs: 8_000,
+        isLoading: false,
+        seenHealthyBoot: false,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldReloadNativeProbe({
+        probe: "empty",
+        elapsedMs: 8_000,
+        isLoading: false,
+        seenHealthyBoot: true,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldReloadNativeProbe({
+        probe: "not-booted",
+        elapsedMs: 10_000,
+        isLoading: false,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldReloadNativeProbe({
+        probe: "not-booted",
+        elapsedMs: BOOT_TIMEOUT_MS,
+        isLoading: false,
+      }),
+      true,
+    );
   });
 });

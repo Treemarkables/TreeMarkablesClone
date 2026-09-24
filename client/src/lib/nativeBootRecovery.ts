@@ -22,9 +22,23 @@ export const BOOT_RELOAD_KEY = "inflowBootReloadAttempts";
 
 export const BOOT_TIMEOUT_MS = 18_000;
 export const HEARTBEAT_STALE_MS = 12_000;
+// A heartbeat newer than this means the entry bundle is alive (chunk still
+// downloading). Reloading a live boot throws the user back onto a black
+// about:blank. Older than this means JS never started or the context froze.
+export const HEARTBEAT_ALIVE_MS = 8_000;
+// Hard stop if the inline shell is still up and no real page has painted.
+export const LIVE_BOOT_HARD_TIMEOUT_MS = 45_000;
+// about:blank that is not loading failed (radio not up). Retry quickly.
+export const BLANK_IDLE_RELOAD_MS = 2_000;
+// about:blank that stays isLoading never committed a document. Capacitor
+// leaves the WKWebView non-opaque on didFailProvisionalNavigation, which
+// composites as a black screen. Don't wait the old 20s.
+export const BLANK_HUNG_RELOAD_MS = 4_000;
 export const AUTH_ME_TIMEOUT_MS = 10_000;
 export const MAX_BOOT_RELOADS = 2;
 export const ATTEMPT_WINDOW_MS = 3 * 60 * 1000;
+
+export const BOOT_PLACEHOLDER_COPY = "Opening Inflow";
 
 export type BootProbeStatus = "booted" | "not-booted" | "wrong-origin" | "blank";
 
@@ -56,15 +70,125 @@ export function shouldForceLoadWhilePending(opts: {
   isLoading: boolean;
   elapsedMs: number;
   hungLoadMs?: number;
+  idleReloadMs?: number;
+  /** Foreground wake of a blank webview that is no longer loading. */
+  force?: boolean;
 }): boolean {
-  const hungLoadMs = opts.hungLoadMs ?? 20_000;
+  const hungLoadMs = opts.hungLoadMs ?? BLANK_HUNG_RELOAD_MS;
+  const idleReloadMs = opts.idleReloadMs ?? BLANK_IDLE_RELOAD_MS;
   const status = classifyWebViewHref(opts.href);
   if (status === "blank" || status === "wrong-origin") {
-    if (opts.isLoading && opts.elapsedMs < hungLoadMs) return false;
-    return opts.elapsedMs >= 6_000 || !opts.isLoading;
+    if (opts.force && !opts.isLoading) return true;
+    if (opts.isLoading) return opts.elapsedMs >= hungLoadMs;
+    return opts.elapsedMs >= idleReloadMs;
   }
   if (opts.isLoading && opts.elapsedMs >= hungLoadMs) return true;
   return false;
+}
+
+export type NativeBootProbe =
+  | "booted"
+  | "painting"
+  | "empty"
+  | "not-booted"
+  | "blank"
+  | "wrong-origin";
+
+export function normalizeShellText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+export function isBootPlaceholderCopy(value: string): boolean {
+  const text = normalizeShellText(value);
+  return text === BOOT_PLACEHOLDER_COPY || text.startsWith(`${BOOT_PLACEHOLDER_COPY} `);
+}
+
+/**
+ * True when a real route has painted. The phone sidebar is off-canvas, so
+ * header chrome does not count. An empty `<main>` (Dispatch chunk still
+ * loading behind the null inner Suspense fallback) is not a painted page.
+ * `mainText === null` means there is no `<main>` yet (login / marketing).
+ */
+export function shellTextSignalsRealPage(opts: {
+  rootText: string;
+  mainText: string | null;
+}): boolean {
+  if (opts.mainText !== null) {
+    const main = normalizeShellText(opts.mainText);
+    return main.length > 0 && !isBootPlaceholderCopy(main);
+  }
+  const root = normalizeShellText(opts.rootText);
+  return root.length > 0 && !isBootPlaceholderCopy(root);
+}
+
+/** `--background` from index.css. Empty until the stylesheet has applied. */
+export function cssTokenPresent(raw: string | null | undefined): boolean {
+  return typeof raw === "string" && raw.trim().length > 0;
+}
+
+/**
+ * Mirrors the probe string in WebViewBootRecovery.swift. A booted flag with
+ * no visible page is the #579 hole (overlay hidden, viewport still black).
+ * `painting` means the inline shell is up and JS is ticking — do not reload.
+ */
+export function classifyBootSurface(opts: {
+  booted: boolean;
+  bootShellVisible: boolean;
+  heartbeatAgeMs: number | null;
+  rootText: string;
+  mainText: string | null;
+}): "booted" | "painting" | "empty" | "not-booted" {
+  const visible = shellTextSignalsRealPage({
+    rootText: opts.rootText,
+    mainText: opts.mainText,
+  });
+  if (opts.booted) {
+    if (visible || opts.bootShellVisible) return "booted";
+    return "empty";
+  }
+  const alive = opts.heartbeatAgeMs != null && opts.heartbeatAgeMs < HEARTBEAT_ALIVE_MS;
+  if (opts.bootShellVisible && alive) return "painting";
+  return "not-booted";
+}
+
+export function shouldReloadNativeProbe(opts: {
+  probe: NativeBootProbe;
+  elapsedMs: number;
+  isLoading: boolean;
+  /** Once a healthy boot has been seen, don't reload a brief empty main. */
+  seenHealthyBoot?: boolean;
+  force?: boolean;
+}): boolean {
+  if (opts.probe === "booted" || opts.probe === "painting") return false;
+  if (opts.probe === "empty") return !opts.seenHealthyBoot;
+  if (opts.probe === "blank" || opts.probe === "wrong-origin") {
+    return shouldForceLoadWhilePending({
+      href: opts.probe === "blank" ? "about:blank" : "https://evil.example/",
+      isLoading: opts.isLoading,
+      elapsedMs: opts.elapsedMs,
+      force: opts.force,
+    });
+  }
+  if (opts.isLoading && opts.elapsedMs < BLANK_HUNG_RELOAD_MS) return false;
+  return opts.elapsedMs >= BOOT_TIMEOUT_MS;
+}
+
+export function shouldReloadUnbootedDespiteHeartbeat(opts: {
+  booted: boolean;
+  elapsedMs: number;
+  heartbeatAgeMs: number | null;
+  bootTimeoutMs?: number;
+  hardTimeoutMs?: number;
+  heartbeatAliveMs?: number;
+}): boolean {
+  if (opts.booted) return false;
+  const hard = opts.hardTimeoutMs ?? LIVE_BOOT_HARD_TIMEOUT_MS;
+  if (opts.elapsedMs >= hard) return true;
+  const soft = opts.bootTimeoutMs ?? BOOT_TIMEOUT_MS;
+  if (opts.elapsedMs < soft) return false;
+  const alive = opts.heartbeatAliveMs ?? HEARTBEAT_ALIVE_MS;
+  if (opts.heartbeatAgeMs != null && opts.heartbeatAgeMs < alive) return false;
+  return true;
 }
 
 export function shouldReloadUnbootedPage(opts: {
@@ -213,15 +337,29 @@ export function startNativeBootWatchdogs(): void {
   const startedAt = Date.now();
   let hiddenAt: number | null = document.visibilityState === "hidden" ? startedAt : null;
 
+  // Tick even before the first real page. A fresh heartbeat tells the HTML
+  // watchdog and the native probe that a slow Dispatch chunk is not a dead
+  // WebView — reloading it was painting black about:blank again.
   const heartbeatId = window.setInterval(() => {
-    if (isAppBooted()) touchHeartbeat();
+    touchHeartbeat();
   }, 2_000);
 
-  window.setTimeout(() => {
-    if (!isAppBooted()) {
-      requestBootReload("boot-timeout");
-    }
-  }, BOOT_TIMEOUT_MS);
+  const armBootTimeout = (delayMs: number) => {
+    window.setTimeout(() => {
+      const hb = bootGlobals()[HEARTBEAT_FLAG] ?? null;
+      if (
+        shouldReloadUnbootedDespiteHeartbeat({
+          booted: isAppBooted(),
+          elapsedMs: Date.now() - startedAt,
+          heartbeatAgeMs: hb == null ? null : Date.now() - hb,
+        })
+      ) {
+        requestBootReload("boot-timeout");
+      }
+    }, delayMs);
+  };
+  armBootTimeout(BOOT_TIMEOUT_MS);
+  armBootTimeout(LIVE_BOOT_HARD_TIMEOUT_MS);
 
   document.addEventListener("visibilitychange", () => {
     const now = Date.now();
@@ -264,4 +402,52 @@ export function startNativeBootWatchdogs(): void {
   window.addEventListener("pagehide", () => {
     window.clearInterval(heartbeatId);
   });
+}
+
+function readCssBackgroundToken(): string {
+  try {
+    return getComputedStyle(document.documentElement).getPropertyValue("--background");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Hide #inflow-boot only after a real route has text AND the CSS bundle has
+ * applied. App's first effect used to call markAppBooted() as soon as the
+ * sidebar shell committed. On a phone that shell's inner Suspense fallback
+ * is empty while the Dispatch chunk downloads, the inline shell disappeared,
+ * and the viewport was the #1a1a1a body — a black screen native recovery
+ * then treated as healthy.
+ */
+export function watchUntilRealPagePainted(): () => void {
+  let stopped = false;
+  let timer = 0;
+
+  const tick = () => {
+    if (stopped || isAppBooted()) return;
+    const root = document.getElementById("root");
+    const main = root?.querySelector("main") ?? null;
+    const ready =
+      shellTextSignalsRealPage({
+        rootText: root?.innerText ?? "",
+        mainText: main ? (main.innerText ?? "") : null,
+      }) && cssTokenPresent(readCssBackgroundToken());
+    if (!ready) {
+      timer = window.setTimeout(tick, 150);
+      return;
+    }
+    // Two frames so the page is on screen before the inline shell hides.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (!stopped && !isAppBooted()) markAppBooted();
+      });
+    });
+  };
+
+  tick();
+  return () => {
+    stopped = true;
+    window.clearTimeout(timer);
+  };
 }
