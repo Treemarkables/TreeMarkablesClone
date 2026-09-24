@@ -23,6 +23,11 @@ describe("toggleRole", () => {
     assert.deepEqual(toggleRole(["A", "B"], "C"), ["C", "A", "B"]);
   });
 
+  it("adds Risk assessment beside a role they already hold", () => {
+    assert.deepEqual(toggleRole(["A"], "R"), ["A", "R"]);
+    assert.deepEqual(toggleRole(["C", "A"], "R"), ["C", "A", "R"]);
+  });
+
   it("removes only the role that was tapped", () => {
     assert.deepEqual(toggleRole(["C", "A"], "C"), ["A"]);
   });
@@ -75,7 +80,19 @@ describe("resolveDesiredDayRoles", () => {
     if (resolved.ok) assert.deepEqual(resolved.roles, ["C", "A"]);
   });
 
-  it("rejects a role that is not A, B, or C", () => {
+  it("stores Risk assessment together with another role", () => {
+    const resolved = resolveDesiredDayRoles({ dayRoles: ["R", "A"] });
+    assert.equal(resolved.ok, true);
+    if (resolved.ok) assert.deepEqual(resolved.roles, ["A", "R"]);
+  });
+
+  it("keeps a one-role Risk assessment assignment as a one-role set", () => {
+    const resolved = resolveDesiredDayRoles({ dayRole: "R" });
+    assert.equal(resolved.ok, true);
+    if (resolved.ok) assert.deepEqual(resolved.roles, ["R"]);
+  });
+
+  it("rejects a role that is not a checklist role", () => {
     const resolved = resolveDesiredDayRoles({ dayRoles: ["C", "lead"] });
     assert.equal(resolved.ok, false);
   });
@@ -177,6 +194,25 @@ describe("outstandingForRoles", () => {
     const items = outstandingForRoles(["B"], tasks, new Set());
     assert.deepEqual(items.map((item) => item.itemId), ["signs-out"]);
   });
+
+  it("treats Risk assessment as its own role, not as part of Kaiwhangai", () => {
+    const withRiskRole = [
+      { itemId: "content-creation", label: "Content creation", roleKey: "A", isEnabled: true },
+      { itemId: "risk-assessment", label: "Risk assessment", roleKey: "R", isEnabled: true },
+    ];
+    assert.deepEqual(
+      outstandingForRoles(["A"], withRiskRole, new Set()).map((item) => item.itemId),
+      ["content-creation"],
+    );
+    assert.deepEqual(
+      outstandingForRoles(["A", "R"], withRiskRole, new Set()).map((item) => item.itemId),
+      ["content-creation", "risk-assessment"],
+    );
+    assert.deepEqual(
+      outstandingForRoles(["R"], withRiskRole, new Set(["risk-assessment"])),
+      [],
+    );
+  });
 });
 
 describe("aggregateRoleSnapshots", () => {
@@ -223,6 +259,17 @@ describe("labels and the legacy mirror", () => {
   it("mirrors the only role on a one-role assignment", () => {
     assert.equal(primaryDayRole(["B"]), "B");
     assert.equal(primaryDayRole([]), null);
+  });
+
+  it("keeps the crew role as the legacy mirror when they also hold Risk assessment", () => {
+    assert.equal(primaryDayRole(["R", "C"]), "C");
+    assert.equal(primaryDayRole(["A", "R"]), "A");
+    assert.equal(primaryDayRole(["R"]), "R");
+  });
+
+  it("names Risk assessment with the other roles they hold", () => {
+    assert.equal(joinRoleLabels(["R"]), "Risk assessment");
+    assert.equal(joinRoleLabels(["R", "A"]), "Kaiwhangai and Risk assessment");
   });
 });
 

@@ -25,8 +25,8 @@ declare module 'express-session' {
 }
 import { storage, invoiceRevenueExGst } from "./storage";
 import { buildTodayOverview, createTodayExtraInstruction, deleteTodayExtraInstruction, HttpError } from "./todayOverview";
-import { loadRiskLinksForJobs } from "./jhaJobRisk";
-import { jhaCompletionRequiresJob, normalizeJhaJobId } from "@shared/jhaJobRisk";
+import { loadEffectiveRiskLinksForJobs, loadRiskLinksForJobs, recordRiskAssessmentChecklistDone } from "./jhaJobRisk";
+import { checklistCompletionClearsRiskDue, doneIdsIncludingLinkedJha, jhaCompletionRequiresJob, normalizeJhaJobId, RISK_ASSESSMENT_CHECKLIST_ITEM_ID, type JobRiskAssessmentLink } from "@shared/jhaJobRisk";
 import { sanitizeJobEquipment } from "@shared/jobEquipmentCatalogue";
 import { APP_URL } from "./config/appUrl";
 import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
@@ -6684,7 +6684,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       let riskAssessmentStatus: "none" | "draft" | "completed" = "none";
       let riskAssessmentId: string | null = null;
       try {
-        const links = await loadRiskLinksForJobs([job.id]);
+        const links = await loadEffectiveRiskLinksForJobs([job.id]);
         const link = links.get(job.id);
         if (link) {
           riskAssessmentStatus = link.riskAssessmentStatus;
@@ -8044,7 +8044,27 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         res.json({ success: true, data: [] });
         return;
       }
-      const completions = await storage.getJobChecklistCompletions(jobId);
+      let completions = await storage.getJobChecklistCompletions(jobId);
+      // A completed morning JHA is the Risk assessment role being done, even
+      // when nobody has opened the checklist since it was saved.
+      if (businessHasRoleChecklist(currentBusinessId())) {
+        try {
+          const today = getNZDateString(new Date());
+          const link = (await loadRiskLinksForJobs([jobId], today)).get(jobId);
+          if (link?.riskAssessmentStatus === "completed") {
+            await recordRiskAssessmentChecklistDone(jobId);
+            completions = await storage.getJobChecklistCompletions(jobId);
+          } else {
+            // A tick from an earlier day on this job does not cover this morning.
+            completions = completions.filter((row) =>
+              row.itemId !== RISK_ASSESSMENT_CHECKLIST_ITEM_ID
+              || checklistCompletionClearsRiskDue(row.completedAt, today),
+            );
+          }
+        } catch (riskErr) {
+          console.error("Error syncing risk assessment checklist:", riskErr);
+        }
+      }
       res.json({ success: true, data: completions });
     } catch (error) {
       console.error('Error fetching job checklist:', error);
@@ -8170,6 +8190,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         return res.status(400).json({ success: false, message: `Unknown checklist item: ${itemId}` });
       }
       if (completed === false) {
+        // The linked JHA is the done signal. Unticking the role must not
+        // bring the due nag back while that assessment is still completed.
+        if (itemId === RISK_ASSESSMENT_CHECKLIST_ITEM_ID && businessHasRoleChecklist(currentBusinessId())) {
+          try {
+            const link = (await loadRiskLinksForJobs([jobId])).get(jobId);
+            if (link?.riskAssessmentStatus === "completed") {
+              await recordRiskAssessmentChecklistDone(jobId);
+              const rows = await storage.getJobChecklistCompletions(jobId);
+              return res.json({ success: true, data: rows.find((row) => row.itemId === itemId) ?? null });
+            }
+          } catch (riskErr) {
+            console.error("Error keeping risk assessment checklist done:", riskErr);
+          }
+        }
         await storage.clearJobChecklistItem(jobId, itemId);
         return res.json({ success: true, data: null });
       }
@@ -8202,10 +8236,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       // Items live alongside the client whitelist — kept in sync by hand because
       // there are only 7 of them and they rarely change.
-      const ITEM_META: Array<{ id: string; label: string; role: 'A' | 'B' | 'C' }> = [
+      const ITEM_META: Array<{ id: string; label: string; role: RoleKey }> = [
         { id: 'time-tracking',       label: 'Time tracking',                role: 'C' },
         { id: 'review-request',      label: 'Request review from client',   role: 'C' },
-        { id: 'risk-assessment',     label: 'Risk assessment',              role: 'A' },
+        { id: 'risk-assessment',     label: 'Risk assessment',              role: 'R' },
         { id: 'content-creation',    label: 'Content creation',             role: 'A' },
         { id: 'alert-customer-late', label: 'Alert customer if running late', role: 'B' },
         { id: 'signs-out',           label: 'Signs out',                    role: 'B' },
@@ -15197,13 +15231,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   }
 
   // Enabled checklist tasks grouped by role, in display order.
-  async function getRoleTaskLabels(): Promise<Record<'A' | 'B' | 'C', string[]>> {
+  async function getRoleTaskLabels(): Promise<Record<RoleKey, string[]>> {
     const rows = await db.select().from(schema.roleChecklistTasks)
       .orderBy(asc(schema.roleChecklistTasks.sortOrder), asc(schema.roleChecklistTasks.createdAt));
-    const byRole: Record<'A' | 'B' | 'C', string[]> = { A: [], B: [], C: [] };
+    const byRole: Record<RoleKey, string[]> = { A: [], B: [], C: [], R: [] };
     for (const r of rows) {
-      if (!r.isEnabled) continue;
-      if (r.roleKey === 'A' || r.roleKey === 'B' || r.roleKey === 'C') byRole[r.roleKey].push(r.label);
+      if (!r.isEnabled || !isRoleKey(r.roleKey)) continue;
+      byRole[r.roleKey].push(r.label);
     }
     return byRole;
   }
@@ -15300,7 +15334,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       rowsByEmployee.set(row.employeeId, list);
     }
 
-    const doneIds = new Set(completions.map(c => c.itemId));
+    let linkedRisk: JobRiskAssessmentLink | undefined;
+    try {
+      linkedRisk = (await loadRiskLinksForJobs([jobId], closeDate)).get(jobId);
+    } catch (riskErr) {
+      console.error('Error loading JHA status for role snapshot:', riskErr);
+    }
+    const doneIds = doneIdsIncludingLinkedJha(completions, linkedRisk, closeDate);
     const expectedByRole = new Map<string, string[]>();
     for (const t of taskRows) {
       if (!t.isEnabled || !isRoleKey(t.roleKey)) continue;
@@ -15367,7 +15407,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         .orderBy(asc(schema.roleChecklistTasks.sortOrder), asc(schema.roleChecklistTasks.createdAt)),
       storage.getJobChecklistCompletions(jobId),
     ]);
-    const done = new Set(completions.map(c => c.itemId));
+    let linkedRisk: JobRiskAssessmentLink | undefined;
+    try {
+      linkedRisk = (await loadRiskLinksForJobs([jobId], nzDate)).get(jobId);
+    } catch (riskErr) {
+      console.error('Error loading JHA status for outstanding roles:', riskErr);
+    }
+    const done = doneIdsIncludingLinkedJha(completions, linkedRisk, nzDate);
     return outstandingForRoles(roles, tasks, done);
   }
 
@@ -15601,7 +15647,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // what to PROMPT about; none of it can fail the stop.
       const todayNZ = getNZDateString(new Date());
       const requesterId = req.session.employeeId;
-      let outstanding: Array<{ itemId: string; label: string; roleKey: 'A' | 'B' | 'C' }> = [];
+      let outstanding: Array<{ itemId: string; label: string; roleKey: RoleKey }> = [];
       let totalOutstanding = 0;
       try {
         for (const employeeId of stoppedEmployeeIds) {
@@ -32569,6 +32615,16 @@ Transcription: ${transcriptText}`;
         });
       }
 
+      if (businessHasRoleChecklist(currentBusinessId())) {
+        try {
+          await recordRiskAssessmentChecklistDone(linkedJobId, {
+            employeeId: (req as Request).session?.employeeId ?? null,
+          });
+        } catch (riskErr) {
+          console.error("Error marking risk assessment checklist done:", riskErr);
+        }
+      }
+
       res.json({ success: true, data: assessment });
     } catch (error) {
       console.error('JHA Assessment creation error:', error);
@@ -32707,6 +32763,20 @@ Transcription: ${transcriptText}`;
       const updatedAssessment = await storage.getJhaAssessment(req.params.id);
       if (!updatedAssessment) {
         throw new Error('Assessment not found after update');
+      }
+
+      if (
+        businessHasRoleChecklist(currentBusinessId())
+        && updatedAssessment.status === "completed"
+        && updatedAssessment.jobId
+      ) {
+        try {
+          await recordRiskAssessmentChecklistDone(updatedAssessment.jobId, {
+            employeeId: (req as Request).session?.employeeId ?? null,
+          });
+        } catch (riskErr) {
+          console.error("Error marking risk assessment checklist done:", riskErr);
+        }
       }
 
       res.json({ success: true, data: updatedAssessment });
@@ -34568,17 +34638,17 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // ─── Role Checklist Tasks ────────────────────────────────────────────────
-  // The seven built-in tasks rendered by JobChecklistPanel today, seeded on
+  // The built-in tasks rendered by JobChecklistPanel, seeded on
   // first GET so existing tenants see the same checklist as before but can now
   // disable/edit/reorder them and add their own from Settings.
   const BUILT_IN_ROLE_CHECKLIST_TASKS: Array<{
-    roleKey: 'A' | 'B' | 'C';
+    roleKey: RoleKey;
     itemId: string;
     label: string;
     iconName: string;
     sortOrder: number;
   }> = [
-    { roleKey: 'A', itemId: 'risk-assessment',     label: 'Risk assessment',                iconName: 'Shield',         sortOrder: 0 },
+    { roleKey: 'R', itemId: 'risk-assessment',     label: 'Risk assessment',                iconName: 'Shield',         sortOrder: 0 },
     { roleKey: 'A', itemId: 'content-creation',    label: 'Content creation',               iconName: 'Camera',         sortOrder: 1 },
     { roleKey: 'B', itemId: 'alert-customer-late', label: 'Alert customer if running late', iconName: 'PhoneCall',      sortOrder: 0 },
     { roleKey: 'B', itemId: 'signs-out',           label: 'Signs out',                      iconName: 'TriangleAlert',  sortOrder: 1 },
@@ -34593,12 +34663,21 @@ If you cannot find a value, use null. Do not guess.`
   const ensureRoleChecklistTasksSeeded = async () => {
     const { db } = await import('./db');
     const { roleChecklistTasks } = await import('../shared/schema');
-    const existing = await db.select().from(roleChecklistTasks).limit(1);
+    const { eq, and, ne } = await import('drizzle-orm');
+    const existing = await db.select({ id: roleChecklistTasks.id }).from(roleChecklistTasks).limit(1);
     if (existing.length === 0) {
       await db.insert(roleChecklistTasks).values(withTenant(
         BUILT_IN_ROLE_CHECKLIST_TASKS.map(t => ({ ...t, isBuiltIn: true })),
       )).onConflictDoNothing();
     }
+    // Move the built-in morning JHA task onto its own role. Custom tasks stay put.
+    await db.update(roleChecklistTasks)
+      .set({ roleKey: 'R', updatedAt: new Date() })
+      .where(and(
+        eq(roleChecklistTasks.itemId, 'risk-assessment'),
+        eq(roleChecklistTasks.isBuiltIn, true),
+        ne(roleChecklistTasks.roleKey, 'R'),
+      ));
   };
 
   // GET /api/role-checklist-tasks — returns all tasks (enabled and disabled),
@@ -34622,7 +34701,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/role-checklist-tasks — adds a user-defined custom task.
-  // Required: roleKey (A|B|C), label. Optional: iconName, sortOrder, itemId.
+  // Required: roleKey (A|B|C|R), label. Optional: iconName, sortOrder, itemId.
   // If itemId omitted, derive a slug from the label.
   app.post('/api/role-checklist-tasks', async (req: Request, res: Response) => {
     if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
@@ -34632,8 +34711,8 @@ If you cannot find a value, use null. Do not guess.`
       const { roleChecklistTasks } = await import('../shared/schema');
       const { eq, max, and } = await import('drizzle-orm');
       const { roleKey, label, iconName, sortOrder, itemId } = req.body ?? {};
-      if (!['A', 'B', 'C'].includes(roleKey)) {
-        return res.status(400).json({ success: false, message: 'roleKey must be A, B, or C' });
+      if (!isRoleKey(roleKey)) {
+        return res.status(400).json({ success: false, message: "roleKey must be A, B, C, or R" });
       }
       if (!label || typeof label !== 'string' || !label.trim()) {
         return res.status(400).json({ success: false, message: 'label is required' });

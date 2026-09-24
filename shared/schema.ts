@@ -2052,8 +2052,8 @@ export const jobStaffAssignments = pgTable("job_staff_assignments", {
   role: text("role"), // lead, operator, ground_crew, driver
   // Legacy single value. job_day_roles is the source of truth and can hold
   // several checklist roles for one person on one day; this column stores the
-  // primary of that set (Kaitiaki, else Kaiwhangai, else Kaitirotiro) so older
-  // readers still see a role. Null when they hold none.
+  // primary of that set (Kaitiaki, else Kaiwhangai, else Kaitirotiro, else
+  // Risk assessment) so older readers still see a role. Null when they hold none.
   dayRole: text("day_role"),
   status: text("status").notNull().default("assigned"), // assigned, confirmed, in_progress, completed, cancelled
   notificationSent: boolean("notification_sent").notNull().default(false),
@@ -2080,7 +2080,7 @@ export type InsertJobStaffAssignment = z.infer<typeof insertJobStaffAssignmentSc
 export type UpdateJobStaffAssignment = z.infer<typeof updateJobStaffAssignmentSchema>;
 
 // Checklist roles a person holds on one NZ day (Kaitiaki / Kaiwhangai /
-// Kaitirotiro). One row per role, so the same person can cover two or three
+// Kaitirotiro / Risk assessment). One row per role, so the same person can cover several
 // roles when the crew is smaller than the role list. This is a fact about a
 // PERSON on a DAY, not about one job booking, which is why it lives here rather
 // than on jobStaffAssignments.dayRole: that column had to be copied onto every
@@ -2098,7 +2098,7 @@ export const jobDayRoles = pgTable("job_day_roles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: varchar("employee_id").notNull(),
   nzDate: text("nz_date").notNull(),
-  roleKey: text("role_key").notNull(), // 'A' Kaiwhangai | 'B' Kaitirotiro | 'C' Kaitiaki
+  roleKey: text("role_key").notNull(), // 'A' Kaiwhangai | 'B' Kaitirotiro | 'C' Kaitiaki | 'R' Risk assessment
   setByEmployeeId: varchar("set_by_employee_id"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -2135,7 +2135,7 @@ export const jobRoleCompletions = pgTable("job_role_completions", {
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   employeeId: varchar("employee_id").notNull(),
   nzDate: text("nz_date").notNull(), // NZ calendar date the job closed on
-  roleKey: text("role_key").notNull(), // 'A' Kaiwhangai | 'B' Kaitirotiro | 'C' Kaitiaki
+  roleKey: text("role_key").notNull(), // 'A' Kaiwhangai | 'B' Kaitirotiro | 'C' Kaitiaki | 'R' Risk assessment
   itemsDone: integer("items_done").notNull(),
   itemsExpected: integer("items_expected").notNull(),
   // The enabled item ids at close, so a later audit can see WHICH task was skipped
@@ -5082,7 +5082,7 @@ export type InsertChecklistTemplate = z.infer<typeof insertChecklistTemplateSche
 export const roleChecklistTasks = pgTable("role_checklist_tasks", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  roleKey: varchar("role_key").notNull(), // 'A' | 'B' | 'C'
+  roleKey: varchar("role_key").notNull(), // 'A' | 'B' | 'C' | 'R' Risk assessment
   itemId: text("item_id").notNull().unique(), // slug used by completions table
   label: text("label").notNull(),
   iconName: text("icon_name").notNull().default("Check"), // lucide icon name

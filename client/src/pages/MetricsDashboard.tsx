@@ -36,7 +36,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
-import { ROLE_LABEL, isRoleKey } from "@/lib/crewRoles";
+import { ROLE_KEYS, ROLE_LABEL, isRoleKey, type RoleKey } from "@/lib/crewRoles";
 import {
   Tooltip as UITooltip,
   TooltipContent,
@@ -269,7 +269,7 @@ interface DispatchAIData {
 interface ChecklistUsageItem {
   id: string;
   label: string;
-  role: 'A' | 'B' | 'C';
+  role: RoleKey;
   completedCount: number;
   percent: number;
 }
@@ -3122,9 +3122,8 @@ export default function MetricsDashboard() {
                     </div>
 
                     {/* Per-role breakdown */}
-                    {(["C", "A", "B"] as const).map((roleKey) => {
-                      const roleLabel =
-                        roleKey === "C" ? "Kaitiaki" : roleKey === "A" ? "Kaiwhangai" : "Kaitirotiro";
+                    {ROLE_KEYS.map((roleKey) => {
+                      const roleLabel = ROLE_LABEL[roleKey];
                       const roleItems = checklistUsage.items.filter((i) => i.role === roleKey);
                       if (roleItems.length === 0) return null;
                       return (

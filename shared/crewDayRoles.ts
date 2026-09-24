@@ -6,8 +6,10 @@
  * than the three roles could not cover them. A person now holds a set of roles.
  * Existing one-role rows are a set of size one and stay valid.
  *
- * Storage order follows ROLE_KEYS (Kaitiaki, then Kaiwhangai, then Kaitirotiro)
- * so the chips, the legacy single day_role mirror, and notifications agree.
+ * Storage order follows ROLE_KEYS (Kaitiaki, then Kaiwhangai, then Kaitirotiro,
+ * then Risk assessment) so the chips, the legacy single day_role mirror, and
+ * notifications agree. Risk assessment is last so adding it beside a crew role
+ * does not change which role the legacy column mirrors.
  */
 import { isRoleKey, ROLE_KEYS, ROLE_LABEL, type RoleKey } from "./crewRoles.ts";
 
@@ -48,7 +50,7 @@ export function planDayRoleChanges(
 
 /**
  * Read a role array from a request body.
- * undefined = the field was omitted. null = it was present but not a list of A/B/C.
+ * undefined = the field was omitted. null = it was present but not a list of A/B/C/R.
  * An empty array is valid (the caller decides whether that clears or no-ops).
  */
 export function readRoleList(value: unknown): RoleKey[] | undefined | null {
@@ -79,10 +81,10 @@ export function resolveDesiredDayRoles(input: {
   const addRoles = readRoleList(input.addRoles);
   const dayRoles = readRoleList(input.dayRoles);
   if (addRoles === null) {
-    return { ok: false, message: "addRoles must be an array of 'A', 'B', and 'C'" };
+    return { ok: false, message: "addRoles must be an array of 'A', 'B', 'C', and 'R'" };
   }
   if (dayRoles === null) {
-    return { ok: false, message: "dayRoles must be an array of 'A', 'B', and 'C'" };
+    return { ok: false, message: "dayRoles must be an array of 'A', 'B', 'C', and 'R'" };
   }
   if (addRoles !== undefined) {
     return { ok: true, roles: unionRoles(input.existing ?? [], addRoles) };
@@ -92,7 +94,7 @@ export function resolveDesiredDayRoles(input: {
   }
   if (input.dayRole === null) return { ok: true, roles: [] };
   if (isRoleKey(input.dayRole)) return { ok: true, roles: [input.dayRole] };
-  return { ok: false, message: "dayRole must be 'A', 'B', 'C', or null" };
+  return { ok: false, message: "dayRole must be 'A', 'B', 'C', 'R', or null" };
 }
 
 /**

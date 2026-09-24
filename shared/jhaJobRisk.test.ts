@@ -2,12 +2,16 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { getNZDateString } from "./dateUtils.ts";
 import {
+  checklistCompletionClearsRiskDue,
+  doneIdsIncludingLinkedJha,
   EMPTY_JOB_RISK,
   jhaAssessmentHref,
   jhaCompletionRequiresJob,
   normalizeJhaJobId,
+  RISK_ASSESSMENT_CHECKLIST_ITEM_ID,
   riskAssessmentForJobDay,
   riskAssessmentsByJobForDay,
+  riskLinkClearedByChecklist,
   type JhaRiskSnapshot,
 } from "./jhaJobRisk.ts";
 
@@ -145,6 +149,70 @@ describe("riskAssessmentsByJobForDay", () => {
     assert.equal(map.get(JOB)?.riskAssessmentStatus, "completed");
     assert.equal(map.get(JOB)?.riskAssessmentId, "done");
     assert.deepEqual(map.get(OTHER), EMPTY_JOB_RISK);
+  });
+});
+
+describe("checklist role and the due state", () => {
+  const none = { riskAssessmentStatus: "none" as const, riskAssessmentId: null };
+  const draft = { riskAssessmentStatus: "draft" as const, riskAssessmentId: "draft-1" };
+  const done = { riskAssessmentStatus: "completed" as const, riskAssessmentId: "done" };
+
+  it("leaves a completed JHA in place when the checklist item is still open", () => {
+    assert.deepEqual(riskLinkClearedByChecklist(done, false), done);
+  });
+
+  it("clears due when the Risk assessment role is ticked and no JHA is completed", () => {
+    assert.deepEqual(riskLinkClearedByChecklist(none, true), {
+      riskAssessmentStatus: "completed",
+      riskAssessmentId: null,
+    });
+  });
+
+  it("clears a draft nag when the role is ticked and keeps the draft id", () => {
+    assert.deepEqual(riskLinkClearedByChecklist(draft, true), {
+      riskAssessmentStatus: "completed",
+      riskAssessmentId: "draft-1",
+    });
+  });
+
+  it("does not clear due for an open role with no completed JHA", () => {
+    assert.deepEqual(riskLinkClearedByChecklist(draft, false), draft);
+    assert.deepEqual(riskLinkClearedByChecklist(none, false), none);
+  });
+
+  it("counts a linked completed JHA as the checklist item being done", () => {
+    const ids = doneIdsIncludingLinkedJha([{ itemId: "signs-out" }], done, TODAY);
+    assert.equal(ids.has(RISK_ASSESSMENT_CHECKLIST_ITEM_ID), true);
+    assert.equal(ids.has("signs-out"), true);
+  });
+
+  it("counts a checklist tick only on the NZ day it was recorded", () => {
+    assert.equal(
+      checklistCompletionClearsRiskDue(MORNING, TODAY),
+      true,
+    );
+    assert.equal(
+      checklistCompletionClearsRiskDue(PREVIOUS_EVENING, TODAY),
+      false,
+    );
+    const todayTick = doneIdsIncludingLinkedJha(
+      [{ itemId: RISK_ASSESSMENT_CHECKLIST_ITEM_ID, completedAt: MORNING }],
+      none,
+      TODAY,
+    );
+    assert.equal(todayTick.has(RISK_ASSESSMENT_CHECKLIST_ITEM_ID), true);
+    const staleTick = doneIdsIncludingLinkedJha(
+      [{ itemId: RISK_ASSESSMENT_CHECKLIST_ITEM_ID, completedAt: PREVIOUS_EVENING }],
+      none,
+      TODAY,
+    );
+    assert.equal(staleTick.has(RISK_ASSESSMENT_CHECKLIST_ITEM_ID), false);
+  });
+
+  it("does not mark the checklist item done for a draft or a missing JHA", () => {
+    assert.equal(doneIdsIncludingLinkedJha([], draft, TODAY).has(RISK_ASSESSMENT_CHECKLIST_ITEM_ID), false);
+    assert.equal(doneIdsIncludingLinkedJha([], none, TODAY).has(RISK_ASSESSMENT_CHECKLIST_ITEM_ID), false);
+    assert.equal(doneIdsIncludingLinkedJha([], undefined, TODAY).has(RISK_ASSESSMENT_CHECKLIST_ITEM_ID), false);
   });
 });
 

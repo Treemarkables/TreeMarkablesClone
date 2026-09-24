@@ -989,7 +989,7 @@ The {businessName} Team';
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         INSERT INTO role_checklist_tasks (role_key, item_id, label, icon_name, sort_order, is_built_in) VALUES
-          ('A', 'risk-assessment',     'Risk assessment',                'Shield',         0, true),
+          ('R', 'risk-assessment',     'Risk assessment',                'Shield',         0, true),
           ('A', 'content-creation',    'Content creation',               'Camera',         1, true),
           ('B', 'alert-customer-late', 'Alert customer if running late', 'PhoneCall',      0, true),
           ('B', 'signs-out',           'Signs out',                      'TriangleAlert',  1, true),
@@ -998,6 +998,11 @@ The {businessName} Team';
           ('C', 'time-tracking',       'Time tracking',                  'Clock',          0, true),
           ('C', 'review-request',      'Request review from client',     'Star',           1, true)
         ON CONFLICT (item_id) DO NOTHING;
+        -- Morning JHA is its own checklist role. Seeds from before that stored
+        -- the built-in task under Kaiwhangai (A); move that one row.
+        UPDATE role_checklist_tasks
+           SET role_key = 'R', updated_at = CURRENT_TIMESTAMP
+         WHERE item_id = 'risk-assessment' AND is_built_in = true AND role_key <> 'R';
       `);
 
       // --- Safety module (Tier 1) tables — idempotent create + seed ---
