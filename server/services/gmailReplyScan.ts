@@ -140,7 +140,8 @@ export function uidsToMarkSeen(outcomes: MailboxProcessOutcome[]): number[] {
   for (const outcome of outcomes) {
     if (outcome.filedOrDuplicate && typeof outcome.uid === 'number') uids.push(outcome.uid);
   }
-  return [...new Set(uids)];
+  // Array.from, not `[...set]`: this tsconfig's target rejects iterating a Set.
+  return Array.from(new Set(uids));
 }
 
 /**
@@ -161,5 +162,6 @@ export function uidsToRescueFromSpam(
     if (typeof outcome.uid !== 'number') continue;
     uids.push(outcome.uid);
   }
-  return [...new Set(uids)];
+  // Array.from, not `[...set]`: this tsconfig's target rejects iterating a Set.
+  return Array.from(new Set(uids));
 }
