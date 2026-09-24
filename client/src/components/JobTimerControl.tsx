@@ -40,6 +40,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { getNZDateString } from "@shared/dateUtils";
 import type { RoleKey } from "@/lib/crewRoles";
+import { parseClockInRoles, rolesFromDayRolePayload } from "@shared/crewDayRoles";
 import { RoleChips } from "@/components/crew/RoleChips";
 import { StaffPickerList } from "@/components/crew/StaffPickerList";
 import {
@@ -88,7 +89,7 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [riskPromptOpen, setRiskPromptOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [roles, setRoles] = useState<Record<string, RoleKey | null>>({});
+  const [roles, setRoles] = useState<Record<string, RoleKey[]>>({});
   const [outstanding, setOutstanding] = useState<OutstandingItem[] | null>(null);
   // Backdated clock-in — "we started at 7:30 but forgot to press the button".
   const [useCustomTime, setUseCustomTime] = useState(false);
@@ -106,7 +107,7 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   // picker is open (badges for people already clocked in elsewhere).
   // Roles for today, so the picker's chips arrive pre-filled — on the second job of
   // the day the foreman just hits Start.
-  const { data: dayRolesResp } = useQuery<{ data: Array<{ employeeId: string; dayRole: RoleKey }> }>({
+  const { data: dayRolesResp } = useQuery<{ data: Array<{ employeeId: string; dayRole?: RoleKey | null; dayRoles?: RoleKey[] }> }>({
     queryKey: ["/api/day-roles"],
     staleTime: 60_000,
   });
@@ -161,8 +162,8 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
       preset.add(currentUser.id);
     }
     setSelectedIds(preset);
-    const existing: Record<string, RoleKey | null> = {};
-    for (const r of dayRolesResp?.data ?? []) existing[r.employeeId] = r.dayRole;
+    const existing: Record<string, RoleKey[]> = {};
+    for (const r of dayRolesResp?.data ?? []) existing[r.employeeId] = rolesFromDayRolePayload(r);
     setRoles(existing);
     setUseCustomTime(false);
     setCustomTime("");
@@ -201,7 +202,7 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
     mutationFn: async (payload: {
       employeeIds: string[];
       startedAt?: string;
-      roles?: Record<string, RoleKey>;
+      roles?: Record<string, RoleKey[]>;
     }) => {
       const res = await apiRequest("POST", `/api/jobs/${jobId}/timer/start`, payload);
       return (await res.json()) as { data?: { switchedJobIds?: string[] } };
@@ -429,8 +430,9 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
               Clock in staff
             </DialogTitle>
             <DialogDescription>
-              Select who is working on this job and give them their role for the
-              day. Staff clocked in on another job will be switched here.
+              Select who is working on this job and give them their roles for the
+              day. One person can hold more than one. Staff clocked in on another
+              job will be switched here.
             </DialogDescription>
           </DialogHeader>
 
@@ -467,8 +469,8 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
               selected ? (
                 <RoleChips
                   size="sm"
-                  value={roles[emp.id] ?? null}
-                  onSelect={(role) => setRoles((r) => ({ ...r, [emp.id]: role }))}
+                  value={roles[emp.id] ?? []}
+                  onChange={(next) => setRoles((r) => ({ ...r, [emp.id]: next }))}
                   disabled={startMutation.isPending}
                   testIdPrefix={`picker-role-${emp.id}`}
                 />
@@ -536,9 +538,9 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
                 const employeeIds = Array.from(selectedIds);
                 // Only send roles for people actually being clocked in, and only
                 // where one is set — an empty chip row means "leave their role alone".
-                const pickedRoles: Record<string, RoleKey> = {};
+                const pickedRoles: Record<string, RoleKey[]> = {};
                 for (const id of employeeIds) {
-                  const role = roles[id];
+                  const role = parseClockInRoles(roles[id]);
                   if (role) pickedRoles[id] = role;
                 }
                 startMutation.mutate({ employeeIds, startedAt, roles: pickedRoles });

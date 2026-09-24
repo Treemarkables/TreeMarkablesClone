@@ -572,23 +572,34 @@ const MIGRATIONS: Migration[] = [
         updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT job_day_roles_employee_date_uniq UNIQUE (employee_id, nz_date))`,
       `CREATE INDEX IF NOT EXISTS job_day_roles_date_idx ON job_day_roles (nz_date)`,
-      // Backfill from the legacy column. Re-runs harmlessly every boot (ON CONFLICT
-      // DO NOTHING), which also self-heals rows written through the old path while
-      // both writers are live. DISTINCT ON keeps the most recently updated row when
-      // a person's assignments disagree for the same NZ day.
+      // Backfill from the legacy column. Re-runs every boot. DISTINCT ON keeps the
+      // most recently updated row when a person's assignments disagree for the same
+      // NZ day. Skip a person-day that already has any job_day_roles row — that
+      // matches the old ON CONFLICT (employee, date) DO NOTHING, and it must not
+      // name that constraint: a later migration drops it so one person can hold
+      // more than one role. Naming it would fail every boot after that drop, and
+      // a per-role NOT EXISTS would re-insert a stale single day_role beside roles
+      // the crew had already set.
       `INSERT INTO job_day_roles (business_id, employee_id, nz_date, role_key)
-         SELECT DISTINCT ON (employee_id, nz_date) business_id, employee_id, nz_date, day_role
+         SELECT business_id, employee_id, nz_date, day_role
            FROM (
-             SELECT business_id,
-                    employee_id,
-                    to_char((start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Pacific/Auckland')::date, 'YYYY-MM-DD') AS nz_date,
-                    day_role,
-                    updated_at
-               FROM job_staff_assignments
-              WHERE day_role IN ('A', 'B', 'C')
-           ) src
-          ORDER BY employee_id, nz_date, updated_at DESC
-         ON CONFLICT ON CONSTRAINT job_day_roles_employee_date_uniq DO NOTHING`,
+             SELECT DISTINCT ON (employee_id, nz_date) business_id, employee_id, nz_date, day_role
+               FROM (
+                 SELECT business_id,
+                        employee_id,
+                        to_char((start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Pacific/Auckland')::date, 'YYYY-MM-DD') AS nz_date,
+                        day_role,
+                        updated_at
+                   FROM job_staff_assignments
+                  WHERE day_role IN ('A', 'B', 'C')
+               ) src
+              ORDER BY employee_id, nz_date, updated_at DESC
+           ) picked
+          WHERE NOT EXISTS (
+            SELECT 1 FROM job_day_roles existing
+             WHERE existing.employee_id = picked.employee_id
+               AND existing.nz_date = picked.nz_date
+          )`,
     ],
     postChecks: async (client) => {
       const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
@@ -932,6 +943,40 @@ const MIGRATIONS: Migration[] = [
         [[...TREEMARKABLES_BUSINESS_IDS]],
       );
     },
+  },
+  {
+    // One person can hold more than one checklist role on the same day. The
+    // original unique (employee_id, nz_date) made a second role overwrite the
+    // first. Dropping that constraint deletes no rows and changes no column
+    // types: every existing row already has one role_key, so it still satisfies
+    // unique (employee_id, nz_date, role_key). The same widening on
+    // job_role_completions lets a close snapshot freeze each role they held.
+    // A historical one-role snapshot stays one row.
+    name: "job-day-roles-multi-per-person",
+    statements: [
+      `ALTER TABLE job_day_roles DROP CONSTRAINT IF EXISTS job_day_roles_employee_date_uniq`,
+      `DO $$
+       BEGIN
+         IF NOT EXISTS (
+           SELECT 1 FROM pg_constraint WHERE conname = 'job_day_roles_employee_date_role_uniq'
+         ) THEN
+           ALTER TABLE job_day_roles
+             ADD CONSTRAINT job_day_roles_employee_date_role_uniq
+             UNIQUE (employee_id, nz_date, role_key);
+         END IF;
+       END $$`,
+      `ALTER TABLE job_role_completions DROP CONSTRAINT IF EXISTS job_role_completions_job_employee_uniq`,
+      `DO $$
+       BEGIN
+         IF NOT EXISTS (
+           SELECT 1 FROM pg_constraint WHERE conname = 'job_role_completions_job_employee_role_uniq'
+         ) THEN
+           ALTER TABLE job_role_completions
+             ADD CONSTRAINT job_role_completions_job_employee_role_uniq
+             UNIQUE (job_id, employee_id, role_key);
+         END IF;
+       END $$`,
+    ],
   },
 ];
 

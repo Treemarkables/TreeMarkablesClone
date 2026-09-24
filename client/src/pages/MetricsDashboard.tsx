@@ -2370,7 +2370,9 @@ export default function MetricsDashboard() {
                     <CardDescription>
                       Measured against the task list as it stood when each job
                       closed, so changing the lists in Settings doesn't move past
-                      results. Only people who held a role are counted.
+                      results. Only people who held a role are counted. A job
+                      counts once even when someone held more than one role, and
+                      it is finished only when every list they held is finished.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

@@ -44,7 +44,7 @@ import { cacheDeletePrefix } from "./perfCache";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db, ownerDb } from "./db";
-import { eq, desc, sql, inArray, and, gte, lt, lte, ne, asc } from "drizzle-orm";
+import { eq, desc, sql, inArray, notInArray, and, gte, lt, lte, ne, asc } from "drizzle-orm";
 import { invoices, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
@@ -172,7 +172,19 @@ if (ffmpegStatic) {
 }
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString, nzTimeToUTC } from "@shared/dateUtils";
-import { ROLE_LABEL as ROLE_LABELS, isRoleKey } from "@shared/crewRoles";
+import { isRoleKey } from "@shared/crewRoles";
+import {
+  aggregateRoleSnapshots,
+  groupRolesByEmployee,
+  joinRoleLabels,
+  outstandingForRoles,
+  parseClockInRoles,
+  primaryDayRole,
+  resolveDesiredDayRoles,
+  selectRolesForDate,
+  sortRoles,
+  type RoleKey,
+} from "@shared/crewDayRoles";
 import { composeCustomerAddress } from "@shared/customerAddress";
 import { statusAfterBooking, statusAfterDiaryBook } from "@shared/jobStatus";
 import { fillEmptyJobContactFromSources } from "@shared/jobContactFill";
@@ -15143,26 +15155,45 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // jobs.staffTimeEntries entry so labour cost, back-costing and gross margin
   // reuse the exact recompute paths the manual RecordedTimeEntries flow uses.
 
-  // Stop a running timer: write the time entry, recompute labour + margin,
-  // diary-log, delete the timer row. Shared by /timer/stop and start-with-switch.
-  // Set one person's crew role for an NZ date. job_day_roles is the source of truth;
-  // the legacy job_staff_assignments.day_role is mirrored for one release.
-  async function upsertDayRole(employeeId: string, nzDate: string, roleKey: 'A' | 'B' | 'C', setBy: string | null) {
-    await db.insert(schema.jobDayRoles)
-      .values(withTenant({ employeeId, nzDate, roleKey, setByEmployeeId: setBy }))
-      .onConflictDoUpdate({
-        target: [schema.jobDayRoles.employeeId, schema.jobDayRoles.nzDate],
-        set: { roleKey, setByEmployeeId: setBy, updatedAt: new Date() },
-      });
+  // Replace one person's checklist roles for an NZ date. job_day_roles is the
+  // source of truth: one row per role, so the same person can hold several.
+  // The legacy job_staff_assignments.day_role column stores only the primary
+  // role of that set (or null when the set is empty).
+  async function setDayRoles(employeeId: string, nzDate: string, desired: RoleKey[], setBy: string | null) {
+    const wanted = sortRoles(desired);
+    const existing = await db.select().from(schema.jobDayRoles).where(and(
+      eq(schema.jobDayRoles.employeeId, employeeId),
+      eq(schema.jobDayRoles.nzDate, nzDate),
+    ));
+    const have = existing.map((row) => row.roleKey).filter(isRoleKey);
+    const remove = have.filter((role) => !wanted.includes(role));
+    const insert = wanted.filter((role) => !have.includes(role));
+    if (remove.length > 0) {
+      await db.delete(schema.jobDayRoles).where(and(
+        eq(schema.jobDayRoles.employeeId, employeeId),
+        eq(schema.jobDayRoles.nzDate, nzDate),
+        inArray(schema.jobDayRoles.roleKey, remove),
+      ));
+    }
+    for (const roleKey of insert) {
+      await db.insert(schema.jobDayRoles)
+        .values(withTenant({ employeeId, nzDate, roleKey, setByEmployeeId: setBy }))
+        .onConflictDoUpdate({
+          target: [schema.jobDayRoles.employeeId, schema.jobDayRoles.nzDate, schema.jobDayRoles.roleKey],
+          set: { setByEmployeeId: setBy, updatedAt: new Date() },
+        });
+    }
     const startUtc = fromZonedTime(`${nzDate}T00:00:00`, 'Pacific/Auckland');
     const endUtc = fromZonedTime(`${nzDate}T23:59:59.999`, 'Pacific/Auckland');
-    await db.update(schema.jobStaffAssignments)
-      .set({ dayRole: roleKey, updatedAt: new Date() })
+    const updated = await db.update(schema.jobStaffAssignments)
+      .set({ dayRole: primaryDayRole(wanted), updatedAt: new Date() })
       .where(and(
         eq(schema.jobStaffAssignments.employeeId, employeeId),
         gte(schema.jobStaffAssignments.startTime, startUtc),
         lte(schema.jobStaffAssignments.startTime, endUtc),
-      ));
+      ))
+      .returning();
+    return { dayRoles: wanted, dayRole: primaryDayRole(wanted), updatedCount: updated.length };
   }
 
   // Enabled checklist tasks grouped by role, in display order.
@@ -15189,23 +15220,26 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       )),
       getRoleTaskLabels(),
     ]);
-    const roleByEmployee = new Map(roleRows.map(r => [r.employeeId, r.roleKey as 'A' | 'B' | 'C']));
+    const rolesByEmployee = groupRolesByEmployee(roleRows);
     const jobRef = job?.jobNumber ? `Job ${job.jobNumber}` : 'this job';
     const withoutRole: string[] = [];
 
     for (const employeeId of employeeIds) {
-      const role = roleByEmployee.get(employeeId);
-      if (!role) {
+      const roles = rolesByEmployee.get(employeeId) ?? [];
+      if (roles.length === 0) {
         withoutRole.push(employeeId);
         continue;
       }
-      const tasks = taskLabels[role];
+      const tasks = roles.flatMap((role) => taskLabels[role]);
+      const label = joinRoleLabels(roles);
       await notificationHelper.notifyEmployee(employeeId, {
-        title: `You're ${ROLE_LABELS[role]} on ${jobRef}`,
-        body: tasks.length > 0 ? tasks.join(' · ') : 'No tasks set for this role.',
+        title: `You're ${label} on ${jobRef}`,
+        body: tasks.length > 0
+          ? tasks.join(' · ')
+          : roles.length === 1 ? 'No tasks set for this role.' : 'No tasks set for these roles.',
         clickAction: `/dispatch?job=${job.id}`,
         collapseId: `day-role-${job.id}-${employeeId}-${nzDate}`,
-        data: { jobId: job.id, roleKey: role },
+        data: { jobId: job.id, roleKey: primaryDayRole(roles), roleKeys: roles },
       });
     }
 
@@ -15248,8 +15282,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     ].filter((id): id is string => typeof id === 'string' && id.length > 0)));
     if (employeeIds.length === 0) return;
 
-    // Their role on the close date, falling back to the most recent role they held
-    // on any day this job ran — a multi-day job may close after they finished up.
+    // Every role they held on the close date, falling back to every role on the
+    // most recent day this job ran — a multi-day job may close after they finished.
     const jobDates = new Set<string>([closeDate]);
     for (const d of getJobScheduledNZDates(job)) jobDates.add(d);
     for (const a of assignments) {
@@ -15259,16 +15293,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       inArray(schema.jobDayRoles.employeeId, employeeIds),
       inArray(schema.jobDayRoles.nzDate, Array.from(jobDates)),
     ));
-    const roleByEmployee = new Map<string, { roleKey: string; nzDate: string }>();
-    for (const r of roleRows) {
-      const existing = roleByEmployee.get(r.employeeId);
-      if (r.nzDate === closeDate) {
-        roleByEmployee.set(r.employeeId, { roleKey: r.roleKey, nzDate: r.nzDate });
-        continue;
-      }
-      if (!existing || (existing.nzDate !== closeDate && r.nzDate > existing.nzDate)) {
-        roleByEmployee.set(r.employeeId, { roleKey: r.roleKey, nzDate: r.nzDate });
-      }
+    const rowsByEmployee = new Map<string, typeof roleRows>();
+    for (const row of roleRows) {
+      const list = rowsByEmployee.get(row.employeeId) ?? [];
+      list.push(row);
+      rowsByEmployee.set(row.employeeId, list);
     }
 
     const doneIds = new Set(completions.map(c => c.itemId));
@@ -15281,33 +15310,45 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
 
     for (const employeeId of employeeIds) {
-      const role = roleByEmployee.get(employeeId);
-      if (!role || !isRoleKey(role.roleKey)) continue; // no role = nothing to be a percentage of
-      const expected = expectedByRole.get(role.roleKey) ?? [];
-      if (expected.length === 0) continue;
-      const done = expected.filter(id => doneIds.has(id));
-      await db.insert(schema.jobRoleCompletions)
-        .values(withTenant({
-          jobId,
-          employeeId,
-          nzDate: closeDate,
-          roleKey: role.roleKey,
-          itemsDone: done.length,
-          itemsExpected: expected.length,
-          expectedItemIds: expected,
-          doneItemIds: done,
-        }))
-        .onConflictDoUpdate({
-          target: [schema.jobRoleCompletions.jobId, schema.jobRoleCompletions.employeeId],
-          set: {
+      const roles = selectRolesForDate(rowsByEmployee.get(employeeId) ?? [], closeDate);
+      const rolesWithTasks = roles.filter((roleKey) => (expectedByRole.get(roleKey) ?? []).length > 0);
+      // No role, or every role's list is empty: leave any previous snapshot. A
+      // one-role job still writes exactly one row.
+      if (rolesWithTasks.length === 0) continue;
+      await db.delete(schema.jobRoleCompletions).where(and(
+        eq(schema.jobRoleCompletions.jobId, jobId),
+        eq(schema.jobRoleCompletions.employeeId, employeeId),
+        notInArray(schema.jobRoleCompletions.roleKey, rolesWithTasks),
+      ));
+      for (const roleKey of rolesWithTasks) {
+        const expected = expectedByRole.get(roleKey) ?? [];
+        const done = expected.filter(id => doneIds.has(id));
+        await db.insert(schema.jobRoleCompletions)
+          .values(withTenant({
+            jobId,
+            employeeId,
             nzDate: closeDate,
-            roleKey: role.roleKey,
+            roleKey,
             itemsDone: done.length,
             itemsExpected: expected.length,
             expectedItemIds: expected,
             doneItemIds: done,
-          },
-        });
+          }))
+          .onConflictDoUpdate({
+            target: [
+              schema.jobRoleCompletions.jobId,
+              schema.jobRoleCompletions.employeeId,
+              schema.jobRoleCompletions.roleKey,
+            ],
+            set: {
+              nzDate: closeDate,
+              itemsDone: done.length,
+              itemsExpected: expected.length,
+              expectedItemIds: expected,
+              doneItemIds: done,
+            },
+          });
+      }
     }
   }
 
@@ -15315,22 +15356,23 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // prompt before they walk off — the prompt NEVER gates the stop, because gating it
   // just moves when people press stop and the resulting time drift poisons back-costing.
   async function outstandingRoleItems(jobId: string, employeeId: string, nzDate: string) {
-    const [roleRow] = await db.select().from(schema.jobDayRoles).where(and(
+    const roleRows = await db.select().from(schema.jobDayRoles).where(and(
       eq(schema.jobDayRoles.employeeId, employeeId),
       eq(schema.jobDayRoles.nzDate, nzDate),
     ));
-    if (!roleRow || !isRoleKey(roleRow.roleKey)) return [];
+    const roles = groupRolesByEmployee(roleRows).get(employeeId) ?? [];
+    if (roles.length === 0) return [];
     const [tasks, completions] = await Promise.all([
       db.select().from(schema.roleChecklistTasks)
         .orderBy(asc(schema.roleChecklistTasks.sortOrder), asc(schema.roleChecklistTasks.createdAt)),
       storage.getJobChecklistCompletions(jobId),
     ]);
     const done = new Set(completions.map(c => c.itemId));
-    return tasks
-      .filter(t => t.isEnabled && t.roleKey === roleRow.roleKey && !done.has(t.itemId))
-      .map(t => ({ itemId: t.itemId, label: t.label, roleKey: roleRow.roleKey as 'A' | 'B' | 'C' }));
+    return outstandingForRoles(roles, tasks, done);
   }
 
+  // Stop a running timer: write the time entry, recompute labour + margin,
+  // diary-log, delete the timer row. Shared by /timer/stop and start-with-switch.
   async function finalizeTimer(timer: { id: string; jobId: string; employeeId: string; startedAt: Date | string }) {
     const elapsedMs = Date.now() - new Date(timer.startedAt).getTime();
     // Round to 2dp hours, minimum 1 minute so an accidental tap-tap still
@@ -15478,9 +15520,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       for (const employeeId of employeeIds) {
         const employee = await storage.getEmployee(employeeId);
         if (!employee) continue; // unknown/other-tenant id — skip
-        const requestedRole = roleInput[employeeId];
-        if (isRoleKey(requestedRole)) {
-          await upsertDayRole(employeeId, todayNZ, requestedRole, req.session.employeeId ?? null);
+        const requestedRoles = parseClockInRoles(roleInput[employeeId]);
+        if (requestedRoles && requestedRoles.length > 0) {
+          await setDayRoles(employeeId, todayNZ, requestedRoles, req.session.employeeId ?? null);
         }
         clockedIn.push(employeeId);
         const running = await storage.getActiveTimerForEmployee(employeeId);
@@ -19582,15 +19624,19 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           inArray(schema.jobDayRoles.employeeId, employeeIds),
           eq(schema.jobDayRoles.nzDate, todayNZ),
         ));
-      const roleByEmployee = new Map(roleRows.map(r => [r.employeeId, r.roleKey]));
+      const rolesByEmployee = groupRolesByEmployee(roleRows);
 
       const crew = employeeIds
         .map(id => {
           const employee = employeeMap.get(id)!;
+          const dayRoles = rolesByEmployee.get(id) ?? [];
           return {
             employeeId: id,
             employeeName: `${employee.firstName} ${employee.lastName}`.trim(),
-            dayRole: (roleByEmployee.get(id) ?? null) as 'A' | 'B' | 'C' | null,
+            dayRoles,
+            // Primary role only. Older clients that still read a single dayRole
+            // keep seeing one role; dayRoles is the full set.
+            dayRole: primaryDayRole(dayRoles),
             source: source.get(id)!,
             isClockedIn: source.get(id) === 'clocked_in',
           };
@@ -20089,30 +20135,23 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         itemsExpected: number;
         taskRate: number;
       }
+      const knownRows = rows.filter(r => employeeMap.has(r.employeeId));
+      const aggregated = aggregateRoleSnapshots(knownRows);
       const byEmployee = new Map<string, Agg>();
-      for (const r of rows) {
-        const employee = employeeMap.get(r.employeeId);
-        if (!employee) continue; // left the company / other tenant — RLS already hid those
-        let agg = byEmployee.get(r.employeeId);
-        if (!agg) {
-          agg = {
-            employeeId: r.employeeId,
-            employeeName: `${employee.firstName} ${employee.lastName}`.trim(),
-            roleKeys: [],
-            jobsCounted: 0,
-            jobsFullyComplete: 0,
-            completionRate: 0,
-            itemsDone: 0,
-            itemsExpected: 0,
-            taskRate: 0,
-          };
-          byEmployee.set(r.employeeId, agg);
-        }
-        agg.jobsCounted += 1;
-        if (r.itemsExpected > 0 && r.itemsDone >= r.itemsExpected) agg.jobsFullyComplete += 1;
-        agg.itemsDone += r.itemsDone;
-        agg.itemsExpected += r.itemsExpected;
-        if (!agg.roleKeys.includes(r.roleKey)) agg.roleKeys.push(r.roleKey);
+      for (const [employeeId, agg] of Array.from(aggregated.entries())) {
+        const employee = employeeMap.get(employeeId);
+        if (!employee) continue;
+        byEmployee.set(employeeId, {
+          employeeId,
+          employeeName: `${employee.firstName} ${employee.lastName}`.trim(),
+          roleKeys: agg.roleKeys,
+          jobsCounted: agg.jobsCounted,
+          jobsFullyComplete: agg.jobsFullyComplete,
+          completionRate: 0,
+          itemsDone: agg.itemsDone,
+          itemsExpected: agg.itemsExpected,
+          taskRate: 0,
+        });
       }
 
       const employees = Array.from(byEmployee.values()).map(a => ({
@@ -20150,9 +20189,14 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         ? req.query.date
         : getNZDateString(new Date());
       const rows = await db.select().from(schema.jobDayRoles).where(eq(schema.jobDayRoles.nzDate, date));
+      const grouped = groupRolesByEmployee(rows);
       res.json({
         success: true,
-        data: rows.map(r => ({ employeeId: r.employeeId, dayRole: r.roleKey })),
+        data: Array.from(grouped.entries()).map(([employeeId, dayRoles]) => ({
+          employeeId,
+          dayRoles,
+          dayRole: primaryDayRole(dayRoles),
+        })),
         date,
       });
     } catch (error) {
@@ -20161,24 +20205,28 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Set the day-level crew role (Kaitiaki / Kaiwhangai / Kaitirotiro) for one person
-  // on one NZ date. Setting null clears it for the day.
+  // Set the checklist roles (Kaitiaki / Kaiwhangai / Kaitirotiro) one person holds
+  // on one NZ date. A person can hold more than one. dayRoles replaces the set
+  // (the job-card chips send every chip that is on, including a second role).
+  // addRoles adds without removing. A lone dayRole still replaces the set with
+  // that one role, or clears it when null.
   //
   // job_day_roles is the source of truth — a role is a fact about a PERSON on a DAY,
-  // so someone who is clocked in without any assignment row can still hold one (that
-  // gap is what blocked allocating roles from the job card). The legacy
-  // job_staff_assignments.day_role is still mirrored for one release so existing
-  // readers keep working; drop that write once nothing reads the column.
+  // so someone who is clocked in without any assignment row can still hold one.
+  // The legacy job_staff_assignments.day_role mirror stores the primary role only.
   //
   // Must be registered BEFORE /api/staff-assignments/:id so Express doesn't match :id="day-role".
   app.put('/api/staff-assignments/day-role', async (req: Request, res: Response) => {
     try {
-      const { employeeId, date, dayRole } = req.body as { employeeId?: string; date?: string; dayRole?: 'A' | 'B' | 'C' | null };
+      const { employeeId, date, dayRole, dayRoles, addRoles } = req.body as {
+        employeeId?: string;
+        date?: string;
+        dayRole?: unknown;
+        dayRoles?: unknown;
+        addRoles?: unknown;
+      };
       if (!employeeId || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ success: false, message: 'employeeId and date (YYYY-MM-DD) required' });
-      }
-      if (dayRole !== null && dayRole !== 'A' && dayRole !== 'B' && dayRole !== 'C') {
-        return res.status(400).json({ success: false, message: "dayRole must be 'A', 'B', 'C', or null" });
       }
 
       // Reject ids from another tenant outright — RLS hides them from the read, and
@@ -20188,39 +20236,21 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         return res.status(404).json({ success: false, message: 'Employee not found' });
       }
 
-      if (dayRole === null) {
-        await db.delete(schema.jobDayRoles)
-          .where(and(
-            eq(schema.jobDayRoles.employeeId, employeeId),
-            eq(schema.jobDayRoles.nzDate, date),
-          ));
-      } else {
-        await db.insert(schema.jobDayRoles)
-          .values(withTenant({
-            employeeId,
-            nzDate: date,
-            roleKey: dayRole,
-            setByEmployeeId: req.session.employeeId ?? null,
-          }))
-          .onConflictDoUpdate({
-            target: [schema.jobDayRoles.employeeId, schema.jobDayRoles.nzDate],
-            set: { roleKey: dayRole, setByEmployeeId: req.session.employeeId ?? null, updatedAt: new Date() },
-          });
+      let existing: RoleKey[] = [];
+      if (addRoles !== undefined) {
+        const rows = await db.select().from(schema.jobDayRoles).where(and(
+          eq(schema.jobDayRoles.employeeId, employeeId),
+          eq(schema.jobDayRoles.nzDate, date),
+        ));
+        existing = groupRolesByEmployee(rows).get(employeeId) ?? [];
+      }
+      const resolved = resolveDesiredDayRoles({ dayRole, dayRoles, addRoles, existing });
+      if (!resolved.ok) {
+        return res.status(400).json({ success: false, message: resolved.message });
       }
 
-      // Transitional mirror onto the legacy column (see note above).
-      const startUtc = fromZonedTime(`${date}T00:00:00`, 'Pacific/Auckland');
-      const endUtc = fromZonedTime(`${date}T23:59:59.999`, 'Pacific/Auckland');
-      const updated = await db.update(schema.jobStaffAssignments)
-        .set({ dayRole, updatedAt: new Date() })
-        .where(and(
-          eq(schema.jobStaffAssignments.employeeId, employeeId),
-          gte(schema.jobStaffAssignments.startTime, startUtc),
-          lte(schema.jobStaffAssignments.startTime, endUtc),
-        ))
-        .returning();
-
-      res.json({ success: true, data: { dayRole, updatedCount: updated.length } });
+      const saved = await setDayRoles(employeeId, date, resolved.roles, req.session.employeeId ?? null);
+      res.json({ success: true, data: saved });
     } catch (error) {
       console.error('Error setting day role:', error);
       res.status(500).json({ success: false, message: 'Error setting day role' });

@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Checklist multi-role per person — branch `cursor/checklist-multi-role-1064` — 2026-09-24 — one staff member can hold more than one Kaitiaki/Kaiwhangai/Kaitirotiro role on the same job. Unique (employee, nz date) becomes (employee, nz date, role). Do not merge until review.
 - Gmail reply poller also scans Spam — branch `cursor/gmail-spam-reply-poll-75b2` — 2026-09-24 — job-alias and quotes@ replies sitting in Gmail Spam are filed through the existing matcher (same diary + email_reply path). All Mail/Inbox scan stays. Message-ID dedupe; filed Spam messages move to Inbox. Do not merge until review. [PR #588]
 - URGENT iOS TestFlight black screen (cold open, after #579) — branch `cursor/ios-cold-start-black-screen-e47b` — 2026-09-24 — Capacitor snapshots isOpaque=false set in capacitorDidLoad, and didFailProvisionalNavigation never restores it, so a cold WKWebView stays black until force-quit. Also don't mark booted on the empty logged-in sidebar shell. Do not merge until review. [PR #587]
 - Notification tap opens the reply — branch `cursor/notification-tap-opens-thread-7387` — 2026-09-23 — bell tap on Email/SMS reply was swallowed by the dismiss backdrop (panel z-index never applied on the popper wrapper) and a search-only `/dispatch?job=` did not open the card. Route to the job diary (or the conversation when there is no job). Do not merge until review. [PR #585]
