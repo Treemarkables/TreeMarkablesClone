@@ -2050,7 +2050,11 @@ export const jobStaffAssignments = pgTable("job_staff_assignments", {
   
   // Assignment details
   role: text("role"), // lead, operator, ground_crew, driver
-  dayRole: text("day_role"), // 'A' | 'B' | null — set once per (employeeId, NZ-date), propagated to every assignment row that day
+  // Legacy single value. job_day_roles is the source of truth and can hold
+  // several checklist roles for one person on one day; this column stores the
+  // primary of that set (Kaitiaki, else Kaiwhangai, else Kaitirotiro) so older
+  // readers still see a role. Null when they hold none.
+  dayRole: text("day_role"),
   status: text("status").notNull().default("assigned"), // assigned, confirmed, in_progress, completed, cancelled
   notificationSent: boolean("notification_sent").notNull().default(false),
   notificationSentAt: timestamp("notification_sent_at"),
@@ -2075,17 +2079,20 @@ export type JobStaffAssignment = typeof jobStaffAssignments.$inferSelect;
 export type InsertJobStaffAssignment = z.infer<typeof insertJobStaffAssignmentSchema>;
 export type UpdateJobStaffAssignment = z.infer<typeof updateJobStaffAssignmentSchema>;
 
-// Per-person, per-day crew role (Kaitiaki / Kaiwhangai / Kaitirotiro) driving the
-// role checklist sections on the job card. This is a fact about a PERSON on a DAY,
-// not about one job booking, which is why it lives here rather than on
-// jobStaffAssignments.dayRole: that column had to be copied onto every assignment
-// row for the day and inherited onto newly created ones, and it left anyone who was
-// clocked in WITHOUT an assignment row with nowhere to hold a role — which is what
-// blocked allocating roles from the job card at all.
+// Checklist roles a person holds on one NZ day (Kaitiaki / Kaiwhangai /
+// Kaitirotiro). One row per role, so the same person can cover two or three
+// roles when the crew is smaller than the role list. This is a fact about a
+// PERSON on a DAY, not about one job booking, which is why it lives here rather
+// than on jobStaffAssignments.dayRole: that column had to be copied onto every
+// assignment row for the day and inherited onto newly created ones, and it left
+// anyone who was clocked in WITHOUT an assignment row with nowhere to hold a role.
 //
-// dayRole is still written for one release so existing readers keep working; this
-// table is the read source. nzDate is the Pacific/Auckland calendar date
-// (YYYY-MM-DD) — see shared/dateUtils.getNZDateString.
+// dayRole is still written as the primary role of the set so existing readers
+// keep working; this table is the read source. nzDate is the Pacific/Auckland
+// calendar date (YYYY-MM-DD) — see shared/dateUtils.getNZDateString.
+//
+// Rows that were stored under the old one-role unique (employee, date) remain
+// valid: they are a set of one.
 export const jobDayRoles = pgTable("job_day_roles", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2097,8 +2104,8 @@ export const jobDayRoles = pgTable("job_day_roles", {
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   // employeeId is already tenant-scoped, so this stays clear of the nullable-
-  // businessId NULL-distinct trap a three-column unique would hit.
-  employeeDateUnique: unique("job_day_roles_employee_date_uniq").on(table.employeeId, table.nzDate),
+  // businessId NULL-distinct trap a unique including businessId would hit.
+  employeeDateRoleUnique: unique("job_day_roles_employee_date_role_uniq").on(table.employeeId, table.nzDate, table.roleKey),
   dateIdx: index("job_day_roles_date_idx").on(table.nzDate),
 }));
 
@@ -2119,9 +2126,9 @@ export type InsertJobDayRole = z.infer<typeof insertJobDayRoleSchema>;
 // make them all jump. Freezing itemsExpected (and the ids behind it) at close is
 // what keeps a completion-rate trend honest.
 //
-// One row per (jobId, employeeId) — checklist completions are per job, not per
-// day, so a multi-day job snapshots once. roleKey is the role that person held on
-// the job's completion date.
+// One row per (jobId, employeeId, roleKey). A person who held one role still has
+// one row. A person who held two roles has one row per role, frozen separately
+// so a later edit to the task list cannot move either percentage.
 export const jobRoleCompletions = pgTable("job_role_completions", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2137,7 +2144,7 @@ export const jobRoleCompletions = pgTable("job_role_completions", {
   doneItemIds: jsonb("done_item_ids").$type<string[]>(),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
-  jobEmployeeUnique: unique("job_role_completions_job_employee_uniq").on(table.jobId, table.employeeId),
+  jobEmployeeRoleUnique: unique("job_role_completions_job_employee_role_uniq").on(table.jobId, table.employeeId, table.roleKey),
   employeeIdx: index("job_role_completions_employee_idx").on(table.employeeId),
   dateIdx: index("job_role_completions_date_idx").on(table.nzDate),
 }));

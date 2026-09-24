@@ -30,21 +30,29 @@ CREATE TABLE IF NOT EXISTS job_day_roles (
 
 CREATE INDEX IF NOT EXISTS job_day_roles_date_idx ON job_day_roles (nz_date);
 
--- Backfill from the legacy column. Safe to re-run. DISTINCT ON keeps the most
--- recently updated row when a person's assignments disagree for the same NZ day.
+-- Backfill from the legacy column. Safe to re-run after
+-- 20260924_job_day_roles_multi_role.sql drops the one-role unique: skip any
+-- person-day that already has a role row, and do not name that constraint.
 INSERT INTO job_day_roles (business_id, employee_id, nz_date, role_key)
-  SELECT DISTINCT ON (employee_id, nz_date) business_id, employee_id, nz_date, day_role
+  SELECT business_id, employee_id, nz_date, day_role
     FROM (
-      SELECT business_id,
-             employee_id,
-             to_char((start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Pacific/Auckland')::date, 'YYYY-MM-DD') AS nz_date,
-             day_role,
-             updated_at
-        FROM job_staff_assignments
-       WHERE day_role IN ('A', 'B', 'C')
-    ) src
-   ORDER BY employee_id, nz_date, updated_at DESC
-  ON CONFLICT ON CONSTRAINT job_day_roles_employee_date_uniq DO NOTHING;
+      SELECT DISTINCT ON (employee_id, nz_date) business_id, employee_id, nz_date, day_role
+        FROM (
+          SELECT business_id,
+                 employee_id,
+                 to_char((start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Pacific/Auckland')::date, 'YYYY-MM-DD') AS nz_date,
+                 day_role,
+                 updated_at
+            FROM job_staff_assignments
+           WHERE day_role IN ('A', 'B', 'C')
+        ) src
+       ORDER BY employee_id, nz_date, updated_at DESC
+    ) picked
+   WHERE NOT EXISTS (
+     SELECT 1 FROM job_day_roles existing
+      WHERE existing.employee_id = picked.employee_id
+        AND existing.nz_date = picked.nz_date
+   );
 
 DO $$
 BEGIN

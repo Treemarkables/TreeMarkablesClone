@@ -29,6 +29,7 @@ import { SpeechToQuote } from "@/components/SpeechToQuote";
 import { formatNZTime, getNZDateString } from "@shared/dateUtils";
 import type { RoleChecklistTask } from "@shared/schema";
 import { ROLE_KEYS, ROLE_LABEL, type RoleKey } from "@/lib/crewRoles";
+import { primaryDayRole, rolesFromDayRolePayload } from "@shared/crewDayRoles";
 import { RoleChips } from "@/components/crew/RoleChips";
 import { CrewPickerDialog } from "@/components/crew/CrewPickerDialog";
 
@@ -83,9 +84,15 @@ interface ChecklistCompletion {
 interface CrewMember {
   employeeId: string;
   employeeName: string;
-  dayRole: RoleKey | null;
+  dayRoles?: RoleKey[];
+  /** Primary role. Present for older responses that predate dayRoles. */
+  dayRole?: RoleKey | null;
   source: "assigned" | "clocked_in" | "worked";
   isClockedIn: boolean;
+}
+
+function rolesFor(member: CrewMember): RoleKey[] {
+  return rolesFromDayRolePayload(member);
 }
 
 // Fallback used while the API call is loading or if it fails. Mirrors the
@@ -193,19 +200,48 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
   const staffByRole = useMemo(() => {
     const groups: Record<RoleKey, CrewMember[]> = { A: [], B: [], C: [] };
     for (const s of staffOnJob) {
-      if (s.dayRole === "A" || s.dayRole === "B" || s.dayRole === "C") {
-        groups[s.dayRole].push(s);
-      }
+      for (const role of rolesFor(s)) groups[role].push(s);
     }
     return groups;
   }, [staffOnJob]);
 
   const setDayRole = useMutation({
-    mutationFn: async (vars: { employeeId: string; date: string; dayRole: RoleKey | null }) => {
+    mutationFn: async (vars: { employeeId: string; date: string; dayRoles: RoleKey[] }) => {
       const res = await apiRequest("PUT", "/api/staff-assignments/day-role", vars);
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: async (vars) => {
+      const key = ["/api/jobs", jobId, "crew-today"] as const;
+      await queryClient.cancelQueries({ queryKey: key });
+      type CrewTodayCache = { success?: boolean; data?: { date?: string; crew?: CrewMember[] } };
+      const prev = queryClient.getQueryData<CrewTodayCache>(key);
+      queryClient.setQueryData<CrewTodayCache>(key, (old) => {
+        if (!old?.data?.crew) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            crew: old.data.crew.map((member) =>
+              member.employeeId === vars.employeeId
+                ? { ...member, dayRoles: vars.dayRoles, dayRole: primaryDayRole(vars.dayRoles) }
+                : member,
+            ),
+          },
+        };
+      });
+      return { prev };
+    },
+    onError: (err: Error, _vars, ctx) => {
+      if (ctx?.prev !== undefined) {
+        queryClient.setQueryData(["/api/jobs", jobId, "crew-today"], ctx.prev);
+      }
+      toast({
+        title: "Couldn't update roles",
+        description: err.message || "Something went wrong",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({
         predicate: (q) =>
           Array.isArray(q.queryKey)
@@ -213,6 +249,7 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
           && (q.queryKey[2] === "staff-assignments" || q.queryKey[2] === "crew-today"),
       });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/day-roles"] });
     },
   });
 
@@ -264,20 +301,21 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
     },
   });
 
-  // Per-person completion, measured against THEIR role's checklist. Completions are
+  // Per-person completion, measured against every role they hold. Completions are
   // recorded per (job, item), not per person, so two people sharing a role see the
   // same number — the question a role checklist answers is "is the Kaitiaki list
   // done", not "who tapped it first". Nobody without a role gets a percentage.
   const progressByEmployee = useMemo(() => {
     const byEmployee = new Map<string, { done: number; total: number; percent: number }>();
     for (const s of staffOnJob) {
-      if (!s.dayRole) continue;
-      const items = roleItems[s.dayRole] ?? [];
-      const done = items.filter((i) => completionByItem.has(i.id)).length;
+      const roles = rolesFor(s);
+      if (roles.length === 0) continue;
+      const ids = new Set(roles.flatMap((role) => (roleItems[role] ?? []).map((item) => item.id)));
+      const done = Array.from(ids).filter((id) => completionByItem.has(id)).length;
       byEmployee.set(s.employeeId, {
         done,
-        total: items.length,
-        percent: items.length === 0 ? 0 : Math.round((done / items.length) * 100),
+        total: ids.size,
+        percent: ids.size === 0 ? 0 : Math.round((done / ids.size) * 100),
       });
     }
     return byEmployee;
@@ -349,8 +387,8 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
           Job completion checklist
         </h2>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Assign each crew member a role for the day, then tick off their tasks as they go.
-          Roles carry across every job that day.
+          Assign roles for the day, then tick off the tasks as they go. One person can
+          hold more than one role. Roles carry across every job that day.
         </p>
       </div>
 
@@ -440,11 +478,11 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
                 staff={s}
                 progress={progressByEmployee.get(s.employeeId) ?? null}
                 disabled={setDayRole.isPending}
-                onSelect={(role) =>
+                onChange={(dayRoles) =>
                   setDayRole.mutate({
                     employeeId: s.employeeId,
                     date: crewDate,
-                    dayRole: role,
+                    dayRoles,
                   })
                 }
               />
@@ -501,13 +539,13 @@ function RoleAssignRow({
   staff,
   progress,
   disabled,
-  onSelect,
+  onChange,
 }: {
   staff: CrewMember;
   /** Null when they hold no role — there's nothing to be a percentage of. */
   progress: { done: number; total: number; percent: number } | null;
   disabled: boolean;
-  onSelect: (role: RoleKey | null) => void;
+  onChange: (roles: RoleKey[]) => void;
 }) {
   const name = staff.employeeName.trim() || "Unknown crew";
   return (
@@ -525,8 +563,8 @@ function RoleAssignRow({
           )}
         </span>
         <RoleChips
-          value={staff.dayRole}
-          onSelect={onSelect}
+          value={rolesFor(staff)}
+          onChange={onChange}
           disabled={disabled}
           testIdPrefix={`role-toggle-${staff.employeeId}`}
         />

@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { ROLE_LABEL, type RoleKey } from "@/lib/crewRoles";
+import type { RoleKey } from "@/lib/crewRoles";
+import { joinRoleLabels, sortRoles } from "@shared/crewDayRoles";
 
 export interface OutstandingItem {
   itemId: string;
@@ -67,7 +68,7 @@ export function ClockOutChecklistSheet({
   });
 
   const open = !!items && items.length > 0;
-  const roleKey = items?.[0]?.roleKey;
+  const roleLabel = joinRoleLabels(sortRoles((items ?? []).map((item) => item.roleKey)));
 
   const dismiss = () => {
     setTicked(new Set());
@@ -80,7 +81,7 @@ export function ClockOutChecklistSheet({
         <DialogHeader>
           <DialogTitle>Before you go</DialogTitle>
           <DialogDescription>
-            {items?.length ?? 0} of your{roleKey ? ` ${ROLE_LABEL[roleKey]}` : ""} tasks
+            {items?.length ?? 0} of your{roleLabel ? ` ${roleLabel}` : ""} tasks
             aren't ticked. Your time is already logged — this is just a reminder.
           </DialogDescription>
         </DialogHeader>

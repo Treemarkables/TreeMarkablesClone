@@ -43,7 +43,7 @@ export function CrewPickerDialog({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [roles, setRoles] = useState<Record<string, RoleKey | null>>({});
+  const [roles, setRoles] = useState<Record<string, RoleKey[]>>({});
 
   const { data: employeesResp } = useQuery<{ data: StaffPickerEmployee[] }>({
     queryKey: ["/api/employees"],
@@ -67,7 +67,7 @@ export function CrewPickerDialog({
         next.delete(id);
       } else {
         next.add(id);
-        setRoles((r) => (r[id] === undefined ? { ...r, [id]: defaultRole } : r));
+        setRoles((r) => (r[id] === undefined ? { ...r, [id]: defaultRole ? [defaultRole] : [] } : r));
       }
       return next;
     });
@@ -86,12 +86,14 @@ export function CrewPickerDialog({
       // Roles are independent of the assignment write, so a failure here shouldn't
       // silently drop the person from the crew — they're added either way.
       for (const employeeId of employeeIds) {
-        const dayRole = roles[employeeId] ?? null;
-        if (!dayRole) continue;
+        const dayRoles = roles[employeeId] ?? [];
+        if (dayRoles.length === 0) continue;
+        // Add, don't replace: they may already hold a role from earlier today,
+        // and these chips don't show that set.
         await apiRequest("PUT", "/api/staff-assignments/day-role", {
           employeeId,
           date,
-          dayRole,
+          addRoles: dayRoles,
         });
       }
     },
@@ -130,8 +132,8 @@ export function CrewPickerDialog({
             Add crew
           </DialogTitle>
           <DialogDescription>
-            Pick who's on this job today. Give them a role now or leave it — roles
-            carry across every job that person works today.
+            Pick who's on this job today. One person can hold more than one role.
+            Roles carry across every job that person works today.
           </DialogDescription>
         </DialogHeader>
 
@@ -152,8 +154,8 @@ export function CrewPickerDialog({
             selected && !existingCrewIds.has(emp.id) ? (
               <RoleChips
                 size="sm"
-                value={roles[emp.id] ?? null}
-                onSelect={(role) => setRoles((r) => ({ ...r, [emp.id]: role }))}
+                value={roles[emp.id] ?? []}
+                onChange={(next) => setRoles((r) => ({ ...r, [emp.id]: next }))}
                 disabled={addCrew.isPending}
                 testIdPrefix={`crew-picker-role-${emp.id}`}
               />
