@@ -7,6 +7,17 @@ import { PhotoStorageService } from '../photoStorage';
 import { onLaneJobEvent } from './laneAutomationService';
 import { resolveBusinessIdByChannel } from '../tenancy/channelMap';
 import { runWithBusiness } from '../tenancy/tenantStore';
+import {
+  GMAIL_INBOX_MOVE_TARGET,
+  createReplyDedupe,
+  fileMailboxReplies,
+  junkMailboxFromBoxes,
+  replyMailboxesToScan,
+  uidsToMarkSeen,
+  uidsToRescueFromSpam,
+  type ImapBoxNode,
+  type ReplyMailbox,
+} from './gmailReplyScan';
 
 interface ParsedEmailAttachment {
   filename?: string;
@@ -80,7 +91,8 @@ class GmailReplyService {
       // deploy (Aug 2026 incident). Destroying the connection settles the
       // promise so the poll counts as a failure and the next one can run;
       // unmarked emails are re-scanned and deduped by messageId.
-      const WATCHDOG_MS = 4 * 60 * 1000;
+      // Two mailboxes (All Mail, then Spam) share this budget.
+      const WATCHDOG_MS = 6 * 60 * 1000;
       const watchdog = setTimeout(() => {
         console.error(`📧 IMAP poll watchdog fired after ${WATCHDOG_MS / 1000}s — destroying hung connection`);
         try { imap.destroy(); } catch (_) {}
@@ -97,161 +109,19 @@ class GmailReplyService {
       });
 
       imap.once('ready', () => {
-        // Use '[Gmail]/All Mail' so we catch emails delivered to any label or routing
-        // rule (e.g. job-XXXX@jobs.treemarkables.co.nz) that bypasses the primary Inbox.
-        // Read-write mode (false) so we can mark emails as Seen after processing.
-        imap.openBox('[Gmail]/All Mail', false, async (err, box) => {
-          if (err) {
-            console.error('📧 Error opening Gmail All Mail folder:', err);
-            imap.end();
+        // All Mail covers Inbox and every other label except Spam and Trash.
+        // Spam is a separate mailbox — replies that Gmail junked never showed
+        // up in All Mail, so they were never filed. Both are scanned below.
+        this.scanReplyMailboxes(imap)
+          .then(() => {
+            try { imap.end(); } catch (_) {}
+            settle(() => resolve());
+          })
+          .catch((err) => {
+            console.error('📧 Error processing fetched emails:', err);
+            try { imap.end(); } catch (_) {}
             settle(() => reject(err));
-            return;
-          }
-
-          // Search for all emails from the last 2 days (not just unread).
-          // Previously used UNSEEN-only, which skipped replies the user had already
-          // opened in Gmail. The messageId duplicate-check in processEmailReply
-          // prevents re-logging entries that are already in the diary.
-          const searchDate = new Date();
-          searchDate.setDate(searchDate.getDate() - 2);
-
-          imap.search([['SINCE', searchDate]], async (err, results) => {
-            if (err) {
-              console.error('📧 Gmail search error:', err);
-              imap.end();
-              settle(() => reject(err));
-              return;
-            }
-
-            if (!results || results.length === 0) {
-              console.log('📧 No new email replies found');
-              imap.end();
-              settle(() => resolve());
-              return;
-            }
-
-            console.log(`📧 Found ${results.length} email(s) in All Mail (last 2 days) to process`);
-
-            const fetch = imap.fetch(results, { bodies: '', markSeen: false });
-            const emailsToProcess: ParsedEmailReply[] = [];
-            const parsePromises: Promise<void>[] = [];
-
-            fetch.on('message', (msg, seqno) => {
-              let emailUid: number | undefined;
-
-              msg.once('attributes', (attrs) => {
-                // Store UID but DON'T mark as seen yet - wait until after successful DB insert
-                emailUid = attrs.uid;
-              });
-
-              msg.on('body', (stream) => {
-                // Create a promise for each email parse operation
-                const parsePromise = new Promise<void>((resolveEmail) => {
-                  simpleParser(stream, async (err, parsed) => {
-                    if (err) {
-                      console.error('📧 Error parsing email:', err);
-                      resolveEmail();
-                      return;
-                    }
-
-                    // Extract sender email
-                    const fromEmail = parsed.from?.value?.[0]?.address?.toLowerCase();
-                    const toEmail = parsed.to?.value?.[0]?.address?.toLowerCase();
-                    console.log(`📧 Processing email from: ${fromEmail}, to: ${toEmail}, subject: ${parsed.subject}`);
-                    
-                    if (!fromEmail) {
-                      console.log(`📧 Skipping - no FROM address`);
-                      resolveEmail();
-                      return;
-                    }
-
-                    // Skip emails from our own domain (these are outgoing emails)
-                    if (fromEmail.includes('treemarkables.co.nz') || fromEmail.includes('treemarkables.nz')) {
-                      console.log(`📧 Skipping outgoing email from: ${fromEmail}`);
-                      resolveEmail();
-                      return;
-                    }
-
-                    // mailparser delivers attachments as { filename, contentType, content (Buffer), size, ... }.
-                    // Keep image attachments so the diary entry can render them; non-image
-                    // parts (PDFs, signatures, etc.) are ignored here on purpose.
-                    const imageAttachments: ParsedEmailAttachment[] = (parsed.attachments || [])
-                      .filter((a: any) => typeof a?.contentType === 'string' && a.contentType.toLowerCase().startsWith('image/') && Buffer.isBuffer(a.content))
-                      .map((a: any) => ({
-                        filename: a.filename,
-                        contentType: a.contentType,
-                        content: a.content,
-                        size: a.size,
-                      }));
-
-                    const emailData: ParsedEmailReply = {
-                      from: fromEmail,
-                      to: toEmail,
-                      subject: parsed.subject || '(no subject)',
-                      date: parsed.date || new Date(),
-                      textBody: parsed.text || '',
-                      htmlBody: parsed.html || undefined,
-                      messageId: parsed.messageId,
-                      inReplyTo: parsed.inReplyTo,
-                      references: parsed.references,
-                      uid: emailUid, // Store UID for later marking as seen
-                      attachments: imageAttachments.length > 0 ? imageAttachments : undefined,
-                    };
-
-                    emailsToProcess.push(emailData);
-                    resolveEmail();
-                  });
-                });
-                
-                parsePromises.push(parsePromise);
-              });
-            });
-
-            fetch.once('error', (err) => {
-              console.error('📧 Fetch error:', err);
-              settle(() => reject(err));
-            });
-
-            fetch.once('end', async () => {
-              try {
-                // Wait for all emails to finish parsing
-                await Promise.all(parsePromises);
-                
-                console.log(`📧 Finished parsing ${emailsToProcess.length} email(s), processing now...`);
-                
-                // Process all collected emails and track successfully processed UIDs
-                const successfulUids: number[] = [];
-                
-                for (const email of emailsToProcess) {
-                  const success = await this.processEmailReply(email);
-                  if (success && email.uid) {
-                    successfulUids.push(email.uid);
-                  }
-                }
-
-                // ONLY mark as seen after successful processing
-                if (successfulUids.length > 0) {
-                  for (const uid of successfulUids) {
-                    imap.addFlags(uid, ['\\Seen'], (err) => {
-                      if (err) {
-                        console.error(`📧 Error marking email UID ${uid} as read:`, err);
-                      }
-                    });
-                  }
-                  console.log(`📧 Marked ${successfulUids.length} email(s) as read after successful processing`);
-                }
-
-                console.log(`📧 Successfully processed ${successfulUids.length} of ${emailsToProcess.length} email reply(ies)`);
-                imap.end();
-                settle(() => resolve());
-              } catch (err) {
-                console.error('📧 Error processing fetched emails:', err);
-                try { imap.end(); } catch (_) {}
-                settle(() => reject(err));
-              }
-            });
           });
-        });
       });
 
       imap.once('end', () => {
@@ -259,6 +129,247 @@ class GmailReplyService {
       });
 
       imap.connect();
+    });
+  }
+
+  /**
+   * Scan All Mail (Inbox + other labels) and Spam. Job matching stays in
+   * processEmailReply — a Spam hit takes the same diary + email_reply path.
+   * A Spam folder error does not fail the poll; an All Mail error does.
+   */
+  private async scanReplyMailboxes(imap: any): Promise<void> {
+    let discoveredJunk: string | null = null;
+    try {
+      const boxes = await this.listMailboxes(imap);
+      discoveredJunk = junkMailboxFromBoxes(boxes);
+    } catch (err) {
+      console.error('📧 Could not list Gmail folders; using [Gmail]/Spam:', err);
+    }
+
+    const mailboxes = replyMailboxesToScan(discoveredJunk);
+    console.log(`📧 Reply poll scanning: ${mailboxes.map((box) => box.name).join(', ')}`);
+
+    // Same-poll guard. The diary messageId check covers the next poll, after
+    // a rescued Spam message shows up in All Mail / Inbox.
+    const dedupe = createReplyDedupe();
+    const searchDate = new Date();
+    searchDate.setDate(searchDate.getDate() - 2);
+
+    for (const mailbox of mailboxes) {
+      try {
+        await this.scanOneMailbox(imap, mailbox, searchDate, dedupe);
+      } catch (err) {
+        if (mailbox.rescueFromSpam) {
+          console.error(`📧 Error scanning ${mailbox.name}; Inbox/All Mail results are kept:`, err);
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  private listMailboxes(imap: any): Promise<Record<string, ImapBoxNode>> {
+    return new Promise((resolve, reject) => {
+      imap.getBoxes((err: Error | null, boxes: Record<string, ImapBoxNode>) => {
+        if (err) reject(err);
+        else resolve(boxes || {});
+      });
+    });
+  }
+
+  private openMailbox(imap: any, mailbox: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Read-write so we can mark Seen and move filed Spam messages to Inbox.
+      imap.openBox(mailbox, false, (err: Error | null) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+
+  private searchSince(imap: any, searchDate: Date): Promise<number[]> {
+    return new Promise((resolve, reject) => {
+      imap.search([['SINCE', searchDate]], (err: Error | null, results: number[]) => {
+        if (err) reject(err);
+        else resolve(results || []);
+      });
+    });
+  }
+
+  private async scanOneMailbox(
+    imap: any,
+    mailbox: ReplyMailbox,
+    searchDate: Date,
+    dedupe: ReturnType<typeof createReplyDedupe>,
+  ): Promise<void> {
+    await this.openMailbox(imap, mailbox.name);
+
+    // Last 2 days, not UNSEEN. UNSEEN skipped replies someone had already
+    // opened in Gmail. messageId dedupe in processEmailReply stops re-filing.
+    const results = await this.searchSince(imap, searchDate);
+    if (results.length === 0) {
+      console.log(`📧 No emails in ${mailbox.name} (last 2 days)`);
+      return;
+    }
+
+    console.log(`📧 Found ${results.length} email(s) in ${mailbox.name} (last 2 days) to process`);
+    const emails = await this.fetchParsedReplies(imap, results);
+    console.log(`📧 Finished parsing ${emails.length} email(s) from ${mailbox.name}, processing now...`);
+
+    const outcomes = await fileMailboxReplies(emails, dedupe, (email) => this.processEmailReply(email));
+
+    const seenUids = uidsToMarkSeen(outcomes);
+    await this.markProcessedSeen(imap, mailbox.name, seenUids);
+
+    if (mailbox.rescueFromSpam) {
+      // Only messages with a Message-ID. The next All Mail pass finds that id
+      // on the diary row and does not insert a second entry.
+      const rescueUids = uidsToRescueFromSpam(true, outcomes);
+      await this.moveOutOfSpam(imap, rescueUids);
+    }
+
+    const filed = outcomes.filter((outcome) => outcome.filedOrDuplicate).length;
+    console.log(`📧 Successfully processed ${filed} of ${emails.length} email reply(ies) in ${mailbox.name}`);
+  }
+
+  private fetchParsedReplies(imap: any, results: number[]): Promise<ParsedEmailReply[]> {
+    return new Promise((resolve, reject) => {
+      const emails: ParsedEmailReply[] = [];
+      const parsePromises: Promise<void>[] = [];
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (!settled) {
+          settled = true;
+          fn();
+        }
+      };
+
+      let fetch;
+      try {
+        fetch = imap.fetch(results, { bodies: '', markSeen: false });
+      } catch (err) {
+        finish(() => reject(err));
+        return;
+      }
+
+      fetch.on('message', (msg: any) => {
+        let emailUid: number | undefined;
+        let emailData: ParsedEmailReply | undefined;
+
+        const applyUid = () => {
+          if (emailData && emailUid) emailData.uid = emailUid;
+        };
+
+        msg.once('attributes', (attrs: { uid?: number }) => {
+          // Store UID but DON'T mark as seen yet — wait until after a successful file.
+          emailUid = attrs.uid;
+          applyUid();
+        });
+
+        msg.on('body', (stream: any) => {
+          const parsePromise = new Promise<void>((resolveEmail) => {
+            simpleParser(stream, async (err, parsed) => {
+              if (err) {
+                console.error('📧 Error parsing email:', err);
+                resolveEmail();
+                return;
+              }
+
+              const fromEmail = parsed.from?.value?.[0]?.address?.toLowerCase();
+              const toEmail = parsed.to?.value?.[0]?.address?.toLowerCase();
+              console.log(`📧 Processing email from: ${fromEmail}, to: ${toEmail}, subject: ${parsed.subject}`);
+
+              if (!fromEmail) {
+                console.log(`📧 Skipping - no FROM address`);
+                resolveEmail();
+                return;
+              }
+
+              // Skip emails from our own domain (these are outgoing emails)
+              if (fromEmail.includes('treemarkables.co.nz') || fromEmail.includes('treemarkables.nz')) {
+                console.log(`📧 Skipping outgoing email from: ${fromEmail}`);
+                resolveEmail();
+                return;
+              }
+
+              // mailparser delivers attachments as { filename, contentType, content (Buffer), size, ... }.
+              // Keep image attachments so the diary entry can render them; non-image
+              // parts (PDFs, signatures, etc.) are ignored here on purpose.
+              const imageAttachments: ParsedEmailAttachment[] = (parsed.attachments || [])
+                .filter((a: any) => typeof a?.contentType === 'string' && a.contentType.toLowerCase().startsWith('image/') && Buffer.isBuffer(a.content))
+                .map((a: any) => ({
+                  filename: a.filename,
+                  contentType: a.contentType,
+                  content: a.content,
+                  size: a.size,
+                }));
+
+              emailData = {
+                from: fromEmail,
+                to: toEmail,
+                subject: parsed.subject || '(no subject)',
+                date: parsed.date || new Date(),
+                textBody: parsed.text || '',
+                htmlBody: parsed.html || undefined,
+                messageId: parsed.messageId,
+                inReplyTo: parsed.inReplyTo,
+                references: parsed.references,
+                uid: emailUid,
+                attachments: imageAttachments.length > 0 ? imageAttachments : undefined,
+              };
+              applyUid();
+              emails.push(emailData);
+              resolveEmail();
+            });
+          });
+          parsePromises.push(parsePromise);
+        });
+      });
+
+      fetch.once('error', (err: Error) => {
+        console.error('📧 Fetch error:', err);
+        finish(() => reject(err));
+      });
+
+      fetch.once('end', async () => {
+        try {
+          await Promise.all(parsePromises);
+          finish(() => resolve(emails));
+        } catch (err) {
+          finish(() => reject(err));
+        }
+      });
+    });
+  }
+
+  private async markProcessedSeen(imap: any, mailbox: string, uids: number[]): Promise<void> {
+    if (uids.length === 0) return;
+    // One UID at a time, same as the previous All Mail loop, so one bad UID
+    // does not block the flags (or the Spam move) for the rest.
+    await Promise.all(uids.map((uid) => new Promise<void>((resolve) => {
+      imap.addFlags(uid, ['\\Seen'], (err: Error | null) => {
+        if (err) console.error(`📧 Error marking email UID ${uid} as read:`, err);
+        resolve();
+      });
+    })));
+    console.log(`📧 Marked ${uids.length} email(s) as read after successful processing in ${mailbox}`);
+  }
+
+  /** Lift filed Spam messages into Inbox so they leave Spam. Failure retries next poll. */
+  private moveOutOfSpam(imap: any, uids: number[]): Promise<void> {
+    return new Promise((resolve) => {
+      if (uids.length === 0) {
+        resolve();
+        return;
+      }
+      imap.move(uids, GMAIL_INBOX_MOVE_TARGET, (err: Error | null) => {
+        if (err) {
+          console.error(`📧 Error moving ${uids.length} filed Spam message(s) to Inbox (will retry next poll):`, err);
+        } else {
+          console.log(`📧 Moved ${uids.length} filed Spam message(s) to Inbox`);
+        }
+        resolve();
+      });
     });
   }
 
