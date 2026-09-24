@@ -20,7 +20,7 @@ import { WebCallButton } from "@/components/WebCallButton";
 // NOTE: useState/useEffect/useCallback are imported further down (imports are
 // hoisted module-wide, so the hooks below can use them).
 import { lazy, Suspense, startTransition } from "react";
-import { markAppBooted } from "@/lib/nativeBootRecovery";
+import { isAppBooted, watchUntilRealPagePainted } from "@/lib/nativeBootRecovery";
 
 // ---------------------------------------------------------------------------
 // Flash-free navigation. Wouter v3 reads the browser location through
@@ -192,19 +192,36 @@ function ScrollToTop() {
 // (Login / Dispatch) actually mounts. The outer Suspense used to fall back to
 // PageSpinner→null; after #556 painted body/#webview #1a1a1a that was a pure
 // black screen for the whole cold-start chunk download.
+const bootShellStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#1a1a1a",
+  color: "#f5f5f0",
+};
+
 function BootPlaceholder() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#1a1a1a] text-[#f5f5f0]">
-      <p className="text-base font-medium">Opening Inflow</p>
+    <div
+      className="min-h-screen flex items-center justify-center bg-[#1a1a1a] text-[#f5f5f0]"
+      style={bootShellStyle}
+    >
+      <p className="text-base font-medium" style={{ margin: 0, fontSize: "1.25rem", fontWeight: 650 }}>
+        Opening Inflow
+      </p>
     </div>
   );
 }
 
-// Inner (sidebar) Suspense fallback: still null so in-app page swaps keep the
-// chrome visible without a full-screen boot flash. Cold start uses
-// BootPlaceholder on the outer Suspense instead.
+// Inner (sidebar) Suspense fallback. After the first real page has painted,
+// stay null so in-app navigations keep the chrome. Until then a null fallback
+// is a black phone viewport: the sidebar is off-canvas and the Dispatch chunk
+// is the thing that fills <main>. #579 only replaced the OUTER fallback, so a
+// logged-in cold start never showed it.
 function PageSpinner() {
-  return null;
+  if (isAppBooted()) return null;
+  return <BootPlaceholder />;
 }
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -1918,14 +1935,12 @@ function App() {
     }
   }, []);
 
-  // Tell the Capacitor boot watchdogs (index.html + native WebViewBootRecovery)
-  // that React has committed at least once. Must NOT run from main.tsx right
-  // after createRoot().render() — that marked __INFLOW_BOOTED before any UI
-  // painted, hid the #inflow-boot shell, and left a near-black empty root while
-  // Login/Dispatch lazy chunks loaded (TestFlight "black screen").
-  useEffect(() => {
-    markAppBooted();
-  }, []);
+  // Hide #inflow-boot only after a real route has text and the CSS bundle has
+  // applied. Marking booted from this component's first effect (#579) ran when
+  // the sidebar shell committed — before the Dispatch chunk filled <main> —
+  // so the inline shell disappeared and native recovery stopped while the
+  // phone viewport was still the #1a1a1a body.
+  useEffect(() => watchUntilRealPagePainted(), []);
 
   // Watchdog for Radix Dialog/Sheet leaving `body { pointer-events: none }`
   // stuck after rapid nested open/close cycles (notably in the job card).

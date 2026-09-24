@@ -809,8 +809,9 @@ class MainViewController: CAPBridgeViewController {
         // registry share one plugin instance.
         bridge?.registerPluginInstance(TwilioVoicePlugin.shared)
         // Cold-start / process-death recovery for the remote server.url webview.
-        // Without this, a hung first load or a dead WK content process stays
-        // white until the user force-quits.
+        // attach() keeps the WKWebView opaque. Setting isOpaque = false here
+        // (before Capacitor snapshots it in willLoadWebview) left cold starts
+        // composited black until force-quit.
         view.backgroundColor = UIColor(red: 26 / 255, green: 26 / 255, blue: 26 / 255, alpha: 1)
         WebViewBootRecovery.shared.attach(webView: webView)
     }

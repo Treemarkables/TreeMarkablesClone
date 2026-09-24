@@ -152,10 +152,10 @@ if ('caches' in window) {
   });
 }
 
-// markAppBooted() lives in App's first useEffect — not here. Calling it
-// synchronously after render() hid #inflow-boot before Login/Dispatch painted
-// and told native WebViewBootRecovery the shell was healthy while #root was
-// still empty on the #1a1a1a Capacitor background (TestFlight black screen).
+// markAppBooted() is deferred by watchUntilRealPagePainted() inside App.
+// Calling it here, or from App's first effect, hid #inflow-boot before the
+// logged-in Dispatch chunk painted and told native recovery the shell was
+// healthy while the phone viewport was still the #1a1a1a body.
 createRoot(document.getElementById("root")!).render(
   <App />
 );

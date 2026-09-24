@@ -13,8 +13,12 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: "automatic",
-    // Match index.html #inflow-boot / LaunchScreen handoff so about:blank is
-    // not a white flash after the splash image dismisses.
+    // Shell color behind the remote document. The WKWebView must stay opaque:
+    // WebViewBootRecovery.paintShell used to set isOpaque = false in
+    // capacitorDidLoad, which runs before Capacitor snapshots isOpaque.
+    // That false snapshot is what cold starts restored, and a non-opaque
+    // webview composites as a stuck black screen. Do not "fix" a white
+    // about:blank flash by setting isOpaque = false.
     backgroundColor: "#1a1a1a",
     scrollEnabled: false,
     // Push taps are handled natively by NotificationHandler (AppDelegate+Firebase.swift),

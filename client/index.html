@@ -221,9 +221,23 @@
           window.location.reload();
         }
         if (retry) retry.addEventListener('click', function () { window.location.reload(); });
+        function heartbeatAge() {
+          var hb = window.__INFLOW_HEARTBEAT_MS || 0;
+          if (!hb) return 999999;
+          return Date.now() - hb;
+        }
+        // 18s with a fresh heartbeat means the entry bundle is alive and the
+        // first route chunk is still downloading. Reloading then wipes it
+        // back to a black about:blank. A stale heartbeat means JS never
+        // started. 45s is the hard stop if the shell never hands off.
+        setTimeout(function () {
+          if (window.__INFLOW_BOOTED) return;
+          if (heartbeatAge() < 8000) return;
+          reloadOnce();
+        }, 18000);
         setTimeout(function () {
           if (!window.__INFLOW_BOOTED) reloadOnce();
-        }, 18000);
+        }, 45000);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
