@@ -30,10 +30,12 @@ export const HEARTBEAT_ALIVE_MS = 8_000;
 export const LIVE_BOOT_HARD_TIMEOUT_MS = 45_000;
 // about:blank that is not loading failed (radio not up). Retry quickly.
 export const BLANK_IDLE_RELOAD_MS = 2_000;
-// about:blank that stays isLoading never committed a document. Capacitor
-// leaves the WKWebView non-opaque on didFailProvisionalNavigation, which
-// composites as a black screen. Don't wait the old 20s.
-export const BLANK_HUNG_RELOAD_MS = 4_000;
+// A still loading about:blank used to be treated as stalled at 4s. That
+// cancelled the in flight remote load on the 4s, 10s, and 18s native checks
+// and left an opaque web view white. Match WebViewBootPolicy.loadingStall.
+export const BLANK_HUNG_RELOAD_MS = 18_000;
+// didFail / didFailProvisionalNavigation / content process terminated.
+export const NAV_FAILURE_BACKOFF_MS = 1_500;
 export const AUTH_ME_TIMEOUT_MS = 10_000;
 export const MAX_BOOT_RELOADS = 2;
 export const ATTEMPT_WINDOW_MS = 3 * 60 * 1000;
@@ -71,18 +73,23 @@ export function shouldForceLoadWhilePending(opts: {
   elapsedMs: number;
   hungLoadMs?: number;
   idleReloadMs?: number;
+  failureBackoffMs?: number;
+  /** didFail / didFailProvisionalNavigation / content process terminated. */
+  navigationFailed?: boolean;
   /** Foreground wake of a blank webview that is no longer loading. */
   force?: boolean;
 }): boolean {
   const hungLoadMs = opts.hungLoadMs ?? BLANK_HUNG_RELOAD_MS;
   const idleReloadMs = opts.idleReloadMs ?? BLANK_IDLE_RELOAD_MS;
+  const failureBackoffMs = opts.failureBackoffMs ?? NAV_FAILURE_BACKOFF_MS;
   const status = classifyWebViewHref(opts.href);
+  if (opts.isLoading) return opts.elapsedMs >= hungLoadMs;
   if (status === "blank" || status === "wrong-origin") {
-    if (opts.force && !opts.isLoading) return true;
-    if (opts.isLoading) return opts.elapsedMs >= hungLoadMs;
+    if (opts.force) return true;
+    if (opts.navigationFailed) return opts.elapsedMs >= failureBackoffMs;
     return opts.elapsedMs >= idleReloadMs;
   }
-  if (opts.isLoading && opts.elapsedMs >= hungLoadMs) return true;
+  if (opts.navigationFailed) return opts.elapsedMs >= failureBackoffMs;
   return false;
 }
 
@@ -158,18 +165,30 @@ export function shouldReloadNativeProbe(opts: {
   /** Once a healthy boot has been seen, don't reload a brief empty main. */
   seenHealthyBoot?: boolean;
   force?: boolean;
+  navigationFailed?: boolean;
+  reloadCount?: number;
+  maxReloads?: number;
 }): boolean {
+  const count = opts.reloadCount ?? 0;
+  const maxReloads = opts.maxReloads ?? 3;
+  if (count >= maxReloads) return false;
   if (opts.probe === "booted" || opts.probe === "painting") return false;
-  if (opts.probe === "empty") return !opts.seenHealthyBoot;
+  if (opts.probe === "empty") {
+    if (opts.seenHealthyBoot) return false;
+    if (opts.isLoading) return opts.elapsedMs >= BLANK_HUNG_RELOAD_MS;
+    return true;
+  }
   if (opts.probe === "blank" || opts.probe === "wrong-origin") {
     return shouldForceLoadWhilePending({
       href: opts.probe === "blank" ? "about:blank" : "https://evil.example/",
       isLoading: opts.isLoading,
       elapsedMs: opts.elapsedMs,
       force: opts.force,
+      navigationFailed: opts.navigationFailed,
     });
   }
-  if (opts.isLoading && opts.elapsedMs < BLANK_HUNG_RELOAD_MS) return false;
+  if (opts.isLoading) return opts.elapsedMs >= BLANK_HUNG_RELOAD_MS;
+  if (opts.navigationFailed) return opts.elapsedMs >= NAV_FAILURE_BACKOFF_MS;
   return opts.elapsedMs >= BOOT_TIMEOUT_MS;
 }
 

@@ -2,7 +2,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   AUTH_ME_TIMEOUT_MS,
+  BLANK_HUNG_RELOAD_MS,
   BOOT_TIMEOUT_MS,
+  NAV_FAILURE_BACKOFF_MS,
   HEARTBEAT_ALIVE_MS,
   LIVE_BOOT_HARD_TIMEOUT_MS,
   canAttemptBootReload,
@@ -37,13 +39,13 @@ describe("native boot recovery — origin / blank webview", () => {
   });
 
   it("does not interrupt an in-flight first load of about:blank before the hung timeout", () => {
-    // A blank document that is still "loading" after a few seconds never
-    // committed. Waiting the old 20s is the force-quit-to-recover black screen.
+    // Cancelling a still loading document at 4s burned the reload budget and
+    // left the opaque web view white. Wait out a slow connection.
     assert.equal(
       shouldForceLoadWhilePending({
         href: "about:blank",
         isLoading: true,
-        elapsedMs: 3_000,
+        elapsedMs: 4_000,
       }),
       false,
     );
@@ -51,7 +53,15 @@ describe("native boot recovery — origin / blank webview", () => {
       shouldForceLoadWhilePending({
         href: "about:blank",
         isLoading: true,
-        elapsedMs: 4_000,
+        elapsedMs: 10_000,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldForceLoadWhilePending({
+        href: "about:blank",
+        isLoading: true,
+        elapsedMs: BLANK_HUNG_RELOAD_MS,
       }),
       true,
     );
@@ -73,6 +83,37 @@ describe("native boot recovery — origin / blank webview", () => {
         elapsedMs: 2_000,
       }),
       true,
+    );
+  });
+
+  it("retries a failed blank load after a short backoff and does not cancel a newer load", () => {
+    assert.equal(
+      shouldForceLoadWhilePending({
+        href: "about:blank",
+        isLoading: false,
+        elapsedMs: NAV_FAILURE_BACKOFF_MS - 1,
+        navigationFailed: true,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldForceLoadWhilePending({
+        href: "about:blank",
+        isLoading: false,
+        elapsedMs: NAV_FAILURE_BACKOFF_MS,
+        navigationFailed: true,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldForceLoadWhilePending({
+        href: "about:blank",
+        isLoading: true,
+        elapsedMs: 5_000,
+        navigationFailed: true,
+        force: true,
+      }),
+      false,
     );
   });
 
