@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- URGENT iOS TestFlight white screen (cold open, build 1.0 (42)) — branch `cursor/ios-boot-white-screen-d371` — 2026-09-25 — native boot recovery was cancelling a still loading first navigation at 4s, 10s and 18s and never reset reloadCount, so an opaque WKWebView stayed white. Stall is 18s, immediate retry only after a real navigation failure, count resets on healthy boot and foreground, dark placeholder until the page commits. Do not merge until review.
 - Checklist risk assessment role — branch `cursor/checklist-risk-assessment-role-d5b5` — 2026-09-24 — morning JHA / Risk needed is an assignable Checklist role. One person can hold it plus another role. Linking or completing the JHA, or ticking the role, clears the due state. Do not merge until review. [PR #590]
 - Checklist multi-role per person — branch `cursor/checklist-multi-role-1064` — 2026-09-24 — one staff member can hold more than one Kaitiaki/Kaiwhangai/Kaitirotiro role on the same job. Unique (employee, nz date) becomes (employee, nz date, role). Do not merge until review. [PR #589]
 - Gmail reply poller also scans Spam — branch `cursor/gmail-spam-reply-poll-75b2` — 2026-09-24 — job-alias and quotes@ replies sitting in Gmail Spam are filed through the existing matcher (same diary + email_reply path). All Mail/Inbox scan stays. Message-ID dedupe; filed Spam messages move to Inbox. Do not merge until review. [PR #588]
