@@ -448,8 +448,11 @@ export function JobCardMobile({
         })}
       </div>
 
-      {/* ── Body (scrollable, action bar overlays bottom) ── */}
-      <div className="flex-1 overflow-y-auto bg-muted">
+      {/* ── Body (scrollable, action bar overlays bottom) ──
+          min-h-0 lets this flex child shrink below the diary feed so the
+          overflow scroller is real. Without it, some Android WebViews keep
+          min-height:auto and the feed is clipped with nowhere to pan. */}
+      <div className="flex-1 min-h-0 overflow-y-auto bg-muted" data-testid="job-card-mobile-body">
         <div className="pb-[110px]">
           {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
           {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}

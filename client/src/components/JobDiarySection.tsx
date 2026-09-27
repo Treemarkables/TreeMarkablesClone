@@ -684,8 +684,14 @@ interface JobDiarySectionProps {
    * layout. Set this when the diary lives inside a parent that already owns
    * the scroll (e.g. JobCardMobile's `overflow-y-auto` body). Without it the
    * `h-full` collapses against a content-height parent and the Radix
-   * ScrollArea swallows the touch with nothing to scroll — which is why
-   * Android staff couldn't scroll the diary feed.
+   * ScrollArea swallows the touch with nothing to scroll.
+   *
+   * Embedded mode also skips the surrounding `PullToRefresh` wrapper. That
+   * wrapper is `overflow-y-auto` plus `overscroll-behavior-y: none`. Inside
+   * the mobile card its height follows the feed, so it cannot scroll, and
+   * Chrome on Android refuses to chain the touch pan to the card body.
+   * Desktop keeps the wrapper: the diary pane has a real height, so that
+   * inner scroller is the one that moves.
    */
   embedded?: boolean;
   onQuoteClick?: (quoteNumber: string) => void;
@@ -2191,8 +2197,7 @@ export function JobDiarySection({
     await refetch();
   };
 
-  return (
-    <PullToRefresh onRefresh={handleRefresh} enabled={false}>
+  const diary = (
       <div
         ref={rootRef}
         className={embedded ? (className ?? "") : `h-full flex flex-col ${className ?? ""}`}
@@ -4613,6 +4618,17 @@ export function JobDiarySection({
           />
         )}
       </div>
+  );
+
+  // Mobile job card: the card body is already the scrollport. A nested
+  // overflow scroller with overscroll-behavior none eats the Android touch
+  // and the older entries never move into view. iOS WKWebView and desktop
+  // mouse wheels were chaining past it; Chrome on Android does not.
+  if (embedded) return diary;
+
+  return (
+    <PullToRefresh onRefresh={handleRefresh} enabled={false}>
+      {diary}
     </PullToRefresh>
   );
 }
