@@ -20,6 +20,8 @@ import { getNZDateString, nzTimeToUTC } from "@shared/dateUtils";
 import { APP_URL } from "./config/appUrl";
 import { listInvoiceXeroForBusiness } from "./invoiceXeroService";
 import { invoiceXeroQueuePath } from "@shared/invoiceXeroFollowUps";
+import { listJobsNotBilledForBusiness } from "./jobsNotBilledService";
+import { jobCardPath, jobsNotBilledQueuePath } from "@shared/jobsNotBilled";
 import { commitApprovedSend } from "@shared/quoteFollowUpApproval";
 import {
   buildRequoteDraft,
@@ -501,7 +503,8 @@ async function remindIfWaiting(businessId: string, now: Date): Promise<void> {
     ? { waiting: 0, followUps: [] as QuoteFollowUpView[] }
     : await loadViews(businessId);
   const xero = await listInvoiceXeroForBusiness(businessId);
-  const waiting = list.waiting + xero.waiting;
+  const notBilled = await listJobsNotBilledForBusiness(businessId);
+  const waiting = list.waiting + xero.waiting + notBilled.waiting;
   if (waiting === 0) return;
   const since = nzTimeToUTC(getNZDateString(now), "00:00");
   const [already] = await ownerDb
@@ -517,23 +520,31 @@ async function remindIfWaiting(businessId: string, now: Date): Promise<void> {
 
   const quoteRows = list.followUps.filter((row) => row.waiting);
   const xeroRows = xero.invoices.filter((row) => row.waiting);
-  const onlyQuotes = xero.waiting === 0;
-  const onlyXero = list.waiting === 0;
-  const path = onlyXero
-    ? (xeroRows.length === 1 ? invoiceXeroQueuePath(xeroRows[0]?.id) : invoiceXeroQueuePath())
-    : (onlyQuotes && quoteRows.length === 1 ? followUpQueuePath(quoteRows[0]?.id) : followUpQueuePath());
-  const title = onlyXero
-    ? "Invoices not in Xero"
-    : (onlyQuotes ? "Quote follow-ups waiting" : "Follow-ups waiting");
-  const message = onlyXero
-    ? (xero.waiting === 1
-      ? "1 invoice was sent to the customer and is not in Xero yet. Nothing has been synced."
-      : `${xero.waiting} invoices were sent to the customer and are not in Xero yet. Nothing has been synced.`)
-    : (onlyQuotes
-      ? (list.waiting === 1
-        ? "1 quote follow-up is waiting for you. Nothing has been sent."
-        : `${list.waiting} quote follow-ups are waiting for you. Nothing has been sent.`)
-      : `${waiting} follow-ups are waiting for you. Nothing has been sent or synced.`);
+  const billedRows = notBilled.jobs.filter((row) => row.waiting);
+  const onlyQuotes = xero.waiting === 0 && notBilled.waiting === 0;
+  const onlyXero = list.waiting === 0 && notBilled.waiting === 0;
+  const onlyBilled = list.waiting === 0 && xero.waiting === 0;
+  const path = onlyBilled
+    ? (billedRows.length === 1 && billedRows[0] ? jobCardPath(billedRows[0].jobId) : jobsNotBilledQueuePath())
+    : (onlyXero
+      ? (xeroRows.length === 1 ? invoiceXeroQueuePath(xeroRows[0]?.id) : invoiceXeroQueuePath())
+      : (onlyQuotes && quoteRows.length === 1 ? followUpQueuePath(quoteRows[0]?.id) : followUpQueuePath()));
+  const title = onlyBilled
+    ? "Completed jobs not billed"
+    : (onlyXero ? "Invoices not in Xero" : (onlyQuotes ? "Quote follow-ups waiting" : "Follow-ups waiting"));
+  const message = onlyBilled
+    ? (notBilled.waiting === 1
+      ? "1 completed job is not billed yet. Nothing has been created or sent."
+      : `${notBilled.waiting} completed jobs are not billed yet. Nothing has been created or sent.`)
+    : (onlyXero
+      ? (xero.waiting === 1
+        ? "1 invoice was sent to the customer and is not in Xero yet. Nothing has been synced."
+        : `${xero.waiting} invoices were sent to the customer and are not in Xero yet. Nothing has been synced.`)
+      : (onlyQuotes
+        ? (list.waiting === 1
+          ? "1 quote follow-up is waiting for you. Nothing has been sent."
+          : `${list.waiting} quote follow-ups are waiting for you. Nothing has been sent.`)
+        : `${waiting} follow-ups are waiting for you. Nothing has been created, sent, or synced.`));
 
   await runWithBusiness(businessId, async () => {
     await storage.createNotification({
@@ -544,7 +555,7 @@ async function remindIfWaiting(businessId: string, now: Date): Promise<void> {
       isRead: false,
       actionUrl: path,
       quoteId: onlyQuotes && quoteRows.length === 1 ? quoteRows[0]?.quoteId : undefined,
-      metadata: { waiting, quotes: list.waiting, invoicesNotInXero: xero.waiting },
+      metadata: { waiting, quotes: list.waiting, invoicesNotInXero: xero.waiting, jobsNotBilled: notBilled.waiting },
     });
     const employees = await storage.getAllEmployees();
     const admins = employees.filter((employee) => employee.role === "admin" && employee.isActive !== false);

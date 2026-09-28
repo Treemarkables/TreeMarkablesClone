@@ -4,6 +4,7 @@ import { workflowAutomationService } from './workflowAutomation';
 import { runAllReminderChecks } from './reminderChecker';
 import { runQuoteFollowUpDetection } from '../quoteFollowUpService';
 import { runInvoiceXeroDetection } from '../invoiceXeroService';
+import { runJobsNotBilledDetection } from '../jobsNotBilledService';
 import { runLaneAutomationChecks, runLaneInvoiceChecks, runLaneStatusChangeAutomations, runLaneEntryForEvent, runLaneExitForEvent, onLaneJobEvent } from './laneAutomationService';
 import type { Job, Customer, InsertJob } from '@shared/schema';
 
@@ -278,14 +279,16 @@ export class AutomatedTriggers {
       runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Reminder check error:', err));
     }, 60 * 60 * 1000); // 1 hour
 
-    // Quote follow-ups and invoices not in Xero. Draft only.
-    // Job names quoteFollowUpDetection and invoiceXeroDetection.
-    // Invoice detection runs first so the daily reminder can see both.
-    // Nothing is sent or synced from these jobs.
+    // Quote follow-ups, invoices not in Xero, and completed jobs not billed.
+    // Job names quoteFollowUpDetection, invoiceXeroDetection, jobsNotBilledDetection.
+    // Not-billed runs first, then Xero, then quotes, so the daily reminder sees all three.
+    // Nothing is created, sent, or synced from these jobs.
     setInterval(() => {
-      runInvoiceXeroDetection()
-        .catch(err => console.error('[invoiceXeroDetection] error:', err))
-        .finally(() => runQuoteFollowUpDetection().catch(err => console.error('[quoteFollowUpDetection] error:', err)));
+      runJobsNotBilledDetection()
+        .catch(err => console.error('[jobsNotBilledDetection] error:', err))
+        .finally(() => runInvoiceXeroDetection()
+          .catch(err => console.error('[invoiceXeroDetection] error:', err))
+          .finally(() => runQuoteFollowUpDetection().catch(err => console.error('[quoteFollowUpDetection] error:', err))));
     }, 60 * 60 * 1000);
 
     // Run lane checks every hour: settle late-payment entry/exit FIRST (so a paid job leaves the
@@ -299,9 +302,11 @@ export class AutomatedTriggers {
     // Run once shortly after startup (90 second delay to let DB connect)
     setTimeout(() => {
       runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Initial reminder check error:', err));
-      runInvoiceXeroDetection()
-        .catch(err => console.error('[invoiceXeroDetection] initial error:', err))
-        .finally(() => runQuoteFollowUpDetection().catch(err => console.error('[quoteFollowUpDetection] initial error:', err)));
+      runJobsNotBilledDetection()
+        .catch(err => console.error('[jobsNotBilledDetection] initial error:', err))
+        .finally(() => runInvoiceXeroDetection()
+          .catch(err => console.error('[invoiceXeroDetection] initial error:', err))
+          .finally(() => runQuoteFollowUpDetection().catch(err => console.error('[quoteFollowUpDetection] initial error:', err))));
       runLaneInvoiceChecks()
         .catch(err => console.error('[AutomatedTriggers] Initial lane invoice check error:', err))
         .finally(() => runLaneAutomationChecks().catch(err => console.error('[AutomatedTriggers] Initial lane automation check error:', err)));
@@ -319,7 +324,8 @@ export class AutomatedTriggers {
         followUpReminders: 'Running (every 4 hours)',
         proactiveReminders: 'Running (hourly)',
         quoteFollowUpDetection: 'Running (hourly)',
-        invoiceXeroDetection: 'Running (hourly)'
+        invoiceXeroDetection: 'Running (hourly)',
+        jobsNotBilledDetection: 'Running (hourly)'
       },
       lastChecked: new Date().toISOString()
     };

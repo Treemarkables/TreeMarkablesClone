@@ -102,6 +102,7 @@ describe("ops HTTP routes", () => {
       syncInvoiceToXero: async () => {
         throw new Error("sync should not run");
       },
+      listJobsNotBilled: async () => ({ waiting: 0, jobs: [], links: { queue: "https://app.example/quote-follow-ups?tab=billed" } }),
     };
 
     const app = express();
@@ -225,6 +226,7 @@ describe("ops HTTP routes", () => {
       syncInvoiceToXero: async () => {
         throw new Error("sync should not run");
       },
+      listJobsNotBilled: async () => ({ waiting: 0, jobs: [], links: { queue: "https://app.example/quote-follow-ups?tab=billed" } }),
     };
 
     const app = express();
@@ -295,6 +297,7 @@ describe("ops HTTP routes", () => {
         syncs += 1;
         return { status: 200, body: { success: true } };
       },
+      listJobsNotBilled: async () => ({ waiting: 0, jobs: [], links: { queue: "https://app.example/quote-follow-ups?tab=billed" } }),
     };
 
     const app = express();
@@ -335,6 +338,76 @@ describe("ops HTTP routes", () => {
       });
       assert.equal(synced.status, 200);
       assert.equal(syncs, 1);
+    } finally {
+      await close();
+    }
+  });
+
+  it("lists completed jobs not billed and has no write route", async () => {
+    const deps: OpsDeps = {
+      resolveAccess: async (req) => accessFromHeader(req),
+      todayNz: () => "2026-09-28",
+      appUrl: "https://app.example",
+      listUnscheduled: async () => {
+        throw new Error("unused");
+      },
+      weekRevenue: async () => {
+        throw new Error("unused");
+      },
+      getDailyRevenueTarget: async () => null,
+      setDailyRevenueTarget: async () => null,
+      listQuoteFollowUps: async () => {
+        throw new Error("unused");
+      },
+      updateQuoteFollowUpDraft: async () => null,
+      approveQuoteFollowUp: async () => {
+        throw new Error("unused");
+      },
+      listInvoicesNotInXero: async () => ({
+        waiting: 0,
+        invoices: [],
+        links: { queue: "https://app.example/quote-follow-ups?tab=xero" },
+      }),
+      syncInvoiceToXero: async () => {
+        throw new Error("sync should not run");
+      },
+      listJobsNotBilled: async (businessId) => {
+        assert.equal(businessId, "biz-a");
+        return {
+          waiting: 1,
+          jobs: [{
+            id: "bill-1",
+            jobId: "job-1",
+            jobNumber: "4048",
+            step: "create_invoice",
+            links: {
+              queue: "https://app.example/quote-follow-ups?tab=billed&id=bill-1",
+              job: "https://app.example/dispatch?job=job-1",
+            },
+          }],
+          links: { queue: "https://app.example/quote-follow-ups?tab=billed" },
+        };
+      },
+    };
+    const app = express();
+    app.use(express.json());
+    mountOpsRoutes(app, deps);
+    const { url, close } = await listen(app);
+    try {
+      const listed = await fetch(`${url}/api/ops/jobs-not-billed`, {
+        headers: { "x-test-user": "crew" },
+      });
+      assert.equal(listed.status, 200);
+      const body = await listed.json() as { data: { waiting: number; jobs: { links: { job: string } }[] } };
+      assert.equal(body.data.waiting, 1);
+      assert.match(body.data.jobs[0]?.links.job ?? "", /dispatch\?job=job-1/);
+
+      const write = await fetch(`${url}/api/ops/jobs-not-billed/bill-1/approve`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-user": "admin" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      assert.equal(write.status, 404);
     } finally {
       await close();
     }

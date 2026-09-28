@@ -14,6 +14,7 @@ import {
   updateQuoteFollowUpDraft,
 } from "./quoteFollowUpService";
 import { countWaitingInvoiceXeroFollowUps } from "./invoiceXeroService";
+import { countWaitingJobsNotBilled } from "./jobsNotBilledService";
 
 function businessId(req: Request, res: Response): string | null {
   if (!req.session.employeeId) {
@@ -44,12 +45,15 @@ export function registerQuoteFollowUpRoutes(app: Express): void {
       if (!businessId(req, res)) return;
       const list = await listQuoteFollowUpsForSession();
       const invoicesNotInXero = await countWaitingInvoiceXeroFollowUps();
+      const notBilled = await countWaitingJobsNotBilled();
       res.json({
         success: true,
         data: {
-          count: list.waiting + invoicesNotInXero,
+          count: list.waiting + invoicesNotInXero + notBilled.count,
           quotes: list.waiting,
           invoicesNotInXero,
+          jobsNotBilled: notBilled.count,
+          notBilledJobId: notBilled.jobId,
         },
       });
     } catch (error) {

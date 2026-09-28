@@ -24,6 +24,7 @@ Settings → Preferences still saves through admin-only `PUT /api/business-setti
 | `approveQuoteFollowUp` | POST | `/api/ops/quote-follow-ups/:id/approve` |
 | `listInvoicesNotInXero` | GET | `/api/ops/invoices-not-in-xero` |
 | `syncInvoiceToXero` | POST | `/api/ops/invoices-not-in-xero/:id/sync` |
+| `listJobsNotBilled` | GET | `/api/ops/jobs-not-billed` |
 
 `week` is any NZ calendar day. It snaps to the Monday–Sunday week (same week as Staff Schedule). Omit it for the week that contains today in Pacific/Auckland. Each day's `scheduledRevenueExGst` matches the Despatch day bar (`jobRevenue`: line items ex GST, then subtotal, then GST-inclusive totals ÷ 1.15, split across booked NZ days, quotes and leads excluded). `gapToTarget` is `dailyRevenueTarget - scheduledRevenueExGst` (positive means short). Both are `null` when no target is stored.
 
@@ -59,6 +60,17 @@ Links:
 
 - Not in Xero tab: `{APP_URL}/quote-follow-ups?tab=xero`
 - One invoice: `{APP_URL}/quote-follow-ups?tab=xero&id={followUpId}`
+
+## Completed jobs not billed
+
+`listJobsNotBilled` is read only. It returns completed jobs that have no invoice, or an invoice that has not been emailed or texted to the customer. Each row includes the next step (`create_invoice` or `send_invoice`), the draft invoice preview when the step is create, and a link to the job. A sent invoice that is not in Xero is not in this list. That job is only on `listInvoicesNotInXero`.
+
+There is no Ops route that creates an invoice, sends one, or syncs one. Those actions stay on the signed-in Follow-ups screen, and each needs `{ "confirm": true }`.
+
+Links:
+
+- Not billed tab: `{APP_URL}/quote-follow-ups?tab=billed`
+- One job: `{APP_URL}/dispatch?job={jobId}`
 
 ## Not in this phase
 

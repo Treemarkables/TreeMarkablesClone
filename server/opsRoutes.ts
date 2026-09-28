@@ -31,6 +31,7 @@ import {
   approveInvoiceXeroFollowUp,
   listInvoiceXeroForBusiness,
 } from "./invoiceXeroService";
+import { listJobsNotBilledForBusiness } from "./jobsNotBilledService";
 import { resolveOpsAccess, type OpsApiKey, type OpsEmployee } from "./opsAccess";
 import { storage } from "./storage";
 
@@ -256,6 +257,7 @@ function realDeps(): OpsDeps {
       id,
       confirm,
     }),
+    listJobsNotBilled: listJobsNotBilledForBusiness,
   };
 }
 

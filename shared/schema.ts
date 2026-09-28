@@ -424,6 +424,34 @@ export const invoiceXeroFollowUps = pgTable("invoice_xero_follow_ups", {
   statusIdx: index("invoice_xero_follow_ups_business_status_idx").on(table.businessId, table.status),
 }));
 
+// Completed jobs that still need an invoice or a send. One row per job.
+// A sent invoice that is not in Xero stays on invoice_xero_follow_ups only.
+// The detector never creates, sends, or syncs.
+export const jobBillingFollowUps = pgTable("job_billing_follow_ups", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(),
+  customerId: varchar("customer_id"),
+  invoiceId: varchar("invoice_id"),
+  step: text("step").notNull(), // create_invoice | send_invoice
+  channel: text("channel").notNull().default("sms"),
+  status: text("status").notNull().default("draft"), // draft, snoozed, working, done, dismissed, cancelled
+  subject: text("subject"),
+  message: text("message").notNull().default(""),
+  recipientName: text("recipient_name"),
+  recipientPhone: text("recipient_phone"),
+  recipientEmail: text("recipient_email"),
+  snoozeUntil: timestamp("snooze_until"),
+  lastError: text("last_error"),
+  completedAt: timestamp("completed_at"),
+  diaryEntryId: varchar("diary_entry_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  jobUniq: uniqueIndex("job_billing_follow_ups_job_uniq").on(table.businessId, table.jobId),
+  statusIdx: index("job_billing_follow_ups_business_status_idx").on(table.businessId, table.status),
+}));
+
 // Job Management
 export const jobs = pgTable("jobs", {
   businessId: varchar("business_id"),

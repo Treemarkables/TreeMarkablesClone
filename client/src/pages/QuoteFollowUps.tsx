@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation, useSearch } from "wouter";
 import { InvoiceXeroPanel } from "@/components/InvoiceXeroPanel";
+import { JobsNotBilledPanel } from "@/components/JobsNotBilledPanel";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,8 @@ export default function QuoteFollowUps() {
   const search = useSearch();
   const [, setLocation] = useLocation();
   const params = new URLSearchParams(search);
-  const tab = params.get("tab") === "xero" ? "xero" : "quotes";
+  const tabParam = params.get("tab");
+  const tab = tabParam === "xero" || tabParam === "billed" ? tabParam : "quotes";
   const selectedFromUrl = tab === "quotes" ? params.get("id") : null;
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl);
   const [message, setMessage] = useState("");
@@ -168,7 +170,9 @@ export default function QuoteFollowUps() {
         <p className="text-sm text-muted-foreground mt-1">
           {tab === "xero"
             ? "Invoices sent to the customer that are not in Xero. Nothing syncs until you press Approve & Sync."
-            : "Drafts only. Nothing goes to the customer until you press Approve & Send."}
+            : tab === "billed"
+              ? "Completed jobs that still need an invoice or a send. Nothing is created or sent until you approve."
+              : "Drafts only. Nothing goes to the customer until you press Approve & Send."}
         </p>
       </div>
 
@@ -181,6 +185,13 @@ export default function QuoteFollowUps() {
           Quotes
         </Button>
         <Button
+          variant={tab === "billed" ? "default" : "outline"}
+          onClick={() => setLocation("/quote-follow-ups?tab=billed")}
+          data-testid="tab-not-billed"
+        >
+          Not billed
+        </Button>
+        <Button
           variant={tab === "xero" ? "default" : "outline"}
           onClick={() => setLocation("/quote-follow-ups?tab=xero")}
           data-testid="tab-not-in-xero"
@@ -191,6 +202,8 @@ export default function QuoteFollowUps() {
 
       {tab === "xero" ? (
         <InvoiceXeroPanel />
+      ) : tab === "billed" ? (
+        <JobsNotBilledPanel />
       ) : isLoading ? (
         <p className="text-sm text-muted-foreground">Loading follow-ups…</p>
       ) : rows.length === 0 ? (

@@ -123,6 +123,11 @@ export interface OpsDeps {
   approveQuoteFollowUp(businessId: string, id: string, confirm: true): Promise<OpsFollowUpApproveResult>;
   listInvoicesNotInXero(businessId: string): Promise<OpsInvoiceNotInXeroList>;
   syncInvoiceToXero(businessId: string, id: string, confirm: true): Promise<OpsFollowUpApproveResult>;
+  listJobsNotBilled(businessId: string): Promise<{
+    waiting: number;
+    jobs: { id: string; jobId: string; jobNumber: string; step: string; links: { queue: string; job: string } }[];
+    links: { queue: string };
+  }>;
 }
 
 function links(appUrl: string): OpsLinks {
@@ -338,6 +343,19 @@ export function mountOpsRoutes(app: Express, deps: OpsDeps): void {
     } catch (error) {
       console.error("Error syncing invoice to Xero:", error);
       fail(res, 500, "Couldn't sync to Xero. Nothing was marked as synced.");
+    }
+  });
+
+  // Read only. Creating, sending, and syncing stay on the signed-in app screens.
+  app.get("/api/ops/jobs-not-billed", async (req: Request, res: Response) => {
+    try {
+      const access = await accessFor(deps, req, res, false);
+      if (!access) return;
+      const data = await deps.listJobsNotBilled(access.businessId);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error("Error listing jobs not billed:", error);
+      fail(res, 500, "Error listing jobs not billed");
     }
   });
 }
