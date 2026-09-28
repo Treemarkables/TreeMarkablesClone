@@ -98,6 +98,7 @@ import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
 import { registerBugReportRoutes } from "./bugReports";
 import { registerOpsRoutes } from "./opsRoutes";
+import { registerQuoteFollowUpRoutes } from "./quoteFollowUpRoutes";
 import {
   isStripeConfigured,
   businessOwnsStripeAccount,
@@ -2260,6 +2261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // In-app bug / feedback reports (text + voice + photos + video) — server/bugReports.ts
   registerBugReportRoutes(app, { requireSession, requirePlatformAdmin, imageUpload, videoUpload, audioUpload });
   registerOpsRoutes(app);
+  registerQuoteFollowUpRoutes(app);
   
   // ========================================
   // CLIENT-SIDE ERROR LOGGING

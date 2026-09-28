@@ -32,6 +32,38 @@ export interface TargetPayload {
   links: { settingsPreferences: string };
 }
 
+export interface OpsQuoteFollowUp {
+  id: string;
+  quoteId: string;
+  quoteNumber: string;
+  jobId: string | null;
+  customerName: string | null;
+  kind: string;
+  nudgeStep: number;
+  channel: string;
+  status: string;
+  waiting: boolean;
+  subject: string | null;
+  message: string;
+  recipientPhone: string | null;
+  recipientEmail: string | null;
+  requoteId: string | null;
+  requoteNumber: string | null;
+  snoozeUntil: string | null;
+  links: { queue: string; job: string | null };
+}
+
+export interface OpsQuoteFollowUpList {
+  waiting: number;
+  followUps: OpsQuoteFollowUp[];
+  links: { queue: string; settings: string };
+}
+
+export interface OpsFollowUpApproveResult {
+  status: number;
+  body: { success: boolean; message?: string };
+}
+
 export interface OpsDeps {
   resolveAccess(req: Request): Promise<OpsAccess>;
   todayNz(): string;
@@ -40,6 +72,13 @@ export interface OpsDeps {
   weekRevenue(businessId: string, anchor: string): Promise<OpsWeekRevenue>;
   getDailyRevenueTarget(businessId: string): Promise<number | null>;
   setDailyRevenueTarget(businessId: string, amount: number): Promise<number | null>;
+  listQuoteFollowUps(businessId: string): Promise<OpsQuoteFollowUpList>;
+  updateQuoteFollowUpDraft(
+    businessId: string,
+    id: string,
+    patch: { message?: unknown; subject?: unknown; channel?: unknown },
+  ): Promise<OpsQuoteFollowUp | null>;
+  approveQuoteFollowUp(businessId: string, id: string, confirm: true): Promise<OpsFollowUpApproveResult>;
 }
 
 function links(appUrl: string): OpsLinks {
@@ -156,6 +195,67 @@ export function mountOpsRoutes(app: Express, deps: OpsDeps): void {
     } catch (error) {
       console.error("Error setting daily revenue target:", error);
       fail(res, 500, "Error setting daily revenue target");
+    }
+  });
+
+  app.get("/api/ops/quote-follow-ups", async (req: Request, res: Response) => {
+    try {
+      const access = await accessFor(deps, req, res, false);
+      if (!access) return;
+      const data = await deps.listQuoteFollowUps(access.businessId);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error("Error listing quote follow-ups:", error);
+      fail(res, 500, "Error listing quote follow-ups");
+    }
+  });
+
+  app.patch("/api/ops/quote-follow-ups/:id", async (req: Request, res: Response) => {
+    try {
+      const access = await accessFor(deps, req, res, false);
+      if (!access) return;
+      const body = req.body;
+      if (body == null || typeof body !== "object" || Array.isArray(body)) {
+        fail(res, 400, "Send a message, subject, or channel to update.");
+        return;
+      }
+      const data = await deps.updateQuoteFollowUpDraft(access.businessId, req.params.id, body as {
+        message?: unknown;
+        subject?: unknown;
+        channel?: unknown;
+      });
+      if (!data) {
+        fail(res, 404, "Follow-up not found.");
+        return;
+      }
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error("Error editing quote follow-up:", error);
+      const message = error instanceof Error ? error.message : "Error editing quote follow-up";
+      const status = (error as { status?: number } | null)?.status;
+      fail(res, typeof status === "number" ? status : 400, message);
+    }
+  });
+
+  // Sends only when the body is { confirm: true }. The handler does not call
+  // the approve dependency otherwise, so a read or a draft edit cannot send.
+  app.post("/api/ops/quote-follow-ups/:id/approve", async (req: Request, res: Response) => {
+    try {
+      const access = await accessFor(deps, req, res, false);
+      if (!access) return;
+      const body = req.body;
+      const confirm = body != null && typeof body === "object" && !Array.isArray(body)
+        ? (body as { confirm?: unknown }).confirm
+        : undefined;
+      if (confirm !== true) {
+        fail(res, 400, "Sending needs confirm: true. Nothing was sent.");
+        return;
+      }
+      const result = await deps.approveQuoteFollowUp(access.businessId, req.params.id, true);
+      res.status(result.status).json(result.body);
+    } catch (error) {
+      console.error("Error approving quote follow-up:", error);
+      fail(res, 500, "Couldn't send the follow-up. Nothing was marked as sent.");
     }
   });
 }

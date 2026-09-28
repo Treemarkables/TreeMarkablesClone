@@ -29,6 +29,7 @@ import {
   type TodayScope,
 } from "@shared/todayPage";
 import { loadEffectiveRiskLinksForJobs } from "./jhaJobRisk";
+import { countWaitingQuoteFollowUps } from "./quoteFollowUpService";
 import type { JobRiskAssessmentLink } from "@shared/jhaJobRisk";
 
 export class HttpError extends Error {
@@ -239,11 +240,19 @@ export async function buildTodayOverview(employeeId: string): Promise<TodayOverv
     .map((team) => ({ id: team.id, name: team.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  let quoteFollowUpsWaiting = 0;
+  try {
+    quoteFollowUpsWaiting = await countWaitingQuoteFollowUps();
+  } catch (error) {
+    console.error("Today overview: quote follow-up count failed:", error);
+  }
+
   const overview: TodayOverviewData = {
     date: todayStr,
     dateLabel: formatTodayHeading(todayStr),
     businessName: settings.businessName?.trim() || "",
     currentEmployeeId: employeeId,
+    quoteFollowUpsWaiting,
     counts: {
       jobsToday: allJobs.length,
       crewsLive: crews.length,

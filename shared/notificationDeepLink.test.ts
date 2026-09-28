@@ -201,6 +201,23 @@ describe("resolveBellNotificationPath — in-app bell tap", () => {
   it("returns null when the row has no target", () => {
     assert.equal(resolveBellNotificationPath({ type: "system_alert" }), null);
   });
+
+  it("opens the quote follow-up queue from the daily reminder", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "quote_followup_waiting",
+        actionUrl: "/quote-follow-ups?id=fu-1",
+      }),
+      "/quote-follow-ups?id=fu-1",
+    );
+    assert.equal(
+      resolveNotificationPath({
+        type: "quote_followup_waiting",
+        clickAction: "/quote-follow-ups",
+      }),
+      "/quote-follow-ups",
+    );
+  });
 });
 
 describe("flatten + path helpers", () => {

@@ -84,6 +84,16 @@ describe("ops HTTP routes", () => {
         seen.push(businessId);
         return amount;
       },
+      listQuoteFollowUps: async () => ({
+        waiting: 0,
+        followUps: [],
+        links: {
+          queue: "https://app.example/quote-follow-ups",
+          settings: "https://app.example/settings/quote-followup",
+        },
+      }),
+      updateQuoteFollowUpDraft: async () => null,
+      approveQuoteFollowUp: async () => ({ status: 200, body: { success: true } }),
     };
 
     const app = express();
@@ -141,6 +151,96 @@ describe("ops HTTP routes", () => {
       assert.equal(wrote, 4500);
       assert.ok(seen.includes("biz-a"));
       assert.equal(seen.includes("biz-b"), false);
+    } finally {
+      await close();
+    }
+  });
+
+  it("lists follow-up drafts and does not send without confirm: true", async () => {
+    let approvals = 0;
+    const draft = {
+      id: "fu-1",
+      quoteId: "q1",
+      quoteNumber: "1042",
+      jobId: "job-1",
+      customerName: "Sam Ngata",
+      kind: "check_in",
+      nudgeStep: 3,
+      channel: "sms",
+      status: "draft",
+      waiting: true,
+      subject: null,
+      message: "Hi Sam, just checking where you're at with quote 1042.",
+      recipientPhone: "021000000",
+      recipientEmail: null,
+      requoteId: null,
+      requoteNumber: null,
+      snoozeUntil: null,
+      links: {
+        queue: "https://app.example/quote-follow-ups?id=fu-1",
+        job: "https://app.example/dispatch?job=job-1",
+      },
+    };
+    const deps: OpsDeps = {
+      resolveAccess: async (req) => accessFromHeader(req),
+      todayNz: () => "2026-09-28",
+      appUrl: "https://app.example",
+      listUnscheduled: async () => {
+        throw new Error("unused");
+      },
+      weekRevenue: async () => {
+        throw new Error("unused");
+      },
+      getDailyRevenueTarget: async () => null,
+      setDailyRevenueTarget: async () => null,
+      listQuoteFollowUps: async (businessId) => {
+        assert.equal(businessId, "biz-a");
+        return {
+          waiting: 1,
+          followUps: [draft],
+          links: {
+            queue: "https://app.example/quote-follow-ups",
+            settings: "https://app.example/settings/quote-followup",
+          },
+        };
+      },
+      updateQuoteFollowUpDraft: async () => null,
+      approveQuoteFollowUp: async () => {
+        approvals += 1;
+        return { status: 200, body: { success: true } };
+      },
+    };
+
+    const app = express();
+    app.use(express.json());
+    mountOpsRoutes(app, deps);
+    const { url, close } = await listen(app);
+    try {
+      const listed = await fetch(`${url}/api/ops/quote-follow-ups`, {
+        headers: { "x-test-user": "crew" },
+      });
+      assert.equal(listed.status, 200);
+      const body = await listed.json() as { data: { waiting: number; followUps: { message: string }[] } };
+      assert.equal(body.data.waiting, 1);
+      assert.match(body.data.followUps[0]?.message ?? "", /just checking where you're at/);
+
+      for (const payload of [{}, { confirm: false }, { confirm: "true" }]) {
+        const refused = await fetch(`${url}/api/ops/quote-follow-ups/fu-1/approve`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-test-user": "admin" },
+          body: JSON.stringify(payload),
+        });
+        assert.equal(refused.status, 400);
+      }
+      assert.equal(approvals, 0);
+
+      const approved = await fetch(`${url}/api/ops/quote-follow-ups/fu-1/approve`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-user": "admin" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      assert.equal(approved.status, 200);
+      assert.equal(approvals, 1);
     } finally {
       await close();
     }

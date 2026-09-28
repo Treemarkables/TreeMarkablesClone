@@ -2,6 +2,7 @@ import { notificationService } from './notificationService';
 import { storage } from '../storage';
 import { workflowAutomationService } from './workflowAutomation';
 import { runAllReminderChecks } from './reminderChecker';
+import { runQuoteFollowUpDetection } from '../quoteFollowUpService';
 import { runLaneAutomationChecks, runLaneInvoiceChecks, runLaneStatusChangeAutomations, runLaneEntryForEvent, runLaneExitForEvent, onLaneJobEvent } from './laneAutomationService';
 import type { Job, Customer, InsertJob } from '@shared/schema';
 
@@ -276,6 +277,12 @@ export class AutomatedTriggers {
       runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Reminder check error:', err));
     }, 60 * 60 * 1000); // 1 hour
 
+    // Quote follow-ups: draft only. Job name quoteFollowUpDetection.
+    // Idempotent per quote and nudge step. Nothing is sent from this job.
+    setInterval(() => {
+      runQuoteFollowUpDetection().catch(err => console.error('[quoteFollowUpDetection] error:', err));
+    }, 60 * 60 * 1000);
+
     // Run lane checks every hour: settle late-payment entry/exit FIRST (so a paid job leaves the
     // chase lane before reminders run), then the "days in lane" automations.
     setInterval(() => {
@@ -287,6 +294,7 @@ export class AutomatedTriggers {
     // Run once shortly after startup (90 second delay to let DB connect)
     setTimeout(() => {
       runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Initial reminder check error:', err));
+      runQuoteFollowUpDetection().catch(err => console.error('[quoteFollowUpDetection] initial error:', err));
       runLaneInvoiceChecks()
         .catch(err => console.error('[AutomatedTriggers] Initial lane invoice check error:', err))
         .finally(() => runLaneAutomationChecks().catch(err => console.error('[AutomatedTriggers] Initial lane automation check error:', err)));
@@ -302,7 +310,8 @@ export class AutomatedTriggers {
       backgroundTasks: {
         overdueJobChecks: 'Running (hourly)',
         followUpReminders: 'Running (every 4 hours)',
-        proactiveReminders: 'Running (hourly)'
+        proactiveReminders: 'Running (hourly)',
+        quoteFollowUpDetection: 'Running (hourly)'
       },
       lastChecked: new Date().toISOString()
     };

@@ -19,6 +19,9 @@ Settings → Preferences still saves through admin-only `PUT /api/business-setti
 | `getWeekRevenueVsTarget` | GET | `/api/ops/week-revenue?week=YYYY-MM-DD` |
 | `getDailyRevenueTarget` | GET | `/api/ops/daily-revenue-target` |
 | `setDailyRevenueTarget` | PUT | `/api/ops/daily-revenue-target` |
+| `listQuoteFollowUps` | GET | `/api/ops/quote-follow-ups` |
+| `updateQuoteFollowUpDraft` | PATCH | `/api/ops/quote-follow-ups/:id` |
+| `approveQuoteFollowUp` | POST | `/api/ops/quote-follow-ups/:id/approve` |
 
 `week` is any NZ calendar day. It snaps to the Monday–Sunday week (same week as Staff Schedule). Omit it for the week that contains today in Pacific/Auckland. Each day's `scheduledRevenueExGst` matches the Despatch day bar (`jobRevenue`: line items ex GST, then subtotal, then GST-inclusive totals ÷ 1.15, split across booked NZ days, quotes and leads excluded). `gapToTarget` is `dailyRevenueTarget - scheduledRevenueExGst` (positive means short). Both are `null` when no target is stored.
 
@@ -30,6 +33,20 @@ Settings → Preferences still saves through admin-only `PUT /api/business-setti
 - Despatch (default filter is Unscheduled): `{APP_URL}/dispatch`
 - Daily target: `{APP_URL}/settings/preferences`
 
+## Quote follow-ups
+
+`listQuoteFollowUps` returns waiting and snoozed drafts for the signed-in business, including the message, subject, channel, and links. It does not send anything.
+
+`updateQuoteFollowUpDraft` edits `message`, `subject`, or `channel` on a draft or snoozed row. It does not send.
+
+`approveQuoteFollowUp` sends only when the JSON body is `{ "confirm": true }`. Any other body, including `{ "confirm": "true" }` or `{ "confirm": false }`, returns 400 and does not call the sender. The same flag is required on the in-app `POST /api/quote-follow-ups/:id/approve`. A send is written to the job diary as a normal email or SMS entry.
+
+Links:
+
+- Queue: `{APP_URL}/quote-follow-ups`
+- One draft: `{APP_URL}/quote-follow-ups?id={followUpId}`
+- Settings: `{APP_URL}/settings/quote-followup`
+
 ## Not in this phase
 
-Book, reschedule, fill-day bundling, SMS, quote chase, gear conflicts.
+Book, reschedule, fill-day bundling, gear conflicts.

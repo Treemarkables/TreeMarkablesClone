@@ -1,4 +1,5 @@
 import { useJobFilters, useLaneFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
+import { QuoteFollowUpBanner } from "@/components/QuoteFollowUpBanner";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -2761,6 +2762,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <QuoteFollowUpBanner testId="dispatch-summary-quote-followups" />
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -2890,6 +2892,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   return (
     <>
       <div className="flex flex-col flex-1 min-h-0">
+        <QuoteFollowUpBanner testId="dispatch-quote-followups" />
         {/* Desktop Layout: Split Screen with Resizable Panels */}
         <div
           className="hidden lg:flex flex-1 min-h-0 p-2 overflow-hidden"
