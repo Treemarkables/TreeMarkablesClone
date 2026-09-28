@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Public watch-video boot overlay — branch `cursor/watch-video-boot-overlay-f615` — 2026-09-28 — title-less job-card /watch links stay on #inflow-boot because main has no text. Detector treats media as painted; public routes mark booted on mount; captions.vtt is public when captions_vtt exists. Do not merge until review.
 - Follow-up customer quote number — branch `cursor/follow-up-short-quote-number-d543` — 2026-09-28 — Follow-ups show the short customer number (`customerFacingQuoteNumber`: job number when `proposal_number` is `PROP-<timestamp>`), not the internal id. Untouched pending drafts are rewritten on boot. Do not merge until review.
 - Android job card diary scroll — branch `cursor/android-diary-scroll-90ba` — 2026-09-27 — embedded Job Diary skips the PullToRefresh overflow trap so Chrome on Android can pan the mobile card body. Desktop keeps the inner scroller. Do not merge until review. [PR #592]
 - URGENT iOS TestFlight white screen (cold open, build 1.0 (42)) — branch `cursor/ios-boot-white-screen-d371` — 2026-09-25 — native boot recovery was cancelling a still loading first navigation at 4s, 10s and 18s and never reset reloadCount, so an opaque WKWebView stayed white. Stall is 18s, immediate retry only after a real navigation failure, count resets on healthy boot and foreground, dark placeholder until the page commits. Do not merge until review. [PR #591]

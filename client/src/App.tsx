@@ -19,8 +19,9 @@ import { WebCallProvider } from "@/contexts/WebCallContext";
 import { WebCallButton } from "@/components/WebCallButton";
 // NOTE: useState/useEffect/useCallback are imported further down (imports are
 // hoisted module-wide, so the hooks below can use them).
-import { lazy, Suspense, startTransition } from "react";
+import { lazy, Suspense, startTransition, type ComponentType } from "react";
 import { isAppBooted, watchUntilRealPagePainted } from "@/lib/nativeBootRecovery";
+import { useMarkAppBooted } from "@/lib/useMarkAppBooted";
 
 // ---------------------------------------------------------------------------
 // Flash-free navigation. Wouter v3 reads the browser location through
@@ -224,6 +225,44 @@ function PageSpinner() {
   if (isAppBooted()) return null;
   return <BootPlaceholder />;
 }
+
+// Public customer and marketing routes mark booted on mount. Their first
+// paint can be a video, image, canvas, PDF-less card, or a spinner with no
+// text inside <main> — the text detector then leaves #inflow-boot up forever.
+// Staff shells are not wrapped: an empty dispatch <main> must stay unbooted.
+function withPublicBoot<P extends object>(Page: ComponentType<P>) {
+  function PublicBootedPage(props: P) {
+    useMarkAppBooted();
+    return <Page {...props} />;
+  }
+  return PublicBootedPage;
+}
+
+const PublicLogin = withPublicBoot(Login);
+const PublicSignup = withPublicBoot(Signup);
+const PublicHome = withPublicBoot(Home);
+const PublicTreeRemoval = withPublicBoot(TreeRemoval);
+const PublicTreePruning = withPublicBoot(TreePruning);
+const PublicStumpGrinding = withPublicBoot(StumpGrinding);
+const PublicHedgeTrimming = withPublicBoot(HedgeTrimming);
+const PublicMulch = withPublicBoot(Mulch);
+const PublicMulchThanks = withPublicBoot(MulchThanks);
+const PublicBlog = withPublicBoot(Blog);
+const PublicBlogPost = withPublicBoot(BlogPost);
+const PublicSummerOffer = withPublicBoot(SummerOffer);
+const PublicContact = withPublicBoot(Contact);
+const PublicPrivacyPolicy = withPublicBoot(PrivacyPolicy);
+const PublicCustomerPortal = withPublicBoot(CustomerPortal);
+const PublicProposalAccept = withPublicBoot(ProposalAccept);
+const PublicProposalViewer = withPublicBoot(ProposalViewer);
+const PublicQuoteViewer = withPublicBoot(QuoteViewer);
+const PublicInvoiceView = withPublicBoot(InvoiceView);
+const PublicInvoiceViewer = withPublicBoot(InvoiceViewer);
+const PublicPaymentComplete = withPublicBoot(PaymentComplete);
+const PublicReviewPage = withPublicBoot(PublicReview);
+const PublicTimelinePage = withPublicBoot(PublicTimeline);
+const PublicWatchVideo = withPublicBoot(WatchVideo);
+const PublicNotFound = withPublicBoot(NotFound);
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NotificationBell } from "@/components/NotificationBell";
 import { InstallPrompt } from "@/components/InstallPrompt";
@@ -1212,7 +1251,7 @@ function Router() {
     if (isNative) {
       return <Redirect to="/login" />;
     }
-    return <Home />;
+    return <PublicHome />;
   }
 
   // Native-app guard: if the iOS Capacitor user somehow lands on a marketing/public route
@@ -1243,20 +1282,20 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/login" component={Login}/>
-      <Route path="/signup" component={Signup}/>
-      <Route path="/home" component={Home}/>
-      <Route path="/tree-removal" component={TreeRemoval}/>
-      <Route path="/tree-pruning" component={TreePruning}/>
-      <Route path="/stump-grinding" component={StumpGrinding}/>
-      <Route path="/hedge-trimming" component={HedgeTrimming}/>
-      <Route path="/mulch" component={Mulch}/>
-      <Route path="/mulch/thanks" component={MulchThanks}/>
-      <Route path="/blog" component={Blog}/>
-      <Route path="/blog/:slug" component={BlogPost}/>
-      <Route path="/summer-offer" component={SummerOffer}/>
-      <Route path="/contact" component={Contact}/>
-      <Route path="/privacy-policy" component={PrivacyPolicy}/>
+      <Route path="/login" component={PublicLogin}/>
+      <Route path="/signup" component={PublicSignup}/>
+      <Route path="/home" component={PublicHome}/>
+      <Route path="/tree-removal" component={PublicTreeRemoval}/>
+      <Route path="/tree-pruning" component={PublicTreePruning}/>
+      <Route path="/stump-grinding" component={PublicStumpGrinding}/>
+      <Route path="/hedge-trimming" component={PublicHedgeTrimming}/>
+      <Route path="/mulch" component={PublicMulch}/>
+      <Route path="/mulch/thanks" component={PublicMulchThanks}/>
+      <Route path="/blog" component={PublicBlog}/>
+      <Route path="/blog/:slug" component={PublicBlogPost}/>
+      <Route path="/summer-offer" component={PublicSummerOffer}/>
+      <Route path="/contact" component={PublicContact}/>
+      <Route path="/privacy-policy" component={PublicPrivacyPolicy}/>
       
       {/* Redirect /dashboard to /dispatch for convenience (default landing page) */}
       <Route path="/dashboard">
@@ -1352,16 +1391,16 @@ function Router() {
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
-      <Route path="/customer-portal" component={CustomerPortal}/>
-      <Route path="/proposal/:proposalId/accept" component={ProposalAccept}/>
-      <Route path="/proposal/:proposalId" component={ProposalViewer}/>
-      <Route path="/quote/:quoteId" component={QuoteViewer}/>
-      <Route path="/invoice/:invoiceId/view" component={InvoiceView}/>
-      <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
-      <Route path="/payment-complete" component={PaymentComplete}/>
-      <Route path="/review/:token" component={PublicReview}/>
-      <Route path="/timeline/:token" component={PublicTimeline}/>
-      <Route path="/watch/:videoId" component={WatchVideo}/>
+      <Route path="/customer-portal" component={PublicCustomerPortal}/>
+      <Route path="/proposal/:proposalId/accept" component={PublicProposalAccept}/>
+      <Route path="/proposal/:proposalId" component={PublicProposalViewer}/>
+      <Route path="/quote/:quoteId" component={PublicQuoteViewer}/>
+      <Route path="/invoice/:invoiceId/view" component={PublicInvoiceView}/>
+      <Route path="/invoice/:invoiceId" component={PublicInvoiceViewer}/>
+      <Route path="/payment-complete" component={PublicPaymentComplete}/>
+      <Route path="/review/:token" component={PublicReviewPage}/>
+      <Route path="/timeline/:token" component={PublicTimelinePage}/>
+      <Route path="/watch/:videoId" component={PublicWatchVideo}/>
       
       {/* Dashboard pages with sidebar - Admin only */}
       <Route path="/opportunities">
@@ -1926,7 +1965,7 @@ function Router() {
         </SidebarLayout>
       </Route>
       {/* Fallback to 404 */}
-      <Route component={NotFound} />
+      <Route component={PublicNotFound} />
     </Switch>
   );
 }

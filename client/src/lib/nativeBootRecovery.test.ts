@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
 import {
   AUTH_ME_TIMEOUT_MS,
@@ -11,9 +11,11 @@ import {
   classifyBootSurface,
   classifyWebViewHref,
   cssTokenPresent,
+  elementHasRenderedContent,
   isAppOriginHost,
   nextBootReloadState,
   readBootReloadAttempts,
+  shellSignalsRealPage,
   shellTextSignalsRealPage,
   shouldForceLoadWhilePending,
   shouldRecoverFrozenResume,
@@ -384,6 +386,227 @@ describe("native boot recovery — painted page vs empty shell", () => {
         isLoading: false,
       }),
       true,
+    );
+  });
+});
+
+type FakeStyle = {
+  display?: string;
+  visibility?: string;
+  opacity?: string;
+  backgroundColor?: string;
+  backgroundImage?: string;
+  borderTopWidth?: string;
+  borderRightWidth?: string;
+  borderBottomWidth?: string;
+  borderLeftWidth?: string;
+};
+
+class FakeEl {
+  tagName: string;
+  children: FakeEl[] = [];
+  parentElement: FakeEl | null = null;
+  text = "";
+  width = 0;
+  height = 0;
+  nodeType = 1;
+  attrs: Record<string, string> = {};
+  style: FakeStyle = {};
+  constructor(tag: string) {
+    this.tagName = tag.toUpperCase();
+  }
+  append(child: FakeEl): FakeEl {
+    child.parentElement = this;
+    this.children.push(child);
+    return child;
+  }
+  get innerText(): string {
+    return [this.text, ...this.children.map((child) => child.innerText)].filter(Boolean).join(" ");
+  }
+  get textContent(): string {
+    return this.innerText;
+  }
+  getAttribute(name: string): string | null {
+    return Object.prototype.hasOwnProperty.call(this.attrs, name) ? this.attrs[name] : null;
+  }
+  getBoundingClientRect() {
+    return {
+      width: this.width,
+      height: this.height,
+      top: 0,
+      left: 0,
+      right: this.width,
+      bottom: this.height,
+      x: 0,
+      y: 0,
+      toJSON() {
+        return {};
+      },
+    };
+  }
+  querySelector(sel: string): FakeEl | null {
+    return this.querySelectorAll(sel)[0] ?? null;
+  }
+  querySelectorAll(sel: string): FakeEl[] {
+    const tags = sel.split(",").map((part) => part.trim().toUpperCase());
+    const all = tags.includes("*");
+    const out: FakeEl[] = [];
+    const walk = (el: FakeEl) => {
+      for (const child of el.children) {
+        if (all || tags.includes(child.tagName)) out.push(child);
+        walk(child);
+      }
+    };
+    walk(this);
+    return out;
+  }
+}
+
+function asEl(el: FakeEl): Element {
+  return el as unknown as Element;
+}
+
+describe("native boot recovery — media counts as a painted page", () => {
+  before(() => {
+    const g = globalThis as typeof globalThis & { window: Window };
+    g.window = {
+      getComputedStyle(el: Element) {
+        const style = (el as unknown as FakeEl).style ?? {};
+        return {
+          display: style.display ?? "block",
+          visibility: style.visibility ?? "visible",
+          opacity: style.opacity ?? "1",
+          backgroundColor: style.backgroundColor ?? "rgba(0, 0, 0, 0)",
+          backgroundImage: style.backgroundImage ?? "none",
+          borderTopWidth: style.borderTopWidth ?? "0px",
+          borderRightWidth: style.borderRightWidth ?? "0px",
+          borderBottomWidth: style.borderBottomWidth ?? "0px",
+          borderLeftWidth: style.borderLeftWidth ?? "0px",
+        } as CSSStyleDeclaration;
+      },
+    } as unknown as Window;
+  });
+
+  it("treats a text main as ready and Opening Inflow as not ready", () => {
+    assert.equal(
+      shellSignalsRealPage({ rootText: "header chrome", mainText: "Daily target" }),
+      true,
+    );
+    assert.equal(
+      shellSignalsRealPage({
+        rootText: "Opening Inflow",
+        mainText: "Opening Inflow",
+        mainHasRenderedContent: true,
+      }),
+      false,
+    );
+    assert.equal(
+      shellSignalsRealPage({ rootText: "Opening Inflow", mainText: null }),
+      false,
+    );
+  });
+
+  it("treats a media-only main as ready and an empty main as not ready", () => {
+    assert.equal(
+      shellSignalsRealPage({
+        rootText: "Powered by Treemarkables",
+        mainText: "",
+        mainHasRenderedContent: true,
+      }),
+      true,
+    );
+    assert.equal(
+      shellSignalsRealPage({
+        rootText: "Dispatch header",
+        mainText: "",
+        mainHasRenderedContent: false,
+      }),
+      false,
+    );
+    const videoMain = new FakeEl("main");
+    const player = videoMain.append(new FakeEl("video"));
+    player.width = 1080;
+    player.height = 720;
+    assert.equal(elementHasRenderedContent(asEl(videoMain)), true);
+    assert.equal(
+      shellSignalsRealPage({
+        rootText: "",
+        mainText: videoMain.innerText,
+        mainHasRenderedContent: elementHasRenderedContent(asEl(videoMain)),
+      }),
+      true,
+    );
+
+    const empty = new FakeEl("main");
+    const stretch = empty.append(new FakeEl("div"));
+    stretch.width = 390;
+    stretch.height = 800;
+    assert.equal(elementHasRenderedContent(asEl(empty)), false);
+  });
+
+  it("counts a painted spinner and ignores boot chrome and the boot-shell colour", () => {
+    const main = new FakeEl("main");
+    const spinner = main.append(new FakeEl("div"));
+    spinner.width = 32;
+    spinner.height = 32;
+    spinner.style.borderTopWidth = "4px";
+    spinner.style.borderRightWidth = "4px";
+    spinner.style.borderBottomWidth = "4px";
+    spinner.style.borderLeftWidth = "4px";
+    assert.equal(elementHasRenderedContent(asEl(main)), true);
+
+    const shell = new FakeEl("main");
+    const chrome = shell.append(new FakeEl("div"));
+    chrome.attrs["data-boot-chrome"] = "";
+    chrome.style.opacity = "0";
+    const icon = chrome.append(new FakeEl("svg"));
+    icon.width = 16;
+    icon.height = 16;
+    const circle = chrome.append(new FakeEl("div"));
+    circle.width = 36;
+    circle.height = 36;
+    circle.style.backgroundColor = "rgb(255, 255, 255)";
+    circle.style.borderTopWidth = "1px";
+    assert.equal(elementHasRenderedContent(asEl(shell)), false);
+
+    const placeholder = new FakeEl("main");
+    placeholder.text = "Opening Inflow";
+    const dark = placeholder.append(new FakeEl("div"));
+    dark.width = 400;
+    dark.height = 800;
+    dark.style.backgroundColor = "rgb(26, 26, 26)";
+    assert.equal(elementHasRenderedContent(asEl(placeholder)), false);
+    assert.equal(
+      shellSignalsRealPage({
+        rootText: placeholder.innerText,
+        mainText: placeholder.innerText,
+        mainHasRenderedContent: elementHasRenderedContent(asEl(placeholder)),
+      }),
+      false,
+    );
+  });
+
+  it("does not classify a booted media-only main as an empty shell", () => {
+    assert.equal(
+      classifyBootSurface({
+        booted: true,
+        bootShellVisible: false,
+        heartbeatAgeMs: 100,
+        rootText: "header",
+        mainText: "",
+        mainHasRenderedContent: true,
+      }),
+      "booted",
+    );
+    assert.equal(
+      classifyBootSurface({
+        booted: true,
+        bootShellVisible: false,
+        heartbeatAgeMs: 100,
+        rootText: "Dispatch header",
+        mainText: "",
+      }),
+      "empty",
     );
   });
 });

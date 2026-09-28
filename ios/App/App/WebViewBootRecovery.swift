@@ -62,6 +62,67 @@ final class WebViewBootRecovery {
       function placeholder(text) {
         return text === 'Opening Inflow' || text.indexOf('Opening Inflow ') === 0;
       }
+      // Mirrors elementHasRenderedContent / shellSignalsRealPage. A title-less
+      // watch page is a <video> with empty main text. An empty dispatch main
+      // (layout wrappers + the hidden pull-to-refresh icon) is not painted.
+      function bootChrome(node) {
+        var cur = node;
+        while (cur && cur.getAttribute) {
+          if (cur.getAttribute('data-boot-chrome') != null) return true;
+          cur = cur.parentElement;
+        }
+        return false;
+      }
+      function hidden(node) {
+        var cur = node;
+        while (cur && cur.nodeType === 1) {
+          var s = window.getComputedStyle(cur);
+          if (s.display === 'none' || s.visibility === 'hidden') return true;
+          var o = parseFloat(s.opacity || '1');
+          if (!isNaN(o) && o < 0.05) return true;
+          cur = cur.parentElement;
+        }
+        return false;
+      }
+      function paints(node) {
+        var s = window.getComputedStyle(node);
+        var bg = (s.backgroundColor || '').replace(/\\s+/g, '').toLowerCase();
+        if (bg && bg !== 'transparent' && bg !== 'rgba(0,0,0,0)' && bg !== 'rgb(26,26,26)') return true;
+        if (s.backgroundImage && s.backgroundImage !== 'none') return true;
+        var sides = [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth];
+        for (var i = 0; i < sides.length; i++) {
+          if (parseFloat(sides[i] || '0') >= 1) return true;
+        }
+        return false;
+      }
+      function rendered(el) {
+        if (!el || !el.querySelectorAll) return false;
+        var media = el.querySelectorAll('video, img, canvas, iframe, picture, audio, object, embed');
+        for (var i = 0; i < media.length; i++) {
+          var m = media[i];
+          if (bootChrome(m) || hidden(m)) continue;
+          var tag = (m.tagName || '').toUpperCase();
+          if (tag === 'VIDEO' || tag === 'CANVAS' || tag === 'IFRAME' || tag === 'AUDIO' || tag === 'OBJECT' || tag === 'EMBED') return true;
+          var mb = m.getBoundingClientRect();
+          if (mb.width >= 2 && mb.height >= 2) return true;
+        }
+        var svgs = el.querySelectorAll('svg');
+        for (var j = 0; j < svgs.length; j++) {
+          if (bootChrome(svgs[j]) || hidden(svgs[j])) continue;
+          var sb = svgs[j].getBoundingClientRect();
+          if (sb.width >= 48 && sb.height >= 48) return true;
+        }
+        var nodes = el.querySelectorAll('*');
+        for (var k = 0; k < nodes.length; k++) {
+          var node = nodes[k];
+          if (bootChrome(node) || hidden(node)) continue;
+          if (placeholder(norm(node))) continue;
+          var r = node.getBoundingClientRect();
+          if (r.width < 2 || r.height < 2) continue;
+          if (paints(node)) return true;
+        }
+        return false;
+      }
       var boot = document.getElementById('inflow-boot');
       var bootShowing = !!(boot && boot.getAttribute('data-booted') !== '1');
       var root = document.getElementById('root');
@@ -69,8 +130,8 @@ final class WebViewBootRecovery {
       var rootText = norm(root);
       var mainText = main ? norm(main) : null;
       var visible = mainText !== null
-        ? (mainText.length > 0 && !placeholder(mainText))
-        : (rootText.length > 0 && !placeholder(rootText));
+        ? (placeholder(mainText) ? false : (mainText.length > 0 || rendered(main)))
+        : (placeholder(rootText) ? false : (rootText.length > 0 || rendered(root)));
       if (window.__INFLOW_BOOTED === true) {
         return (visible || bootShowing) ? 'booted' : 'empty';
       }
