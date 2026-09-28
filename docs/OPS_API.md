@@ -38,7 +38,7 @@ Settings → Preferences still saves through admin-only `PUT /api/business-setti
 
 ## Quote follow-ups
 
-`listQuoteFollowUps` returns waiting and snoozed drafts for the signed-in business, including the message, subject, channel, and links. It does not send anything.
+`listQuoteFollowUps` returns waiting and snoozed drafts for the signed-in business, including the message, subject, channel, and links. It does not send anything. A row can be a `quotes` table quote, a proposal (the document customers are emailed or texted), or a job whose quote was presented on site. One open item per job. A re-quote preview is included when the quote has expired. Approving is what creates the new draft. Detection does not.
 
 `updateQuoteFollowUpDraft` edits `message`, `subject`, or `channel` on a draft or snoozed row. It does not send.
 

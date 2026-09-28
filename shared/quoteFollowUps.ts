@@ -17,7 +17,8 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type FollowUpKind = "check_in" | "requote";
 export type FollowUpChannel = "sms" | "email";
-export type FollowUpStopReason = "accepted" | "declined" | "customer_reply";
+export type FollowUpSourceType = "quote" | "proposal" | "job";
+export type FollowUpStopReason = "accepted" | "declined" | "customer_reply" | "superseded";
 
 export interface QuoteSignal {
   id: string;
@@ -39,6 +40,13 @@ export interface QuoteSignal {
   customerName?: string | null;
   phone?: string | null;
   email?: string | null;
+  /** Where this quote lives. Defaults to the quotes table. */
+  sourceType?: FollowUpSourceType;
+  /** Job status, used to stop when the job has moved on or been lost. */
+  jobStatus?: string | null;
+  /** Set when a newer document on the same job replaces this one. */
+  forceStop?: FollowUpStopReason | null;
+  title?: string | null;
 }
 
 export interface DiaryReplySignal {
@@ -102,6 +110,7 @@ export interface PlannedSkip {
   customerId: string | null;
   nudgeStep: number;
   kind: "check_in";
+  sourceType: FollowUpSourceType;
 }
 
 export interface PlannedCancel {
@@ -139,6 +148,10 @@ export interface RequoteDraft {
 
 const OPEN_STATUSES = new Set(["sent", "viewed", "expired"]);
 const BLOCKING_STATUSES = new Set(["draft", "snoozed"]);
+const ACCEPTED_DOC = new Set(["accepted", "accepted_pending_deposit"]);
+const DECLINED_DOC = new Set(["rejected", "declined"]);
+const WON_JOB = new Set(["work_order", "work order", "scheduled", "completed", "invoiced", "mulch"]);
+const LOST_JOB = new Set(["unsuccessful", "cancelled", "canceled", "archived", "lost"]);
 
 function timeOf(value: string | Date | null | undefined): number | null {
   if (value == null || value === "") return null;
@@ -350,9 +363,13 @@ function hasOpenFollowUp(existing: ExistingFollowUp[], businessId: string, quote
 }
 
 function stopReason(quote: QuoteSignal, replies: DiaryReplySignal[]): FollowUpStopReason | null {
+  if (quote.forceStop) return quote.forceStop;
   const status = quote.status.trim().toLowerCase();
-  if (status === "accepted") return "accepted";
-  if (status === "rejected") return "declined";
+  if (ACCEPTED_DOC.has(status)) return "accepted";
+  if (DECLINED_DOC.has(status)) return "declined";
+  const jobStatus = (quote.jobStatus ?? "").trim().toLowerCase();
+  if (WON_JOB.has(jobStatus)) return "accepted";
+  if (LOST_JOB.has(jobStatus)) return "declined";
   if (quote.responseDate) return "declined";
   const sent = timeOf(quote.sentDate);
   if (quote.jobId && replies.some((reply) => reply.jobId === quote.jobId && isCustomerDiaryReply(reply, sent))) {
@@ -455,6 +472,7 @@ export function planQuoteFollowUps(input: PlanQuoteFollowUpsInput): FollowUpPlan
           customerId: quote.customerId,
           nudgeStep: step,
           kind: "check_in",
+          sourceType: quote.sourceType ?? "quote",
         });
         continue;
       }
@@ -476,6 +494,125 @@ export function planQuoteFollowUps(input: PlanQuoteFollowUpsInput): FollowUpPlan
   }
 
   return plans;
+}
+
+const TERMINAL_DOC = new Set(["accepted", "accepted_pending_deposit", "rejected", "declined"]);
+
+/**
+ * A proposal counts as sent when email stamped it, or when an outbound diary
+ * SMS/email recorded the send (older texts left the row as draft).
+ * Returns null when it was never sent and is not already accepted or declined.
+ */
+export function proposalFollowUpStatus(input: {
+  status: string;
+  sentDate?: string | Date | null;
+  viewedDate?: string | Date | null;
+  updatedAt?: string | Date | null;
+  diarySentAt?: string | Date | null;
+}): { status: string; sentDate: string | Date | null } | null {
+  const status = input.status.trim().toLowerCase();
+  const terminal = TERMINAL_DOC.has(status);
+  let nextStatus = input.status;
+  let sentDate = input.sentDate ?? input.diarySentAt ?? null;
+  if (!terminal && !input.sentDate && input.diarySentAt) nextStatus = "sent";
+  if (!sentDate && (nextStatus === "sent" || nextStatus === "viewed")) {
+    sentDate = input.viewedDate ?? input.updatedAt ?? null;
+  }
+  if (!sentDate && !terminal) return null;
+  return { status: nextStatus, sentDate };
+}
+
+function sourceRank(sourceType: FollowUpSourceType | undefined): number {
+  if (sourceType === "proposal") return 3;
+  if (sourceType === "job") return 1;
+  return 2;
+}
+
+/**
+ * One follow-up per job. A sent proposal beats a quotes-table row, which beats
+ * a job that only has quote_presented_date. A won, lost, or accepted job
+ * stops every document on that job.
+ */
+export function collapseFollowUpSources(signals: QuoteSignal[]): QuoteSignal[] {
+  const loose: QuoteSignal[] = [];
+  const byJob = new Map<string, QuoteSignal[]>();
+  for (const signal of signals) {
+    if (!signal.jobId) {
+      loose.push(signal);
+      continue;
+    }
+    const list = byJob.get(signal.jobId) ?? [];
+    list.push(signal);
+    byJob.set(signal.jobId, list);
+  }
+  const out = [...loose];
+  for (const group of Array.from(byJob.values())) {
+    const jobStatus = (group.find((signal) => signal.jobStatus)?.jobStatus ?? "").trim().toLowerCase();
+    const won = WON_JOB.has(jobStatus);
+    const lost = LOST_JOB.has(jobStatus);
+    const accepted = group.some((signal) => ACCEPTED_DOC.has(signal.status.trim().toLowerCase()));
+    if (won || lost || accepted) {
+      const reason: FollowUpStopReason = lost && !won && !accepted ? "declined" : "accepted";
+      for (const signal of group) out.push({ ...signal, forceStop: reason });
+      continue;
+    }
+    const open = group.filter((signal) => {
+      const status = signal.status.trim().toLowerCase();
+      return !DECLINED_DOC.has(status) && !signal.responseDate;
+    });
+    for (const signal of group) {
+      if (!open.includes(signal)) out.push({ ...signal, forceStop: "declined" });
+    }
+    if (open.length === 0) continue;
+    const winner = [...open].sort((a, b) => {
+      const rank = sourceRank(b.sourceType) - sourceRank(a.sourceType);
+      if (rank !== 0) return rank;
+      return (timeOf(b.sentDate) ?? 0) - (timeOf(a.sentDate) ?? 0);
+    })[0]!;
+    out.push(winner);
+    for (const signal of open) {
+      if (signal.id !== winner.id) out.push({ ...signal, forceStop: "superseded" });
+    }
+  }
+  return out;
+}
+
+export interface RequotePreviewLine {
+  description: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+}
+
+/** Today's prices for a re-quote. Does not create a quote or use a number. */
+export function previewRequote(
+  lineItems: unknown,
+  rates: RateCardItem[],
+  fallbackAmount?: string | number | null,
+): { lines: RequotePreviewLine[]; subtotal: number } {
+  const priced = repriceLineItems(lineItems, rates);
+  if (priced.lineItems.length === 0) {
+    const amount = Number(fallbackAmount);
+    if (!Number.isFinite(amount) || amount <= 0) return { lines: [], subtotal: 0 };
+    const rounded = roundMoney(amount);
+    return {
+      lines: [{ description: "Quote", quantity: 1, rate: rounded, amount: rounded }],
+      subtotal: rounded,
+    };
+  }
+  return {
+    lines: priced.lineItems.map((item) => {
+      const quantity = Number(item.quantity);
+      const qty = Number.isFinite(quantity) ? quantity : 1;
+      const rate = roundMoney(Number(item.unitPrice) || 0);
+      const amount = roundMoney(Number(item.total) || qty * rate);
+      const description = typeof item.description === "string" && item.description.trim()
+        ? item.description.trim()
+        : "Tree service";
+      return { description, quantity: qty, rate, amount };
+    }),
+    subtotal: priced.amount,
+  };
 }
 
 export function isWaitingFollowUp(

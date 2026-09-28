@@ -66,6 +66,13 @@ describe("completed jobs not billed", () => {
     assert.deepEqual(plan({ status: "work_order" }), []);
   });
 
+  it("treats a job Xero id with no invoice row as already billed", () => {
+    assert.equal(billingGap(job({ invoices: [], xeroInvoiceId: "xero-1", xeroStatus: "sent" })), "billed");
+    assert.equal(billingGap(job({ invoices: [], xeroInvoiceId: "xero-1", xeroStatus: null })), "billed");
+    assert.equal(billingGap(job({ invoices: [], xeroInvoiceId: "xero-1", xeroStatus: "error" })), "create_invoice");
+    assert.deepEqual(plan({ invoices: [], xeroInvoiceId: "xero-1", xeroStatus: "sent" }), []);
+  });
+
   it("ignores a completed job that is already in Xero", () => {
     const sent = { id: "inv-1", status: "sent", sentDate: new Date(NOW - DAY).toISOString(), xeroInvoiceId: "xero-1" };
     assert.equal(billingGap(job({ invoices: [sent], xeroStatus: "sent" })), "billed");

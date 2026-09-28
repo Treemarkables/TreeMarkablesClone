@@ -2,14 +2,16 @@
  * Quote follow-up workflow.
  *
  * quoteFollowUpDetection runs hourly (RUN_CRONS, both app instances). It only
- * inserts drafts. Approve & Send is the only path that talks to a customer,
- * and it refuses unless confirm is the boolean true.
+ * inserts follow-up drafts. It reads proposals (the documents customers are
+ * emailed or texted), jobs with quote_presented_date, and the quotes table.
+ * Approve & Send is the only path that talks to a customer or creates a
+ * re-quote, and it refuses unless confirm is the boolean true.
  *
  * Reads and writes go through the owner connection filtered by business id.
  * Callers wrap storage helpers in runWithBusiness so quote numbers, diary
  * rows, and notifications stamp the same tenant.
  */
-import { and, asc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, or } from "drizzle-orm";
 import { ownerDb } from "./db";
 import { storage } from "./storage";
 import { runWithBusiness, currentBusinessId } from "./tenancy/tenantStore";
@@ -25,17 +27,21 @@ import { jobCardPath, jobsNotBilledQueuePath } from "@shared/jobsNotBilled";
 import { commitApprovedSend } from "@shared/quoteFollowUpApproval";
 import {
   buildRequoteDraft,
+  collapseFollowUpSources,
   followUpQueuePath,
   isWaitingFollowUp,
   parseNudgeDays,
   planQuoteFollowUps,
+  previewRequote,
+  proposalFollowUpStatus,
   SENT_LOOKBACK_DAYS,
   withNewQuoteNumber,
   type DiaryReplySignal,
   type FollowUpChannel,
-  type PlannedCreate,
+  type FollowUpSourceType,
   type QuoteSignal,
   type RateCardItem,
+  type RequotePreviewLine,
 } from "@shared/quoteFollowUps";
 import * as schema from "@shared/schema";
 
@@ -60,6 +66,8 @@ export interface QuoteFollowUpView {
   recipientEmail: string | null;
   requoteId: string | null;
   requoteNumber: string | null;
+  sourceType: FollowUpSourceType;
+  requotePreview: { lines: RequotePreviewLine[]; subtotal: number } | null;
   snoozeUntil: string | null;
   daysQuiet: number | null;
   links: {
@@ -125,32 +133,101 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
     .orderBy(asc(schema.quoteFollowUps.createdAt))
     .limit(200);
 
-  const quoteIds = Array.from(new Set(rows.flatMap((row) => [row.quoteId, row.requoteId].filter((id): id is string => !!id))));
-  const quoteRows = quoteIds.length === 0
-    ? []
-    : await ownerDb
-      .select({
-        id: schema.quotes.id,
-        quoteNumber: schema.quotes.quoteNumber,
-        sentDate: schema.quotes.sentDate,
-        updatedAt: schema.quotes.updatedAt,
-      })
-      .from(schema.quotes)
-      .where(and(eq(schema.quotes.businessId, businessId), inArray(schema.quotes.id, quoteIds)));
+  const idsFor = (type: FollowUpSourceType) => rows.filter((row) => (row.sourceType || "quote") === type).map((row) => row.quoteId);
+  const quoteIds = Array.from(new Set([
+    ...idsFor("quote"),
+    ...rows.map((row) => row.requoteId).filter((id): id is string => !!id && rows.some((row) => row.requoteId === id && (row.sourceType || "quote") === "quote")),
+  ]));
+  const proposalIds = Array.from(new Set([
+    ...idsFor("proposal"),
+    ...rows.flatMap((row) => (row.sourceType === "proposal" || row.sourceType === "job") && row.requoteId ? [row.requoteId] : []),
+  ]));
+  const jobOnlyIds = idsFor("job");
+  const quoteRows = quoteIds.length === 0 ? [] : await ownerDb.select({
+    id: schema.quotes.id,
+    quoteNumber: schema.quotes.quoteNumber,
+    sentDate: schema.quotes.sentDate,
+    updatedAt: schema.quotes.updatedAt,
+    amount: schema.quotes.amount,
+    lineItems: schema.quotes.lineItems,
+  }).from(schema.quotes).where(and(eq(schema.quotes.businessId, businessId), inArray(schema.quotes.id, quoteIds)));
+  const proposalRows = proposalIds.length === 0 ? [] : await ownerDb.select({
+    id: schema.proposals.id,
+    proposalNumber: schema.proposals.proposalNumber,
+    sentDate: schema.proposals.sentDate,
+    updatedAt: schema.proposals.updatedAt,
+    subtotal: schema.proposals.subtotal,
+    totalAmount: schema.proposals.totalAmount,
+  }).from(schema.proposals).where(and(eq(schema.proposals.businessId, businessId), inArray(schema.proposals.id, proposalIds)));
+  const jobRows = jobOnlyIds.length === 0 ? [] : await ownerDb.select({
+    id: schema.jobs.id,
+    jobNumber: schema.jobs.jobNumber,
+    quotePresentedDate: schema.jobs.quotePresentedDate,
+    updatedAt: schema.jobs.updatedAt,
+    totalAmount: schema.jobs.totalAmount,
+    lineItems: schema.jobs.lineItems,
+  }).from(schema.jobs).where(and(eq(schema.jobs.businessId, businessId), inArray(schema.jobs.id, jobOnlyIds)));
+  const proposalLineRows = proposalIds.length === 0 ? [] : await ownerDb.select({
+    proposalId: schema.proposalLineItems.proposalId,
+    description: schema.proposalLineItems.description,
+    quantity: schema.proposalLineItems.quantity,
+    unitPrice: schema.proposalLineItems.unitPrice,
+    totalPrice: schema.proposalLineItems.totalPrice,
+    sourceId: schema.proposalLineItems.sourceId,
+    selected: schema.proposalLineItems.selected,
+  }).from(schema.proposalLineItems).where(and(
+    eq(schema.proposalLineItems.businessId, businessId),
+    inArray(schema.proposalLineItems.proposalId, proposalIds),
+  ));
   const quotesById = new Map(quoteRows.map((row) => [row.id, row]));
+  const proposalsById = new Map(proposalRows.map((row) => [row.id, row]));
+  const jobsById = new Map(jobRows.map((row) => [row.id, row]));
+  const linesByProposal = new Map<string, typeof proposalLineRows>();
+  for (const line of proposalLineRows) {
+    const list = linesByProposal.get(line.proposalId) ?? [];
+    list.push(line);
+    linesByProposal.set(line.proposalId, list);
+  }
+  const needsPreview = rows.some((row) => row.kind === "requote" && !row.requoteId);
+  const rates = needsPreview ? await rateCard(businessId) : [];
   const now = Date.now();
 
   const followUps: QuoteFollowUpView[] = rows.map((row) => {
-    const quote = quotesById.get(row.quoteId);
-    const requote = row.requoteId ? quotesById.get(row.requoteId) : undefined;
-    const sent = quote?.sentDate ? new Date(quote.sentDate).getTime() : null;
-    const updated = quote?.updatedAt ? new Date(quote.updatedAt).getTime() : null;
-    const anchor = sent == null ? null : (updated != null && updated > sent + 60_000 ? updated : sent);
-    const daysQuiet = anchor == null ? null : Math.max(0, Math.floor((now - anchor) / DAY_MS));
+    const sourceType: FollowUpSourceType = row.sourceType === "proposal" || row.sourceType === "job" ? row.sourceType : "quote";
+    const quote = sourceType === "quote" ? quotesById.get(row.quoteId) : undefined;
+    const proposal = sourceType === "proposal" ? proposalsById.get(row.quoteId) : undefined;
+    const job = sourceType === "job" ? jobsById.get(row.quoteId) : undefined;
+    const requoteNumber = row.requoteId
+      ? (sourceType === "quote"
+        ? quotesById.get(row.requoteId)?.quoteNumber
+        : proposalsById.get(row.requoteId)?.proposalNumber) || null
+      : null;
+    const sent = quote?.sentDate ?? proposal?.sentDate ?? job?.quotePresentedDate ?? null;
+    const updated = quote?.updatedAt ?? proposal?.updatedAt ?? job?.updatedAt ?? null;
+    const sentMs = sent ? new Date(sent).getTime() : null;
+    const updatedMs = updated ? new Date(updated).getTime() : null;
+    const anchor = sentMs == null ? null : (updatedMs != null && updatedMs > sentMs + 60_000 ? updatedMs : sentMs);
+    const daysQuiet = anchor == null || !Number.isFinite(anchor) ? null : Math.max(0, Math.floor((now - anchor) / DAY_MS));
+    const lineItems = sourceType === "proposal"
+      ? (linesByProposal.get(row.quoteId) ?? []).filter((line) => line.selected !== false).map((line) => ({
+        description: line.description,
+        quantity: Number(line.quantity),
+        unitPrice: Number(line.unitPrice),
+        total: Number(line.totalPrice),
+        itemCode: line.sourceId,
+      }))
+      : sourceType === "job"
+        ? job?.lineItems
+        : quote?.lineItems;
+    const fallback = sourceType === "proposal"
+      ? (proposal?.subtotal || proposal?.totalAmount)
+      : sourceType === "job"
+        ? job?.totalAmount
+        : quote?.amount;
     return {
       id: row.id,
       quoteId: row.quoteId,
-      quoteNumber: quote?.quoteNumber || "",
+      quoteNumber: quote?.quoteNumber || proposal?.proposalNumber || job?.jobNumber || "",
       jobId: row.jobId,
       customerId: row.customerId,
       customerName: row.recipientName,
@@ -164,7 +241,9 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
       recipientPhone: row.recipientPhone,
       recipientEmail: row.recipientEmail,
       requoteId: row.requoteId,
-      requoteNumber: requote?.quoteNumber || null,
+      requoteNumber,
+      sourceType,
+      requotePreview: row.kind === "requote" && !row.requoteId ? previewRequote(lineItems, rates, fallback) : null,
       snoozeUntil: row.snoozeUntil ? new Date(row.snoozeUntil).toISOString() : null,
       daysQuiet,
       links: {
@@ -273,12 +352,26 @@ export async function dismissQuoteFollowUp(businessId: string, id: string): Prom
   const row = await rowForBusiness(businessId, id);
   if (!row || (row.status !== "draft" && row.status !== "snoozed")) return false;
   await runWithBusiness(businessId, async () => {
-    await ownerDb.update(schema.quotes).set({
-      status: "rejected",
-      rejectionReason: "Marked lost from the follow-up queue",
-      responseDate: new Date(),
-      updatedAt: new Date(),
-    }).where(and(eq(schema.quotes.id, row.quoteId), eq(schema.quotes.businessId, businessId)));
+    if (row.sourceType === "proposal") {
+      await ownerDb.update(schema.proposals).set({
+        status: "rejected",
+        responseDate: new Date(),
+        updatedAt: new Date(),
+      }).where(and(eq(schema.proposals.id, row.quoteId), eq(schema.proposals.businessId, businessId)));
+    } else if (row.sourceType === "job") {
+      await ownerDb.update(schema.jobs).set({
+        status: "unsuccessful",
+        unsuccessfulDate: new Date(),
+        updatedAt: new Date(),
+      }).where(and(eq(schema.jobs.id, row.quoteId), eq(schema.jobs.businessId, businessId)));
+    } else {
+      await ownerDb.update(schema.quotes).set({
+        status: "rejected",
+        rejectionReason: "Marked lost from the follow-up queue",
+        responseDate: new Date(),
+        updatedAt: new Date(),
+      }).where(and(eq(schema.quotes.id, row.quoteId), eq(schema.quotes.businessId, businessId)));
+    }
     await ownerDb.update(schema.quoteFollowUps).set({
       status: "dismissed",
       cancelReason: "dismissed",
@@ -345,12 +438,19 @@ export async function approveQuoteFollowUp(input: {
   }
 
   try {
+    let message = claimed.message;
+    let subject = claimed.subject;
+    if (claimed.kind === "requote" && !claimed.requoteId) {
+      const created = await materialiseRequote(businessId, claimed);
+      message = created.message;
+      subject = created.subject;
+    }
     const result = await commitApprovedSend({
       confirm: true,
       status: previousStatus === "snoozed" ? "snoozed" : "draft",
       channel: claimed.channel,
-      message: claimed.message,
-      subject: claimed.subject,
+      message,
+      subject,
       phone: claimed.recipientPhone,
       email: claimed.recipientEmail,
     }, (request) => deliver(request, businessId, claimed.jobId));
@@ -419,7 +519,7 @@ export async function approveQuoteFollowUp(input: {
 
 async function insertPlanRow(
   businessId: string,
-  plan: { quoteId: string; jobId: string | null; customerId: string | null; nudgeStep: number; kind: string; channel?: string; subject?: string | null; message?: string; recipientName?: string | null; recipientPhone?: string | null; recipientEmail?: string | null },
+  plan: { quoteId: string; jobId: string | null; customerId: string | null; nudgeStep: number; kind: string; channel?: string; subject?: string | null; message?: string; recipientName?: string | null; recipientPhone?: string | null; recipientEmail?: string | null; sourceType?: FollowUpSourceType },
   status: "draft" | "skipped",
 ) {
   const [inserted] = await ownerDb.insert(schema.quoteFollowUps).values({
@@ -436,28 +536,73 @@ async function insertPlanRow(
     recipientName: plan.recipientName ?? null,
     recipientPhone: plan.recipientPhone ?? null,
     recipientEmail: plan.recipientEmail ?? null,
+    sourceType: plan.sourceType ?? "quote",
   }).onConflictDoNothing({
     target: [schema.quoteFollowUps.businessId, schema.quoteFollowUps.quoteId, schema.quoteFollowUps.nudgeStep],
   }).returning();
   return inserted;
 }
 
-async function materialiseRequote(businessId: string, plan: PlannedCreate, insertedId: string): Promise<void> {
-  const settings = await storage.getBusinessSettingsForBusiness(businessId);
-  const validityDays = settings?.quoteValidityDays && settings.quoteValidityDays > 0 ? settings.quoteValidityDays : 30;
+async function rateCard(businessId: string): Promise<RateCardItem[]> {
   const services = await ownerDb
     .select({ id: schema.services.id, name: schema.services.name, basePrice: schema.services.basePrice })
     .from(schema.services)
     .where(eq(schema.services.businessId, businessId));
-  const rates: RateCardItem[] = services.map((service) => ({
+  return services.map((service) => ({
     id: service.id,
     name: service.name,
     basePrice: Number(service.basePrice),
   }));
-  try {
-    const created = await runWithBusiness(businessId, async () => {
+}
+
+function recordsFromProposalLines(lines: { description: string; quantity: string | number; unitPrice: string | number; totalPrice: string | number; sourceId: string | null; selected: boolean | null }[]): Record<string, unknown>[] {
+  return lines.filter((line) => line.selected !== false).map((line) => ({
+    description: line.description,
+    quantity: Number(line.quantity),
+    unitPrice: Number(line.unitPrice),
+    total: Number(line.totalPrice),
+    itemCode: line.sourceId,
+  }));
+}
+
+/**
+ * Creates the fresh draft only after Approve. Detection stores the follow-up
+ * and a price preview, and leaves the original quote or proposal untouched.
+ */
+async function materialiseRequote(
+  businessId: string,
+  row: { id: string; quoteId: string; jobId: string | null; customerId: string | null; sourceType: string; message: string; subject: string | null },
+): Promise<{ message: string; subject: string | null }> {
+  const settings = await storage.getBusinessSettingsForBusiness(businessId);
+  const validityDays = settings?.quoteValidityDays && settings.quoteValidityDays > 0 ? settings.quoteValidityDays : 30;
+  const rates = await rateCard(businessId);
+  const validUntil = new Date(Date.now() + validityDays * DAY_MS);
+  const sourceType: FollowUpSourceType = row.sourceType === "proposal" || row.sourceType === "job" ? row.sourceType : "quote";
+
+  const created = await runWithBusiness(businessId, async () => {
+    if (sourceType === "quote") {
+      const [source] = await ownerDb.select().from(schema.quotes).where(and(
+        eq(schema.quotes.id, row.quoteId),
+        eq(schema.quotes.businessId, businessId),
+      )).limit(1);
+      if (!source) throw new Error("Original quote not found.");
       const quoteNumber = await storage.getNextQuoteNumber();
-      const draft = buildRequoteDraft(plan.source, rates, quoteNumber, new Date(Date.now() + validityDays * DAY_MS));
+      const signal: QuoteSignal = {
+        id: source.id,
+        businessId,
+        jobId: source.jobId,
+        customerId: source.customerId,
+        leadId: source.leadId,
+        quoteNumber: source.quoteNumber,
+        description: source.description,
+        terms: source.terms,
+        amount: source.amount,
+        lineItems: source.lineItems,
+        status: source.status,
+        sentDate: source.sentDate,
+        createdBy: source.createdBy,
+      };
+      const draft = buildRequoteDraft(signal, rates, quoteNumber, validUntil);
       const inserted = await ownerDb.insert(schema.quotes).values({
         businessId,
         quoteNumber: draft.quoteNumber,
@@ -474,25 +619,107 @@ async function materialiseRequote(businessId: string, plan: PlannedCreate, inser
         createdBy: draft.createdBy,
         followUpCount: 0,
       }).returning();
-      const created = Array.isArray(inserted) ? inserted[0] : undefined;
-      if (!created) throw new Error("Couldn't create the new quote.");
-      return created;
-    });
-    const copy = withNewQuoteNumber(plan.message, plan.subject, created.quoteNumber);
-    await ownerDb.update(schema.quoteFollowUps).set({
-      requoteId: created.id,
-      message: copy.message,
-      subject: copy.subject,
-      updatedAt: new Date(),
-    }).where(and(eq(schema.quoteFollowUps.id, insertedId), eq(schema.quoteFollowUps.businessId, businessId)));
-  } catch (error) {
-    await ownerDb.delete(schema.quoteFollowUps).where(and(
-      eq(schema.quoteFollowUps.id, insertedId),
-      eq(schema.quoteFollowUps.businessId, businessId),
-      isNull(schema.quoteFollowUps.requoteId),
-    ));
-    throw error;
-  }
+      const quote = Array.isArray(inserted) ? inserted[0] : undefined;
+      if (!quote) throw new Error("Couldn't create the new quote.");
+      return { id: quote.id, number: quote.quoteNumber };
+    }
+
+    const proposalSource = sourceType === "proposal"
+      ? (await ownerDb.select().from(schema.proposals).where(and(
+        eq(schema.proposals.id, row.quoteId),
+        eq(schema.proposals.businessId, businessId),
+      )).limit(1))[0]
+      : undefined;
+    const jobSource = sourceType === "job"
+      ? (await ownerDb.select().from(schema.jobs).where(and(
+        eq(schema.jobs.id, row.quoteId),
+        eq(schema.jobs.businessId, businessId),
+      )).limit(1))[0]
+      : undefined;
+    const customerId = proposalSource?.customerId || jobSource?.customerId || row.customerId;
+    if (!customerId) throw new Error("This quote has no customer, so a new draft can't be created.");
+    const originalNumber = proposalSource?.proposalNumber || jobSource?.jobNumber || "the quote";
+    const lines = proposalSource
+      ? recordsFromProposalLines(await ownerDb.select({
+        description: schema.proposalLineItems.description,
+        quantity: schema.proposalLineItems.quantity,
+        unitPrice: schema.proposalLineItems.unitPrice,
+        totalPrice: schema.proposalLineItems.totalPrice,
+        sourceId: schema.proposalLineItems.sourceId,
+        selected: schema.proposalLineItems.selected,
+      }).from(schema.proposalLineItems).where(and(
+        eq(schema.proposalLineItems.businessId, businessId),
+        eq(schema.proposalLineItems.proposalId, proposalSource.id),
+      )))
+      : (Array.isArray(jobSource?.lineItems) ? jobSource.lineItems as Record<string, unknown>[] : []);
+    const priced = buildRequoteDraft({
+      id: row.quoteId,
+      businessId,
+      jobId: row.jobId,
+      customerId,
+      quoteNumber: originalNumber,
+      description: proposalSource?.introduction || jobSource?.description || null,
+      amount: proposalSource?.subtotal || jobSource?.totalAmount || null,
+      lineItems: lines,
+      status: "sent",
+      sentDate: null,
+    }, rates, "preview", validUntil);
+    const proposalNumber = `Q-DRAFT-${Date.now()}`;
+    const subtotal = Number(priced.amount);
+    const gst = Math.round(subtotal * 15) / 100;
+    const inserted = await ownerDb.insert(schema.proposals).values({
+      businessId,
+      jobId: row.jobId,
+      customerId,
+      proposalNumber,
+      title: proposalSource?.title || `Re-quote of ${originalNumber}`,
+      introduction: proposalSource?.introduction || jobSource?.description || null,
+      status: "draft",
+      templateUsed: proposalSource?.templateUsed || "quote",
+      expiryDate: validUntil,
+      subtotal: subtotal.toFixed(2),
+      gstAmount: gst.toFixed(2),
+      totalAmount: (Math.round((subtotal + gst) * 100) / 100).toFixed(2),
+      createdBy: proposalSource?.createdBy || "Follow-up",
+    }).returning();
+    const proposal = Array.isArray(inserted) ? inserted[0] : undefined;
+    if (!proposal) throw new Error("Couldn't create the new quote.");
+    const sectionInserted = await ownerDb.insert(schema.proposalSections).values({
+      businessId,
+      proposalId: proposal.id,
+      sectionType: "pricing",
+      title: "Pricing",
+      content: priced.description,
+      sortOrder: 0,
+      isVisible: true,
+    }).returning();
+    const section = Array.isArray(sectionInserted) ? sectionInserted[0] : undefined;
+    if (priced.lineItems.length > 0) {
+      await ownerDb.insert(schema.proposalLineItems).values(priced.lineItems.map((item, index) => ({
+        businessId,
+        proposalId: proposal.id,
+        sectionId: section?.id ?? null,
+        sourceType: "fixed" as const,
+        sourceId: typeof item.itemCode === "string" ? item.itemCode : null,
+        description: typeof item.description === "string" ? item.description : "Tree service",
+        quantity: String(Number(item.quantity) || 1),
+        unitPrice: (Number(item.unitPrice) || 0).toFixed(2),
+        totalPrice: (Number(item.total) || 0).toFixed(2),
+        sortOrder: index,
+        selected: true,
+      })));
+    }
+    return { id: proposal.id, number: proposal.proposalNumber };
+  });
+
+  const copy = withNewQuoteNumber(row.message, row.subject, created.number);
+  await ownerDb.update(schema.quoteFollowUps).set({
+    requoteId: created.id,
+    message: copy.message,
+    subject: copy.subject,
+    updatedAt: new Date(),
+  }).where(and(eq(schema.quoteFollowUps.id, row.id), eq(schema.quoteFollowUps.businessId, businessId)));
+  return copy;
 }
 
 async function remindIfWaiting(businessId: string, now: Date): Promise<void> {
@@ -571,29 +798,104 @@ async function remindIfWaiting(businessId: string, now: Date): Promise<void> {
   });
 }
 
+const PROPOSAL_TRACKED = ["sent", "viewed", "accepted", "accepted_pending_deposit", "rejected", "declined"];
+
+function proposalIdOf(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const id = (metadata as { proposalId?: unknown }).proposalId;
+  return typeof id === "string" && id.trim() ? id : null;
+}
+
+function textField(row: unknown, key: string): string | null {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+  const value = (row as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : null;
+}
+
+function contactBits(job: unknown, customer: { name: string | null; email: string | null; phone: string | null; mobile: string | null } | undefined) {
+  const contactName = [textField(job, "jobContactFirstName"), textField(job, "jobContactLastName")].filter(Boolean).join(" ").trim();
+  return {
+    customerName: contactName || customer?.name || null,
+    phone: textField(job, "jobContactMobile") || textField(job, "jobContactPhone") || customer?.mobile || customer?.phone || null,
+    email: textField(job, "jobContactEmail") || customer?.email || null,
+  };
+}
+
 async function detectForBusiness(businessId: string, now: Date): Promise<void> {
   const settings = await storage.getBusinessSettingsForBusiness(businessId);
   const lookbackStart = new Date(now.getTime() - SENT_LOOKBACK_DAYS * DAY_MS);
-  const quoteRows = await ownerDb
-    .select()
-    .from(schema.quotes)
-    .where(and(
-      eq(schema.quotes.businessId, businessId),
-      inArray(schema.quotes.status, OPEN_QUOTE_STATUSES),
-      gte(schema.quotes.sentDate, lookbackStart),
-    ));
+  const quoteRows = await ownerDb.select().from(schema.quotes).where(and(
+    eq(schema.quotes.businessId, businessId),
+    inArray(schema.quotes.status, OPEN_QUOTE_STATUSES),
+    gte(schema.quotes.sentDate, lookbackStart),
+  )).limit(1000);
+  const proposalRows = await ownerDb.select().from(schema.proposals).where(and(
+    eq(schema.proposals.businessId, businessId),
+    or(
+      gte(schema.proposals.sentDate, lookbackStart),
+      and(inArray(schema.proposals.status, PROPOSAL_TRACKED), gte(schema.proposals.updatedAt, lookbackStart)),
+    ),
+  )).limit(1000);
+  const presentedJobs = await ownerDb.select().from(schema.jobs).where(and(
+    eq(schema.jobs.businessId, businessId),
+    gte(schema.jobs.quotePresentedDate, lookbackStart),
+  )).limit(1000);
 
-  const quotes: QuoteSignal[] = [];
-  const jobIds = Array.from(new Set(quoteRows.map((row) => row.jobId).filter((id): id is string => !!id)));
-  const customerIds = Array.from(new Set(quoteRows.map((row) => row.customerId).filter((id): id is string => !!id)));
-  const jobs = jobIds.length === 0 ? [] : await ownerDb.select({
-    id: schema.jobs.id,
-    jobContactFirstName: schema.jobs.jobContactFirstName,
-    jobContactLastName: schema.jobs.jobContactLastName,
-    jobContactEmail: schema.jobs.jobContactEmail,
-    jobContactPhone: schema.jobs.jobContactPhone,
-    jobContactMobile: schema.jobs.jobContactMobile,
-  }).from(schema.jobs).where(and(eq(schema.jobs.businessId, businessId), inArray(schema.jobs.id, jobIds)));
+  const jobIds = Array.from(new Set([
+    ...quoteRows.map((row) => row.jobId),
+    ...proposalRows.map((row) => row.jobId),
+    ...presentedJobs.map((row) => row.id),
+  ].filter((id): id is string => !!id)));
+  const diaryRows = jobIds.length === 0 ? [] : await ownerDb.select({
+    jobId: schema.jobDiaryEntries.jobId,
+    createdAt: schema.jobDiaryEntries.createdAt,
+    authorRole: schema.jobDiaryEntries.authorRole,
+    tags: schema.jobDiaryEntries.tags,
+    metadata: schema.jobDiaryEntries.metadata,
+    entryType: schema.jobDiaryEntries.entryType,
+  }).from(schema.jobDiaryEntries).where(and(
+    eq(schema.jobDiaryEntries.businessId, businessId),
+    inArray(schema.jobDiaryEntries.jobId, jobIds),
+    gte(schema.jobDiaryEntries.createdAt, lookbackStart),
+  ));
+
+  const diarySends = new Map<string, Date>();
+  for (const row of diaryRows) {
+    const proposalId = proposalIdOf(row.metadata);
+    if (!proposalId || !row.createdAt) continue;
+    const type = (row.entryType ?? "").toLowerCase();
+    if (type !== "sms" && type !== "email") continue;
+    if ((row.authorRole ?? "").toLowerCase() === "customer") continue;
+    const direction = (directionOf(row.metadata) ?? "").toLowerCase();
+    if (direction === "inbound" || direction === "incoming") continue;
+    const previous = diarySends.get(proposalId);
+    if (!previous || row.createdAt < previous) diarySends.set(proposalId, row.createdAt);
+  }
+  const missingProposalIds = Array.from(diarySends.keys()).filter((id) => !proposalRows.some((row) => row.id === id));
+  const extraProposals = missingProposalIds.length === 0 ? [] : await ownerDb.select().from(schema.proposals).where(and(
+    eq(schema.proposals.businessId, businessId),
+    inArray(schema.proposals.id, missingProposalIds),
+  ));
+  const proposals = [...proposalRows, ...extraProposals];
+
+  const extraJobIds = Array.from(new Set(proposals.map((row) => row.jobId).filter((id): id is string => !!id && !jobIds.includes(id))));
+  const extraJobs = extraJobIds.length === 0 ? [] : await ownerDb.select().from(schema.jobs).where(and(
+    eq(schema.jobs.businessId, businessId),
+    inArray(schema.jobs.id, extraJobIds),
+  ));
+  const jobs = [...presentedJobs, ...extraJobs.filter((job) => !presentedJobs.some((row) => row.id === job.id))];
+  const quoteJobIds = quoteRows.map((row) => row.jobId).filter((id): id is string => !!id && !jobs.some((job) => job.id === id));
+  const quoteJobs = quoteJobIds.length === 0 ? [] : await ownerDb.select().from(schema.jobs).where(and(
+    eq(schema.jobs.businessId, businessId),
+    inArray(schema.jobs.id, quoteJobIds),
+  ));
+  const jobsById = new Map([...jobs, ...quoteJobs].map((job) => [job.id, job]));
+
+  const customerIds = Array.from(new Set([
+    ...quoteRows.map((row) => row.customerId),
+    ...proposals.map((row) => row.customerId),
+    ...Array.from(jobsById.values()).map((job) => job.customerId),
+  ].filter((id): id is string => !!id)));
   const customers = customerIds.length === 0 ? [] : await ownerDb.select({
     id: schema.customers.id,
     name: schema.customers.name,
@@ -601,14 +903,13 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
     phone: schema.customers.phone,
     mobile: schema.customers.mobile,
   }).from(schema.customers).where(and(eq(schema.customers.businessId, businessId), inArray(schema.customers.id, customerIds)));
-  const jobsById = new Map(jobs.map((job) => [job.id, job]));
   const customersById = new Map(customers.map((customer) => [customer.id, customer]));
 
+  const signals: QuoteSignal[] = [];
   for (const row of quoteRows) {
     const job = row.jobId ? jobsById.get(row.jobId) : undefined;
     const customer = row.customerId ? customersById.get(row.customerId) : undefined;
-    const contactName = [job?.jobContactFirstName, job?.jobContactLastName].filter(Boolean).join(" ").trim();
-    quotes.push({
+    signals.push({
       id: row.id,
       businessId,
       jobId: row.jobId,
@@ -625,33 +926,80 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
       validUntil: row.validUntil,
       responseDate: row.responseDate,
       createdBy: row.createdBy,
-      customerName: contactName || customer?.name || null,
-      phone: job?.jobContactMobile || job?.jobContactPhone || customer?.mobile || customer?.phone || null,
-      email: job?.jobContactEmail || customer?.email || null,
+      sourceType: "quote",
+      jobStatus: job?.status ?? null,
+      ...contactBits(job, customer),
+    });
+  }
+  for (const row of proposals) {
+    if (!row.jobId) continue;
+    const tracked = proposalFollowUpStatus({
+      status: row.status,
+      sentDate: row.sentDate,
+      viewedDate: row.viewedDate,
+      updatedAt: row.updatedAt,
+      diarySentAt: diarySends.get(row.id) ?? null,
+    });
+    if (!tracked) continue;
+    const status = tracked.status;
+    const sentDate = tracked.sentDate;
+    const job = jobsById.get(row.jobId);
+    const customer = row.customerId ? customersById.get(row.customerId) : undefined;
+    signals.push({
+      id: row.id,
+      businessId,
+      jobId: row.jobId,
+      customerId: row.customerId,
+      quoteNumber: row.proposalNumber,
+      description: row.introduction,
+      amount: row.subtotal || row.totalAmount,
+      status,
+      sentDate,
+      updatedAt: row.updatedAt,
+      validUntil: row.expiryDate,
+      responseDate: row.responseDate,
+      createdBy: row.createdBy,
+      sourceType: "proposal",
+      jobStatus: job?.status ?? null,
+      title: row.title,
+      ...contactBits(job, customer),
+    });
+  }
+  for (const job of Array.from(jobsById.values())) {
+    if (!job.quotePresentedDate) continue;
+    const customer = job.customerId ? customersById.get(job.customerId) : undefined;
+    signals.push({
+      id: job.id,
+      businessId,
+      jobId: job.id,
+      customerId: job.customerId,
+      quoteNumber: job.jobNumber,
+      description: job.description,
+      amount: job.totalAmount,
+      lineItems: job.lineItems,
+      status: "sent",
+      sentDate: job.quotePresentedDate,
+      updatedAt: job.updatedAt,
+      validUntil: null,
+      sourceType: "job",
+      jobStatus: job.status,
+      title: job.title,
+      ...contactBits(job, customer),
     });
   }
 
-  const replyRows = jobIds.length === 0 ? [] : await ownerDb.select({
-    jobId: schema.jobDiaryEntries.jobId,
-    createdAt: schema.jobDiaryEntries.createdAt,
-    authorRole: schema.jobDiaryEntries.authorRole,
-    tags: schema.jobDiaryEntries.tags,
-    metadata: schema.jobDiaryEntries.metadata,
-    entryType: schema.jobDiaryEntries.entryType,
-  }).from(schema.jobDiaryEntries).where(and(
-    eq(schema.jobDiaryEntries.businessId, businessId),
-    inArray(schema.jobDiaryEntries.jobId, jobIds),
-    gte(schema.jobDiaryEntries.createdAt, lookbackStart),
-  ));
-  const replies: DiaryReplySignal[] = replyRows.map((row) => ({
-    jobId: row.jobId,
-    createdAt: row.createdAt ?? now,
-    authorRole: row.authorRole,
-    tags: row.tags,
-    direction: directionOf(row.metadata),
-    entryType: row.entryType,
-  }));
-
+  const quotes = collapseFollowUpSources(signals);
+  const replyJobIds = Array.from(new Set(quotes.map((quote) => quote.jobId).filter((id): id is string => !!id)));
+  const replies: DiaryReplySignal[] = diaryRows
+    .filter((row) => replyJobIds.includes(row.jobId))
+    .map((row) => ({
+      jobId: row.jobId,
+      createdAt: row.createdAt ?? now,
+      authorRole: row.authorRole,
+      tags: row.tags,
+      direction: directionOf(row.metadata),
+      entryType: row.entryType,
+    }));
   const quoteIdList = quotes.map((quote) => quote.id);
   const existing = quoteIdList.length === 0 ? [] : await ownerDb.select({
     businessId: schema.quoteFollowUps.businessId,
@@ -695,15 +1043,10 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
       ));
       continue;
     }
-    if (plan.action === "skip") {
-      await insertPlanRow(businessId, plan, "skipped");
-      continue;
-    }
-    const inserted = await insertPlanRow(businessId, plan, "draft");
-    if (!inserted) continue;
-    if (plan.kind === "requote") {
-      await materialiseRequote(businessId, plan, inserted.id);
-    }
+    const sourceType = plan.action === "skip"
+      ? plan.sourceType
+      : (plan.source.sourceType ?? "quote");
+    await insertPlanRow(businessId, { ...plan, sourceType }, plan.action === "skip" ? "skipped" : "draft");
   }
 
   await remindIfWaiting(businessId, now);

@@ -127,7 +127,14 @@ function clientHasInvoice(invoice: NotBilledInvoice): boolean {
 export function billingGap(job: Pick<NotBilledJob, "status" | "invoices" | "xeroInvoiceId" | "xeroStatus">): BillingGap {
   if (job.status.trim().toLowerCase() !== "completed") return "billed";
   const active = activeInvoices(job.invoices);
-  if (active.length === 0) return "create_invoice";
+  const xeroStatus = (job.xeroStatus ?? "").trim().toLowerCase();
+  const jobAlreadyInXero = (job.xeroInvoiceId ?? "").trim().length > 0
+    && xeroStatus !== "pending"
+    && xeroStatus !== "failed"
+    && xeroStatus !== "error";
+  // Older sends wrote the Xero id on the job and did not always leave an invoices row.
+  if (active.length === 0) return jobAlreadyInXero ? "billed" : "create_invoice";
+  if (jobAlreadyInXero && active.every((invoice) => !clientHasInvoice(invoice))) return "billed";
   const sent = active.filter(clientHasInvoice);
   if (sent.length === 0) return "send_invoice";
   const synced = sent.some((invoice) => !invoiceNeedsXeroSync({

@@ -2,11 +2,14 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildRequoteDraft,
+  collapseFollowUpSources,
   DEFAULT_NUDGE_DAYS,
   EXPIRY_NUDGE_STEP,
   isCustomerDiaryReply,
   parseNudgeDays,
   planQuoteFollowUps,
+  previewRequote,
+  proposalFollowUpStatus,
   quietDaysSince,
   repriceLineItems,
   type DiaryReplySignal,
@@ -325,6 +328,100 @@ describe("re-quote pricing", () => {
     assert.equal(items[0]?.unitPrice, 40);
     assert.equal(priced.lineItems[0]?.unitPrice, 55);
     assert.equal(priced.amount, 165);
+  });
+});
+
+function follow(signals: QuoteSignal[], existing: ExistingFollowUp[] = []) {
+  return plan({ quotes: collapseFollowUpSources(signals), existing });
+}
+
+describe("proposals and presented jobs", () => {
+  it("follows a sent proposal", () => {
+    const plans = creates(follow([
+      quote({ id: "prop-1", sourceType: "proposal", quoteNumber: "Q-100", status: "sent" }),
+    ]));
+    assert.equal(plans.length, 1);
+    assert.equal(plans[0]?.quoteId, "prop-1");
+  });
+
+  it("follows a job that was presented with no proposal", () => {
+    const plans = creates(follow([
+      quote({ id: "job-1", jobId: "job-1", sourceType: "job", quoteNumber: "4048", status: "sent", jobStatus: "quote" }),
+    ]));
+    assert.equal(plans.length, 1);
+    assert.equal(plans[0]?.quoteId, "job-1");
+  });
+
+  it("keeps one item when the job has a proposal and a presented date", () => {
+    const plans = creates(follow([
+      quote({ id: "prop-1", sourceType: "proposal", quoteNumber: "Q-100" }),
+      quote({ id: "job-1", jobId: "job-1", sourceType: "job", quoteNumber: "4048", jobStatus: "quote" }),
+    ]));
+    assert.equal(plans.length, 1);
+    assert.equal(plans[0]?.quoteId, "prop-1");
+  });
+
+  it("prefers the proposal over a quotes-table row on the same job", () => {
+    const plans = creates(follow([
+      quote({ id: "q-table", sourceType: "quote", quoteNumber: "1042" }),
+      quote({ id: "prop-1", sourceType: "proposal", quoteNumber: "Q-100" }),
+    ]));
+    assert.equal(plans.length, 1);
+    assert.equal(plans[0]?.quoteId, "prop-1");
+  });
+
+  it("stops when the proposal is accepted or waiting on a deposit", () => {
+    for (const status of ["accepted", "accepted_pending_deposit"]) {
+      const plans = follow([
+        quote({ id: "prop-1", sourceType: "proposal", status, jobStatus: "quote" }),
+        quote({ id: "job-1", jobId: "job-1", sourceType: "job", jobStatus: "quote" }),
+      ], [{ businessId: "biz-a", quoteId: "prop-1", nudgeStep: 3, status: "draft" }]);
+      assert.equal(creates(plans).length, 0, status);
+      assert.ok(plans.some((item) => item.action === "cancel"), status);
+    }
+  });
+
+  it("stops when the job is booked or lost", () => {
+    for (const jobStatus of ["work_order", "completed", "unsuccessful", "archived"]) {
+      const plans = creates(follow([
+        quote({ id: "prop-1", sourceType: "proposal", status: "sent", jobStatus }),
+      ]));
+      assert.equal(plans.length, 0, jobStatus);
+    }
+  });
+
+  it("still follows a quotes-table row when that is all the job has", () => {
+    const plans = creates(follow([quote({ sourceType: "quote" })]));
+    assert.equal(plans.length, 1);
+    assert.equal(plans[0]?.quoteId, "q1");
+  });
+
+  it("treats an SMS diary send as sent even when the proposal is still draft", () => {
+    const tracked = proposalFollowUpStatus({
+      status: "draft",
+      sentDate: null,
+      diarySentAt: new Date(NOW - 4 * DAY).toISOString(),
+    });
+    assert.equal(tracked?.status, "sent");
+    assert.ok(tracked?.sentDate);
+    assert.equal(proposalFollowUpStatus({ status: "draft", sentDate: null }), null);
+  });
+
+  it("does not put a new quote number on the re-quote until approval", () => {
+    const plans = creates(plan({
+      quotes: [quote({
+        sourceType: "proposal",
+        validUntil: new Date(NOW - DAY).toISOString(),
+        status: "sent",
+      })],
+    }));
+    assert.equal(plans.length, 1);
+    assert.equal(plans[0]?.kind, "requote");
+    if (plans[0]?.action !== "create") return;
+    assert.match(plans[0].message, /the new quote/);
+    const preview = previewRequote(quote().lineItems, [{ id: "svc-1", name: "Tree removal", basePrice: 275 }]);
+    assert.equal(preview.lines[0]?.rate, 275);
+    assert.equal("quoteNumber" in preview, false);
   });
 });
 

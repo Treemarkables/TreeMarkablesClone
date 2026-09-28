@@ -380,6 +380,8 @@ export const quoteFollowUps = pgTable("quote_follow_ups", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   quoteId: varchar("quote_id").notNull(),
+  // quote = quotes table, proposal = the document customers actually receive, job = quote_presented_date only.
+  sourceType: text("source_type").notNull().default("quote"),
   jobId: varchar("job_id"),
   customerId: varchar("customer_id"),
   kind: text("kind").notNull(), // check_in | requote

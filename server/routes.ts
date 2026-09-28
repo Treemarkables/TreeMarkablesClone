@@ -22521,6 +22521,33 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           authorName: 'System',
           metadata: { phoneNumber: to, ...(proposalId ? { proposalId, proposalNumber } : {}) }
         });
+
+        // Email sends stamp the proposal. SMS used to leave it as a draft, so
+        // follow-up detection never saw it. Match the email path.
+        if (proposalId) {
+          try {
+            const sentProposal = await storage.getProposal(proposalId);
+            const closed = sentProposal && ['accepted', 'accepted_pending_deposit', 'rejected', 'declined'].includes(sentProposal.status);
+            if (sentProposal && !closed) {
+              await storage.updateProposal(proposalId, {
+                status: 'sent',
+                sentDate: sentProposal.sentDate ?? new Date(),
+                deliveryMethod: 'sms',
+              });
+              if (sentProposal.jobId) {
+                const smsJob = await storage.getJob(sentProposal.jobId);
+                const jobUpdate: { lastActivityAt: Date; quotePresentedDate: Date; status?: string } = {
+                  lastActivityAt: new Date(),
+                  quotePresentedDate: smsJob?.quotePresentedDate ?? new Date(),
+                };
+                if (smsJob && smsJob.status === 'lead') jobUpdate.status = 'quote';
+                await storage.updateJob(sentProposal.jobId, jobUpdate);
+              }
+            }
+          } catch (stampError) {
+            console.error('Proposal SMS sent, but the sent status was not saved:', stampError);
+          }
+        }
         
         res.json({ 
           success: true, 

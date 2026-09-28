@@ -1003,6 +1003,7 @@ const MIGRATIONS: Migration[] = [
         recipient_name text,
         recipient_phone text,
         recipient_email text,
+        source_type text NOT NULL DEFAULT 'quote',
         requote_id varchar,
         snooze_until timestamp,
         sent_at timestamp,
@@ -1013,6 +1014,7 @@ const MIGRATIONS: Migration[] = [
       )`,
       `CREATE UNIQUE INDEX IF NOT EXISTS quote_follow_ups_quote_step_uniq ON quote_follow_ups (business_id, quote_id, nudge_step)`,
       `CREATE INDEX IF NOT EXISTS quote_follow_ups_business_status_idx ON quote_follow_ups (business_id, status)`,
+      `ALTER TABLE quote_follow_ups ADD COLUMN IF NOT EXISTS source_type text NOT NULL DEFAULT 'quote'`,
     ],
     postChecks: async (client) => {
       const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);

@@ -42,8 +42,14 @@ interface FollowUp {
   recipientEmail: string | null;
   requoteId: string | null;
   requoteNumber: string | null;
+  sourceType?: string;
+  requotePreview?: { lines: { description: string; quantity: number; rate: number; amount: number }[]; subtotal: number } | null;
   snoozeUntil: string | null;
   daysQuiet: number | null;
+}
+
+function nzd(value: number): string {
+  return new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(value);
 }
 
 interface ListResponse {
@@ -208,7 +214,7 @@ export default function QuoteFollowUps() {
         <p className="text-sm text-muted-foreground">Loading follow-ups…</p>
       ) : rows.length === 0 ? (
         <div className="inflow-chrome px-5 py-8 text-sm text-muted-foreground" data-testid="quote-followups-empty">
-          No follow-ups waiting. Sent quotes with no reply show up here after a few days, and again if they pass their valid date.
+          No follow-ups waiting. Sent quotes and proposals with no reply show up here after a few days, and again if they pass their valid date.
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
@@ -242,6 +248,9 @@ export default function QuoteFollowUps() {
                     {selected.kind === "requote" && selected.requoteNumber
                       ? ` · new draft ${selected.requoteNumber}`
                       : ""}
+                    {selected.kind === "requote" && !selected.requoteNumber
+                      ? " · new draft is created when you approve"
+                      : ""}
                   </p>
                 </div>
                 {selected.jobId && (
@@ -250,6 +259,22 @@ export default function QuoteFollowUps() {
                   </Link>
                 )}
               </div>
+
+              {selected.kind === "requote" && selected.requotePreview && selected.requotePreview.lines.length > 0 && (
+                <div className="text-sm border border-border rounded-md divide-y divide-border" data-testid="requote-preview">
+                  <p className="px-3 py-2 text-muted-foreground">Today's price. Nothing is saved until you press Approve & send.</p>
+                  {selected.requotePreview.lines.map((line, index) => (
+                    <div key={`${line.description}-${index}`} className="px-3 py-2 flex justify-between gap-3">
+                      <span>{line.description} <span className="text-muted-foreground">· {line.quantity} × {nzd(line.rate)}</span></span>
+                      <span className="shrink-0">{nzd(line.amount)}</span>
+                    </div>
+                  ))}
+                  <div className="px-3 py-2 flex justify-between font-medium">
+                    <span>Subtotal (exc. GST)</span>
+                    <span>{nzd(selected.requotePreview.subtotal)}</span>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2 max-w-[200px]">
                 <Label htmlFor="followup-channel">Send via</Label>
@@ -341,7 +366,7 @@ export default function QuoteFollowUps() {
           <DialogHeader>
             <DialogTitle>Mark this quote as lost?</DialogTitle>
             <DialogDescription>
-              Dismiss stops follow-ups and marks quote {selected?.quoteNumber} as lost. The customer is not contacted.
+              Dismiss stops follow-ups and marks {selected?.quoteNumber || "this quote"} as lost. A proposal is marked rejected. A job that was only presented in person is marked unsuccessful. The customer is not contacted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
