@@ -139,6 +139,7 @@ describe("Just me filter", () => {
     dateLabel: "Mon 21 September 2026",
     businessName: "Treemarkables Gisborne",
     currentEmployeeId: "josh",
+    quoteFollowUpsWaiting: 0,
     counts: {
       jobsToday: 2,
       crewsLive: 2,

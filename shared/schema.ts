@@ -367,8 +367,91 @@ export const quotes = pgTable("quotes", {
   followUpNotes: text("follow_up_notes"),
   // Presentation method tracking for conversion rate analysis
   presentationMethod: text("presentation_method"), // on-site, sent-later, phone
+  // Set on a re-quote draft. The original sent quote is never overwritten.
+  revisedFromQuoteId: varchar("revised_from_quote_id"),
 }, (table) => ({
   businessQuoteNumberUniq: uniqueIndex("quotes_business_quote_number_uniq").on(table.businessId, table.quoteNumber),
+}));
+
+// Quote follow-ups — one row per quote and nudge step (3, 7, 14, or the
+// tenant's own days). Step 0 is the expiry re-quote. Drafts wait in the
+// queue until someone presses Approve & Send. Nothing is sent by the detector.
+export const quoteFollowUps = pgTable("quote_follow_ups", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quoteId: varchar("quote_id").notNull(),
+  // quote = quotes table, proposal = the document customers actually receive, job = quote_presented_date only.
+  sourceType: text("source_type").notNull().default("quote"),
+  jobId: varchar("job_id"),
+  customerId: varchar("customer_id"),
+  kind: text("kind").notNull(), // check_in | requote
+  nudgeStep: integer("nudge_step").notNull(), // 0 = expiry re-quote, else the day threshold
+  channel: text("channel").notNull().default("sms"), // sms | email
+  status: text("status").notNull().default("draft"), // draft, snoozed, sending, sent, dismissed, skipped, cancelled
+  subject: text("subject"),
+  message: text("message").notNull().default(""),
+  recipientName: text("recipient_name"),
+  recipientPhone: text("recipient_phone"),
+  recipientEmail: text("recipient_email"),
+  requoteId: varchar("requote_id"),
+  snoozeUntil: timestamp("snooze_until"),
+  sentAt: timestamp("sent_at"),
+  diaryEntryId: varchar("diary_entry_id"),
+  cancelReason: text("cancel_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  quoteStepUniq: uniqueIndex("quote_follow_ups_quote_step_uniq").on(table.businessId, table.quoteId, table.nudgeStep),
+  statusIdx: index("quote_follow_ups_business_status_idx").on(table.businessId, table.status),
+}));
+
+// Invoices sent to the customer that are not in Xero yet. One row per invoice.
+// The hourly detector only inserts a draft. Approve & Sync is the only path
+// that calls Xero, and it uses the same send as the Invoices page.
+export const invoiceXeroFollowUps = pgTable("invoice_xero_follow_ups", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").notNull(),
+  jobId: varchar("job_id"),
+  customerId: varchar("customer_id"),
+  status: text("status").notNull().default("draft"), // draft, snoozed, syncing, synced, dismissed, cancelled
+  snoozeUntil: timestamp("snooze_until"),
+  lastError: text("last_error"),
+  syncedAt: timestamp("synced_at"),
+  diaryEntryId: varchar("diary_entry_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  invoiceUniq: uniqueIndex("invoice_xero_follow_ups_invoice_uniq").on(table.businessId, table.invoiceId),
+  statusIdx: index("invoice_xero_follow_ups_business_status_idx").on(table.businessId, table.status),
+}));
+
+// Completed jobs that still need an invoice or a send. One row per job.
+// A sent invoice that is not in Xero stays on invoice_xero_follow_ups only.
+// The detector never creates, sends, or syncs.
+export const jobBillingFollowUps = pgTable("job_billing_follow_ups", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(),
+  customerId: varchar("customer_id"),
+  invoiceId: varchar("invoice_id"),
+  step: text("step").notNull(), // create_invoice | send_invoice
+  channel: text("channel").notNull().default("sms"),
+  status: text("status").notNull().default("draft"), // draft, snoozed, working, done, dismissed, cancelled
+  subject: text("subject"),
+  message: text("message").notNull().default(""),
+  recipientName: text("recipient_name"),
+  recipientPhone: text("recipient_phone"),
+  recipientEmail: text("recipient_email"),
+  snoozeUntil: timestamp("snooze_until"),
+  lastError: text("last_error"),
+  completedAt: timestamp("completed_at"),
+  diaryEntryId: varchar("diary_entry_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  jobUniq: uniqueIndex("job_billing_follow_ups_job_uniq").on(table.businessId, table.jobId),
+  statusIdx: index("job_billing_follow_ups_business_status_idx").on(table.businessId, table.status),
 }));
 
 // Job Management
@@ -1413,6 +1496,10 @@ export const businessSettings = pgTable("business_settings", {
   autoQuoteFollowupEnabled: boolean("auto_quote_followup_enabled").default(false),
   quoteFollowupChannel: text("quote_followup_channel").default("sms"), // sms, email
   quoteFollowupMaxAttempts: integer("quote_followup_max_attempts").default(2),
+  // Approval-gated follow-up queue. On by default: the detector only drafts.
+  // Nothing goes to the customer until Approve & Send.
+  quoteFollowupWorkflowEnabled: boolean("quote_followup_workflow_enabled").default(true),
+  quoteFollowupNudgeDays: jsonb("quote_followup_nudge_days").$type<number[]>().default(sql`'[3, 7, 14]'::jsonb`),
   quotePricingModel: text("quote_pricing_model").default("standard"), // standard, dynamic, competitive
   quoteValidityDays: integer("quote_validity_days").default(30),
   autoQuoteApproval: boolean("auto_quote_approval").default(false),
@@ -1563,6 +1650,8 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
   sessionTimeout: z.number().int().min(30).max(1440).optional(), // 30 minutes to 24 hours
   passwordExpiration: z.number().int().min(30).max(365).optional(), // 30 days to 1 year
   quoteFollowupMaxAttempts: z.number().int().min(1).max(5).optional(),
+  quoteFollowupWorkflowEnabled: z.boolean().optional(),
+  quoteFollowupNudgeDays: z.array(z.number().int().min(1).max(90)).min(1).max(5).optional(),
   // Add enum constraints for select fields
   leadAssignmentMethod: z.enum(['round_robin', 'skill_based', 'manual']).optional(),
   quoteFollowupChannel: z.enum(['sms', 'email']).optional(),
@@ -1639,6 +1728,7 @@ export const notificationTypes = [
   'quote_sent',         // Quote sent to customer
   'quote_accepted',     // Quote accepted by customer
   'quote_expired',      // Quote expired
+  'quote_followup_waiting', // Daily reminder that quote follow-ups are waiting
   'follow_up_due',      // Follow-up is due
   'follow_up_overdue',  // Follow-up is overdue
   'job_scheduled',      // Job scheduled

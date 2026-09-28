@@ -116,6 +116,13 @@ function SidebarNavContent({
 
   // Same flag as the spike page: GET /api/hazard-pins/enabled → HAZARD_TREE_PINS.
   // Hidden while loading or when the flag is off (enabled !== true).
+  const { data: followUpCountResp } = useQuery<{ data?: { count?: number } }>({
+    queryKey: ["/api/quote-follow-ups/count"],
+    staleTime: 60_000,
+    enabled: isAdmin,
+  });
+  const followUpCount = followUpCountResp?.data?.count ?? 0;
+
   const { data: hazardPinsEnabledResp } = useQuery<{ data?: { enabled?: boolean } }>({
     queryKey: ["/api/hazard-pins/enabled"],
     staleTime: 5 * 60 * 1000,
@@ -134,7 +141,7 @@ function SidebarNavContent({
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const safetyActive = location === "/safety" || location.startsWith("/safety/") || ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
   const financeActive = ["/metrics", "/profitability-calculator"].includes(location);
-  const opsActive = ["/calendar", "/workflows", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox"].includes(location);
+  const opsActive = ["/calendar", "/workflows", "/follow-up-queue", "/quote-follow-ups", "/reputation", "/reviews", "/marketing", "/inbox"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
   const [safetyOpen, setSafetyOpen] = useState(safetyActive);
@@ -581,6 +588,18 @@ function SidebarNavContent({
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/follow-up-queue"}>
                             <Link href="/follow-up-queue" onClick={handleLinkClick} data-testid="link-follow-up-queue"><span>Follow-up Queue</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/quote-follow-ups"}>
+                            <Link href="/quote-follow-ups" onClick={handleLinkClick} data-testid="link-quote-follow-ups">
+                              <span>Follow-ups</span>
+                              {followUpCount > 0 && (
+                                <span className="ml-2 rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5" data-testid="badge-quote-followups">
+                                  {followUpCount}
+                                </span>
+                              )}
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>

@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { QuoteFollowUpBanner } from "@/components/QuoteFollowUpBanner";
 import { JobRiskStatusChip } from "@/components/JobRiskStatusChip";
 import {
   TODAY_COPY,
@@ -166,6 +167,8 @@ export default function TodayDashboard() {
           </Button>
         </div>
       </div>
+
+      <QuoteFollowUpBanner testId="today-quote-followups" />
 
       <div className="inflow-chrome overflow-hidden mb-4" data-testid="today-morning-summary">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">

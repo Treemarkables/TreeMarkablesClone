@@ -93,6 +93,7 @@ const MAX_NOTIFICATION_LIST_LIMIT = 500;
 const ALWAYS_SHOW_NOTIFICATION_TYPES = new Set([
   'email_reply', 'sms_reply', 'payment_received', 'invoice_paid',
   'reminder_uninvoiced', 'reminder_no_crew', 'reminder_stale_quote', 'reminder_stale_lead',
+  'quote_followup_waiting',
 ]);
 import { EXPENSE_COMPANY_KEYWORDS } from "@shared/customerFilters";
 import * as schema from "@shared/schema";

@@ -103,6 +103,7 @@ export interface TodayOverviewData {
     bookedLabel: string;
     extraNotes: number;
   };
+  quoteFollowUpsWaiting: number;
   notes: TodayNote[];
   crews: TodayCrewGroup[];
   peopleOptions: TodayPerson[];

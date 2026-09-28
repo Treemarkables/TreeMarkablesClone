@@ -22,6 +22,16 @@ import * as schema from "@shared/schema";
 import { APP_URL } from "./config/appUrl";
 import { ownerDb } from "./db";
 import { mountOpsRoutes, type OpsDeps, type UnscheduledPayload } from "./opsHandlers";
+import {
+  approveQuoteFollowUp,
+  listQuoteFollowUpsForBusiness,
+  updateQuoteFollowUpDraft,
+} from "./quoteFollowUpService";
+import {
+  approveInvoiceXeroFollowUp,
+  listInvoiceXeroForBusiness,
+} from "./invoiceXeroService";
+import { listJobsNotBilledForBusiness } from "./jobsNotBilledService";
 import { resolveOpsAccess, type OpsApiKey, type OpsEmployee } from "./opsAccess";
 import { storage } from "./storage";
 
@@ -233,6 +243,21 @@ function realDeps(): OpsDeps {
     weekRevenue,
     getDailyRevenueTarget,
     setDailyRevenueTarget,
+    listQuoteFollowUps: listQuoteFollowUpsForBusiness,
+    updateQuoteFollowUpDraft,
+    approveQuoteFollowUp: (businessId, id, confirm) => approveQuoteFollowUp({
+      businessId,
+      id,
+      confirm,
+      authorName: "Inflow Ops",
+    }),
+    listInvoicesNotInXero: listInvoiceXeroForBusiness,
+    syncInvoiceToXero: (businessId, id, confirm) => approveInvoiceXeroFollowUp({
+      businessId,
+      id,
+      confirm,
+    }),
+    listJobsNotBilled: listJobsNotBilledForBusiness,
   };
 }
 

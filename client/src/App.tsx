@@ -161,6 +161,7 @@ const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoR
 const SettingsVoiceAgent = lazy(() => import("@/pages/SettingsVoiceAgent"));
 const SettingsAiKnowledge = lazy(() => import("@/pages/SettingsAiKnowledge"));
 const FollowUpQueue = lazy(() => import("@/pages/FollowUpQueue"));
+const QuoteFollowUps = lazy(() => import("@/pages/QuoteFollowUps"));
 const UnlinkedCalls = lazy(() => import("@/pages/UnlinkedCalls"));
 const Reconciliation = lazy(() => import("@/pages/Reconciliation"));
 const ProfitabilityCalculator = lazy(() => import("@/pages/ProfitabilityCalculator"));
@@ -1374,6 +1375,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <FollowUpQueue />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/quote-follow-ups">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <QuoteFollowUps />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

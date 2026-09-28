@@ -98,6 +98,9 @@ import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
 import { registerBugReportRoutes } from "./bugReports";
 import { registerOpsRoutes } from "./opsRoutes";
+import { registerQuoteFollowUpRoutes } from "./quoteFollowUpRoutes";
+import { registerInvoiceXeroRoutes } from "./invoiceXeroRoutes";
+import { registerJobsNotBilledRoutes } from "./jobsNotBilledRoutes";
 import {
   isStripeConfigured,
   businessOwnsStripeAccount,
@@ -2260,6 +2263,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // In-app bug / feedback reports (text + voice + photos + video) — server/bugReports.ts
   registerBugReportRoutes(app, { requireSession, requirePlatformAdmin, imageUpload, videoUpload, audioUpload });
   registerOpsRoutes(app);
+  registerQuoteFollowUpRoutes(app);
+  registerInvoiceXeroRoutes(app);
+  registerJobsNotBilledRoutes(app);
   
   // ========================================
   // CLIENT-SIDE ERROR LOGGING
@@ -7906,18 +7912,22 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           };
           
           // Extract proposalId from metadata if available (for proposal_sent notifications)
-          const proposalId = entry.metadata?.proposalId || null;
-          
+          const rawProposalId = entry.metadata?.proposalId;
+          const proposalId = typeof rawProposalId === "string" ? rawProposalId : null;
+          const requestUser = (req as Request & { user?: { id?: unknown } }).user;
+          const userId = typeof requestUser?.id === "string" ? requestUser.id : null;
+          const customerId = typeof job?.customerId === "string" ? job.customerId : null;
+
           const notificationData = {
             title: titleMap[entry.entryType] || 'Job Update',
-            message: messageMap[entry.entryType] || entry.content?.substring(0, 100),
+            message: messageMap[entry.entryType] || entry.content?.substring(0, 100) || "Job update",
             type: notificationType,
             priority: entry.entryType === 'proposal' ? 'high' : 'medium',
             isRead: false,
-            userId: req.user?.id,
+            userId,
             jobId: jobId,
-            customerId: job?.customerId || null,
-            proposalId: proposalId,
+            customerId,
+            proposalId,
             diaryEntryId: entry.id
           };
           
@@ -12569,15 +12579,17 @@ Return only the rewritten description, nothing else.`,
       if (customerId || jobId) {
         try {
           await storage.createCommunication({
-            customerId: customerId || job?.customerId,
-            jobId: jobId,
+            platform: 'sms',
             type: 'sms',
+            from: 'system',
+            to: [String(phone)],
+            customerId: typeof (customerId || job?.customerId) === 'string' ? (customerId || job?.customerId) : null,
+            jobId: typeof jobId === 'string' ? jobId : null,
             direction: 'outbound',
             subject: 'Invoice SMS',
             content: message,
-            phoneNumber: phone,
-            timestamp: new Date().toISOString(),
-            status: 'sent'
+            sentAt: new Date(),
+            status: 'sent',
           });
         } catch (commError) {
           console.warn('Failed to log SMS communication:', commError);
@@ -22515,6 +22527,35 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           authorName: 'System',
           metadata: { phoneNumber: to, ...(proposalId ? { proposalId, proposalNumber } : {}) }
         });
+
+        // Email sends stamp the proposal. SMS used to leave it as a draft, so
+        // follow-up detection never saw it. Match the email path.
+        if (proposalId) {
+          try {
+            const sentProposal = await storage.getProposal(proposalId);
+            const closed = sentProposal && ['accepted', 'accepted_pending_deposit', 'rejected', 'declined'].includes(sentProposal.status);
+            if (sentProposal && !closed) {
+              await storage.updateProposal(proposalId, {
+                status: 'sent',
+                sentDate: sentProposal.sentDate ?? new Date(),
+                deliveryMethod: 'sms',
+              });
+              if (sentProposal.jobId) {
+                const smsJob = await storage.getJob(sentProposal.jobId);
+                // Same shape as the proposal email send above: the jobs update
+                // type is a loose partial, so this matches that caller.
+                const jobUpdate: any = {
+                  lastActivityAt: new Date(),
+                  quotePresentedDate: smsJob?.quotePresentedDate ?? new Date(),
+                };
+                if (smsJob && smsJob.status === 'lead') jobUpdate.status = 'quote';
+                await storage.updateJob(sentProposal.jobId, jobUpdate);
+              }
+            }
+          } catch (stampError) {
+            console.error('Proposal SMS sent, but the sent status was not saved:', stampError);
+          }
+        }
         
         res.json({ 
           success: true, 
@@ -24659,16 +24700,16 @@ Transcription: ${transcriptText}`;
               isRead: false,
               diaryEntryId: diaryEntry?.id,
               actionUrl: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
-              entityType: 'job',
-              entityId: job.id,
-              relatedEntityType: 'job',
-              relatedEntityId: job.id,
               jobId: job.id,
               metadata: {
                 preview: previewText,
                 senderEmail: actualFromEmail || actualFrom,
                 senderName: actualFromName,
                 emailMessageId: inboundMessageId,
+                entityType: 'job',
+                entityId: job.id,
+                relatedEntityType: 'job',
+                relatedEntityId: job.id,
               },
             });
             console.log(`🔔 Notification created for email reply on job ${job.jobNumber} (UUID path)`);
