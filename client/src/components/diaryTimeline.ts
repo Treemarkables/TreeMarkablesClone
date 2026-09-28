@@ -348,9 +348,9 @@ function normalizeBookings(assignments: unknown[]): DiaryEntry[] {
   }
 
   const entries: DiaryEntry[] = [];
-  for (const group of timeSlotGroups.values()) {
+  timeSlotGroups.forEach((group) => {
     const first = group[0];
-    if (!first) continue;
+    if (!first) return;
     const startTime = diaryText(first.startTime) ? new Date(diaryText(first.startTime)) : null;
     const endTime = diaryText(first.endTime) ? new Date(diaryText(first.endTime)) : null;
     const staffNames = group.map((a) => {
@@ -396,7 +396,7 @@ function normalizeBookings(assignments: unknown[]): DiaryEntry[] {
         status: diaryText(first.status) || undefined,
       },
     });
-  }
+  });
   return entries;
 }
 
