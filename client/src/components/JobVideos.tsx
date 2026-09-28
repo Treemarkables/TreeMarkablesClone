@@ -36,6 +36,7 @@ import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X, Che
 import { useToast } from "@/hooks/use-toast";
 import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
 import { formatNZTime } from "@shared/dateUtils";
+import { videoHasCaptions } from "@/lib/videoCaptions";
 
 interface JobVideosProps {
   jobId: string;
@@ -476,7 +477,7 @@ export function JobVideos({ jobId }: JobVideosProps) {
                   playsInline
                   className="w-full max-h-80 rounded bg-black object-contain"
                 >
-                  {v.captionsStatus === "ready" && (
+                  {videoHasCaptions(v) && (
                     <track
                       kind="captions"
                       srcLang="en"

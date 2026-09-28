@@ -111,10 +111,13 @@ export function isBootPlaceholderCopy(value: string): boolean {
 }
 
 /**
- * True when a real route has painted. The phone sidebar is off-canvas, so
+ * True when a real route has painted text. The phone sidebar is off-canvas, so
  * header chrome does not count. An empty `<main>` (Dispatch chunk still
  * loading behind the null inner Suspense fallback) is not a painted page.
  * `mainText === null` means there is no `<main>` yet (login / marketing).
+ *
+ * Text-only. A job-card watch page whose `<main>` is just a `<video>` (title
+ * null) has empty innerText — use `shellSignalsRealPage` for that.
  */
 export function shellTextSignalsRealPage(opts: {
   rootText: string;
@@ -126,6 +129,173 @@ export function shellTextSignalsRealPage(opts: {
   }
   const root = normalizeShellText(opts.rootText);
   return root.length > 0 && !isBootPlaceholderCopy(root);
+}
+
+/**
+ * Replaced content that means a route has painted even with no innerText.
+ * Small `svg` icons are excluded here (the pull-to-refresh glyph and lucide
+ * icons live in the shell) and checked separately with a size floor.
+ */
+export const RENDERED_MEDIA_SELECTOR =
+  "video, img, canvas, iframe, picture, audio, object, embed";
+
+const MIN_PAINTED_PX = 2;
+const MIN_SVG_PX = 48;
+
+function isBootChrome(el: Element): boolean {
+  let cur: Element | null = el;
+  while (cur) {
+    try {
+      if (cur.getAttribute("data-boot-chrome") != null) return true;
+    } catch {
+      return false;
+    }
+    cur = cur.parentElement;
+  }
+  return false;
+}
+
+function isVisuallyHidden(el: Element): boolean {
+  if (typeof window === "undefined" || typeof window.getComputedStyle !== "function") {
+    return false;
+  }
+  let cur: Element | null = el;
+  while (cur && cur.nodeType === 1) {
+    let style: CSSStyleDeclaration;
+    try {
+      style = window.getComputedStyle(cur);
+    } catch {
+      return false;
+    }
+    if (style.display === "none" || style.visibility === "hidden") return true;
+    const opacity = parseFloat(style.opacity || "1");
+    if (Number.isFinite(opacity) && opacity < 0.05) return true;
+    cur = cur.parentElement;
+  }
+  return false;
+}
+
+function layoutBox(el: Element): { width: number; height: number } | null {
+  try {
+    const rect = el.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  } catch {
+    return null;
+  }
+}
+
+/** A box that actually paints. Empty flex wrappers (the dispatch shell) do not. */
+function elementPaints(el: Element): boolean {
+  if (typeof window === "undefined" || typeof window.getComputedStyle !== "function") {
+    return false;
+  }
+  let style: CSSStyleDeclaration;
+  try {
+    style = window.getComputedStyle(el);
+  } catch {
+    return false;
+  }
+  const bg = (style.backgroundColor || "").replace(/\s+/g, "").toLowerCase();
+  // #1a1a1a is the boot shell. A full-bleed placeholder must not count.
+  if (
+    bg &&
+    bg !== "transparent" &&
+    bg !== "rgba(0,0,0,0)" &&
+    bg !== "rgb(26,26,26)"
+  ) {
+    return true;
+  }
+  if (style.backgroundImage && style.backgroundImage !== "none") return true;
+  return [
+    style.borderTopWidth,
+    style.borderRightWidth,
+    style.borderBottomWidth,
+    style.borderLeftWidth,
+  ].some((width) => parseFloat(width || "0") >= 1);
+}
+
+/**
+ * True when `root` contains something a person can see that is not the
+ * "Opening Inflow" shell: a video/image/canvas/iframe, a large svg, or any
+ * other element with a non-zero box that paints (spinner border, card, …).
+ * Layout-only divs and the hidden pull-to-refresh indicator do not count —
+ * those are what an empty dispatch `<main>` is made of.
+ */
+export function elementHasRenderedContent(root: Element | null | undefined): boolean {
+  if (!root || typeof root.querySelectorAll !== "function") return false;
+  let media: Element[] = [];
+  try {
+    media = Array.from(root.querySelectorAll(RENDERED_MEDIA_SELECTOR));
+  } catch {
+    media = [];
+  }
+  for (const node of media) {
+    if (isBootChrome(node) || isVisuallyHidden(node)) continue;
+    const tag = (node.tagName || "").toUpperCase();
+    if (
+      tag === "VIDEO" ||
+      tag === "CANVAS" ||
+      tag === "IFRAME" ||
+      tag === "AUDIO" ||
+      tag === "OBJECT" ||
+      tag === "EMBED"
+    ) {
+      return true;
+    }
+    const box = layoutBox(node);
+    if (box && box.width >= MIN_PAINTED_PX && box.height >= MIN_PAINTED_PX) return true;
+  }
+  let svgs: Element[] = [];
+  try {
+    svgs = Array.from(root.querySelectorAll("svg"));
+  } catch {
+    svgs = [];
+  }
+  for (const svg of svgs) {
+    if (isBootChrome(svg) || isVisuallyHidden(svg)) continue;
+    const box = layoutBox(svg);
+    if (box && box.width >= MIN_SVG_PX && box.height >= MIN_SVG_PX) return true;
+  }
+  let nodes: Element[] = [];
+  try {
+    nodes = Array.from(root.querySelectorAll("*"));
+  } catch {
+    return false;
+  }
+  for (const node of nodes) {
+    if (isBootChrome(node) || isVisuallyHidden(node)) continue;
+    const text = normalizeShellText(
+      (node as HTMLElement).innerText || node.textContent || "",
+    );
+    if (text && isBootPlaceholderCopy(text)) continue;
+    const box = layoutBox(node);
+    if (!box || box.width < MIN_PAINTED_PX || box.height < MIN_PAINTED_PX) continue;
+    if (elementPaints(node)) return true;
+  }
+  return false;
+}
+
+/**
+ * Text paint, or rendered media / a painted box. "Opening Inflow" is never
+ * ready, even when the placeholder div has a size. An empty `<main>` with
+ * only layout wrappers is not ready (TestFlight black-screen guard).
+ */
+export function shellSignalsRealPage(opts: {
+  rootText: string;
+  mainText: string | null;
+  mainHasRenderedContent?: boolean;
+  rootHasRenderedContent?: boolean;
+}): boolean {
+  if (opts.mainText !== null) {
+    const main = normalizeShellText(opts.mainText);
+    if (isBootPlaceholderCopy(main)) return false;
+    if (main.length > 0) return true;
+    return opts.mainHasRenderedContent === true;
+  }
+  const root = normalizeShellText(opts.rootText);
+  if (isBootPlaceholderCopy(root)) return false;
+  if (root.length > 0) return true;
+  return opts.rootHasRenderedContent === true;
 }
 
 /** `--background` from index.css. Empty until the stylesheet has applied. */
@@ -144,10 +314,15 @@ export function classifyBootSurface(opts: {
   heartbeatAgeMs: number | null;
   rootText: string;
   mainText: string | null;
+  /** Media or a painted box inside `<main>`. Omitted keeps the text-only probe. */
+  mainHasRenderedContent?: boolean;
+  rootHasRenderedContent?: boolean;
 }): "booted" | "painting" | "empty" | "not-booted" {
-  const visible = shellTextSignalsRealPage({
+  const visible = shellSignalsRealPage({
     rootText: opts.rootText,
     mainText: opts.mainText,
+    mainHasRenderedContent: opts.mainHasRenderedContent,
+    rootHasRenderedContent: opts.rootHasRenderedContent,
   });
   if (opts.booted) {
     if (visible || opts.bootShellVisible) return "booted";
@@ -432,12 +607,15 @@ function readCssBackgroundToken(): string {
 }
 
 /**
- * Hide #inflow-boot only after a real route has text AND the CSS bundle has
- * applied. App's first effect used to call markAppBooted() as soon as the
- * sidebar shell committed. On a phone that shell's inner Suspense fallback
- * is empty while the Dispatch chunk downloads, the inline shell disappeared,
- * and the viewport was the #1a1a1a body — a black screen native recovery
- * then treated as healthy.
+ * Hide #inflow-boot only after a real route has text or rendered media AND
+ * the CSS bundle has applied. App's first effect used to call markAppBooted()
+ * as soon as the sidebar shell committed. On a phone that shell's inner
+ * Suspense fallback is empty while the Dispatch chunk downloads, the inline
+ * shell disappeared, and the viewport was the #1a1a1a body — a black screen
+ * native recovery then treated as healthy.
+ *
+ * A `<main>` that is only a `<video>` (job-card watch links have no title)
+ * counts. An empty dispatch `<main>` still does not.
  */
 export function watchUntilRealPagePainted(): () => void {
   let stopped = false;
@@ -448,9 +626,11 @@ export function watchUntilRealPagePainted(): () => void {
     const root = document.getElementById("root");
     const main = root?.querySelector("main") ?? null;
     const ready =
-      shellTextSignalsRealPage({
+      shellSignalsRealPage({
         rootText: root?.innerText ?? "",
         mainText: main ? (main.innerText ?? "") : null,
+        mainHasRenderedContent: main ? elementHasRenderedContent(main) : false,
+        rootHasRenderedContent: root ? elementHasRenderedContent(root) : false,
       }) && cssTokenPresent(readCssBackgroundToken());
     if (!ready) {
       timer = window.setTimeout(tick, 150);

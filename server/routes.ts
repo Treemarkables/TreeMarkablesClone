@@ -9279,6 +9279,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
           url: video.url,
           thumbnailUrl: video.thumbnailUrl,
           captionsStatus: video.captionsStatus,
+          // Status can read "ready" while captions_vtt is empty. The watch
+          // page only renders <track> when this is true.
+          hasCaptions:
+            video.captionsStatus === 'ready' &&
+            typeof video.captionsVtt === 'string' &&
+            video.captionsVtt.trim().length > 0,
           createdAt: video.createdAt,
         },
       });

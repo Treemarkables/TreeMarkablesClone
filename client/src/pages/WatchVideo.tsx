@@ -2,10 +2,13 @@
 // No auth: the video id in the URL is an unguessable UUID, so the link itself
 // grants access. Reached at /watch/:videoId; this is what the Copy-link buttons
 // hand out instead of the raw object-stream URL.
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { markAppBooted } from "@/lib/nativeBootRecovery";
+import { videoHasCaptions } from "@/lib/videoCaptions";
 
 interface PublicVideo {
   id: string;
@@ -13,7 +16,21 @@ interface PublicVideo {
   description?: string | null;
   url: string;
   thumbnailUrl?: string | null;
+  captionsStatus?: string | null;
+  /** True only when captions_vtt is stored. Status "ready" alone is not enough. */
+  hasCaptions?: boolean | null;
   createdAt?: string | null;
+}
+
+/**
+ * Lift #inflow-boot for every watch-page commit. Job-card videos are stored
+ * with title null, so `<main>` is only a `<video>` and the text detector
+ * never fires. The loading spinner and "Video unavailable" states also have
+ * to be visible while the public fetch is in flight or has failed.
+ */
+export function markWatchVideoBooted(video?: { title?: string | null } | null): void {
+  void video;
+  markAppBooted();
 }
 
 export default function WatchVideo() {
@@ -42,6 +59,12 @@ export default function WatchVideo() {
   });
 
   const video = data?.data;
+
+  // Mount, not "when the title arrives". A slow or failed fetch, and a
+  // title-less player, must not stay under the boot overlay.
+  useEffect(() => {
+    markWatchVideoBooted(video ?? null);
+  }, [video]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -88,7 +111,7 @@ export default function WatchVideo() {
               className="w-full max-h-[70vh] rounded-lg bg-black object-contain"
               data-testid="watch-video-player"
             >
-              {video.captionsStatus === "ready" && (
+              {videoHasCaptions(video) && (
                 <track
                   kind="captions"
                   srcLang="en"

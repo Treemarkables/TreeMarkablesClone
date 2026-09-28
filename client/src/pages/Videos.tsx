@@ -17,6 +17,7 @@ import { isNativeApp } from "@/lib/platform";
 import { canSaveToPhotos, saveToPhotos, isPhotosPermissionError } from "@/lib/mediaLibrary";
 import { isShareDismissed, saveFailureCopy } from "@/lib/saveMedia";
 import { formatNZTime } from "@shared/dateUtils";
+import { videoHasCaptions } from "@/lib/videoCaptions";
 
 // Per-video state for the native (iOS app) download path. Current app builds
 // ship the MediaLibrary plugin, which downloads natively and saves straight
@@ -450,7 +451,7 @@ export default function Videos() {
                   playsInline
                   className="w-full max-h-72 rounded bg-black object-contain"
                 >
-                  {v.captionsStatus === "ready" && (
+                  {videoHasCaptions(v) && (
                     <track
                       kind="captions"
                       srcLang="en"
