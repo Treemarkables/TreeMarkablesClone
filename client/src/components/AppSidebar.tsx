@@ -593,7 +593,7 @@ function SidebarNavContent({
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/quote-follow-ups"}>
                             <Link href="/quote-follow-ups" onClick={handleLinkClick} data-testid="link-quote-follow-ups">
-                              <span>Quote follow-ups</span>
+                              <span>Follow-ups</span>
                               {followUpCount > 0 && (
                                 <span className="ml-2 rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5" data-testid="badge-quote-followups">
                                   {followUpCount}

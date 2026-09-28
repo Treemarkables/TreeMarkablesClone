@@ -18,6 +18,8 @@ import { emailService } from "./services/emailService";
 import { notifyEmployee } from "./services/notificationHelper";
 import { getNZDateString, nzTimeToUTC } from "@shared/dateUtils";
 import { APP_URL } from "./config/appUrl";
+import { listInvoiceXeroForBusiness } from "./invoiceXeroService";
+import { invoiceXeroQueuePath } from "@shared/invoiceXeroFollowUps";
 import { commitApprovedSend } from "@shared/quoteFollowUpApproval";
 import {
   buildRequoteDraft,
@@ -494,8 +496,13 @@ async function materialiseRequote(businessId: string, plan: PlannedCreate, inser
 async function remindIfWaiting(businessId: string, now: Date): Promise<void> {
   const hour = nzHour(now);
   if (hour < 7 || hour >= 18) return;
-  const list = await loadViews(businessId);
-  if (list.waiting === 0) return;
+  const settings = await storage.getBusinessSettingsForBusiness(businessId);
+  const list = settings?.quoteFollowupWorkflowEnabled === false
+    ? { waiting: 0, followUps: [] as QuoteFollowUpView[] }
+    : await loadViews(businessId);
+  const xero = await listInvoiceXeroForBusiness(businessId);
+  const waiting = list.waiting + xero.waiting;
+  if (waiting === 0) return;
   const since = nzTimeToUTC(getNZDateString(now), "00:00");
   const [already] = await ownerDb
     .select({ id: schema.notifications.id })
@@ -508,12 +515,25 @@ async function remindIfWaiting(businessId: string, now: Date): Promise<void> {
     .limit(1);
   if (already) return;
 
-  const only = list.followUps.filter((row) => row.waiting);
-  const path = only.length === 1 ? followUpQueuePath(only[0]?.id) : followUpQueuePath();
-  const title = "Quote follow-ups waiting";
-  const message = list.waiting === 1
-    ? "1 quote follow-up is waiting for you. Nothing has been sent."
-    : `${list.waiting} quote follow-ups are waiting for you. Nothing has been sent.`;
+  const quoteRows = list.followUps.filter((row) => row.waiting);
+  const xeroRows = xero.invoices.filter((row) => row.waiting);
+  const onlyQuotes = xero.waiting === 0;
+  const onlyXero = list.waiting === 0;
+  const path = onlyXero
+    ? (xeroRows.length === 1 ? invoiceXeroQueuePath(xeroRows[0]?.id) : invoiceXeroQueuePath())
+    : (onlyQuotes && quoteRows.length === 1 ? followUpQueuePath(quoteRows[0]?.id) : followUpQueuePath());
+  const title = onlyXero
+    ? "Invoices not in Xero"
+    : (onlyQuotes ? "Quote follow-ups waiting" : "Follow-ups waiting");
+  const message = onlyXero
+    ? (xero.waiting === 1
+      ? "1 invoice was sent to the customer and is not in Xero yet. Nothing has been synced."
+      : `${xero.waiting} invoices were sent to the customer and are not in Xero yet. Nothing has been synced.`)
+    : (onlyQuotes
+      ? (list.waiting === 1
+        ? "1 quote follow-up is waiting for you. Nothing has been sent."
+        : `${list.waiting} quote follow-ups are waiting for you. Nothing has been sent.`)
+      : `${waiting} follow-ups are waiting for you. Nothing has been sent or synced.`);
 
   await runWithBusiness(businessId, async () => {
     await storage.createNotification({
@@ -523,8 +543,8 @@ async function remindIfWaiting(businessId: string, now: Date): Promise<void> {
       priority: "medium",
       isRead: false,
       actionUrl: path,
-      quoteId: only.length === 1 ? only[0]?.quoteId : undefined,
-      metadata: { waiting: list.waiting },
+      quoteId: onlyQuotes && quoteRows.length === 1 ? quoteRows[0]?.quoteId : undefined,
+      metadata: { waiting, quotes: list.waiting, invoicesNotInXero: xero.waiting },
     });
     const employees = await storage.getAllEmployees();
     const admins = employees.filter((employee) => employee.role === "admin" && employee.isActive !== false);
@@ -533,7 +553,7 @@ async function remindIfWaiting(businessId: string, now: Date): Promise<void> {
         title,
         body: message,
         clickAction: path,
-        collapseId: `quote-followups-${businessId}`,
+        collapseId: `follow-ups-${businessId}`,
         data: { type: "quote_followup_waiting" },
       });
     }
@@ -675,9 +695,7 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
     }
   }
 
-  if (settings?.quoteFollowupWorkflowEnabled !== false) {
-    await remindIfWaiting(businessId, now);
-  }
+  await remindIfWaiting(businessId, now);
 }
 
 export async function runQuoteFollowUpDetection(now = new Date()): Promise<void> {

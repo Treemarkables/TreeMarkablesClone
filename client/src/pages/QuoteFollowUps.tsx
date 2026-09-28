@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
+import { InvoiceXeroPanel } from "@/components/InvoiceXeroPanel";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -59,7 +60,10 @@ function kindLabel(kind: string): string {
 export default function QuoteFollowUps() {
   const { toast } = useToast();
   const search = useSearch();
-  const selectedFromUrl = new URLSearchParams(search).get("id");
+  const [, setLocation] = useLocation();
+  const params = new URLSearchParams(search);
+  const tab = params.get("tab") === "xero" ? "xero" : "quotes";
+  const selectedFromUrl = tab === "quotes" ? params.get("id") : null;
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl);
   const [message, setMessage] = useState("");
   const [subject, setSubject] = useState("");
@@ -160,13 +164,34 @@ export default function QuoteFollowUps() {
   return (
     <div className="flex flex-col min-h-full overflow-y-auto p-4 md:p-6 gap-4 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-semibold">Quote follow-ups</h1>
+        <h1 className="text-2xl font-semibold">Follow-ups</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Drafts only. Nothing goes to the customer until you press Approve &amp; Send.
+          {tab === "xero"
+            ? "Invoices sent to the customer that are not in Xero. Nothing syncs until you press Approve & Sync."
+            : "Drafts only. Nothing goes to the customer until you press Approve & Send."}
         </p>
       </div>
 
-      {isLoading ? (
+      <div className="flex gap-2">
+        <Button
+          variant={tab === "quotes" ? "default" : "outline"}
+          onClick={() => setLocation("/quote-follow-ups")}
+          data-testid="tab-quote-followups"
+        >
+          Quotes
+        </Button>
+        <Button
+          variant={tab === "xero" ? "default" : "outline"}
+          onClick={() => setLocation("/quote-follow-ups?tab=xero")}
+          data-testid="tab-not-in-xero"
+        >
+          Not in Xero
+        </Button>
+      </div>
+
+      {tab === "xero" ? (
+        <InvoiceXeroPanel />
+      ) : isLoading ? (
         <p className="text-sm text-muted-foreground">Loading follow-ups…</p>
       ) : rows.length === 0 ? (
         <div className="inflow-chrome px-5 py-8 text-sm text-muted-foreground" data-testid="quote-followups-empty">

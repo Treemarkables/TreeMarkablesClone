@@ -27,6 +27,10 @@ import {
   listQuoteFollowUpsForBusiness,
   updateQuoteFollowUpDraft,
 } from "./quoteFollowUpService";
+import {
+  approveInvoiceXeroFollowUp,
+  listInvoiceXeroForBusiness,
+} from "./invoiceXeroService";
 import { resolveOpsAccess, type OpsApiKey, type OpsEmployee } from "./opsAccess";
 import { storage } from "./storage";
 
@@ -245,6 +249,12 @@ function realDeps(): OpsDeps {
       id,
       confirm,
       authorName: "Inflow Ops",
+    }),
+    listInvoicesNotInXero: listInvoiceXeroForBusiness,
+    syncInvoiceToXero: (businessId, id, confirm) => approveInvoiceXeroFollowUp({
+      businessId,
+      id,
+      confirm,
     }),
   };
 }

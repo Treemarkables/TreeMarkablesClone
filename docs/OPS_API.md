@@ -22,6 +22,8 @@ Settings → Preferences still saves through admin-only `PUT /api/business-setti
 | `listQuoteFollowUps` | GET | `/api/ops/quote-follow-ups` |
 | `updateQuoteFollowUpDraft` | PATCH | `/api/ops/quote-follow-ups/:id` |
 | `approveQuoteFollowUp` | POST | `/api/ops/quote-follow-ups/:id/approve` |
+| `listInvoicesNotInXero` | GET | `/api/ops/invoices-not-in-xero` |
+| `syncInvoiceToXero` | POST | `/api/ops/invoices-not-in-xero/:id/sync` |
 
 `week` is any NZ calendar day. It snaps to the Monday–Sunday week (same week as Staff Schedule). Omit it for the week that contains today in Pacific/Auckland. Each day's `scheduledRevenueExGst` matches the Despatch day bar (`jobRevenue`: line items ex GST, then subtotal, then GST-inclusive totals ÷ 1.15, split across booked NZ days, quotes and leads excluded). `gapToTarget` is `dailyRevenueTarget - scheduledRevenueExGst` (positive means short). Both are `null` when no target is stored.
 
@@ -46,6 +48,17 @@ Links:
 - Queue: `{APP_URL}/quote-follow-ups`
 - One draft: `{APP_URL}/quote-follow-ups?id={followUpId}`
 - Settings: `{APP_URL}/settings/quote-followup`
+
+## Invoices not in Xero
+
+`listInvoicesNotInXero` is read-only. It returns invoices that were emailed or texted to the customer and are not in Xero (no Xero invoice id, or a pending, failed, or error sync). Each row includes the preview of the contact, line items, totals, GST, and account code that Approve & Sync would create. It does not call Xero.
+
+`syncInvoiceToXero` calls the same Xero send as the Invoices page only when the JSON body is `{ "confirm": true }` and the caller is an admin (session admin, or a scoped key — the same gate as `setDailyRevenueTarget`). Any other body, including `{ "confirm": "true" }` or `{ "confirm": false }`, returns 400 and does not call Xero. A non-admin with `confirm: true` returns 403 and does not call Xero. The same flag is required on the in-app `POST /api/invoice-xero-follow-ups/:id/sync`. Success and failure are written to the job diary by that send.
+
+Links:
+
+- Not in Xero tab: `{APP_URL}/quote-follow-ups?tab=xero`
+- One invoice: `{APP_URL}/quote-follow-ups?tab=xero&id={followUpId}`
 
 ## Not in this phase
 

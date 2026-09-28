@@ -64,6 +64,48 @@ export interface OpsFollowUpApproveResult {
   body: { success: boolean; message?: string };
 }
 
+export interface OpsInvoiceNotInXero {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  jobId: string | null;
+  customerName: string | null;
+  status: string;
+  waiting: boolean;
+  snoozeUntil: string | null;
+  lastError: string | null;
+  preview: {
+    currency: "NZD";
+    contact: { name: string; email: string | null; phone: string | null };
+    invoiceNumber: string;
+    reference: string | null;
+    dueDate: string | null;
+    statusInXero: "AUTHORISED";
+    accountCode: string;
+    taxType: string;
+    gstRate: number;
+    lineItems: {
+      description: string;
+      quantity: number;
+      unitAmount: number;
+      accountCode: string;
+      taxType: string;
+      lineTotal: number;
+    }[];
+    subtotal: number;
+    gst: number;
+    total: number;
+    blockingReason: string | null;
+  };
+  links: { queue: string; job: string | null };
+}
+
+export interface OpsInvoiceNotInXeroList {
+  waiting: number;
+  invoices: OpsInvoiceNotInXero[];
+  links: { queue: string };
+}
+
 export interface OpsDeps {
   resolveAccess(req: Request): Promise<OpsAccess>;
   todayNz(): string;
@@ -79,6 +121,8 @@ export interface OpsDeps {
     patch: { message?: unknown; subject?: unknown; channel?: unknown },
   ): Promise<OpsQuoteFollowUp | null>;
   approveQuoteFollowUp(businessId: string, id: string, confirm: true): Promise<OpsFollowUpApproveResult>;
+  listInvoicesNotInXero(businessId: string): Promise<OpsInvoiceNotInXeroList>;
+  syncInvoiceToXero(businessId: string, id: string, confirm: true): Promise<OpsFollowUpApproveResult>;
 }
 
 function links(appUrl: string): OpsLinks {
@@ -256,6 +300,44 @@ export function mountOpsRoutes(app: Express, deps: OpsDeps): void {
     } catch (error) {
       console.error("Error approving quote follow-up:", error);
       fail(res, 500, "Couldn't send the follow-up. Nothing was marked as sent.");
+    }
+  });
+
+  app.get("/api/ops/invoices-not-in-xero", async (req: Request, res: Response) => {
+    try {
+      const access = await accessFor(deps, req, res, false);
+      if (!access) return;
+      const data = await deps.listInvoicesNotInXero(access.businessId);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error("Error listing invoices not in Xero:", error);
+      fail(res, 500, "Error listing invoices not in Xero");
+    }
+  });
+
+  // Syncs only when the body is { confirm: true } and the caller is an admin.
+  // The handler does not call the sync dependency otherwise.
+  app.post("/api/ops/invoices-not-in-xero/:id/sync", async (req: Request, res: Response) => {
+    try {
+      const access = await accessFor(deps, req, res, false);
+      if (!access) return;
+      const body = req.body;
+      const confirm = body != null && typeof body === "object" && !Array.isArray(body)
+        ? (body as { confirm?: unknown }).confirm
+        : undefined;
+      if (confirm !== true) {
+        fail(res, 400, "Syncing needs confirm: true. Nothing was sent to Xero.");
+        return;
+      }
+      if (!access.canSetDailyRevenueTarget) {
+        fail(res, 403, "Admin access required");
+        return;
+      }
+      const result = await deps.syncInvoiceToXero(access.businessId, req.params.id, true);
+      res.status(result.status).json(result.body);
+    } catch (error) {
+      console.error("Error syncing invoice to Xero:", error);
+      fail(res, 500, "Couldn't sync to Xero. Nothing was marked as synced.");
     }
   });
 }

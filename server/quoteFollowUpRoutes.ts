@@ -13,6 +13,7 @@ import {
   snoozeQuoteFollowUp,
   updateQuoteFollowUpDraft,
 } from "./quoteFollowUpService";
+import { countWaitingInvoiceXeroFollowUps } from "./invoiceXeroService";
 
 function businessId(req: Request, res: Response): string | null {
   if (!req.session.employeeId) {
@@ -42,7 +43,15 @@ export function registerQuoteFollowUpRoutes(app: Express): void {
     try {
       if (!businessId(req, res)) return;
       const list = await listQuoteFollowUpsForSession();
-      res.json({ success: true, data: { count: list.waiting } });
+      const invoicesNotInXero = await countWaitingInvoiceXeroFollowUps();
+      res.json({
+        success: true,
+        data: {
+          count: list.waiting + invoicesNotInXero,
+          quotes: list.waiting,
+          invoicesNotInXero,
+        },
+      });
     } catch (error) {
       console.error("Error counting quote follow-ups:", error);
       res.status(httpStatus(error)).json({ success: false, message: "Couldn't load follow-ups." });

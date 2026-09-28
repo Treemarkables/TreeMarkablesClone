@@ -94,6 +94,14 @@ describe("ops HTTP routes", () => {
       }),
       updateQuoteFollowUpDraft: async () => null,
       approveQuoteFollowUp: async () => ({ status: 200, body: { success: true } }),
+      listInvoicesNotInXero: async () => ({
+        waiting: 0,
+        invoices: [],
+        links: { queue: "https://app.example/quote-follow-ups?tab=xero" },
+      }),
+      syncInvoiceToXero: async () => {
+        throw new Error("sync should not run");
+      },
     };
 
     const app = express();
@@ -209,6 +217,14 @@ describe("ops HTTP routes", () => {
         approvals += 1;
         return { status: 200, body: { success: true } };
       },
+      listInvoicesNotInXero: async () => ({
+        waiting: 0,
+        invoices: [],
+        links: { queue: "https://app.example/quote-follow-ups?tab=xero" },
+      }),
+      syncInvoiceToXero: async () => {
+        throw new Error("sync should not run");
+      },
     };
 
     const app = express();
@@ -241,6 +257,84 @@ describe("ops HTTP routes", () => {
       });
       assert.equal(approved.status, 200);
       assert.equal(approvals, 1);
+    } finally {
+      await close();
+    }
+  });
+
+  it("lists invoices not in Xero and does not sync without confirm: true", async () => {
+    let syncs = 0;
+    const deps: OpsDeps = {
+      resolveAccess: async (req) => accessFromHeader(req),
+      todayNz: () => "2026-09-28",
+      appUrl: "https://app.example",
+      listUnscheduled: async () => {
+        throw new Error("unused");
+      },
+      weekRevenue: async () => {
+        throw new Error("unused");
+      },
+      getDailyRevenueTarget: async () => null,
+      setDailyRevenueTarget: async () => null,
+      listQuoteFollowUps: async () => {
+        throw new Error("unused");
+      },
+      updateQuoteFollowUpDraft: async () => null,
+      approveQuoteFollowUp: async () => {
+        throw new Error("unused");
+      },
+      listInvoicesNotInXero: async (businessId) => {
+        assert.equal(businessId, "biz-a");
+        return {
+          waiting: 1,
+          invoices: [],
+          links: { queue: "https://app.example/quote-follow-ups?tab=xero" },
+        };
+      },
+      syncInvoiceToXero: async () => {
+        syncs += 1;
+        return { status: 200, body: { success: true } };
+      },
+    };
+
+    const app = express();
+    app.use(express.json());
+    mountOpsRoutes(app, deps);
+    const { url, close } = await listen(app);
+    try {
+      const listed = await fetch(`${url}/api/ops/invoices-not-in-xero`, {
+        headers: { "x-test-user": "crew" },
+      });
+      assert.equal(listed.status, 200);
+      const body = await listed.json() as { data: { waiting: number; links: { queue: string } } };
+      assert.equal(body.data.waiting, 1);
+      assert.match(body.data.links.queue, /tab=xero/);
+
+      for (const payload of [{}, { confirm: false }, { confirm: "true" }]) {
+        const refused = await fetch(`${url}/api/ops/invoices-not-in-xero/row-1/sync`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-test-user": "admin" },
+          body: JSON.stringify(payload),
+        });
+        assert.equal(refused.status, 400);
+      }
+      assert.equal(syncs, 0);
+
+      const crew = await fetch(`${url}/api/ops/invoices-not-in-xero/row-1/sync`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-user": "crew" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      assert.equal(crew.status, 403);
+      assert.equal(syncs, 0);
+
+      const synced = await fetch(`${url}/api/ops/invoices-not-in-xero/row-1/sync`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-user": "admin" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      assert.equal(synced.status, 200);
+      assert.equal(syncs, 1);
     } finally {
       await close();
     }

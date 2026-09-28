@@ -99,6 +99,7 @@ import { registerXeroRoutes } from "./xeroRoutes";
 import { registerBugReportRoutes } from "./bugReports";
 import { registerOpsRoutes } from "./opsRoutes";
 import { registerQuoteFollowUpRoutes } from "./quoteFollowUpRoutes";
+import { registerInvoiceXeroRoutes } from "./invoiceXeroRoutes";
 import {
   isStripeConfigured,
   businessOwnsStripeAccount,
@@ -2262,6 +2263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerBugReportRoutes(app, { requireSession, requirePlatformAdmin, imageUpload, videoUpload, audioUpload });
   registerOpsRoutes(app);
   registerQuoteFollowUpRoutes(app);
+  registerInvoiceXeroRoutes(app);
   
   // ========================================
   // CLIENT-SIDE ERROR LOGGING

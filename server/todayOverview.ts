@@ -30,6 +30,7 @@ import {
 } from "@shared/todayPage";
 import { loadEffectiveRiskLinksForJobs } from "./jhaJobRisk";
 import { countWaitingQuoteFollowUps } from "./quoteFollowUpService";
+import { countWaitingInvoiceXeroFollowUps } from "./invoiceXeroService";
 import type { JobRiskAssessmentLink } from "@shared/jhaJobRisk";
 
 export class HttpError extends Error {
@@ -242,7 +243,9 @@ export async function buildTodayOverview(employeeId: string): Promise<TodayOverv
 
   let quoteFollowUpsWaiting = 0;
   try {
-    quoteFollowUpsWaiting = await countWaitingQuoteFollowUps();
+    const quoteWaiting = await countWaitingQuoteFollowUps();
+    const xeroWaiting = await countWaitingInvoiceXeroFollowUps();
+    quoteFollowUpsWaiting = quoteWaiting + xeroWaiting;
   } catch (error) {
     console.error("Today overview: quote follow-up count failed:", error);
   }

@@ -403,6 +403,27 @@ export const quoteFollowUps = pgTable("quote_follow_ups", {
   statusIdx: index("quote_follow_ups_business_status_idx").on(table.businessId, table.status),
 }));
 
+// Invoices sent to the customer that are not in Xero yet. One row per invoice.
+// The hourly detector only inserts a draft. Approve & Sync is the only path
+// that calls Xero, and it uses the same send as the Invoices page.
+export const invoiceXeroFollowUps = pgTable("invoice_xero_follow_ups", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").notNull(),
+  jobId: varchar("job_id"),
+  customerId: varchar("customer_id"),
+  status: text("status").notNull().default("draft"), // draft, snoozed, syncing, synced, dismissed, cancelled
+  snoozeUntil: timestamp("snooze_until"),
+  lastError: text("last_error"),
+  syncedAt: timestamp("synced_at"),
+  diaryEntryId: varchar("diary_entry_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  invoiceUniq: uniqueIndex("invoice_xero_follow_ups_invoice_uniq").on(table.businessId, table.invoiceId),
+  statusIdx: index("invoice_xero_follow_ups_business_status_idx").on(table.businessId, table.status),
+}));
+
 // Job Management
 export const jobs = pgTable("jobs", {
   businessId: varchar("business_id"),
