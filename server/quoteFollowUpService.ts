@@ -28,7 +28,9 @@ import { commitApprovedSend } from "@shared/quoteFollowUpApproval";
 import {
   buildRequoteDraft,
   collapseFollowUpSources,
+  customerFacingQuoteNumber,
   followUpQueuePath,
+  isInternalDocumentNumber,
   isWaitingFollowUp,
   parseNudgeDays,
   planQuoteFollowUps,
@@ -142,9 +144,9 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
     ...idsFor("proposal"),
     ...rows.flatMap((row) => (row.sourceType === "proposal" || row.sourceType === "job") && row.requoteId ? [row.requoteId] : []),
   ]));
-  const jobOnlyIds = idsFor("job");
   const quoteRows = quoteIds.length === 0 ? [] : await ownerDb.select({
     id: schema.quotes.id,
+    jobId: schema.quotes.jobId,
     quoteNumber: schema.quotes.quoteNumber,
     sentDate: schema.quotes.sentDate,
     updatedAt: schema.quotes.updatedAt,
@@ -153,20 +155,28 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
   }).from(schema.quotes).where(and(eq(schema.quotes.businessId, businessId), inArray(schema.quotes.id, quoteIds)));
   const proposalRows = proposalIds.length === 0 ? [] : await ownerDb.select({
     id: schema.proposals.id,
+    jobId: schema.proposals.jobId,
     proposalNumber: schema.proposals.proposalNumber,
     sentDate: schema.proposals.sentDate,
     updatedAt: schema.proposals.updatedAt,
     subtotal: schema.proposals.subtotal,
     totalAmount: schema.proposals.totalAmount,
   }).from(schema.proposals).where(and(eq(schema.proposals.businessId, businessId), inArray(schema.proposals.id, proposalIds)));
-  const jobRows = jobOnlyIds.length === 0 ? [] : await ownerDb.select({
+  const jobIds = Array.from(new Set([
+    ...idsFor("job"),
+    ...rows.map((row) => row.jobId).filter((id): id is string => !!id),
+    ...quoteRows.map((row) => row.jobId).filter((id): id is string => !!id),
+    ...proposalRows.map((row) => row.jobId).filter((id): id is string => !!id),
+  ]));
+  const jobRows = jobIds.length === 0 ? [] : await ownerDb.select({
     id: schema.jobs.id,
     jobNumber: schema.jobs.jobNumber,
+    address: schema.jobs.address,
     quotePresentedDate: schema.jobs.quotePresentedDate,
     updatedAt: schema.jobs.updatedAt,
     totalAmount: schema.jobs.totalAmount,
     lineItems: schema.jobs.lineItems,
-  }).from(schema.jobs).where(and(eq(schema.jobs.businessId, businessId), inArray(schema.jobs.id, jobOnlyIds)));
+  }).from(schema.jobs).where(and(eq(schema.jobs.businessId, businessId), inArray(schema.jobs.id, jobIds)));
   const proposalLineRows = proposalIds.length === 0 ? [] : await ownerDb.select({
     proposalId: schema.proposalLineItems.proposalId,
     description: schema.proposalLineItems.description,
@@ -196,11 +206,30 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
     const sourceType: FollowUpSourceType = row.sourceType === "proposal" || row.sourceType === "job" ? row.sourceType : "quote";
     const quote = sourceType === "quote" ? quotesById.get(row.quoteId) : undefined;
     const proposal = sourceType === "proposal" ? proposalsById.get(row.quoteId) : undefined;
-    const job = sourceType === "job" ? jobsById.get(row.quoteId) : undefined;
-    const requoteNumber = row.requoteId
+    const job = jobsById.get(row.jobId || "") ?? (sourceType === "job" ? jobsById.get(row.quoteId) : undefined)
+      ?? (quote?.jobId ? jobsById.get(quote.jobId) : undefined)
+      ?? (proposal?.jobId ? jobsById.get(proposal.jobId) : undefined);
+    const documentNumber = sourceType === "quote"
+      ? quote?.quoteNumber
+      : sourceType === "proposal"
+        ? proposal?.proposalNumber
+        : job?.jobNumber;
+    const quoteNumber = customerFacingQuoteNumber({
+      documentNumber,
+      jobNumber: job?.jobNumber,
+      jobAddress: job?.address,
+    });
+    const rawRequote = row.requoteId
       ? (sourceType === "quote"
         ? quotesById.get(row.requoteId)?.quoteNumber
         : proposalsById.get(row.requoteId)?.proposalNumber) || null
+      : null;
+    const requoteNumber = rawRequote
+      ? customerFacingQuoteNumber({
+        documentNumber: rawRequote,
+        jobNumber: job?.jobNumber,
+        jobAddress: job?.address,
+      })
       : null;
     const sent = quote?.sentDate ?? proposal?.sentDate ?? job?.quotePresentedDate ?? null;
     const updated = quote?.updatedAt ?? proposal?.updatedAt ?? job?.updatedAt ?? null;
@@ -227,7 +256,7 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
     return {
       id: row.id,
       quoteId: row.quoteId,
-      quoteNumber: quote?.quoteNumber || proposal?.proposalNumber || job?.jobNumber || "",
+      quoteNumber,
       jobId: row.jobId,
       customerId: row.customerId,
       customerName: row.recipientName,
@@ -300,15 +329,27 @@ export async function updateQuoteFollowUpDraft(
     throw error;
   }
   const updates: Partial<typeof schema.quoteFollowUps.$inferInsert> = { updatedAt: new Date() };
+  let edited = false;
   if (typeof patch.message === "string") {
     if (!patch.message.trim()) {
       const error = new Error("Write a message before saving.");
       (error as Error & { status?: number }).status = 400;
       throw error;
     }
-    updates.message = patch.message.trim();
+    const nextMessage = patch.message.trim();
+    if (nextMessage !== row.message) {
+      updates.message = nextMessage;
+      edited = true;
+    }
   }
-  if (typeof patch.subject === "string") updates.subject = patch.subject.trim() || null;
+  if (typeof patch.subject === "string") {
+    const nextSubject = patch.subject.trim() || null;
+    if (nextSubject !== (row.subject ?? null)) {
+      updates.subject = nextSubject;
+      edited = true;
+    }
+  }
+  if (edited) updates.draftEditedAt = new Date();
   if (patch.channel === "sms" || patch.channel === "email") {
     if (patch.channel === "sms" && !row.recipientPhone) {
       const error = new Error("No mobile number on file for SMS.");
@@ -638,7 +679,20 @@ async function materialiseRequote(
       : undefined;
     const customerId = proposalSource?.customerId || jobSource?.customerId || row.customerId;
     if (!customerId) throw new Error("This quote has no customer, so a new draft can't be created.");
-    const originalNumber = proposalSource?.proposalNumber || jobSource?.jobNumber || "the quote";
+    const linkedJob = !jobSource && row.jobId
+      ? (await ownerDb.select({
+        jobNumber: schema.jobs.jobNumber,
+        address: schema.jobs.address,
+      }).from(schema.jobs).where(and(
+        eq(schema.jobs.id, row.jobId),
+        eq(schema.jobs.businessId, businessId),
+      )).limit(1))[0]
+      : undefined;
+    const originalNumber = customerFacingQuoteNumber({
+      documentNumber: proposalSource?.proposalNumber || jobSource?.jobNumber,
+      jobNumber: jobSource?.jobNumber || linkedJob?.jobNumber,
+      jobAddress: jobSource?.address || linkedJob?.address,
+    });
     const lines = proposalSource
       ? recordsFromProposalLines(await ownerDb.select({
         description: schema.proposalLineItems.description,
@@ -712,7 +766,8 @@ async function materialiseRequote(
     return { id: proposal.id, number: proposal.proposalNumber };
   });
 
-  const copy = withNewQuoteNumber(row.message, row.subject, created.number);
+  const replacement = isInternalDocumentNumber(created.number) ? "the new quote" : created.number.trim();
+  const copy = withNewQuoteNumber(row.message, row.subject, replacement);
   await ownerDb.update(schema.quoteFollowUps).set({
     requoteId: created.id,
     message: copy.message,
@@ -769,7 +824,7 @@ async function remindIfWaiting(businessId: string, now: Date): Promise<void> {
         : `${xero.waiting} invoices were sent to the customer and are not in Xero yet. Nothing has been synced.`)
       : (onlyQuotes
         ? (list.waiting === 1
-          ? "1 quote follow-up is waiting for you. Nothing has been sent."
+          ? `Quote ${quoteRows[0]?.quoteNumber || "follow-up"} is waiting for you. Nothing has been sent.`
           : `${list.waiting} quote follow-ups are waiting for you. Nothing has been sent.`)
         : `${waiting} follow-ups are waiting for you. Nothing has been created, sent, or synced.`));
 
@@ -915,7 +970,11 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
       jobId: row.jobId,
       customerId: row.customerId,
       leadId: row.leadId,
-      quoteNumber: row.quoteNumber,
+      quoteNumber: customerFacingQuoteNumber({
+        documentNumber: row.quoteNumber,
+        jobNumber: job?.jobNumber,
+        jobAddress: job?.address,
+      }),
       description: row.description,
       terms: row.terms,
       amount: row.amount,
@@ -950,7 +1009,11 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
       businessId,
       jobId: row.jobId,
       customerId: row.customerId,
-      quoteNumber: row.proposalNumber,
+      quoteNumber: customerFacingQuoteNumber({
+        documentNumber: row.proposalNumber,
+        jobNumber: job?.jobNumber,
+        jobAddress: job?.address,
+      }),
       description: row.introduction,
       amount: row.subtotal || row.totalAmount,
       status,
@@ -973,7 +1036,11 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
       businessId,
       jobId: job.id,
       customerId: job.customerId,
-      quoteNumber: job.jobNumber,
+      quoteNumber: customerFacingQuoteNumber({
+        documentNumber: job.jobNumber,
+        jobNumber: job.jobNumber,
+        jobAddress: job.address,
+      }),
       description: job.description,
       amount: job.totalAmount,
       lineItems: job.lineItems,

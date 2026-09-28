@@ -3,11 +3,15 @@ import assert from "node:assert/strict";
 import {
   buildRequoteDraft,
   collapseFollowUpSources,
+  customerFacingQuoteNumber,
   DEFAULT_NUDGE_DAYS,
+  draftCheckInMessage,
+  draftRequoteMessage,
   EXPIRY_NUDGE_STEP,
   isCustomerDiaryReply,
   parseNudgeDays,
   planQuoteFollowUps,
+  planUntouchedDraftRefresh,
   previewRequote,
   proposalFollowUpStatus,
   quietDaysSince,
@@ -430,5 +434,195 @@ describe("nudge day parsing", () => {
     assert.deepEqual(parseNudgeDays(undefined), [3, 7, 14]);
     assert.deepEqual(parseNudgeDays([14, 3, 3, 7]), [3, 7, 14]);
     assert.deepEqual(parseNudgeDays([0, 99, "nope"]), [3, 7, 14]);
+  });
+});
+
+const PROP = "PROP-1790575789755";
+const JOB = "4248";
+const ADDRESS = "14 Rimu Road, Nelson";
+const UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+
+describe("customer-facing quote number", () => {
+  it("keeps a short quote number", () => {
+    assert.equal(customerFacingQuoteNumber({
+      documentNumber: "1042",
+      jobNumber: JOB,
+      jobAddress: ADDRESS,
+    }), "1042");
+  });
+
+  it("uses the job number when the document number is a PROP- id", () => {
+    assert.equal(customerFacingQuoteNumber({
+      documentNumber: PROP,
+      jobNumber: JOB,
+      jobAddress: ADDRESS,
+    }), JOB);
+  });
+
+  it("uses the job number when there is no document number", () => {
+    assert.equal(customerFacingQuoteNumber({
+      documentNumber: "",
+      jobNumber: JOB,
+      jobAddress: ADDRESS,
+    }), JOB);
+  });
+
+  it("uses the job address when there is no short number", () => {
+    assert.equal(customerFacingQuoteNumber({
+      documentNumber: PROP,
+      jobNumber: "",
+      jobAddress: ADDRESS,
+    }), ADDRESS);
+    assert.equal(customerFacingQuoteNumber({
+      documentNumber: UUID,
+      jobNumber: null,
+      jobAddress: "Address not specified",
+    }), "your quote");
+  });
+
+  it("never returns a PROP- id or a UUID", () => {
+    const shown = customerFacingQuoteNumber({
+      documentNumber: PROP,
+      jobNumber: UUID,
+      jobAddress: ADDRESS,
+    });
+    assert.equal(shown, ADDRESS);
+    assert.doesNotMatch(shown, /PROP-/);
+    assert.notEqual(shown, UUID);
+    assert.equal(customerFacingQuoteNumber({
+      documentNumber: `Q-DRAFT-${Date.parse("2026-09-28T00:00:00Z")}`,
+      jobNumber: JOB,
+    }), JOB);
+  });
+});
+
+describe("follow-up template text", () => {
+  const shown = customerFacingQuoteNumber({ documentNumber: PROP, jobNumber: JOB, jobAddress: ADDRESS });
+
+  it("check-in SMS, email, and re-quote use the short number on every nudge day", () => {
+    const sms = draftCheckInMessage({ firstName: "Bruce", quoteNumber: shown, businessName: "Treemarkables", channel: "sms" });
+    assert.equal(sms.subject, null);
+    assert.equal(sms.message, "Hi Bruce, just checking where you're at with quote 4248. Happy to answer any questions. Cheers, Treemarkables");
+    assert.doesNotMatch(sms.message, /PROP-|DRAFT-|[0-9a-f]{8}-/);
+
+    const email = draftCheckInMessage({ firstName: "Bruce", quoteNumber: shown, businessName: "Treemarkables", channel: "email" });
+    assert.equal(email.subject, "Quote 4248 — just checking in");
+    assert.match(email.message, /quote 4248/);
+
+    const requote = draftRequoteMessage({
+      firstName: "Bruce",
+      quoteNumber: shown,
+      newQuoteNumber: "the new quote",
+      businessName: "Treemarkables",
+      channel: "sms",
+    });
+    assert.match(requote.message, /quote 4248/);
+    assert.doesNotMatch(requote.message, /PROP-/);
+
+    for (const day of [3, 7, 14]) {
+      const plans = creates(plan({
+        quotes: [quote({
+          quoteNumber: shown,
+          customerName: "Bruce Thompson",
+          sentDate: new Date(NOW - day * DAY).toISOString(),
+          updatedAt: new Date(NOW - day * DAY).toISOString(),
+          validUntil: new Date(NOW + 30 * DAY).toISOString(),
+        })],
+      }));
+      const draft = plans.find((item) => item.nudgeStep === day);
+      assert.equal(draft?.kind, "check_in");
+      if (draft?.action !== "create") continue;
+      assert.match(draft.message, /quote 4248/);
+      assert.doesNotMatch(draft.message, /PROP-/);
+    }
+
+    const expired = creates(plan({
+      quotes: [quote({
+        quoteNumber: shown,
+        customerName: "Bruce Thompson",
+        sentDate: new Date(NOW - 20 * DAY).toISOString(),
+        updatedAt: new Date(NOW - 20 * DAY).toISOString(),
+        validUntil: new Date(NOW - DAY).toISOString(),
+      })],
+    }));
+    assert.equal(expired[0]?.kind, "requote");
+    if (expired[0]?.action === "create") {
+      assert.match(expired[0].message, /quote 4248/);
+      assert.doesNotMatch(expired[0].message, /PROP-/);
+    }
+  });
+});
+
+describe("untouched draft refresh", () => {
+  const base = {
+    status: "draft",
+    kind: "check_in",
+    channel: "sms",
+    recipientName: "Bruce Thompson",
+    businessName: "Treemarkables",
+    documentNumber: PROP,
+    jobNumber: JOB,
+    jobAddress: ADDRESS,
+    subject: null as string | null,
+  };
+
+  it("rewrites an untouched draft and leaves an edited one", () => {
+    const stored = draftCheckInMessage({ firstName: "Bruce", quoteNumber: PROP, businessName: "Treemarkables", channel: "sms" });
+    const plan = planUntouchedDraftRefresh({ ...base, message: stored.message, subject: stored.subject });
+    assert.equal(plan.action, "rewrite");
+    if (plan.action !== "rewrite") return;
+    assert.match(plan.message, /quote 4248/);
+    assert.doesNotMatch(plan.message, /PROP-/);
+
+    const again = planUntouchedDraftRefresh({ ...base, message: plan.message, subject: plan.subject, documentNumber: PROP });
+    assert.equal(again.action, "keep");
+
+    const edited = planUntouchedDraftRefresh({
+      ...base,
+      message: "Hi Bruce, parking is tight on quote PROP-1790575789755. Cheers, Jules",
+    });
+    assert.equal(edited.action, "mark_edited");
+    const leftAlone = planUntouchedDraftRefresh({
+      ...base,
+      draftEditedAt: "2026-09-28T00:00:00.000Z",
+      message: stored.message,
+    });
+    assert.equal(leftAlone.action, "keep");
+  });
+
+  it("does not rewrite sent or snoozed-edited rows, and does rewrite an untouched re-quote", () => {
+    const stored = draftCheckInMessage({ firstName: "Bruce", quoteNumber: PROP, businessName: "Treemarkables", channel: "sms" });
+    assert.equal(planUntouchedDraftRefresh({ ...base, status: "sent", message: stored.message }).action, "keep");
+    assert.equal(planUntouchedDraftRefresh({ ...base, status: "sending", message: stored.message }).action, "keep");
+    assert.equal(planUntouchedDraftRefresh({ ...base, status: "dismissed", message: stored.message }).action, "keep");
+
+    const requote = draftRequoteMessage({
+      firstName: "Bruce",
+      quoteNumber: PROP,
+      newQuoteNumber: "the new quote",
+      businessName: "Treemarkables",
+      channel: "email",
+    });
+    const refreshed = planUntouchedDraftRefresh({
+      ...base,
+      status: "snoozed",
+      kind: "requote",
+      channel: "email",
+      message: requote.message,
+      subject: requote.subject,
+    });
+    assert.equal(refreshed.action, "rewrite");
+    if (refreshed.action !== "rewrite") return;
+    assert.match(refreshed.message, /Quote 4248/);
+    assert.equal(refreshed.subject, "Fresh quote the new quote");
+    assert.doesNotMatch(`${refreshed.subject}\n${refreshed.message}`, /PROP-/);
+    assert.equal(planUntouchedDraftRefresh({
+      ...base,
+      status: "snoozed",
+      kind: "requote",
+      channel: "email",
+      message: refreshed.message,
+      subject: refreshed.subject,
+    }).action, "keep");
   });
 });
