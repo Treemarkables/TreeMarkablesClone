@@ -229,7 +229,7 @@ export default function QuoteFollowUps() {
                 >
                   <p className="font-medium truncate">{row.customerName || "Customer"}</p>
                   <p className="text-sm text-muted-foreground">
-                    Quote {row.quoteNumber || row.quoteId} · {kindLabel(row.kind)}
+                    Quote {row.quoteNumber} · {kindLabel(row.kind)}
                     {row.waiting ? "" : " · snoozed"}
                   </p>
                 </button>
