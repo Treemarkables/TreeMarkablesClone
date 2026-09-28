@@ -35,9 +35,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { format } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  assembleDiaryEntries,
+  cleanDiaryContent,
+  diaryText,
+  emailBubbleMessage,
+  fetchDiaryTimelineSources,
+  formatDiaryTimestamp,
+  payloadData,
+  reportDiaryClientError,
+  type DiaryEntry,
+} from "@/components/diaryTimeline";
 import {
   MessageSquare,
   Mail,
@@ -138,7 +147,7 @@ function cleanSmsMessage(
   entry: { title: string; content: string },
   direction: EmailDirection,
 ): { text: string; recipient: string } {
-  let messageText = entry.content || "";
+  let messageText = diaryText(entry.content);
   let recipientInfo = "";
 
   if (direction === "sent") {
@@ -202,7 +211,7 @@ function cleanEmailMessage(
   entry: { title: string; content: string },
   direction: EmailDirection,
 ): { text: string; recipient: string } {
-  let messageText = entry.content || "";
+  let messageText = diaryText(entry.content);
   let recipientInfo = "";
 
   if (direction === "sent" && messageText.includes("Message:")) {
@@ -307,11 +316,7 @@ function EmailActivity({ messageId }: { messageId: string }) {
         <div className="flex items-center gap-0.5 text-gray-500">
           <Clock className="h-2.5 w-2.5" />
           <span>
-            {formatInTimeZone(
-              new Date(activity.lastEventAt),
-              "Pacific/Auckland",
-              "MMM dd, h:mma",
-            )}
+            {formatDiaryTimestamp(activity.lastEventAt, "MMM dd, h:mma")}
           </span>
         </div>
       )}
@@ -590,44 +595,6 @@ function SuggestedReplyDraft({
   );
 }
 
-// ServiceM8 API response types (matches server/services/servicem8-api.ts)
-interface ServiceM8DiaryEntry {
-  id: string;
-  jobUuid: string;
-  staffUuid: string | null;
-  entryType: string | null;
-  note: string | null;
-  objectUuid: string | null;
-  entryDate: Date | null;
-  createdAt: Date | null;
-  active: boolean;
-}
-
-// Types for diary entries
-interface DiaryEntry {
-  id: string;
-  type: "note" | "sms" | "email" | "job_event" | "proposal" | "quote" | "call" | "photo";
-  title: string;
-  content: string;
-  author: string;
-  timestamp: string;
-  photoUrl?: string;
-  photos?: string[];
-  tags?: string[];
-  metadata?: {
-    phoneNumber?: string;
-    emailAddress?: string;
-    proposalNumber?: string;
-    eventType?: string;
-    status?: string;
-    viewedDate?: string;
-    replyAcknowledged?: boolean;
-    recipient?: string;
-    sendgridMessageId?: string;
-    [key: string]: any;
-  };
-}
-
 // Form schemas
 const noteSchema = z.object({
   content: z.string().min(1, "Note content is required"),
@@ -779,6 +746,59 @@ function firstPressHandlers(action: () => void) {
       action();
     },
   };
+}
+
+function DiaryEntrySlot({ render }: { render: () => React.ReactNode }) {
+  return <>{render()}</>;
+}
+
+function DiaryLoadError({
+  onRetry,
+  message = "The diary couldn't be loaded.",
+}: {
+  onRetry: () => void;
+  message?: string;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-2 py-6"
+      data-testid="diary-load-error"
+    >
+      <div className="text-xs text-muted-foreground">{message}</div>
+      <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
+  );
+}
+
+class DiaryEntryErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: { componentStack?: string }) {
+    reportDiaryClientError(error, "JobDiaryEntry", info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          className="rounded-2xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground"
+          data-testid="diary-entry-error"
+        >
+          This entry couldn't be displayed.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export function JobDiarySection({
@@ -1219,6 +1239,8 @@ export function JobDiarySection({
   const {
     data: diaryEntries = [],
     isLoading,
+    isError,
+    error: diaryError,
     refetch,
   } = useQuery({
     queryKey: ["/api/jobs", jobId, "diary-timeline", diaryLimit],
@@ -1227,265 +1249,34 @@ export function JobDiarySection({
     refetchOnMount: true,
     refetchOnWindowFocus: false,
     networkMode: "always", // iOS PWAs can falsely report offline — force the request
-    retry: true,
+    // true retries forever, so one failed fetch left this panel on "Loading…".
+    retry: 2,
     retryOnMount: true,
     queryFn: async (): Promise<DiaryEntry[]> => {
       const diaryUrl = diaryLimit
         ? `/api/jobs/${jobId}/diary?limit=${diaryLimit}`
         : `/api/jobs/${jobId}/diary`;
-
-      const [
-        diaryResponse,
-        proposalsResponse,
-        servicem8Response,
-        scheduleResponse,
-      ] = await Promise.all([
-        apiRequest("GET", diaryUrl).then((res) => res.json()),
-        apiRequest("GET", `/api/proposals?jobId=${jobId}`).then((res) =>
-          res.json(),
-        ),
-        apiRequest("GET", `/api/servicem8/jobs/${jobId}/diary`)
-          .then((res) => res.json())
-          .catch(() => ({ data: [] })),
-        apiRequest("GET", `/api/jobs/${jobId}/staff-assignments`)
-          .then((res) => res.json())
-          .catch(() => ({ data: [] })),
-      ]);
-      const entries: DiaryEntry[] = [];
-
+      const sources = await fetchDiaryTimelineSources(
+        {
+          diary: diaryUrl,
+          proposals: `/api/proposals?jobId=${jobId}`,
+          servicem8: `/api/servicem8/jobs/${jobId}/diary`,
+          assignments: `/api/jobs/${jobId}/staff-assignments`,
+        },
+        apiRequest,
+      );
       // If the server returned a full page, there may be more older entries.
       // (When diaryLimit is null we asked for all and there's nothing more.)
-      const localCount = Array.isArray(diaryResponse.data)
-        ? diaryResponse.data.length
-        : 0;
+      const localCount = payloadData(sources.diary).length;
       setDiaryHasMore(diaryLimit !== null && localCount >= diaryLimit);
-
-      // Add local diary entries
-      if (diaryResponse.data) {
-        diaryResponse.data.forEach((entry: any) => {
-          // CRITICAL FIX: Use entry.photoUrl directly (it's a string, not an array)
-          // The database column is photo_url, which comes through as photoUrl in the API response
-          const photoUrl = entry.photoUrl || undefined;
-          // photos[] holds the full set when multiple images were uploaded as a
-          // single batch (one diary entry, many photos). Fall back to the
-          // single photoUrl so legacy single-photo entries still render.
-          const photosArr: string[] | undefined = Array.isArray(entry.photos)
-            ? entry.photos.filter((u: any): u is string => typeof u === "string" && u.length > 0)
-            : undefined;
-          const photos = photosArr && photosArr.length > 0
-            ? photosArr
-            : photoUrl
-              ? [photoUrl]
-              : undefined;
-
-          // Support both snake_case (entry_type) and camelCase (entryType)
-          const entryType = entry.entryType || entry.entry_type;
-
-          entries.push({
-            id: entry.id,
-            type:
-              entryType === "note"
-                ? "note"
-                : entryType === "proposal"
-                  ? "proposal"
-                  : entryType === "photo"
-                    ? "photo"
-                    : entryType === "email"
-                      ? "email"
-                      : entryType === "sms"
-                        ? "sms"
-                        : entryType === "call"
-                          ? "call"
-                          : "job_event",
-            title: entry.title,
-            content: entry.description || entry.content || "",
-            author: entry.authorName || entry.author_name || "System",
-            timestamp: entry.createdAt || entry.created_at,
-            photoUrl: photoUrl,
-            photos: photos,
-            tags: entry.tags || undefined,
-            metadata: {
-              ...entry.metadata, // Preserve existing metadata (email, phone, etc.)
-              eventType: entryType,
-              proposalNumber:
-                entryType === "proposal"
-                  ? entry.title.replace("Proposal Created: ", "")
-                  : undefined,
-            },
-          });
-        });
-      }
-
-      // Add local proposals — templateUsed='quote' is the discriminator that
-      // separates quotes from proposals in the same table.
-      if (proposalsResponse.data) {
-        proposalsResponse.data.forEach((proposal: any) => {
-          const isQuote = proposal.templateUsed === "quote";
-          entries.push({
-            id: proposal.id,
-            type: isQuote ? "quote" : "proposal",
-            title: `${isQuote ? "Quote" : "Proposal"} Created: ${proposal.proposalNumber}`,
-            content: proposal.title || proposal.description,
-            author: proposal.createdBy || "System",
-            timestamp: proposal.createdAt,
-            metadata: {
-              proposalNumber: proposal.proposalNumber,
-              status: proposal.status,
-              viewedDate: proposal.viewedDate,
-              isDeletable: false, // Proposals from proposals table cannot be deleted via diary endpoint
-            },
-          });
-        });
-      }
-
-      // Add ServiceM8 diary entries if available
-      if (servicem8Response.data && servicem8Response.data.length > 0) {
-        servicem8Response.data.forEach((entry: ServiceM8DiaryEntry) => {
-          const entryDate = entry.entryDate ? new Date(entry.entryDate) : null;
-
-          entries.push({
-            id: `servicem8-${entry.id}`, // Prefix to avoid ID conflicts
-            type:
-              entry.entryType === "Note"
-                ? "note"
-                : entry.entryType === "Scheduled"
-                  ? "job_event"
-                  : entry.entryType === "Completed"
-                    ? "job_event"
-                    : entry.entryType === "CallLog"
-                      ? "call"
-                      : "note",
-            title:
-              entry.entryType === "Note"
-                ? "ServiceM8 Note"
-                : entry.entryType === "Scheduled"
-                  ? "ServiceM8 Scheduled"
-                  : entry.entryType === "Completed"
-                    ? "ServiceM8 Completed"
-                    : entry.entryType === "CallLog"
-                      ? "ServiceM8 Call"
-                      : "ServiceM8 Entry",
-            content: entry.note || "No content",
-            author: "ServiceM8 User",
-            timestamp:
-              entryDate?.toISOString() ||
-              (entry.createdAt
-                ? new Date(entry.createdAt).toISOString()
-                : new Date().toISOString()),
-            metadata: {
-              eventType: entry.entryType || undefined,
-              status: entry.active ? "active" : "inactive",
-            },
-          });
-        });
-      }
-
-      // Add job staff assignments (upcoming bookings) if available
-      // Group by same time slot to show as single entry
-      if (scheduleResponse.data && scheduleResponse.data.length > 0) {
-        // Group assignments by start/end time
-        const timeSlotGroups = new Map<string, any[]>();
-
-        scheduleResponse.data.forEach((assignment: any) => {
-          const key = `${assignment.startTime || ""}-${assignment.endTime || ""}`;
-          if (!timeSlotGroups.has(key)) {
-            timeSlotGroups.set(key, []);
-          }
-          timeSlotGroups.get(key)!.push(assignment);
-        });
-
-        // Create a single entry per time slot with all staff names
-        timeSlotGroups.forEach((assignments, _key) => {
-          const firstAssignment = assignments[0];
-          const startTime = firstAssignment.startTime
-            ? new Date(firstAssignment.startTime)
-            : null;
-          const endTime = firstAssignment.endTime
-            ? new Date(firstAssignment.endTime)
-            : null;
-
-          // Collect all staff names for this time slot
-          const staffNames = assignments.map(
-            (a: any) =>
-              a.employeeName ||
-              (a.employee
-                ? `${a.employee.firstName} ${a.employee.lastName}`
-                : "Staff"),
-          );
-
-          // Format time for display
-          const timeStr = startTime
-            ? formatInTimeZone(startTime, "Pacific/Auckland", "h:mm a")
-            : "";
-          const dateStr = startTime
-            ? formatInTimeZone(startTime, "Pacific/Auckland", "dd/MM/yyyy")
-            : "";
-          const endTimeStr = endTime
-            ? formatInTimeZone(endTime, "Pacific/Auckland", "h:mm a")
-            : "";
-
-          // Format staff list nicely
-          const staffList =
-            staffNames.length === 1
-              ? staffNames[0]
-              : staffNames.slice(0, -1).join(", ") +
-                " & " +
-                staffNames[staffNames.length - 1];
-
-          entries.push({
-            id: `booking-${assignments.map((a: any) => a.id).join("-")}`,
-            type: "job_event",
-            title: "Staff Scheduled",
-            content: `${staffList} scheduled for ${dateStr} at ${timeStr}${endTimeStr ? ` - ${endTimeStr}` : ""}`,
-            author: "System",
-            timestamp:
-              firstAssignment.createdAt ||
-              startTime?.toISOString() ||
-              new Date().toISOString(),
-            metadata: {
-              eventType: "staff_booking",
-              assignmentIds: assignments.map((a: any) => a.id),
-              employeeIds: assignments.map((a: any) => a.employeeId),
-              staffNames: staffNames,
-              startTime: firstAssignment.startTime,
-              endTime: firstAssignment.endTime,
-              status: firstAssignment.status,
-            },
-          });
-        });
-      }
-
-      // Deduplicate: if two entries share the same messageId (e.g. a Gmail reply captured
-      // twice due to a polling race), keep only the first occurrence seen.
-      const seenMessageIds = new Set<string>();
-      const seenDbIds = new Set<string | number>();
-      const uniqueEntries = entries.filter(entry => {
-        // Dedup by DB id (catches any entry duplicated at source-merge level)
-        if (entry.id !== undefined && entry.id !== null) {
-          const idKey = String(entry.id);
-          if (seenDbIds.has(idKey)) return false;
-          seenDbIds.add(idKey);
-        }
-        // Dedup by email messageId in metadata (catches same email inserted twice in DB)
-        const msgId = entry.metadata?.messageId;
-        if (msgId) {
-          if (seenMessageIds.has(msgId)) return false;
-          seenMessageIds.add(msgId);
-        }
-        return true;
-      });
-
-      // Sort by timestamp (newest first) — NaN-safe so invalid timestamps go to bottom
-      return uniqueEntries.sort((a, b) => {
-        const ta = new Date(a.timestamp).getTime();
-        const tb = new Date(b.timestamp).getTime();
-        if (isNaN(tb) && isNaN(ta)) return 0;
-        if (isNaN(tb)) return 1;
-        if (isNaN(ta)) return -1;
-        return tb - ta;
-      });
+      return assembleDiaryEntries(sources);
     },
   });
+
+  useEffect(() => {
+    if (!isError) return;
+    reportDiaryClientError(diaryError, "JobDiarySection");
+  }, [isError, diaryError]);
 
   // Collect all photos from diary entries for gallery view. Pull from the
   // photos[] array when present (multi-photo entries) and fall back to
@@ -2125,39 +1916,6 @@ export function JobDiarySection({
     return phone;
   };
 
-  const cleanDiaryContent = (
-    content: string | null | undefined,
-    type: DiaryEntry["type"],
-  ) => {
-    // Return empty string if content is null or undefined
-    if (!content) return "";
-
-    // Remove redundant prefixes from diary content
-    let cleaned = content;
-
-    // Remove "SMS sent to [name]" prefix
-    cleaned = cleaned.replace(/^SMS sent to [^\n]+\n\n/i, "");
-
-    // Remove "Email sent to [email]" prefix
-    cleaned = cleaned.replace(/^Email sent to [^\n]+\n\n/i, "");
-
-    // Remove "Message:" prefix
-    cleaned = cleaned.replace(/^Message:\s*/i, "");
-
-    // Remove email reply headers and quoted text for email type
-    if (type === "email") {
-      // Remove the "On [date] at [time] [name] <[email]> wrote:" pattern that appears AFTER the message
-      // This pattern matches the quoted reply footer
-      cleaned = cleaned.replace(/\n*On .+? at .+? .+? <.+?> wrote:\s*$/is, "");
-      // Also handle pattern without email: "On [date] [name] wrote:"
-      cleaned = cleaned.replace(/\n*On .+? wrote:\s*$/is, "");
-      // Remove any trailing quoted content that starts with "On" at the end
-      cleaned = cleaned.replace(/\n+On\s+.+$/is, "");
-    }
-
-    return cleaned.trim();
-  };
-
   // Swipe handlers for photo gallery navigation
   const minSwipeDistance = 50;
 
@@ -2385,7 +2143,9 @@ export function JobDiarySection({
             tile to open the existing fullscreen viewer (with swipe navigation). */}
         {diaryTab === "photos" && (
           <TabScrollContainer embedded={embedded}>
-            {isLoading ? (
+            {isError && diaryEntries.length === 0 ? (
+              <DiaryLoadError onRetry={() => refetch()} />
+            ) : isLoading ? (
               <div className="flex items-center justify-center py-4">
                 <div className="text-xs text-muted-foreground">Loading...</div>
               </div>
@@ -2448,11 +2208,7 @@ export function JobDiarySection({
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="text-[10px] text-white whitespace-nowrap truncate">
-                          {formatInTimeZone(
-                            new Date(photo.timestamp),
-                            "Pacific/Auckland",
-                            "MMM d, h:mm a",
-                          )}
+                          {formatDiaryTimestamp(photo.timestamp, "MMM d, h:mm a")}
                         </div>
                       </div>
                     </button>
@@ -2496,7 +2252,9 @@ export function JobDiarySection({
         {diaryTab === "timeline" && (
         <TabScrollContainer embedded={embedded}>
           <PendingMessagesCard jobId={jobId} />
-          {isLoading ? (
+          {isError && diaryEntries.length === 0 ? (
+            <DiaryLoadError onRetry={() => refetch()} />
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-4">
               <div className="text-xs text-muted-foreground">Loading...</div>
             </div>
@@ -2514,7 +2272,18 @@ export function JobDiarySection({
                   contain-intrinsic-size keeps the scrollbar stable; `auto`
                   remembers each entry's real height once rendered.
                   Unsupported browsers (iOS <18) simply ignore it. */}
-              {groupedEntries.map((group, groupIndex) => {
+              {isError && (
+                <DiaryLoadError
+                  onRetry={() => refetch()}
+                  message="The diary couldn't be refreshed."
+                />
+              )}
+              {groupedEntries.map((group, groupIndex) => (
+                <DiaryEntryErrorBoundary
+                  key={group.entries[0]?.id ?? `group-${groupIndex}`}
+                >
+                  <DiaryEntrySlot
+                    render={() => {
                 // Email thread rendering — one consolidated card containing the
                 // parent (sent) email plus all received replies stacked below.
                 if (group.type === "email_thread") {
@@ -2662,11 +2431,7 @@ export function JobDiarySection({
                                   </div>
                                   <div className="flex items-center gap-1 flex-shrink-0">
                                     <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap text-right">
-                                      {formatInTimeZone(
-                                        new Date(msg.timestamp),
-                                        "Pacific/Auckland",
-                                        "h:mm a dd/MM/yy",
-                                      )}
+                                      {formatDiaryTimestamp(msg.timestamp)}
                                     </span>
                                     <Button
                                       size="icon"
@@ -2841,11 +2606,7 @@ export function JobDiarySection({
                                   </div>
                                   <div className="flex items-center gap-1 flex-shrink-0">
                                     <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap text-right">
-                                      {formatInTimeZone(
-                                        new Date(msg.timestamp),
-                                        "Pacific/Auckland",
-                                        "h:mm a dd/MM/yy",
-                                      )}
+                                      {formatDiaryTimestamp(msg.timestamp)}
                                     </span>
                                     <Button
                                       size="icon"
@@ -2920,11 +2681,7 @@ export function JobDiarySection({
                               </span>
                               <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400">
                                 <Clock className="w-2.5 h-2.5" />
-                                {formatInTimeZone(
-                                  new Date(group.timestamp),
-                                  "Pacific/Auckland",
-                                  "h:mm a dd/MM/yy",
-                                )}
+                                {formatDiaryTimestamp(group.timestamp)}
                                 <span className="mx-0.5">·</span>
                                 <User className="w-2.5 h-2.5" />
                                 {group.author}
@@ -3035,77 +2792,12 @@ export function JobDiarySection({
 
                 // Special rendering for SMS and Email entries (chat-style bubbles)
                 if (entry.type === "sms" || entry.type === "email") {
-                  // Check both title and content for better detection
-                  const titleLower = (entry.title || "").toLowerCase();
-                  const contentLower = (entry.content || "").toLowerCase();
-                  const isSent =
-                    titleLower.includes("sent") ||
-                    contentLower.includes("email sent to") ||
-                    contentLower.includes("sms sent to");
-                  const isReceived =
-                    titleLower.includes("reply") || titleLower.includes("from");
-
-                  // Extract message text
-                  let messageText = entry.content;
-                  let recipientInfo = "";
-
-                  if (isSent && messageText.includes("Message:")) {
-                    // Extract recipient email/phone before "Message:"
-                    const beforeMessage = messageText.split("Message:")[0];
-                    if (beforeMessage.includes("Email sent to")) {
-                      recipientInfo = beforeMessage
-                        .split("Email sent to")[1]
-                        .trim();
-                    } else if (beforeMessage.includes("SMS sent to")) {
-                      recipientInfo = beforeMessage
-                        .split("SMS sent to")[1]
-                        .trim();
-                    }
-
-                    // Extract message and strip HTML tags
-                    messageText = messageText.split("Message:")[1].trim();
-
-                    // Strip HTML tags and convert to plain text
-                    messageText = messageText
-                      .replace(/<br\s*\/?>/gi, "\n") // Convert <br> to newlines
-                      .replace(/<\/p>/gi, "\n") // Convert </p> to newlines
-                      .replace(/<p>/gi, "") // Remove <p> tags
-                      .replace(/<[^>]+>/g, "") // Remove any other HTML tags
-                      .trim();
-                  } else if (isReceived && messageText.includes(":\n\n")) {
-                    messageText = messageText.split(":\n\n")[1].trim();
-                  }
-
-                  // Clean up received messages: remove email metadata that appears after message content
-                  if (isReceived) {
-                    // Normalize line endings and HTML formatting first
-                    messageText = messageText
-                      .replace(/\r\n/g, "\n")
-                      .replace(/\r/g, "\n")
-                      .replace(/<br\s*\/?>/gi, "\n") // Convert <br> to newlines
-                      .replace(/<\/p>/gi, "\n") // Convert </p> to newlines
-                      .replace(/<p>/gi, "") // Remove <p> tags
-                      .replace(/<[^>]+>/g, ""); // Remove any other HTML tags
-
-                    // Remove email metadata blocks that typically appear at the end
-                    // These usually start with "From:" and include Sent:, To:, Subject:, etc.
-                    // Look for the pattern: newline + "From:" followed by email metadata
-                    const fromIndex = messageText.search(/\n+From:\s*.+?[@<]/i);
-                    if (fromIndex !== -1) {
-                      // Truncate everything from "From:" onwards
-                      messageText = messageText.substring(0, fromIndex);
-                    }
-
-                    // Also check for "Sent:" as an alternative starting point
-                    const sentIndex =
-                      messageText.search(/\n+Sent:\s*.+?\d{4}/i);
-                    if (sentIndex !== -1) {
-                      messageText = messageText.substring(0, sentIndex);
-                    }
-
-                    // Final cleanup: trim and remove excessive whitespace
-                    messageText = messageText.trim();
-                  }
+                  const {
+                    text: messageText,
+                    isSent,
+                    isReceived,
+                    recipientInfo,
+                  } = emailBubbleMessage(entry);
 
                   return (
                     <div
@@ -3145,11 +2837,7 @@ export function JobDiarySection({
                             <span
                               className="text-[10px] whitespace-nowrap text-gray-400 dark:text-gray-500"
                             >
-                              {formatInTimeZone(
-                                new Date(entry.timestamp),
-                                "Pacific/Auckland",
-                                "h:mm a dd/MM/yy",
-                              )}
+                              {formatDiaryTimestamp(entry.timestamp)}
                             </span>
                             <Button
                               size="icon"
@@ -3450,11 +3138,7 @@ export function JobDiarySection({
                             </span>
                             <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400">
                               <Clock className="w-2.5 h-2.5" />
-                              {formatInTimeZone(
-                                new Date(entry.timestamp),
-                                "Pacific/Auckland",
-                                "h:mm a dd/MM/yy",
-                              )}
+                              {formatDiaryTimestamp(entry.timestamp)}
                               <span className="mx-0.5">·</span>
                               <User className="w-2.5 h-2.5" />
                               {entry.author}
@@ -3908,7 +3592,10 @@ export function JobDiarySection({
                     </div>
                   </div>
                 );
-              })}
+                    }}
+                  />
+                </DiaryEntryErrorBoundary>
+              ))}
               {diaryHasMore && (
                 <div className="flex justify-center pt-2">
                   <Button
