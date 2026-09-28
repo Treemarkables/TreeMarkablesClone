@@ -29,6 +29,7 @@ import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/typ
 import type { DocumentTemplate, Customer, Proposal, DocumentBlock } from "@shared/schema";
 import { DEFAULT_PROPOSAL_BLOCKS } from "@shared/schema";
 import { proposalAcceptLink } from "@shared/customerLinks";
+import { lineItemsForNewProposal } from "./proposalCreateLineItems";
 
 // Minimal typed interfaces for browser SpeechRecognition (not in TypeScript lib by default)
 interface SpeechRecognitionAlternative { readonly transcript: string; }
@@ -1702,76 +1703,20 @@ export function ProposalBuilderV2({
       ? (job as { lineItems: IncomingLineItemRaw[] }).lineItems
       : null;
     const rawItems = propItems ?? jobJsonbItems;
-    if (rawItems && rawItems.length > 0) {
-      const items: LineItem[] = rawItems.map((item, idx) => {
-        const qty = parseFloat(String(item.quantity ?? 1)) || 1;
-        const rawTotal = parseFloat(String(
-          (item as { totalPrice?: string | number }).totalPrice ??
-          (item as { total?: string | number }).total ?? 0
-        )) || 0;
-        const rawUnit = parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0;
-        const unitPrice = rawUnit || (rawTotal > 0 ? rawTotal / qty : 0);
-        const totalPrice = (qty * unitPrice) || rawTotal;
-        const costPrice = parseFloat(String(item.costPrice ?? 0)) || unitPrice;
-        return {
-          id: item.id || `prefill-${idx}`,
-          description: item.description || item.name || "",
-          quantity: qty,
-          unitPrice,
-          totalPrice,
-          unit: item.unit || "each",
-          category: item.category || item.itemCode || "",
-          isOptional: item.isOptional || false,
-          selected: true,
-          pricingType: item.pricingType || "normal",
-          choices: item.choices || [],
-          priceIncludesTax: item.priceIncludesTax || false,
-          costPrice,
-          markupPct: parseFloat(String(item.markupPct ?? 0)) || 0,
-        };
-      });
-      builtBlocks.push({
-        id: "block-lineitems",
-        type: "lineItems",
-        title: "Line Items",
-        description: "",
-        photos: [],
-        lineItems: items,
-        sortOrder: builtBlocks.length,
-      });
-    } else {
-      // Nothing to prefill — seed one starter item and open it in the editor,
-      // so the only thing left to do is price it.
-      const starterId = `item-starter-${Date.now()}`;
-      builtBlocks.push({
-        id: "block-lineitems",
-        type: "lineItems",
-        title: "Line Items",
-        description: "",
-        photos: [],
-        lineItems: [{
-          id: starterId,
-          description:
-            (job as { serviceType?: string } | null)?.serviceType ||
-            (job as { title?: string } | null)?.title ||
-            "",
-          quantity: 1,
-          unitPrice: 0,
-          totalPrice: 0,
-          unit: "each",
-          category: "",
-          isOptional: false,
-          selected: true,
-          pricingType: "normal",
-          choices: [],
-          priceIncludesTax: false,
-          costPrice: 0,
-          markupPct: 0,
-        }],
-        sortOrder: builtBlocks.length,
-      });
-      setAutoEditItemId(starterId);
-    }
+    // No job lines: one blank row, opened in the editor. Description stays
+    // empty — jobs.title is often the customer name, and that used to land
+    // here as if it were a line item.
+    const seeded = lineItemsForNewProposal(rawItems);
+    builtBlocks.push({
+      id: "block-lineitems",
+      type: "lineItems",
+      title: "Line Items",
+      description: "",
+      photos: [],
+      lineItems: seeded.items,
+      sortOrder: builtBlocks.length,
+    });
+    if (seeded.starterId) setAutoEditItemId(seeded.starterId);
 
     setBlocks((cur) => {
       const hasContent = cur.some((b) => b.lineItems.length > 0 || b.photos.length > 0 || b.description);
