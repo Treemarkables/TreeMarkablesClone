@@ -390,6 +390,9 @@ export const quoteFollowUps = pgTable("quote_follow_ups", {
   status: text("status").notNull().default("draft"), // draft, snoozed, sending, sent, dismissed, skipped, cancelled
   subject: text("subject"),
   message: text("message").notNull().default(""),
+  // Set when someone saves a change to the draft text. Boot refresh rewrites
+  // only rows still equal to the generated default (this stays null).
+  draftEditedAt: timestamp("draft_edited_at"),
   recipientName: text("recipient_name"),
   recipientPhone: text("recipient_phone"),
   recipientEmail: text("recipient_email"),

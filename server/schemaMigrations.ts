@@ -18,6 +18,7 @@
 import type { PoolClient } from "pg";
 import { pool } from "./db";
 import { TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
+import { planUntouchedDraftRefresh } from "../shared/quoteFollowUps";
 
 interface Migration {
   // Stable name shown in logs. Append-only — do not rename existing entries.
@@ -1126,7 +1127,126 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Follow-up drafts were stored with proposals.proposal_number (PROP-<timestamp>).
+    // Rewrite only pending rows that still equal the generated default. A saved
+    // edit sets draft_edited_at and is left alone. Sent rows are not updated.
+    name: "quote-follow-up-customer-number",
+    statements: [
+      `ALTER TABLE quote_follow_ups ADD COLUMN IF NOT EXISTS draft_edited_at timestamp`,
+    ],
+    postChecks: async (client) => {
+      await refreshUntouchedQuoteFollowUpDrafts(client);
+    },
+  },
 ];
+
+function textOrNull(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function editedAt(value: unknown): string | Date | null {
+  if (value instanceof Date) return value;
+  if (typeof value === "string" && value.trim()) return value;
+  return null;
+}
+
+/**
+ * Rewrites pending follow-up drafts that still match the generated default so
+ * the customer number is the short one. User-edited drafts get draft_edited_at
+ * and are not changed. Safe to run on every boot.
+ */
+async function refreshUntouchedQuoteFollowUpDrafts(client: PoolClient): Promise<void> {
+  const found = await client.query(
+    `SELECT
+       f.id,
+       f.status,
+       f.kind,
+       f.channel,
+       f.message,
+       f.subject,
+       f.recipient_name,
+       f.draft_edited_at,
+       CASE
+         WHEN f.source_type = 'proposal' THEN p.proposal_number
+         WHEN f.source_type = 'job' THEN j.job_number
+         ELSE q.quote_number
+       END AS document_number,
+       j.job_number,
+       j.address AS job_address,
+       CASE
+         WHEN f.source_type = 'quote' THEN rq.quote_number
+         ELSE rp.proposal_number
+       END AS new_document_number,
+       (
+         SELECT bs.business_name
+         FROM business_settings bs
+         WHERE bs.business_id = f.business_id
+         ORDER BY bs.updated_at DESC NULLS LAST
+         LIMIT 1
+       ) AS business_name
+     FROM quote_follow_ups f
+     LEFT JOIN quotes q ON f.source_type = 'quote' AND q.id = f.quote_id
+     LEFT JOIN proposals p ON f.source_type = 'proposal' AND p.id = f.quote_id
+     LEFT JOIN quotes rq ON f.source_type = 'quote' AND rq.id = f.requote_id
+     LEFT JOIN proposals rp ON f.source_type <> 'quote' AND rp.id = f.requote_id
+     LEFT JOIN jobs j ON j.id = COALESCE(
+       f.job_id,
+       CASE WHEN f.source_type = 'job' THEN f.quote_id END,
+       q.job_id,
+       p.job_id
+     )
+     WHERE f.status IN ('draft', 'snoozed')
+       AND f.draft_edited_at IS NULL`,
+  );
+  let rewritten = 0;
+  let marked = 0;
+  for (const row of found.rows) {
+    const id = textOrNull(row.id);
+    if (!id) continue;
+    const plan = planUntouchedDraftRefresh({
+      status: textOrNull(row.status) ?? "",
+      draftEditedAt: editedAt(row.draft_edited_at),
+      kind: textOrNull(row.kind) ?? "",
+      channel: textOrNull(row.channel) ?? "sms",
+      message: textOrNull(row.message) ?? "",
+      subject: textOrNull(row.subject),
+      recipientName: textOrNull(row.recipient_name),
+      businessName: textOrNull(row.business_name) ?? "",
+      documentNumber: textOrNull(row.document_number),
+      jobNumber: textOrNull(row.job_number),
+      jobAddress: textOrNull(row.job_address),
+      newDocumentNumber: textOrNull(row.new_document_number),
+    });
+    if (plan.action === "rewrite") {
+      const updated = await client.query(
+        `UPDATE quote_follow_ups
+            SET message = $2, subject = $3, updated_at = now()
+          WHERE id = $1
+            AND status IN ('draft', 'snoozed')
+            AND draft_edited_at IS NULL
+            AND message IS DISTINCT FROM $2`,
+        [id, plan.message, plan.subject],
+      );
+      rewritten += updated.rowCount ?? 0;
+    } else if (plan.action === "mark_edited") {
+      const updated = await client.query(
+        `UPDATE quote_follow_ups
+            SET draft_edited_at = now()
+          WHERE id = $1
+            AND status IN ('draft', 'snoozed')
+            AND draft_edited_at IS NULL`,
+        [id],
+      );
+      marked += updated.rowCount ?? 0;
+    }
+  }
+  if (rewritten > 0 || marked > 0) {
+    console.log(`[schema] quote follow-up numbers: rewrote ${rewritten} untouched draft(s), left ${marked} edited`);
+  }
+}
 
 let migrationPromise: Promise<void> | null = null;
 

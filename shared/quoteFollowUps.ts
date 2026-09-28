@@ -228,6 +228,57 @@ function greeting(firstName: string): string {
   return firstName ? `Hi ${firstName}` : "Hi";
 }
 
+const INTERNAL_NUMBER = /^(?:prop|q-draft|draft)-/i;
+const UUID_NUMBER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const LONG_DIGITS = /\d{10,}/;
+const UNUSABLE_ADDRESS = new Set(["address not specified", "n/a", "na"]);
+
+/**
+ * True when a stored document number is an internal id (PROP-<timestamp>,
+ * DRAFT-/Q-DRAFT-, a UUID, or any token with a 10+ digit run). Those are not
+ * the short number a customer should see in a follow-up.
+ */
+export function isInternalDocumentNumber(value: string | null | undefined): boolean {
+  const text = (value ?? "").trim();
+  if (!text) return true;
+  if (/^n\/?a$/i.test(text)) return true;
+  if (INTERNAL_NUMBER.test(text)) return true;
+  if (UUID_NUMBER.test(text)) return true;
+  if (LONG_DIGITS.test(text)) return true;
+  return false;
+}
+
+/**
+ * Number to show after "Quote" / "Proposal" in follow-ups.
+ *
+ * The proposal screen, PDF, and send email do not share a formatter. Each
+ * prints `proposals.proposal_number` directly:
+ * - DocumentBlockRenderer header: `{docLabel} #{ctx.invoiceNumber}`
+ *   (`buildProposalRenderContext` sets invoiceNumber from proposal.proposalNumber)
+ * - ProposalTemplate: `Proposal #{proposal.proposalNumber}`
+ * - generateProposalPDFBuffer: `#${proposal.proposalNumber}` beside PROPOSAL/QUOTE
+ * - send-email documentLabel: `Proposal #${proposalNumber}` (DRAFT- rewritten to PROP-)
+ * Quote rows print `quotes.quote_number` the same way (QuoteTemplate `Quote #{quote.quoteNumber}`,
+ * send-quote-email `Quote #${quoteNumber}`).
+ *
+ * When that rendered value is a short customer number, this returns it. When it
+ * is an internal PROP-/UUID/timestamp id, this returns the job number, then the
+ * job address. It never returns a PROP- id or a UUID.
+ */
+export function customerFacingQuoteNumber(input: {
+  documentNumber?: string | null;
+  jobNumber?: string | number | null;
+  jobAddress?: string | null;
+}): string {
+  const documentNumber = (input.documentNumber ?? "").trim();
+  if (documentNumber && !isInternalDocumentNumber(documentNumber)) return documentNumber;
+  const jobNumber = input.jobNumber == null ? "" : String(input.jobNumber).trim();
+  if (jobNumber && !isInternalDocumentNumber(jobNumber)) return jobNumber;
+  const address = (input.jobAddress ?? "").trim();
+  if (address && !UNUSABLE_ADDRESS.has(address.toLowerCase())) return address;
+  return "your quote";
+}
+
 export function draftCheckInMessage(input: {
   firstName: string;
   quoteNumber: string;
@@ -642,4 +693,87 @@ export function withNewQuoteNumber(message: string, subject: string | null, newQ
     message: message.replaceAll("the new quote", newQuoteNumber),
     subject: subject ? subject.replaceAll("the new quote", newQuoteNumber) : null,
   };
+}
+
+export interface UntouchedDraftInput {
+  status: string;
+  draftEditedAt?: string | Date | null;
+  kind: string;
+  channel: string;
+  message: string;
+  subject: string | null;
+  recipientName?: string | null;
+  businessName: string;
+  documentNumber?: string | null;
+  jobNumber?: string | number | null;
+  jobAddress?: string | null;
+  newDocumentNumber?: string | null;
+}
+
+export type UntouchedDraftPlan =
+  | { action: "keep" }
+  | { action: "mark_edited" }
+  | { action: "rewrite"; message: string; subject: string | null };
+
+function sameDraft(copy: { message: string; subject: string | null }, message: string, subject: string | null): boolean {
+  return copy.message === message && (copy.subject ?? "") === (subject ?? "");
+}
+
+function internalTokens(text: string): string[] {
+  const found = text.match(/\b(?:PROP|Q-DRAFT|DRAFT)-\d+\b|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi);
+  return found ?? [];
+}
+
+/**
+ * Pending drafts that still equal a generated default are rewritten onto the
+ * short customer number. A draft the user has saved (draftEditedAt, or text
+ * that does not match any generated default) is left as-is. Sent and other
+ * finished rows are never rewritten. Calling this again on the rewritten
+ * text returns keep.
+ */
+export function planUntouchedDraftRefresh(input: UntouchedDraftInput): UntouchedDraftPlan {
+  const status = input.status.trim().toLowerCase();
+  if (status !== "draft" && status !== "snoozed") return { action: "keep" };
+  if (input.draftEditedAt) return { action: "keep" };
+
+  const channel: FollowUpChannel = input.channel === "email" ? "email" : "sms";
+  const kind: FollowUpKind = input.kind === "requote" ? "requote" : "check_in";
+  const firstName = customerFirstName(input.recipientName);
+  const shown = customerFacingQuoteNumber(input);
+  const signed = input.message.match(/Cheers,\s*([^\n]+)\s*$/)?.[1]?.trim() ?? "";
+  const businessName = input.businessName.trim() || signed || "us";
+  const newRaw = (input.newDocumentNumber ?? "").trim();
+  const newShown = newRaw && !isInternalDocumentNumber(newRaw) ? newRaw : "the new quote";
+  const names = Array.from(new Set([businessName, signed, "us"].filter((value) => value.length > 0)));
+  const numbers = Array.from(new Set([
+    (input.documentNumber ?? "").trim(),
+    shown,
+    ...internalTokens(`${input.message}\n${input.subject ?? ""}`),
+  ].filter((value) => value.length > 0)));
+  const newNumbers = Array.from(new Set(["the new quote", newShown, newRaw, ...internalTokens(input.message)].filter((value) => value.length > 0)));
+
+  const rewrite = (name: string) => kind === "requote"
+    ? draftRequoteMessage({ firstName, quoteNumber: shown, newQuoteNumber: newShown, businessName: name, channel })
+    : draftCheckInMessage({ firstName, quoteNumber: shown, businessName: name, channel });
+
+  for (const name of names) {
+    for (const number of numbers) {
+      if (kind === "requote") {
+        for (const next of newNumbers) {
+          const copy = draftRequoteMessage({ firstName, quoteNumber: number, newQuoteNumber: next, businessName: name, channel });
+          if (!sameDraft(copy, input.message, input.subject)) continue;
+          const desired = rewrite(name);
+          if (sameDraft(desired, input.message, input.subject)) return { action: "keep" };
+          return { action: "rewrite", message: desired.message, subject: desired.subject };
+        }
+      } else {
+        const copy = draftCheckInMessage({ firstName, quoteNumber: number, businessName: name, channel });
+        if (!sameDraft(copy, input.message, input.subject)) continue;
+        const desired = rewrite(name);
+        if (sameDraft(desired, input.message, input.subject)) return { action: "keep" };
+        return { action: "rewrite", message: desired.message, subject: desired.subject };
+      }
+    }
+  }
+  return { action: "mark_edited" };
 }
