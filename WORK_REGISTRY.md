@@ -18,7 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
-- Job diary silent spinner — branch `cursor/diary-load-harden-32c2` — 2026-09-28 — diary for a job whose reply row is a full Apple Mail HTML document (blank description) stays on Loading. Bound retries, proposals failure must not block entries, per-entry fallback, visible Retry. Do not merge until review.
+- Job diary silent spinner — branch `cursor/diary-load-harden-32c2` — 2026-09-28 — diary for a job whose reply row is a full Apple Mail HTML document (blank description) stays on Loading. Bound retries, proposals failure must not block entries, per-entry fallback, visible Retry. Do not merge until review. [PR #597]
 - Public watch-video boot overlay — branch `cursor/watch-video-boot-overlay-f615` — 2026-09-28 — title-less job-card /watch links stay on #inflow-boot because main has no text. Detector treats media as painted; public routes mark booted on mount; captions.vtt is public when captions_vtt exists. Do not merge until review.
 - Follow-up customer quote number — branch `cursor/follow-up-short-quote-number-d543` — 2026-09-28 — Follow-ups show the short customer number (`customerFacingQuoteNumber`: job number when `proposal_number` is `PROP-<timestamp>`), not the internal id. Untouched pending drafts are rewritten on boot. Do not merge until review.
 - Android job card diary scroll — branch `cursor/android-diary-scroll-90ba` — 2026-09-27 — embedded Job Diary skips the PullToRefresh overflow trap so Chrome on Android can pan the mobile card body. Desktop keeps the inner scroller. Do not merge until review. [PR #592]
