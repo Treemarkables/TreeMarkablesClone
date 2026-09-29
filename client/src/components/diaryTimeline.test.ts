@@ -10,9 +10,13 @@ import assert from "node:assert/strict";
 import {
   assembleDiaryEntries,
   cleanDiaryContent,
+  describeDiaryFailure,
   emailBubbleMessage,
+  entryFailureDetail,
   fetchDiaryTimelineSources,
   formatDiaryTimestamp,
+  markDiaryFailure,
+  reportDiaryClientError,
   stripTrailingOnWrote,
 } from "./diaryTimeline.ts";
 
@@ -179,6 +183,135 @@ describe("job diary shapes from a blank-description Apple Mail reply", () => {
         ),
       /diary 500/,
     );
+  });
+
+  it("keeps the diary status and server message on the thrown error", async () => {
+    const request = async (_method: string, url: string) => {
+      if (url.includes("/proposals") || url.includes("servicem8") || url.includes("staff-assignments")) {
+        return { json: async () => ({ data: [] }) };
+      }
+      const error = Object.assign(new Error("relation job_diary_entries does not exist"), {
+        status: 500,
+        serverMessage: "relation job_diary_entries does not exist",
+        body: { message: "relation job_diary_entries does not exist" },
+      });
+      throw error;
+    };
+    await assert.rejects(
+      () =>
+        fetchDiaryTimelineSources(
+          {
+            diary: "/api/jobs/job-1/diary?limit=100",
+            proposals: "/api/proposals?jobId=job-1",
+            servicem8: "/api/servicem8/jobs/job-1/diary",
+            assignments: "/api/jobs/job-1/staff-assignments",
+          },
+          request,
+        ),
+      (error: unknown) => {
+        const details = describeDiaryFailure(error);
+        assert.equal(details.request, "/api/jobs/job-1/diary?limit=100");
+        assert.equal(details.status, 500);
+        assert.equal(details.message, "relation job_diary_entries does not exist");
+        assert.equal(error instanceof Error && error.message, "relation job_diary_entries does not exist");
+        return true;
+      },
+    );
+  });
+
+  it("stringifies a non-Error from the diary request", async () => {
+    const request = async (_method: string, url: string) => {
+      if (url.endsWith("/diary?limit=100") || url.includes("/diary?")) {
+        throw { code: "ECONNRESET" };
+      }
+      return { json: async () => ({ data: [] }) };
+    };
+    await assert.rejects(
+      () =>
+        fetchDiaryTimelineSources(
+          {
+            diary: "/api/jobs/job-1/diary?limit=100",
+            proposals: "/api/proposals?jobId=job-1",
+            servicem8: "/api/servicem8/jobs/job-1/diary",
+            assignments: "/api/jobs/job-1/staff-assignments",
+          },
+          request,
+        ),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        const details = describeDiaryFailure(error);
+        assert.match(details.message, /ECONNRESET/);
+        assert.equal(details.message.includes("Diary error"), false);
+        assert.equal(details.status, null);
+        return true;
+      },
+    );
+  });
+
+  it("truncates and redacts the message shown on the card", () => {
+    const leaked = `connect postgres://user:secret@db.example/app ${"x".repeat(400)}`;
+    const error = Object.assign(new Error(leaked), { serverMessage: leaked, status: 500 });
+    const details = describeDiaryFailure(markDiaryFailure(error, "render"));
+    assert.equal(details.request, "render");
+    assert.equal(details.status, 500);
+    assert.equal(details.message.includes("secret"), false);
+    assert.match(details.message, /\[redacted\]/);
+    assert.equal(details.message.length, 300);
+    assert.equal(details.message.endsWith("…"), true);
+    const again = describeDiaryFailure(error, "/api/jobs/job-1/diary");
+    assert.equal(again.request, "render");
+    assert.equal(again.timestamp, details.timestamp);
+  });
+
+  it("keeps the thrown row error on an unreadable entry", () => {
+    const row: Record<string, unknown> = { id: "row-1", entry_type: "email" };
+    Object.defineProperty(row, "entryType", {
+      get() {
+        throw new Error("bad date");
+      },
+    });
+    const entries = assembleDiaryEntries({
+      diary: { data: [row] },
+      proposals: { data: [] },
+      servicem8: { data: [] },
+      schedule: { data: [] },
+    });
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0]?.metadata?.unreadable, true);
+    assert.equal(entries[0]?.id, "row-1");
+    assert.match(String(entries[0]?.metadata?.errorMessage), /bad date/);
+    assert.equal(
+      entryFailureDetail("email", "row-1", "bad date"),
+      "email · row-1 — bad date",
+    );
+  });
+
+  it("posts the same detail fields and job id", () => {
+    const bodies: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = ((...args: Parameters<typeof fetch>) => {
+      const init = args[1];
+      bodies.push(typeof init?.body === "string" ? init.body : "");
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }) as typeof fetch;
+    try {
+      const error = markDiaryFailure(
+        Object.assign(new Error("boom"), { status: 502, serverMessage: "boom" }),
+        "/api/jobs/job-1/diary?limit=100",
+      );
+      reportDiaryClientError(error, "JobDiarySection", "at Diary", { jobId: "job-1" });
+    } finally {
+      globalThis.fetch = original;
+    }
+    assert.equal(bodies.length, 1);
+    const payload = JSON.parse(bodies[0] || "{}") as Record<string, unknown>;
+    assert.equal(payload.jobId, "job-1");
+    assert.equal(payload.request, "/api/jobs/job-1/diary?limit=100");
+    assert.equal(payload.status, 502);
+    assert.equal(payload.serverMessage, "boom");
+    assert.equal(payload.message, "boom");
+    assert.equal(typeof payload.timestamp, "string");
+    assert.equal(payload.context, "JobDiarySection");
   });
 
   it("strips a long missed On-wrote tail without hanging", () => {

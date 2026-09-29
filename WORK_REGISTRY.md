@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Diary error details on the job card — branch `cursor/diary-error-details-6ef1` — 2026-09-29 — when the diary fails to load or refresh, the card shows the request, HTTP status, server message, and time (copyable) so a screenshot replaces the server logs. Same fields plus jobId go to /api/client-errors. A diary 500 returns that message as JSON, without a stack. Do not merge until review.
 - Job diary silent spinner — branch `cursor/diary-load-harden-32c2` — 2026-09-28 — diary for a job whose reply row is a full Apple Mail HTML document (blank description) stays on Loading. Bound retries, proposals failure must not block entries, per-entry fallback, visible Retry. Do not merge until review. [PR #597]
 - Blank proposal starter line — branch `cursor/blank-proposal-starter-line-811e` — 2026-09-28 — new proposals no longer copy jobs.title (often the customer name) into the starter line-item description. Saved proposals are not rewritten. Do not merge until review. [PR #596]
 - Public watch-video boot overlay — branch `cursor/watch-video-boot-overlay-f615` — 2026-09-28 — title-less job-card /watch links stay on #inflow-boot because main has no text. Detector treats media as painted; public routes mark booted on mount; captions.vtt is public when captions_vtt exists. Do not merge until review.
