@@ -41,8 +41,10 @@ import {
   cleanDiaryContent,
   diaryText,
   emailBubbleMessage,
+  emailEntryPhotoUrls,
   fetchDiaryTimelineSources,
   formatDiaryTimestamp,
+  hideEmbeddedPhotoNote,
   payloadData,
   reportDiaryClientError,
   type DiaryEntry,
@@ -799,6 +801,50 @@ class DiaryEntryErrorBoundary extends React.Component<
     }
     return this.props.children;
   }
+}
+
+function EmailDiaryPhotoRow({
+  entryId,
+  urls,
+  allPhotos,
+  resolveDisplayUrl,
+  onOpen,
+}: {
+  entryId: string;
+  urls: string[];
+  allPhotos: string[];
+  resolveDisplayUrl: (url: string | null | undefined) => string | undefined;
+  onOpen: (index: number) => void;
+}) {
+  if (urls.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5" data-testid={`email-diary-photos-${entryId}`}>
+      {urls.map((url, i) => (
+        <button
+          key={`${entryId}-${i}`}
+          type="button"
+          className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 hover-elevate active-elevate-2 dark:border-gray-700 dark:bg-gray-800"
+          onClick={(e) => {
+            e.stopPropagation();
+            const idx = allPhotos.indexOf(url);
+            onOpen(idx >= 0 ? idx : 0);
+          }}
+          aria-label={`Open photo ${i + 1} full size`}
+          data-testid={`email-diary-photo-${entryId}-${i}`}
+        >
+          <img
+            src={resolveDisplayUrl(url)}
+            alt=""
+            loading="lazy"
+            className="h-full w-full object-cover"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function JobDiarySection({
@@ -2386,9 +2432,18 @@ export function JobDiarySection({
                           {threadEntries.map((msg) => {
                             const direction = getEmailDirection(msg);
                             const cleaned = cleanEmailMessage(msg, direction);
+                            const msgPhotos = emailEntryPhotoUrls(msg);
+                            const cleanedRecipient = hideEmbeddedPhotoNote(
+                              cleaned.recipient,
+                              msgPhotos.length > 0,
+                            );
+                            const cleanedText = hideEmbeddedPhotoNote(
+                              cleaned.text,
+                              msgPhotos.length > 0,
+                            );
                             const isOutgoing = direction === "sent";
                             const senderLabel = isOutgoing
-                              ? `to ${cleaned.recipient || msg.metadata?.emailAddress || msg.metadata?.recipient || counterpartyAddr || "customer"}`
+                              ? `to ${cleanedRecipient || msg.metadata?.emailAddress || msg.metadata?.recipient || counterpartyAddr || "customer"}`
                               : `from ${
                                   msg.author && msg.author !== "System"
                                     ? msg.author
@@ -2455,8 +2510,15 @@ export function JobDiarySection({
                                     className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${bubbleText}`}
                                     style={{ wordBreak: "break-word" }}
                                   >
-                                    {cleaned.text}
+                                    {cleanedText}
                                   </p>
+                                  <EmailDiaryPhotoRow
+                                    entryId={msg.id}
+                                    urls={msgPhotos}
+                                    allPhotos={allPhotos}
+                                    resolveDisplayUrl={resolveDisplayUrl}
+                                    onOpen={setViewingPhotoIndex}
+                                  />
                                 </div>
                                 {!isOutgoing && (
                                   <div className="mt-1.5 flex items-center justify-end gap-1">
@@ -2798,6 +2860,10 @@ export function JobDiarySection({
                     isReceived,
                     recipientInfo,
                   } = emailBubbleMessage(entry);
+                  const entryPhotos = emailEntryPhotoUrls(entry);
+                  const hasStoredPhotos = entryPhotos.length > 0;
+                  const recipientShown = hideEmbeddedPhotoNote(recipientInfo, hasStoredPhotos);
+                  const messageShown = hideEmbeddedPhotoNote(messageText, hasStoredPhotos);
 
                   return (
                     <div
@@ -2827,8 +2893,8 @@ export function JobDiarySection({
                               className={`text-[10px] ${isSent ? "text-gray-500 dark:text-gray-400" : "text-purple-600 dark:text-purple-400"}`}
                             >
                               {isSent
-                                ? recipientInfo
-                                  ? `to ${recipientInfo}`
+                                ? recipientShown
+                                  ? `to ${recipientShown}`
                                   : ""
                                 : "received"}
                             </span>
@@ -2869,8 +2935,15 @@ export function JobDiarySection({
                             className={`text-xs leading-relaxed whitespace-pre-wrap break-words w-full text-gray-700 dark:text-gray-300 ${isClickable ? "underline underline-offset-2 decoration-dashed" : ""}`}
                             style={{ wordBreak: "break-word" }}
                           >
-                            {messageText}
+                            {messageShown}
                           </p>
+                          <EmailDiaryPhotoRow
+                            entryId={entry.id}
+                            urls={entryPhotos}
+                            allPhotos={allPhotos}
+                            resolveDisplayUrl={resolveDisplayUrl}
+                            onOpen={setViewingPhotoIndex}
+                          />
                         </div>
                         {/* Footer with tracking and reply */}
                         <div className="px-3 py-1.5 flex items-center justify-between gap-2 border-t border-gray-200 dark:border-gray-700">
