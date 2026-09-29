@@ -22,6 +22,8 @@ import {
   shouldReloadNativeProbe,
   shouldReloadUnbootedDespiteHeartbeat,
   shouldReloadUnbootedPage,
+  shouldRevealBootFailure,
+  BOOT_FAILURE_REVEAL_MS,
 } from "./nativeBootRecovery.ts";
 
 describe("native boot recovery — origin / blank webview", () => {
@@ -544,7 +546,30 @@ describe("native boot recovery — media counts as a painted page", () => {
     assert.equal(elementHasRenderedContent(asEl(empty)), false);
   });
 
-  it("counts a painted spinner and ignores boot chrome and the boot-shell colour", () => {
+  it("does not treat a text-less card or spinner as the real page", () => {
+    // Dispatch jobsLoading is a white card and pulse bars with no words.
+    // Counting that as painted hid the cover and the installed text-only
+    // native probe reloaded the WebView white.
+    const cardMain = new FakeEl("main");
+    const card = cardMain.append(new FakeEl("div"));
+    card.width = 358;
+    card.height = 571;
+    card.style.backgroundColor = "rgb(255, 255, 255)";
+    card.style.borderTopWidth = "1px";
+    const bar = card.append(new FakeEl("div"));
+    bar.width = 200;
+    bar.height = 16;
+    bar.style.backgroundColor = "rgb(240, 240, 240)";
+    assert.equal(elementHasRenderedContent(asEl(cardMain)), false);
+    assert.equal(
+      shellSignalsRealPage({
+        rootText: "Dispatch header",
+        mainText: "",
+        mainHasRenderedContent: elementHasRenderedContent(asEl(cardMain)),
+      }),
+      false,
+    );
+
     const main = new FakeEl("main");
     const spinner = main.append(new FakeEl("div"));
     spinner.width = 32;
@@ -553,7 +578,7 @@ describe("native boot recovery — media counts as a painted page", () => {
     spinner.style.borderRightWidth = "4px";
     spinner.style.borderBottomWidth = "4px";
     spinner.style.borderLeftWidth = "4px";
-    assert.equal(elementHasRenderedContent(asEl(main)), true);
+    assert.equal(elementHasRenderedContent(asEl(main)), false);
 
     const shell = new FakeEl("main");
     const chrome = shell.append(new FakeEl("div"));
@@ -607,6 +632,27 @@ describe("native boot recovery — media counts as a painted page", () => {
         mainText: "",
       }),
       "empty",
+    );
+  });
+
+  it("reveals a boot failure only when no real screen is up", () => {
+    assert.equal(
+      shouldRevealBootFailure({ elapsedMs: 5_000, realScreenVisible: false }),
+      false,
+    );
+    assert.equal(
+      shouldRevealBootFailure({
+        elapsedMs: BOOT_FAILURE_REVEAL_MS,
+        realScreenVisible: false,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldRevealBootFailure({
+        elapsedMs: BOOT_FAILURE_REVEAL_MS,
+        realScreenVisible: true,
+      }),
+      false,
     );
   });
 });

@@ -2851,10 +2851,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     );
   }
 
-  // Show loading state for full dispatch board
+  // Show loading state for full dispatch board. data-boot-chrome: this card
+  // has no words (pulse bars only). It must not count as the app having opened.
   if (jobsLoading) {
     return (
-      <div className="flex flex-col flex-1 min-h-0 p-4">
+      <div className="flex flex-col flex-1 min-h-0 p-4" data-boot-chrome="">
         <Card className="flex-1">
           <CardContent className="pt-6">
             <div className="animate-pulse space-y-3">

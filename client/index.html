@@ -186,22 +186,98 @@
       });
     </script>
     <script>
-      // Capacitor TestFlight cold-start watchdog. Runs BEFORE the React
-      // bundle. If main.tsx never marks window.__INFLOW_BOOTED (hung first
-      // load, dead JS, failed chunk), reload once so the user does not have
-      // to force-quit. CSP already allows this inline script (Wave 1).
+      // Capacitor cold-start watchdog. Runs BEFORE the React bundle. A
+      // text-less white card must not count as opened: that hid this cover
+      // and the installed native probe reloaded the WebView white. If the
+      // bundle never starts, cache-bust once. If there is still no real
+      // screen, this cover becomes the error / Retry UI no matter what.
       (function () {
         window.__INFLOW_BOOTED = window.__INFLOW_BOOTED === true;
         window.__INFLOW_HEARTBEAT_MS = Date.now();
+        window.__INFLOW_BOOT_ERROR = window.__INFLOW_BOOT_ERROR || '';
         var KEY = 'inflowBootReloadAttempts';
         var overlay = document.getElementById('inflow-boot');
         var retry = document.getElementById('inflow-boot-retry');
+        var title = overlay ? overlay.querySelector('.boot-title') : null;
+        var sub = overlay ? overlay.querySelector('.boot-sub') : null;
         function hideBoot() {
           window.__INFLOW_BOOTED = true;
           window.__INFLOW_HEARTBEAT_MS = Date.now();
-          if (overlay) overlay.setAttribute('data-booted', '1');
+          if (overlay) {
+            overlay.setAttribute('data-booted', '1');
+            overlay.removeAttribute('data-stuck');
+          }
+          try {
+            window.webkit.messageHandlers.inflowBoot.postMessage({ type: 'appReady' });
+          } catch (e) {}
         }
         window.addEventListener('inflow-booted', hideBoot);
+        function realScreen() {
+          var root = document.getElementById('root');
+          if (!root) return false;
+          var main = root.querySelector('main');
+          var scope = main || root;
+          var text = ((scope.innerText || '') + '').replace(/\s+/g, ' ').trim();
+          if (text && text !== 'Opening Inflow' && text.indexOf('Opening Inflow ') !== 0) return true;
+          if (scope.querySelector('video, canvas, iframe, audio')) return true;
+          var img = scope.querySelector('img');
+          if (!img || !img.getBoundingClientRect) return false;
+          var box = img.getBoundingClientRect();
+          return box.width >= 2 && box.height >= 2;
+        }
+        function revealFailure(message) {
+          if (realScreen()) {
+            hideBoot();
+            return;
+          }
+          window.__INFLOW_BOOTED = false;
+          var text = message || window.__INFLOW_BOOT_ERROR || 'Inflow did not finish opening. Check your connection and try again.';
+          if (overlay) {
+            overlay.removeAttribute('data-booted');
+            overlay.setAttribute('data-stuck', '1');
+          }
+          if (title) title.textContent = "Inflow didn't open";
+          if (sub) sub.textContent = text;
+          try {
+            window.webkit.messageHandlers.inflowBoot.postMessage({ type: 'bootFailed', message: text });
+          } catch (e) {}
+        }
+        function postClientError(message, stack) {
+          try {
+            fetch('/api/client-errors', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: message,
+                stack: stack || '',
+                componentStack: 'boot',
+                url: location.href,
+                userAgent: navigator.userAgent
+              })
+            });
+          } catch (e) {}
+        }
+        function noteError(message, stack) {
+          var text = message || 'Script error';
+          window.__INFLOW_BOOT_ERROR = text;
+          if (realScreen()) return;
+          if (sub) sub.textContent = text;
+          if (overlay) overlay.setAttribute('data-error', '1');
+          postClientError(text, stack);
+          try {
+            window.webkit.messageHandlers.inflowBoot.postMessage({ type: 'bootError', message: text });
+          } catch (e) {}
+        }
+        window.addEventListener('error', function (event) {
+          var msg = (event && event.message) || 'Script error';
+          if (msg.indexOf('Script error') === 0 && !(event && event.filename)) return;
+          noteError(msg, event && event.error && event.error.stack);
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event && event.reason;
+          var msg = (reason && reason.message) || String(reason || 'Unhandled rejection');
+          noteError(msg, reason && reason.stack);
+        });
         function attempts() {
           try {
             var parsed = JSON.parse(sessionStorage.getItem(KEY) || 'null');
@@ -210,34 +286,46 @@
             return parsed.count;
           } catch (e) { return 0; }
         }
+        function cacheBust() {
+          var url = new URL(location.href);
+          url.searchParams.set('inflow_boot', String(Date.now()));
+          location.replace(url.toString());
+        }
         function reloadOnce() {
-          if (window.__INFLOW_BOOTED) return;
+          if (realScreen()) {
+            hideBoot();
+            return;
+          }
           var n = attempts();
-          if (n >= 2) {
-            if (overlay) overlay.setAttribute('data-stuck', '1');
+          if (n >= 1) {
+            revealFailure(window.__INFLOW_BOOT_ERROR);
             return;
           }
           try { sessionStorage.setItem(KEY, JSON.stringify({ count: n + 1, at: Date.now() })); } catch (e) {}
-          window.location.reload();
+          cacheBust();
         }
-        if (retry) retry.addEventListener('click', function () { window.location.reload(); });
+        if (retry) retry.addEventListener('click', function () { cacheBust(); });
         function heartbeatAge() {
           var hb = window.__INFLOW_HEARTBEAT_MS || 0;
           if (!hb) return 999999;
           return Date.now() - hb;
         }
-        // 18s with a fresh heartbeat means the entry bundle is alive and the
-        // first route chunk is still downloading. Reloading then wipes it
-        // back to a black about:blank. A stale heartbeat means JS never
-        // started. 45s is the hard stop if the shell never hands off.
+        // 12s with a stale heartbeat means the entry bundle never started
+        // (stale index, missing chunk). A fresh heartbeat means JS is alive
+        // and a slow route must not be cancelled.
         setTimeout(function () {
-          if (window.__INFLOW_BOOTED) return;
+          if (realScreen()) return;
           if (heartbeatAge() < 8000) return;
           reloadOnce();
-        }, 18000);
+        }, 12000);
+        // No matter the booted flag or a live heartbeat: if nothing real is
+        // on screen, stop saying "Opening Inflow".
         setTimeout(function () {
-          if (!window.__INFLOW_BOOTED) reloadOnce();
-        }, 45000);
+          if (!realScreen()) revealFailure(window.__INFLOW_BOOT_ERROR);
+        }, 20000);
+        setInterval(function () {
+          if (overlay && overlay.getAttribute('data-stuck') === '1' && realScreen()) hideBoot();
+        }, 500);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

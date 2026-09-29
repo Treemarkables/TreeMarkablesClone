@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- iOS white screen on dispatch skeleton — branch `cursor/ios-boot-web-guarantee-2b78` — 2026-09-29 — #595 treated the text-less dispatch jobs-loading card as a painted page, so the cover lifted and the installed text-only native probe reloaded the WebView white. Web: ignore text-less cards, hard timeout, boot errors, appReady signal. Do not merge until review.
 - Job diary silent spinner — branch `cursor/diary-load-harden-32c2` — 2026-09-28 — diary for a job whose reply row is a full Apple Mail HTML document (blank description) stays on Loading. Bound retries, proposals failure must not block entries, per-entry fallback, visible Retry. Do not merge until review. [PR #597]
 - Blank proposal starter line — branch `cursor/blank-proposal-starter-line-811e` — 2026-09-28 — new proposals no longer copy jobs.title (often the customer name) into the starter line-item description. Saved proposals are not rewritten. Do not merge until review. [PR #596]
 - Public watch-video boot overlay — branch `cursor/watch-video-boot-overlay-f615` — 2026-09-28 — title-less job-card /watch links stay on #inflow-boot because main has no text. Detector treats media as painted; public routes mark booted on mount; captions.vtt is public when captions_vtt exists. Do not merge until review.

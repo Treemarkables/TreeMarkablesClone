@@ -28,6 +28,10 @@ export const HEARTBEAT_STALE_MS = 12_000;
 export const HEARTBEAT_ALIVE_MS = 8_000;
 // Hard stop if the inline shell is still up and no real page has painted.
 export const LIVE_BOOT_HARD_TIMEOUT_MS = 45_000;
+// Show the boot error / Retry UI even if a premature booted flag or a
+// text-less white card convinced an earlier check that startup finished.
+export const BOOT_FAILURE_REVEAL_MS = 20_000;
+export const NATIVE_READY_TIMEOUT_MS = 12_000;
 // about:blank that is not loading failed (radio not up). Retry quickly.
 export const BLANK_IDLE_RELOAD_MS = 2_000;
 // A still loading about:blank used to be treated as stalled at 4s. That
@@ -184,42 +188,13 @@ function layoutBox(el: Element): { width: number; height: number } | null {
   }
 }
 
-/** A box that actually paints. Empty flex wrappers (the dispatch shell) do not. */
-function elementPaints(el: Element): boolean {
-  if (typeof window === "undefined" || typeof window.getComputedStyle !== "function") {
-    return false;
-  }
-  let style: CSSStyleDeclaration;
-  try {
-    style = window.getComputedStyle(el);
-  } catch {
-    return false;
-  }
-  const bg = (style.backgroundColor || "").replace(/\s+/g, "").toLowerCase();
-  // #1a1a1a is the boot shell. A full-bleed placeholder must not count.
-  if (
-    bg &&
-    bg !== "transparent" &&
-    bg !== "rgba(0,0,0,0)" &&
-    bg !== "rgb(26,26,26)"
-  ) {
-    return true;
-  }
-  if (style.backgroundImage && style.backgroundImage !== "none") return true;
-  return [
-    style.borderTopWidth,
-    style.borderRightWidth,
-    style.borderBottomWidth,
-    style.borderLeftWidth,
-  ].some((width) => parseFloat(width || "0") >= 1);
-}
-
 /**
- * True when `root` contains something a person can see that is not the
- * "Opening Inflow" shell: a video/image/canvas/iframe, a large svg, or any
- * other element with a non-zero box that paints (spinner border, card, …).
- * Layout-only divs and the hidden pull-to-refresh indicator do not count —
- * those are what an empty dispatch `<main>` is made of.
+ * True when `root` contains replaced media a person can see, with no innerText.
+ * A video/image/canvas/iframe or a large svg counts. A text-less card does not:
+ * Dispatch's jobs-loading skeleton is a white `bg-card` with pulse bars and no
+ * words. Treating that border as "painted" hid #inflow-boot while `<main>` was
+ * still empty, and the installed text-only native probe then reloaded the
+ * WebView into a white screen.
  */
 export function elementHasRenderedContent(root: Element | null | undefined): boolean {
   if (!root || typeof root.querySelectorAll !== "function") return false;
@@ -256,29 +231,13 @@ export function elementHasRenderedContent(root: Element | null | undefined): boo
     const box = layoutBox(svg);
     if (box && box.width >= MIN_SVG_PX && box.height >= MIN_SVG_PX) return true;
   }
-  let nodes: Element[] = [];
-  try {
-    nodes = Array.from(root.querySelectorAll("*"));
-  } catch {
-    return false;
-  }
-  for (const node of nodes) {
-    if (isBootChrome(node) || isVisuallyHidden(node)) continue;
-    const text = normalizeShellText(
-      (node as HTMLElement).innerText || node.textContent || "",
-    );
-    if (text && isBootPlaceholderCopy(text)) continue;
-    const box = layoutBox(node);
-    if (!box || box.width < MIN_PAINTED_PX || box.height < MIN_PAINTED_PX) continue;
-    if (elementPaints(node)) return true;
-  }
   return false;
 }
 
 /**
- * Text paint, or rendered media / a painted box. "Opening Inflow" is never
- * ready, even when the placeholder div has a size. An empty `<main>` with
- * only layout wrappers is not ready (TestFlight black-screen guard).
+ * Text, or replaced media. "Opening Inflow" is never ready. A white card,
+ * spinner border, or skeleton with no words is not ready either — that was
+ * the dispatch loading state lifting the cover onto a blank cream page.
  */
 export function shellSignalsRealPage(opts: {
   rootText: string;
@@ -454,8 +413,20 @@ export function markAppBooted(now = Date.now()): void {
   g[BOOT_FLAG] = true;
   g[HEARTBEAT_FLAG] = now;
   try {
-    document.getElementById("inflow-boot")?.setAttribute("data-booted", "1");
+    const overlay = document.getElementById("inflow-boot");
+    overlay?.setAttribute("data-booted", "1");
+    overlay?.removeAttribute("data-stuck");
     document.documentElement.dataset.inflowBooted = "1";
+  } catch {
+    /* ignore */
+  }
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("inflow_boot")) {
+      url.searchParams.delete("inflow_boot");
+      const next = url.pathname + url.search + url.hash;
+      window.history.replaceState(window.history.state, "", next);
+    }
   } catch {
     /* ignore */
   }
@@ -463,6 +434,156 @@ export function markAppBooted(now = Date.now()): void {
     window.dispatchEvent(new Event("inflow-booted"));
   } catch {
     /* ignore */
+  }
+  signalNativeBoot({ type: "appReady" });
+}
+
+interface NativeBootMessage {
+  type: "appReady" | "bootFailed" | "bootError" | "reload";
+  message?: string;
+}
+
+interface WebkitMessageHandler {
+  postMessage: (body: unknown) => void;
+}
+
+interface InflowBootPlugin {
+  appReady?: () => void | Promise<void>;
+  bootFailed?: (data: { message: string }) => void | Promise<void>;
+}
+
+function webkitBootHandler(): WebkitMessageHandler | null {
+  const w = window as Window & {
+    webkit?: { messageHandlers?: { inflowBoot?: WebkitMessageHandler } };
+  };
+  return w.webkit?.messageHandlers?.inflowBoot ?? null;
+}
+
+function inflowBootPlugin(): InflowBootPlugin | null {
+  const cap = (window as Window & {
+    Capacitor?: { Plugins?: { InflowBoot?: InflowBootPlugin } };
+  }).Capacitor;
+  return cap?.Plugins?.InflowBoot ?? null;
+}
+
+/** Tell the Capacitor shell the web app has a real screen, or that boot failed. */
+export function signalNativeBoot(message: NativeBootMessage): void {
+  try {
+    webkitBootHandler()?.postMessage(message);
+  } catch {
+    /* Older TestFlight builds have no inflowBoot handler. */
+  }
+  try {
+    const plugin = inflowBootPlugin();
+    if (message.type === "appReady") void plugin?.appReady?.();
+    if (message.type === "bootFailed" || message.type === "bootError") {
+      void plugin?.bootFailed?.({ message: message.message ?? "" });
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new CustomEvent("inflow-app-ready", { detail: message }));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function reportBootClientError(message: string, stack?: string, context = "boot"): void {
+  if (typeof fetch !== "function") return;
+  const url = typeof window !== "undefined" ? window.location.href : "";
+  const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  fetch("/api/client-errors", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      stack,
+      componentStack: context,
+      url,
+      userAgent,
+    }),
+  }).catch(() => {});
+}
+
+export function readRealScreenVisible(): boolean {
+  if (typeof document === "undefined") return false;
+  const root = document.getElementById("root");
+  const main = root?.querySelector("main") ?? null;
+  return shellSignalsRealPage({
+    rootText: root?.innerText ?? "",
+    mainText: main ? (main.innerText ?? "") : null,
+    mainHasRenderedContent: main ? elementHasRenderedContent(main) : false,
+    rootHasRenderedContent: !main && root ? elementHasRenderedContent(root) : false,
+  });
+}
+
+export function shouldRevealBootFailure(opts: {
+  elapsedMs: number;
+  realScreenVisible: boolean;
+  revealAfterMs?: number;
+}): boolean {
+  if (opts.realScreenVisible) return false;
+  return opts.elapsedMs >= (opts.revealAfterMs ?? BOOT_FAILURE_REVEAL_MS);
+}
+
+const BOOT_FAILURE_TITLE = "Inflow didn't open";
+const BOOT_FAILURE_FALLBACK =
+  "Inflow did not finish opening. Check your connection and try again.";
+
+/** Replace the loading cover with the error / Retry UI. A real screen wins. */
+export function revealBootFailure(message?: string): void {
+  if (readRealScreenVisible()) {
+    markAppBooted();
+    return;
+  }
+  const g = bootGlobals();
+  g[BOOT_FLAG] = false;
+  const text = (message || "").trim() || BOOT_FAILURE_FALLBACK;
+  try {
+    const overlay = document.getElementById("inflow-boot");
+    if (overlay) {
+      overlay.removeAttribute("data-booted");
+      overlay.setAttribute("data-stuck", "1");
+      const title = overlay.querySelector(".boot-title");
+      const sub = overlay.querySelector(".boot-sub");
+      if (title) title.textContent = BOOT_FAILURE_TITLE;
+      if (sub) sub.textContent = text;
+    }
+  } catch {
+    /* ignore */
+  }
+  signalNativeBoot({ type: "bootFailed", message: text });
+}
+
+/** Show a boot-time exception on the cover and report it. A real screen is left alone. */
+export function noteBootError(message: string, stack?: string): void {
+  if (readRealScreenVisible()) return;
+  const text = message.trim() || "Script error";
+  try {
+    (window as Window & { __INFLOW_BOOT_ERROR?: string }).__INFLOW_BOOT_ERROR = text;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const overlay = document.getElementById("inflow-boot");
+    const sub = overlay?.querySelector(".boot-sub");
+    if (sub) sub.textContent = text;
+    overlay?.setAttribute("data-error", "1");
+  } catch {
+    /* ignore */
+  }
+  signalNativeBoot({ type: "bootError", message: text });
+  reportBootClientError(text, stack);
+}
+
+export function cacheBustingReload(): void {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("inflow_boot", String(Date.now()));
+    window.location.replace(url.toString());
+  } catch {
+    window.location.reload();
   }
 }
 
@@ -538,8 +659,12 @@ export function startNativeBootWatchdogs(): void {
     touchHeartbeat();
   }, 2_000);
 
+  const failureAlreadyShown = () =>
+    document.getElementById("inflow-boot")?.getAttribute("data-stuck") === "1";
+
   const armBootTimeout = (delayMs: number) => {
     window.setTimeout(() => {
+      if (failureAlreadyShown()) return;
       const hb = bootGlobals()[HEARTBEAT_FLAG] ?? null;
       if (
         shouldReloadUnbootedDespiteHeartbeat({
@@ -554,6 +679,24 @@ export function startNativeBootWatchdogs(): void {
   };
   armBootTimeout(BOOT_TIMEOUT_MS);
   armBootTimeout(LIVE_BOOT_HARD_TIMEOUT_MS);
+
+  // Guaranteed stop. A booted flag or a live heartbeat must not leave the
+  // cover up, or a text-less white card on screen, forever.
+  window.setTimeout(() => {
+    const stored = (window as Window & { __INFLOW_BOOT_ERROR?: string }).__INFLOW_BOOT_ERROR;
+    if (
+      shouldRevealBootFailure({
+        elapsedMs: Date.now() - startedAt,
+        realScreenVisible: readRealScreenVisible(),
+      })
+    ) {
+      revealBootFailure(stored);
+    }
+  }, BOOT_FAILURE_REVEAL_MS);
+
+  window.setInterval(() => {
+    if (failureAlreadyShown() && readRealScreenVisible()) markAppBooted();
+  }, 500);
 
   document.addEventListener("visibilitychange", () => {
     const now = Date.now();

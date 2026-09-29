@@ -5,7 +5,8 @@ import App from "./App";
 import "./index.css";
 import { isReloadUnsafe } from "./lib/foregroundReloadGuard";
 import { isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
-import { startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
+import { noteBootError, startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Sentry frontend init — disabled when VITE_SENTRY_DSN is unset so local
 // development without a DSN doesn't spam Sentry.
@@ -57,7 +58,10 @@ window.addEventListener('error', (event) => {
   if (isChunkError) {
     console.warn('⚠️ Stale JS bundle detected — reloading to get fresh version');
     requestStaleBundleReload();
+    return;
   }
+  if (!msg || msg.includes("ResizeObserver") || msg === "Script error.") return;
+  noteBootError(msg, event.error instanceof Error ? event.error.stack : undefined);
 });
 
 // Also catch unhandled promise rejections (dynamic import errors)
@@ -69,7 +73,10 @@ window.addEventListener('unhandledrejection', (event) => {
     console.warn('⚠️ Stale JS chunk import failed — reloading to get fresh version');
     event.preventDefault();
     requestStaleBundleReload();
+    return;
   }
+  if (!msg) return;
+  noteBootError(msg, reason instanceof Error ? reason.stack : undefined);
 });
 
 // The hashed entry bundle this page loaded with. index.html is served
@@ -157,5 +164,7 @@ if ('caches' in window) {
 // logged-in Dispatch chunk painted and told native recovery the shell was
 // healthy while the phone viewport was still the #1a1a1a body.
 createRoot(document.getElementById("root")!).render(
-  <App />
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
 );
