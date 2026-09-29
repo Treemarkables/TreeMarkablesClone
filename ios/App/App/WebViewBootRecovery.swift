@@ -31,7 +31,7 @@ import WebKit
 ///
 /// Probe strings match `classifyBootSurface` in
 /// `client/src/lib/nativeBootRecovery.ts`.
-final class WebViewBootRecovery {
+final class WebViewBootRecovery: NSObject, WKScriptMessageHandler {
     static let shared = WebViewBootRecovery()
 
     private weak var webView: WKWebView?
@@ -41,6 +41,10 @@ final class WebViewBootRecovery {
     private var lastLoadAttemptAt = Date.distantPast
     private var reloadCount = 0
     private var sawHealthyBoot = false
+    private var appReady = false
+    private var cacheBusts = 0
+    private var showingFallback = false
+    private var lastBootError = ""
     private var navigationFailed = false
     private var didAttach = false
     private var failureGeneration = 0
@@ -84,17 +88,6 @@ final class WebViewBootRecovery {
         }
         return false;
       }
-      function paints(node) {
-        var s = window.getComputedStyle(node);
-        var bg = (s.backgroundColor || '').replace(/\\s+/g, '').toLowerCase();
-        if (bg && bg !== 'transparent' && bg !== 'rgba(0,0,0,0)' && bg !== 'rgb(26,26,26)') return true;
-        if (s.backgroundImage && s.backgroundImage !== 'none') return true;
-        var sides = [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth];
-        for (var i = 0; i < sides.length; i++) {
-          if (parseFloat(sides[i] || '0') >= 1) return true;
-        }
-        return false;
-      }
       function rendered(el) {
         if (!el || !el.querySelectorAll) return false;
         var media = el.querySelectorAll('video, img, canvas, iframe, picture, audio, object, embed');
@@ -111,15 +104,6 @@ final class WebViewBootRecovery {
           if (bootChrome(svgs[j]) || hidden(svgs[j])) continue;
           var sb = svgs[j].getBoundingClientRect();
           if (sb.width >= 48 && sb.height >= 48) return true;
-        }
-        var nodes = el.querySelectorAll('*');
-        for (var k = 0; k < nodes.length; k++) {
-          var node = nodes[k];
-          if (bootChrome(node) || hidden(node)) continue;
-          if (placeholder(norm(node))) continue;
-          var r = node.getBoundingClientRect();
-          if (r.width < 2 || r.height < 2) continue;
-          if (paints(node)) return true;
         }
         return false;
       }
@@ -142,7 +126,35 @@ final class WebViewBootRecovery {
     })();
     """
 
-    private init() {}
+    private override init() {
+        super.init()
+    }
+
+    func userContentController(
+        _ userContentController: WKUserContentController,
+        didReceive message: WKScriptMessage
+    ) {
+        guard message.name == "inflowBoot" else { return }
+        let body = message.body as? [String: Any]
+        let type = body?["type"] as? String ?? ""
+        let text = body?["message"] as? String ?? ""
+        if !text.isEmpty {
+            lastBootError = String(text.prefix(500))
+        }
+        switch type {
+        case "appReady":
+            noteAppReady(reason: "appReady")
+        case "reload":
+            showingFallback = false
+            appReady = false
+            cacheBusts = 0
+            reloadCount = 0
+            lastBootError = ""
+            loadApp(reason: "fallback button")
+        default:
+            break
+        }
+    }
 
     func attach(webView: WKWebView?) {
         self.webView = webView
@@ -156,6 +168,7 @@ final class WebViewBootRecovery {
         guard !didAttach else { return }
         didAttach = true
         lastLoadAt = Date()
+        webView.configuration.userContentController.add(self, name: "inflowBoot")
 
         NotificationCenter.default.addObserver(
             self,
@@ -170,7 +183,7 @@ final class WebViewBootRecovery {
             object: nil
         )
 
-        for delay in [2.0, 4.0, 10.0, 18.0] {
+        for delay in [2.0, 4.0, 10.0, 12.0, 18.0] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 self?.inspectAndRecover(reason: "cold-start+\(Int(delay))s")
             }
@@ -188,6 +201,9 @@ final class WebViewBootRecovery {
     /// Foreground and scene activation can both fire for one return.
     /// Count resets either way. One inspect is enough.
     private func noteAppReturned(reason: String, event: WebViewBootCountEvent) {
+        if !showingFallback {
+            cacheBusts = 0
+        }
         resetReloadCount(reason: reason, event: event, alwaysLog: true)
         guard !returnInspectScheduled else { return }
         returnInspectScheduled = true
@@ -214,6 +230,9 @@ final class WebViewBootRecovery {
     fileprivate func handleContentProcessTerminated() {
         // Capacitor reloads the current URL itself. Restart the attempt clock
         // so that reload is not cancelled as if it were the stalled first load.
+        // A previous appReady must not suppress recovery of the dead process.
+        appReady = false
+        sawHealthyBoot = false
         navigationFailed = true
         lastLoadAt = Date()
         scheduleFailureInspect(reason: "web content process terminated")
@@ -247,9 +266,13 @@ final class WebViewBootRecovery {
     private func scheduleStallCheck() {
         stallGeneration += 1
         let generation = stallGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + WebViewBootPolicy.loadingStall) { [weak self] in
-            guard let self, generation == self.stallGeneration else { return }
-            self.inspectAndRecover(reason: "stall")
+        let delays = [12.0, WebViewBootPolicy.loadingStall]
+        for delay in delays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, generation == self.stallGeneration else { return }
+                let label = delay >= WebViewBootPolicy.loadingStall ? "stall" : "ready-timeout"
+                self.inspectAndRecover(reason: label)
+            }
         }
     }
 
@@ -345,8 +368,25 @@ final class WebViewBootRecovery {
         let blank = href.isEmpty || href.hasPrefix("about:")
         let foreground = reason.hasPrefix("foreground")
 
+        if showingFallback { return }
+        if appReady {
+            noteAppReady(reason: "appReady")
+            return
+        }
+
         if blank || !isAppOrigin(href) {
             let surface = blank ? "blank" : "wrong-origin"
+            if cacheBusts >= 1 {
+                if bootReadyAction(
+                    appReady: false,
+                    elapsed: elapsed,
+                    isLoading: loading,
+                    cacheBusts: cacheBusts
+                ) == "fallback" {
+                    showBundledFallback()
+                }
+                return
+            }
             if decideReload(
                 surface: surface,
                 elapsed: elapsed,
@@ -362,7 +402,18 @@ final class WebViewBootRecovery {
             guard let self, let webView = self.webView else { return }
             let elapsedNow = Date().timeIntervalSince(self.lastLoadAt)
             if let error {
-                if self.decideReload(
+                if self.showingFallback { return }
+                let action = bootReadyAction(
+                    appReady: false,
+                    elapsed: elapsedNow,
+                    isLoading: webView.isLoading,
+                    cacheBusts: self.cacheBusts
+                )
+                if self.cacheBusts >= 1 {
+                    if action == "fallback" { self.showBundledFallback() }
+                    return
+                }
+                if action == "reload" || self.decideReload(
                     surface: "blank",
                     elapsed: elapsedNow,
                     isLoading: webView.isLoading,
@@ -374,26 +425,107 @@ final class WebViewBootRecovery {
                 return
             }
             let status = result as? String ?? "not-booted"
-            if status == "booted" || status == "painting" {
-                if status == "booted" {
-                    self.sawHealthyBoot = true
-                }
+            if self.showingFallback { return }
+            if self.appReady || status == "booted" {
+                self.noteAppReady(reason: status == "booted" ? "booted" : "appReady")
+                return
+            }
+            // "painting" means the web cover is up and the bundle is alive.
+            // That is not ready. Hide the native placeholder (the web cover
+            // is the visible one) and still apply the 12s ready timeout.
+            if status == "painting" {
                 self.navigationFailed = false
                 self.failureGeneration += 1
                 self.paintShell(webView)
                 self.hidePlaceholder(reason: status)
-                self.resetReloadCount(reason: "page loaded", event: .healthyBoot, alwaysLog: false)
-                return
             }
-            if self.decideReload(
-                surface: status,
+            let action = bootReadyAction(
+                appReady: false,
                 elapsed: elapsedNow,
                 isLoading: webView.isLoading,
-                foregroundRetry: false
-            ) {
+                cacheBusts: self.cacheBusts
+            )
+            if self.cacheBusts >= 1 {
+                if action == "fallback" {
+                    self.showBundledFallback()
+                }
+                return
+            }
+            if status == "blank" || status == "wrong-origin" {
+                if self.decideReload(
+                    surface: status,
+                    elapsed: elapsedNow,
+                    isLoading: webView.isLoading,
+                    foregroundRetry: false
+                ) {
+                    self.loadApp(reason: "\(reason) probe=\(status)")
+                }
+                return
+            }
+            // "empty" used to reload immediately. That cancelled a dispatch
+            // skeleton the web side had marked booted and left this opaque
+            // web view white. Wait out the ready window, reload once, then
+            // the bundled fallback.
+            if action == "reload" {
                 self.loadApp(reason: "\(reason) probe=\(status)")
             }
         }
+    }
+
+    private func noteAppReady(reason: String) {
+        appReady = true
+        sawHealthyBoot = true
+        showingFallback = false
+        cacheBusts = 0
+        navigationFailed = false
+        failureGeneration += 1
+        if let webView {
+            paintShell(webView)
+            hidePlaceholder(reason: reason)
+        }
+        resetReloadCount(reason: reason, event: .healthyBoot, alwaysLog: false)
+    }
+
+    private func showBundledFallback() {
+        guard let webView, !showingFallback else { return }
+        showingFallback = true
+        hidePlaceholder(reason: "fallback")
+        let safeError = Self.escapeForHTML(lastBootError)
+        let shown = safeError.isEmpty ? "Inflow did not finish opening." : safeError
+        let html: String
+        if let url = Bundle.main.url(forResource: "boot-fallback", withExtension: "html"),
+           let template = try? String(contentsOf: url, encoding: .utf8) {
+            html = template.replacingOccurrences(of: "__BOOT_ERROR__", with: shown)
+        } else {
+            html = Self.inlineFallbackHTML(error: shown)
+        }
+        print("WebViewBootRecovery showing bundled fallback")
+        webView.loadHTMLString(html, baseURL: Bundle.main.bundleURL)
+    }
+
+    private static func escapeForHTML(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
+    private static func inlineFallbackHTML(error: String) -> String {
+        """
+        <!DOCTYPE html>
+        <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+        <style>
+          html,body{margin:0;height:100%;background:#1a1a1a;color:#f5f5f0;font-family:-apple-system,sans-serif}
+          main{min-height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+          button{margin-top:20px;color:#f5f5f0;background:transparent;border:1px solid rgba(245,245,240,.35);border-radius:999px;padding:12px 18px;font-size:17px}
+          p{color:rgba(245,245,240,.75);white-space:pre-wrap}
+        </style></head>
+        <body><main><div>
+          <h1>Inflow didn't open</h1>
+          <p>\(error)</p>
+          <button type="button" onclick="try{window.webkit.messageHandlers.inflowBoot.postMessage({type:'reload'})}catch(e){}">Reload</button>
+        </div></main></body></html>
+        """
     }
 
     private func decideReload(
@@ -429,6 +561,7 @@ final class WebViewBootRecovery {
     private func loadApp(reason: String) {
         guard reloadCount < WebViewBootPolicy.maxReloads else {
             print("⚠️ WebViewBootRecovery: gave up after \(WebViewBootPolicy.maxReloads) reloads (\(reason))")
+            showBundledFallback()
             return
         }
         guard let webView else { return }
@@ -436,8 +569,9 @@ final class WebViewBootRecovery {
         if Date().timeIntervalSince(lastLoadAttemptAt) < 0.35 {
             return
         }
-        let url = remoteAppURL()
+        let url = cacheBustingURL(remoteAppURL())
         reloadCount = nextReloadCount(reloadCount, event: .attempt)
+        cacheBusts += 1
         lastLoadAt = Date()
         lastLoadAttemptAt = lastLoadAt
         navigationFailed = false
@@ -449,6 +583,17 @@ final class WebViewBootRecovery {
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 45)
         webView.load(request)
         scheduleStallCheck()
+    }
+
+    private func cacheBustingURL(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+        var items = components.queryItems ?? []
+        items.removeAll { $0.name == "inflow_boot" }
+        items.append(URLQueryItem(name: "inflow_boot", value: String(Int(Date().timeIntervalSince1970 * 1000))))
+        components.queryItems = items
+        return components.url ?? url
     }
 
     private func remoteAppURL() -> URL {
