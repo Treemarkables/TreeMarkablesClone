@@ -776,7 +776,7 @@ function DiaryLoadError({
 
   useEffect(() => {
     return () => {
-      if (copiedTimer.current != null) window.clearTimeout(copiedTimer.current);
+      if (copiedTimer.current != null) clearTimeout(copiedTimer.current);
     };
   }, []);
 
@@ -786,8 +786,8 @@ function DiaryLoadError({
     const text = formatDiaryFailureCopy(details, jobId);
     const markCopied = () => {
       setCopied(true);
-      if (copiedTimer.current != null) window.clearTimeout(copiedTimer.current);
-      copiedTimer.current = window.setTimeout(() => setCopied(false), 2000);
+      if (copiedTimer.current != null) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 2000);
     };
     const copyWithTextarea = () => {
       const area = document.createElement("textarea");
