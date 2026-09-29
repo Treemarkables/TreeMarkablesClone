@@ -219,6 +219,80 @@ describe("job diary shapes from a blank-description Apple Mail reply", () => {
     );
   });
 
+  it("keeps the HTTP status and a short body snippet when the diary body is not JSON", async () => {
+    const html =
+      '<!DOCTYPE html><html><head><title>Login</title></head><body>password=hunter2 sign in</body></html>';
+    const request = async (_method: string, url: string) => {
+      if (url.includes("/proposals") || url.includes("servicem8") || url.includes("staff-assignments")) {
+        return { json: async () => ({ data: [] }) };
+      }
+      const payload = {
+        status: 200,
+        json: async () => JSON.parse(html),
+        text: async () => html,
+        clone() {
+          return this;
+        },
+      };
+      return payload;
+    };
+    await assert.rejects(
+      () =>
+        fetchDiaryTimelineSources(
+          {
+            diary: "/api/jobs/job-1/diary?limit=100",
+            proposals: "/api/proposals?jobId=job-1",
+            servicem8: "/api/servicem8/jobs/job-1/diary",
+            assignments: "/api/jobs/job-1/staff-assignments",
+          },
+          request,
+        ),
+      (error: unknown) => {
+        const details = describeDiaryFailure(error);
+        assert.equal(details.request, "/api/jobs/job-1/diary?limit=100");
+        assert.equal(details.status, 200);
+        assert.match(details.message, /Login/);
+        assert.equal(details.message.includes("hunter2"), false);
+        assert.match(details.message, /password=\[redacted\]/);
+        return true;
+      },
+    );
+  });
+
+  it("keeps status when the diary body is empty", async () => {
+    const request = async (_method: string, url: string) => {
+      if (!url.includes("/diary?") || url.includes("servicem8")) {
+        return { json: async () => ({ data: [] }) };
+      }
+      return {
+        status: 204,
+        json: async () => JSON.parse(""),
+        text: async () => "",
+        clone() {
+          return this;
+        },
+      };
+    };
+    await assert.rejects(
+      () =>
+        fetchDiaryTimelineSources(
+          {
+            diary: "/api/jobs/job-1/diary?limit=100",
+            proposals: "/api/proposals?jobId=job-1",
+            servicem8: "/api/servicem8/jobs/job-1/diary",
+            assignments: "/api/jobs/job-1/staff-assignments",
+          },
+          request,
+        ),
+      (error: unknown) => {
+        const details = describeDiaryFailure(error);
+        assert.equal(details.status, 204);
+        assert.match(details.message, /\(empty body\)/);
+        return true;
+      },
+    );
+  });
+
   it("stringifies a non-Error from the diary request", async () => {
     const request = async (_method: string, url: string) => {
       if (url.endsWith("/diary?limit=100") || url.includes("/diary?")) {

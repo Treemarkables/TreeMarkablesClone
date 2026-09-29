@@ -65,10 +65,19 @@ export interface DiaryTimelineSources {
   schedule: unknown;
 }
 
+type DiaryResponseBody = {
+  text?: () => Promise<string>;
+};
+
 type JsonRequest = (
   method: string,
   url: string,
-) => Promise<{ json: () => Promise<unknown> }>;
+) => Promise<{
+  status?: number;
+  json: () => Promise<unknown>;
+  text?: () => Promise<string>;
+  clone?: () => DiaryResponseBody;
+}>;
 
 export function diaryText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -669,14 +678,56 @@ export function assembleDiaryEntries(sources: DiaryTimelineSources): DiaryEntry[
   return sortNewestFirst(uniqueEntries);
 }
 
+function responseStatus(status: unknown): number | null {
+  return typeof status === "number" && Number.isFinite(status) ? status : null;
+}
+
+/**
+ * res.json() on an empty or HTML 2xx throws a SyntaxError with no status.
+ * Safari words that "The string did not match the expected pattern." Keep the
+ * HTTP status and a short redacted snippet so the diary card does not say none.
+ */
+function diaryUnparsedBody(status: number | null, body: string, cause: unknown): Error {
+  const snippet = publicErrorText(body) || "(empty body)";
+  const reason =
+    cause instanceof Error && cause.message.trim()
+      ? cause.message.trim()
+      : "Response was not JSON";
+  const message = publicErrorText(`${reason} — ${snippet}`) || reason;
+  const error = new Error(message);
+  if (status != null) (error as { status: number }).status = status;
+  (error as { serverMessage: string }).serverMessage = message;
+  return error;
+}
+
 /**
  * Diary and proposals used to share one Promise.all with no catch on either.
  * A proposals failure rejected the whole query, and retry: true retried forever.
  * Proposals, ServiceM8, and staff bookings are optional. The diary request is not.
  */
 async function readDiaryJson(request: JsonRequest, url: string): Promise<unknown> {
+  let res: Awaited<ReturnType<JsonRequest>>;
   try {
-    const res = await request("GET", url);
+    res = await request("GET", url);
+  } catch (error) {
+    throw markDiaryFailure(error, url);
+  }
+  const status = responseStatus(res.status);
+  try {
+    if (typeof res.clone === "function" && typeof res.text === "function") {
+      const copy = res.clone();
+      try {
+        return await res.json();
+      } catch (parseError) {
+        let body = "";
+        try {
+          body = typeof copy.text === "function" ? await copy.text() : "";
+        } catch {
+          body = "";
+        }
+        throw diaryUnparsedBody(status, body, parseError);
+      }
+    }
     return await res.json();
   } catch (error) {
     throw markDiaryFailure(error, url);
