@@ -24,6 +24,7 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
+import { clientSafeErrorText } from "./httpErrorText";
 import { buildTodayOverview, createTodayExtraInstruction, deleteTodayExtraInstruction, HttpError } from "./todayOverview";
 import { loadEffectiveRiskLinksForJobs, loadRiskLinksForJobs, recordRiskAssessmentChecklistDone } from "./jhaJobRisk";
 import { checklistCompletionClearsRiskDue, doneIdsIncludingLinkedJha, jhaCompletionRequiresJob, normalizeJhaJobId, RISK_ASSESSMENT_CHECKLIST_ITEM_ID, type JobRiskAssessmentLink } from "@shared/jhaJobRisk";
@@ -2271,13 +2272,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========================================
   // CLIENT-SIDE ERROR LOGGING
   app.post('/api/client-errors', (req: Request, res: Response) => {
-    const { message, stack, componentStack, url, userAgent } = req.body || {};
+    const {
+      message, stack, componentStack, url, userAgent,
+      context, jobId, entryId, entryType, request: failedRequest, status, serverMessage, timestamp,
+    } = req.body || {};
+    const clip = (value: unknown, max: number) =>
+      typeof value === 'string' ? value.slice(0, max) : undefined;
     console.error('🚨 [CLIENT ERROR]', {
-      message,
+      message: clip(message, 500),
       url,
       userAgent,
-      stack: stack?.slice(0, 500),
-      componentStack: componentStack?.slice(0, 500),
+      stack: clip(stack, 500),
+      componentStack: clip(componentStack, 500),
+      context,
+      jobId,
+      entryId,
+      entryType,
+      request: failedRequest,
+      status,
+      serverMessage: clip(serverMessage, 300),
+      timestamp,
     });
     res.json({ success: true });
   });
@@ -7977,7 +7991,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       res.json({ success: true, data: transformedEntries, mobile: true });
     } catch (error) {
       console.error('Error fetching mobile diary:', error);
-      res.status(500).json({ success: false, message: 'Error fetching diary entries' });
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: clientSafeErrorText(error, 'Error fetching diary entries') });
+      }
     }
   });
 
@@ -8042,7 +8058,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       res.json({ success: true, data: transformedEntries });
     } catch (error) {
       console.error('Error fetching job diary entries:', error);
-      res.status(500).json({ success: false, message: 'Error fetching diary entries' });
+      // The job card shows this message. Keep the real reason (timeout, bad
+      // column, JSON failure) and drop stacks and connection strings.
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: clientSafeErrorText(error, 'Error fetching diary entries') });
+      }
     }
   });
 

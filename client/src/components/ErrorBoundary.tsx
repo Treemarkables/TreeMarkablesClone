@@ -7,6 +7,7 @@ import {
   canAttemptReload,
   requestStaleBundleReload,
 } from '@/lib/staleChunkReload';
+import { markAppBooted } from '@/lib/nativeBootRecovery';
 
 interface Props {
   children: ReactNode;
@@ -54,6 +55,10 @@ export class ErrorBoundary extends Component<Props, State> {
     if (isChunkLoadError(error) && requestStaleBundleReload() === 'reloading') {
       return;
     }
+
+    // The cover sits above #root. A crash used to leave "Opening Inflow" on
+    // top of this card, or a white card underneath a cover that never lifted.
+    markAppBooted();
 
     // Report to Sentry with the React component stack as extra context.
     // No-op when VITE_SENTRY_DSN is unset (Sentry.init was skipped).
