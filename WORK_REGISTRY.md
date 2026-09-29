@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Treemarkables invoice bank-only — branch `cursor/tm-invoice-bank-only-943e` — 2026-09-29 — production business a985f349-b6aa-4ef9-a6f9-70aa00e1dcb2 invoices: no Pay now, no invoice Checkout session. Deposits, job-card payments, other businesses, and Inflow subscription billing unchanged. Do not merge until review.
 - iOS white screen on dispatch skeleton — branch `cursor/ios-boot-web-guarantee-2b78` — 2026-09-29 — #595 treated the text-less dispatch jobs-loading card as a painted page, so the cover lifted and the installed text-only native probe reloaded the WebView white. Web: ignore text-less cards, hard timeout, boot errors, appReady signal. Do not merge until review.
 - Job diary silent spinner — branch `cursor/diary-load-harden-32c2` — 2026-09-28 — diary for a job whose reply row is a full Apple Mail HTML document (blank description) stays on Loading. Bound retries, proposals failure must not block entries, per-entry fallback, visible Retry. Do not merge until review. [PR #597]
 - Blank proposal starter line — branch `cursor/blank-proposal-starter-line-811e` — 2026-09-28 — new proposals no longer copy jobs.title (often the customer name) into the starter line-item description. Saved proposals are not rewritten. Do not merge until review. [PR #596]

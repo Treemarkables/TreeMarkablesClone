@@ -30,6 +30,11 @@ type StripeClient = any; // typed via runtime import to avoid hard dep
 //
 // STRIPE_PAYMENT_BUSINESS_IDS (comma-separated) opts extra businessIds in without a
 // code change — e.g. once Connect lands and routing becomes per-tenant.
+//
+// Invoice card checkout is a separate gate. businessOwnsStripeAccount stays true
+// for Treemarkables so proposal deposits and job-card payments still settle on
+// the platform account. invoiceCardCheckoutDisabled turns off kind=payment
+// checkout for a Treemarkables production INVOICE only.
 export function businessOwnsStripeAccount(businessId: string | null | undefined): boolean {
   if (!businessId) return false;
   if (TREEMARKABLES_BUSINESS_IDS.includes(businessId)) return true;
@@ -38,6 +43,36 @@ export function businessOwnsStripeAccount(businessId: string | null | undefined)
     .map((s) => s.trim())
     .filter(Boolean);
   return extra.includes(businessId);
+}
+
+/** Treemarkables production. Invoice card payments on the platform account stop here. */
+export const TREEMARKABLES_PROD_INVOICE_CARD_OFF_BUSINESS_ID =
+  "a985f349-b6aa-4ef9-a6f9-70aa00e1dcb2";
+
+/**
+ * True only for Treemarkables production invoices. Card checkout (Pay now,
+ * the invoice email pay button, and POST /api/invoices/:id/payment-checkout)
+ * must not run. The local-dev Treemarkables id, every other business, proposal
+ * deposits, job-card payments, and Inflow subscription billing are not covered.
+ */
+export function invoiceCardCheckoutDisabled(
+  businessId: string | null | undefined,
+): boolean {
+  return businessId === TREEMARKABLES_PROD_INVOICE_CARD_OFF_BUSINESS_ID;
+}
+
+/**
+ * Whether the public invoice page should offer Pay now.
+ * Treemarkables production is false even when the platform account would
+ * otherwise allow a card, and even if Connect charges were later turned on.
+ */
+export function invoiceOnlinePaymentEnabled(input: {
+  businessId: string | null | undefined;
+  ownsPlatformAccount: boolean;
+  connectChargesEnabled: boolean;
+}): boolean {
+  if (invoiceCardCheckoutDisabled(input.businessId)) return false;
+  return input.ownsPlatformAccount || input.connectChargesEnabled;
 }
 
 let cachedClient: StripeClient | null = null;

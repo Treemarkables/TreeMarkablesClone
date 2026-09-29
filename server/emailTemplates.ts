@@ -342,6 +342,27 @@ export interface InvoiceEmailOptions {
   /** Public review link (/review/:token). When set, a "How did we do?" block
    *  renders between the bank details and the footer. */
   reviewUrl?: string;
+  /** When false, the button is "View invoice" and never a pay-by-card label.
+   *  Omit (or true) to keep "View & pay invoice online". */
+  offerCardPayment?: boolean;
+}
+
+/** Plain-text bank-transfer instructions for an invoice email. Null when the
+ *  business has not set an account, so we never invent one. */
+export function invoiceBankTransferNote(input: {
+  accountName?: string | null;
+  accountNumber?: string | null;
+  reference?: string | null;
+}): string | null {
+  const accountName = input.accountName?.trim() || "";
+  const accountNumber = input.accountNumber?.trim() || "";
+  if (!accountName && !accountNumber) return null;
+  const parts = ["Pay by bank transfer."];
+  if (accountName) parts.push(`Account name: ${accountName}.`);
+  if (accountNumber) parts.push(`Account number: ${accountNumber}.`);
+  const reference = input.reference?.trim();
+  if (reference) parts.push(`Reference: ${reference}.`);
+  return parts.join(" ");
 }
 
 /**
@@ -452,7 +473,7 @@ export function renderInvoiceEmail(opts: InvoiceEmailOptions): string {
             </td>
           </tr>
           <tr><td colspan="2" style="padding:0 20px 18px;">
-            <a href="${opts.ctaUrl}" style="display:block;text-align:center;background:${b.accent};color:${b.onAccent};padding:13px;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;">${esc(opts.ctaText || 'View & pay invoice online')}</a>
+            <a href="${opts.ctaUrl}" style="display:block;text-align:center;background:${b.accent};color:${b.onAccent};padding:13px;border-radius:8px;font-weight:700;font-size:15px;text-decoration:none;">${esc(opts.offerCardPayment === false ? 'View invoice' : (opts.ctaText || 'View & pay invoice online'))}</a>
           </td></tr>
         </table>
       </td></tr>

@@ -345,8 +345,8 @@ export default function InvoiceView() {
                       : `Issued ${new Date(invoice.issueDate).toLocaleDateString("en-NZ")}${invoice.dueDate ? ` · Due ${new Date(invoice.dueDate).toLocaleDateString("en-NZ")}` : ""}`}
                 </p>
                 <div className="flex flex-wrap gap-2 mt-4">
-                  {/* Pay online — only when this business can take card payments (single
-                      Stripe account = Treemarkables until Connect); others pay by bank transfer. */}
+                  {/* Pay now only when the server says this invoice can take a card.
+                      Treemarkables production invoices set onlinePaymentEnabled false. */}
                   {stripeConfigured &&
                     invoice.onlinePaymentEnabled &&
                     !justPaid &&
