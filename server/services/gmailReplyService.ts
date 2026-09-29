@@ -503,9 +503,15 @@ class GmailReplyService {
         // Scope this brand-new-lead path to the addressed tenant: runWithBusiness
         // stamps every conversation/message/notification insert below (via withTenant)
         // with channelBusinessId, and the cross-tenant reads are guarded explicitly.
-        // When the address isn't a registered channel, channelBusinessId is undefined
-        // and this is a no-op (unchanged behaviour).
-        return await runWithBusiness(channelBusinessId, async () => {
+        // When the address isn't a registered channel, file it on the platform
+        // default business (the original single-tenant inbox) instead of leaving
+        // business id unset — an unset id used to push the reply to every admin.
+        let scopeBusinessId = channelBusinessId;
+        if (!scopeBusinessId) {
+          const { storage: scopeStorage } = await import('../storage.js');
+          scopeBusinessId = (await scopeStorage.getBusinessSettings())?.businessId ?? undefined;
+        }
+        return await runWithBusiness(scopeBusinessId, async () => {
         try {
           const notificationHelper = await import('./notificationHelper.js');
           const { storage } = await import('../storage.js');
@@ -627,8 +633,13 @@ class GmailReplyService {
       // Clean up email body text (remove quoted replies)
       const cleanedBody = this.cleanEmailBody(email.textBody);
 
-      // Only create job diary entry if we have both job and customer
+      // Only create job diary entry if we have both job and customer.
+      // Bind the job's business for the whole block: this poller is session-less,
+      // so without it the reply notification and the admin push go out with no
+      // tenant and every business's devices receive them.
       if (job && customer) {
+        const replyBusinessId = job.businessId ?? channelBusinessId;
+        return await runWithBusiness(replyBusinessId, async () => {
         // Check for duplicate email FIRST - across ALL diary entries, not just this job
         if (email.messageId) {
           const duplicateCheck = await db
@@ -803,6 +814,7 @@ class GmailReplyService {
         // /conversation/{id}, which is exactly what we don't want for job replies.
         console.log(`📧 Reply matched to job #${job.jobNumber} - logged to diary only, skipping conversations page`);
         return true;
+        });
       }
       
       // Create or update conversation to trigger notification bell
@@ -811,7 +823,12 @@ class GmailReplyService {
         // Import notification helper
         const notificationHelper = await import('./notificationHelper.js');
         const { storage } = await import('../storage.js');
-        
+        let replyBusinessId = customer?.businessId ?? job?.businessId ?? channelBusinessId;
+        if (!replyBusinessId) {
+          replyBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+        }
+
+        await runWithBusiness(replyBusinessId, async () => {
         // Check for existing open conversation from this email
         let conversation = await notificationHelper.findExistingOpenConversation(email.from.trim().toLowerCase());
         let isNewConversation = !conversation;
@@ -877,6 +894,7 @@ class GmailReplyService {
         });
         
         console.log(`📧 ✅ Added email to conversation messages`);
+        });
       } catch (convError) {
         console.error('📧 Error creating conversation from email reply:', convError);
         // Continue even if conversation creation fails - the job diary entry was still created
@@ -895,6 +913,8 @@ class GmailReplyService {
       try {
         if (email.messageId) {
           const { storage } = await import('../storage.js');
+          const operatorBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+          await runWithBusiness(operatorBusinessId, async () => {
           const alreadyAlerted = await storage.hasNotificationSince({
             type: 'email_processing_failed',
             since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
@@ -915,6 +935,7 @@ class GmailReplyService {
             });
             console.log(`🔔 Raised email-processing-failure alert for messageId ${email.messageId}`);
           }
+          });
         }
       } catch (alertErr) {
         console.error('📧 Failed to raise email-processing alert:', alertErr);

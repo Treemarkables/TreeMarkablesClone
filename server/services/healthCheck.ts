@@ -319,6 +319,25 @@ async function ownerEmail(): Promise<string> {
   }
 }
 
+async function pushPlatformAdmins(options: {
+  title: string;
+  body: string;
+  clickAction?: string;
+  data?: Record<string, string>;
+}): Promise<void> {
+  // Platform alerts go to the default business (Treemarkables), not every
+  // subscriber admin. getBusinessSettings() with no tenant context returns
+  // that canonical row.
+  const businessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+  if (!businessId) return;
+  await notificationHelper.pushToAdminsWithCustomerMessages({
+    title: options.title,
+    body: options.body,
+    clickAction: options.clickAction,
+    data: options.data,
+  }, businessId);
+}
+
 async function sendAlert(failures: CheckResult[]): Promise<void> {
   const lines = failures.map((f) => `- ${f.name}: ${f.detail}`).join('\n');
   const subject = `[ALERT] Treemarkables health check failed (${failures.length})`;
@@ -340,7 +359,7 @@ async function sendAlert(failures: CheckResult[]): Promise<void> {
     console.error('[health] alert email failed:', (e as Error).message);
   }
   try {
-    await notificationHelper.pushToAdminsWithCustomerMessages({
+    await pushPlatformAdmins({
       title: 'Health check failed',
       body: failures.map((f) => f.name).join(', '),
       clickAction: '/today',
@@ -378,7 +397,7 @@ export async function alertOwner(opts: {
     console.error('[health] owner alert email failed:', (e as Error).message);
   }
   try {
-    await notificationHelper.pushToAdminsWithCustomerMessages({
+    await pushPlatformAdmins({
       title: opts.pushTitle,
       body: opts.pushBody,
       clickAction: '/today',
@@ -398,7 +417,7 @@ async function sendRecovery(): Promise<void> {
     console.error('[health] recovery email failed:', (e as Error).message);
   }
   try {
-    await notificationHelper.pushToAdminsWithCustomerMessages({
+    await pushPlatformAdmins({
       title: 'Health check recovered',
       body: 'All monitored systems are healthy again.',
       clickAction: '/today',
