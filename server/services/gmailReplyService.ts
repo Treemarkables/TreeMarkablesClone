@@ -911,14 +911,15 @@ class GmailReplyService {
       // since at this point the owning tenant may be exactly what we failed to
       // work out.
       try {
-        if (email.messageId) {
+        const failedMessageId = email.messageId;
+        if (failedMessageId) {
           const { storage } = await import('../storage.js');
           const operatorBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
           await runWithBusiness(operatorBusinessId, async () => {
           const alreadyAlerted = await storage.hasNotificationSince({
             type: 'email_processing_failed',
             since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-            metadata: { key: 'emailMessageId', value: email.messageId },
+            metadata: { key: 'emailMessageId', value: failedMessageId },
           });
           if (!alreadyAlerted) {
             await storage.createNotification({
@@ -927,13 +928,13 @@ class GmailReplyService {
               type: 'email_processing_failed',
               priority: 'high',
               metadata: {
-                emailMessageId: email.messageId,
+                emailMessageId: failedMessageId,
                 from: email.from,
                 to: email.to,
                 error: String((error as Error)?.message || error),
               },
             });
-            console.log(`🔔 Raised email-processing-failure alert for messageId ${email.messageId}`);
+            console.log(`🔔 Raised email-processing-failure alert for messageId ${failedMessageId}`);
           }
           });
         }

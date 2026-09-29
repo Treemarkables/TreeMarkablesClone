@@ -10,9 +10,9 @@ export function addClient(res: Response, businessId?: string): void {
 }
 
 export function removeClient(res: Response): void {
-  for (const client of clients) {
+  clients.forEach((client) => {
     if (client.res === res) clients.delete(client);
-  }
+  });
 }
 
 /**
@@ -26,12 +26,12 @@ export function broadcast(queries: string[], businessId?: string): void {
   if (clients.size === 0) return;
   const bid = businessId ?? currentBusinessId();
   const payload = `data: ${JSON.stringify({ queries })}\n\n`;
-  for (const client of clients) {
-    if (bid && client.businessId !== bid) continue;
+  clients.forEach((client) => {
+    if (bid && client.businessId !== bid) return;
     try {
       client.res.write(payload);
     } catch {
       clients.delete(client);
     }
-  }
+  });
 }
