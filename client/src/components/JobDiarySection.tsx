@@ -39,10 +39,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   assembleDiaryEntries,
   cleanDiaryContent,
+  describeDiaryFailure,
   diaryText,
   emailBubbleMessage,
+  entryFailureDetail,
   fetchDiaryTimelineSources,
+  formatDiaryFailureCopy,
   formatDiaryTimestamp,
+  markDiaryFailure,
   payloadData,
   reportDiaryClientError,
   type DiaryEntry,
@@ -755,35 +759,135 @@ function DiaryEntrySlot({ render }: { render: () => React.ReactNode }) {
 function DiaryLoadError({
   onRetry,
   message = "The diary couldn't be loaded.",
+  error,
+  jobId,
 }: {
   onRetry: () => void;
   message?: string;
+  error: unknown;
+  jobId?: string;
 }) {
+  const details = React.useMemo(
+    () => describeDiaryFailure(error, "unknown"),
+    [error],
+  );
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current != null) clearTimeout(copiedTimer.current);
+    };
+  }, []);
+
+  const nzTime = formatDiaryTimestamp(details.timestamp, "d MMM yyyy, h:mm:ss a");
+
+  const copyDetails = () => {
+    const text = formatDiaryFailureCopy(details, jobId);
+    const markCopied = () => {
+      setCopied(true);
+      if (copiedTimer.current != null) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 2000);
+    };
+    const copyWithTextarea = () => {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.top = "0";
+      area.style.left = "0";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.focus();
+      area.select();
+      area.setSelectionRange(0, text.length);
+      const ok = document.execCommand("copy");
+      document.body.removeChild(area);
+      if (ok) markCopied();
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(markCopied).catch(copyWithTextarea);
+      return;
+    }
+    copyWithTextarea();
+  };
+
   return (
     <div
-      className="flex flex-col items-center justify-center gap-2 py-6"
+      className="flex w-full min-w-0 flex-col items-center justify-center gap-2 px-3 py-6"
       data-testid="diary-load-error"
     >
-      <div className="text-xs text-muted-foreground">{message}</div>
+      <div className="text-xs text-muted-foreground text-center">{message}</div>
       <Button type="button" variant="outline" size="sm" onClick={onRetry}>
         Retry
       </Button>
+      <details className="mt-1 w-full min-w-0 text-left" open data-testid="diary-error-details">
+        <summary className="cursor-pointer select-none py-1 text-xs font-medium text-muted-foreground">
+          Error details
+        </summary>
+        <div className="mt-1 space-y-1 rounded-md bg-muted/50 p-2 text-[11px] leading-relaxed break-all">
+          <div>
+            <span className="text-muted-foreground">Request: </span>
+            {details.request}
+          </div>
+          <div>
+            <span className="text-muted-foreground">Status: </span>
+            {details.status ?? "none"}
+          </div>
+          <div>
+            <span className="text-muted-foreground">Message: </span>
+            {details.message}
+          </div>
+          <div>
+            <span className="text-muted-foreground">Time: </span>
+            {nzTime ? `${nzTime} NZ` : details.timestamp}
+          </div>
+          <div className="text-muted-foreground">{details.timestamp}</div>
+          {jobId ? (
+            <div>
+              <span className="text-muted-foreground">Job: </span>
+              {jobId}
+            </div>
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-1 h-8 px-2 text-xs"
+            onClick={copyDetails}
+            data-testid="diary-error-copy"
+          >
+            {copied ? "Copied" : "Copy details"}
+          </Button>
+        </div>
+      </details>
     </div>
   );
 }
 
 class DiaryEntryErrorBoundary extends React.Component<
-  { children: React.ReactNode },
+  {
+    children: React.ReactNode;
+    jobId?: string;
+    entryId?: string;
+    entryType?: string;
+  },
   { error: Error | null }
 > {
   state = { error: null as Error | null };
 
   static getDerivedStateFromError(error: Error) {
+    describeDiaryFailure(error, "render");
     return { error };
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string }) {
-    reportDiaryClientError(error, "JobDiaryEntry", info.componentStack);
+    reportDiaryClientError(error, "JobDiaryEntry", info.componentStack, {
+      jobId: this.props.jobId,
+      entryId: this.props.entryId,
+      entryType: this.props.entryType,
+      request: "render",
+    });
   }
 
   render() {
@@ -793,7 +897,10 @@ class DiaryEntryErrorBoundary extends React.Component<
           className="rounded-2xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground"
           data-testid="diary-entry-error"
         >
-          This entry couldn't be displayed.
+          <div>This entry couldn't be displayed.</div>
+          <p className="mt-1 text-[11px] leading-snug break-all" data-testid="diary-entry-error-detail">
+            {entryFailureDetail(this.props.entryType, this.props.entryId, this.state.error)}
+          </p>
         </div>
       );
     }
@@ -1256,27 +1363,38 @@ export function JobDiarySection({
       const diaryUrl = diaryLimit
         ? `/api/jobs/${jobId}/diary?limit=${diaryLimit}`
         : `/api/jobs/${jobId}/diary`;
-      const sources = await fetchDiaryTimelineSources(
-        {
-          diary: diaryUrl,
-          proposals: `/api/proposals?jobId=${jobId}`,
-          servicem8: `/api/servicem8/jobs/${jobId}/diary`,
-          assignments: `/api/jobs/${jobId}/staff-assignments`,
-        },
-        apiRequest,
-      );
-      // If the server returned a full page, there may be more older entries.
-      // (When diaryLimit is null we asked for all and there's nothing more.)
-      const localCount = payloadData(sources.diary).length;
-      setDiaryHasMore(diaryLimit !== null && localCount >= diaryLimit);
-      return assembleDiaryEntries(sources);
+      try {
+        const sources = await fetchDiaryTimelineSources(
+          {
+            diary: diaryUrl,
+            proposals: `/api/proposals?jobId=${jobId}`,
+            servicem8: `/api/servicem8/jobs/${jobId}/diary`,
+            assignments: `/api/jobs/${jobId}/staff-assignments`,
+          },
+          apiRequest,
+        );
+        // If the server returned a full page, there may be more older entries.
+        // (When diaryLimit is null we asked for all and there's nothing more.)
+        const localCount = payloadData(sources.diary).length;
+        setDiaryHasMore(diaryLimit !== null && localCount >= diaryLimit);
+        try {
+          return assembleDiaryEntries(sources);
+        } catch (error) {
+          throw markDiaryFailure(error, "render");
+        }
+      } catch (error) {
+        // fetchDiaryTimelineSources already labels a diary HTTP failure with
+        // the URL. Anything else (including a non-Error throw) is wrapped
+        // without replacing a more specific label.
+        throw markDiaryFailure(error, diaryUrl);
+      }
     },
   });
 
   useEffect(() => {
     if (!isError) return;
-    reportDiaryClientError(diaryError, "JobDiarySection");
-  }, [isError, diaryError]);
+    reportDiaryClientError(diaryError, "JobDiarySection", undefined, { jobId });
+  }, [isError, diaryError, jobId]);
 
   // Collect all photos from diary entries for gallery view. Pull from the
   // photos[] array when present (multi-photo entries) and fall back to
@@ -2144,7 +2262,7 @@ export function JobDiarySection({
         {diaryTab === "photos" && (
           <TabScrollContainer embedded={embedded}>
             {isError && diaryEntries.length === 0 ? (
-              <DiaryLoadError onRetry={() => refetch()} />
+              <DiaryLoadError onRetry={() => refetch()} error={diaryError} jobId={jobId} />
             ) : isLoading ? (
               <div className="flex items-center justify-center py-4">
                 <div className="text-xs text-muted-foreground">Loading...</div>
@@ -2253,7 +2371,7 @@ export function JobDiarySection({
         <TabScrollContainer embedded={embedded}>
           <PendingMessagesCard jobId={jobId} />
           {isError && diaryEntries.length === 0 ? (
-            <DiaryLoadError onRetry={() => refetch()} />
+            <DiaryLoadError onRetry={() => refetch()} error={diaryError} jobId={jobId} />
           ) : isLoading ? (
             <div className="flex items-center justify-center py-4">
               <div className="text-xs text-muted-foreground">Loading...</div>
@@ -2276,11 +2394,16 @@ export function JobDiarySection({
                 <DiaryLoadError
                   onRetry={() => refetch()}
                   message="The diary couldn't be refreshed."
+                  error={diaryError}
+                  jobId={jobId}
                 />
               )}
               {groupedEntries.map((group, groupIndex) => (
                 <DiaryEntryErrorBoundary
                   key={group.entries[0]?.id ?? `group-${groupIndex}`}
+                  jobId={jobId}
+                  entryId={group.entries[0]?.id}
+                  entryType={group.entries[0]?.type}
                 >
                   <DiaryEntrySlot
                     render={() => {
@@ -3291,6 +3414,23 @@ export function JobDiarySection({
                               >
                                 {cleanDiaryContent(entry.content, entry.type)}
                               </div>
+                            )}
+
+                            {entry.metadata?.unreadable === true && (
+                              <p
+                                className="mt-1 text-[11px] leading-snug text-muted-foreground break-all"
+                                data-testid="diary-entry-unreadable-detail"
+                              >
+                                {entryFailureDetail(
+                                  typeof entry.metadata.sourceType === "string"
+                                    ? entry.metadata.sourceType
+                                    : entry.type,
+                                  entry.id,
+                                  typeof entry.metadata.errorMessage === "string"
+                                    ? entry.metadata.errorMessage
+                                    : "",
+                                )}
+                              </p>
                             )}
 
                             {(() => {
