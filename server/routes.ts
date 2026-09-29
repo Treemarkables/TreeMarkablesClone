@@ -34,6 +34,7 @@ import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
+import { businessIdFromVoiceClient, isBusinessId, voiceIdentityForEmployee, inboundVoiceIdentity } from "./tenancy/voiceIdentity";
 import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
@@ -2696,6 +2697,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ── Server-Sent Events ────────────────────────────────────────────────────
   // Clients connect here and receive real-time invalidation signals.
   app.get('/api/sse', (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!req.session.employeeId || !businessId) {
+      return res.status(401).end();
+    }
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -2705,7 +2710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const ping = setInterval(() => {
       try { res.write(': ping\n\n'); } catch { clearInterval(ping); }
     }, 25000);
-    addClient(res);
+    addClient(res, businessId);
     req.on('close', () => {
       clearInterval(ping);
       removeClient(res);
@@ -12893,7 +12898,7 @@ Return only the rewritten description, nothing else.`,
       }
       
       // Respond to Twilio with TwiML (required)
-      broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary']);
+      broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary'], inboundBizId);
       res.type('text/xml');
       res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
       
@@ -12927,11 +12932,18 @@ Return only the rewritten description, nothing else.`,
         return res.status(400).json({ error: 'Invalid filename' });
       }
       const servingUrl = `/api/recordings/${filename}`;
+      const recordingBusinessId = currentBusinessId();
+      const callScope = recordingBusinessId
+        ? and(eq(schema.calls.recordingUrl, servingUrl), eq(schema.calls.businessId, recordingBusinessId))
+        : eq(schema.calls.recordingUrl, servingUrl);
       const [ownedCall] = await db.select({ id: schema.calls.id })
-        .from(schema.calls).where(eq(schema.calls.recordingUrl, servingUrl)).limit(1);
+        .from(schema.calls).where(callScope).limit(1);
       if (!ownedCall) {
+        const recordScope = recordingBusinessId
+          ? and(eq(schema.callRecords.recordingUrl, servingUrl), eq(schema.callRecords.businessId, recordingBusinessId))
+          : eq(schema.callRecords.recordingUrl, servingUrl);
         const [ownedRecord] = await db.select({ id: schema.callRecords.id })
-          .from(schema.callRecords).where(eq(schema.callRecords.recordingUrl, servingUrl)).limit(1);
+          .from(schema.callRecords).where(recordScope).limit(1);
         if (!ownedRecord) {
           return res.status(404).json({ error: 'Recording not found' });
         }
@@ -12955,7 +12967,8 @@ Return only the rewritten description, nothing else.`,
   // Create them at: Twilio Console → Account → API Keys & Tokens → Create API Key (Standard).
   app.post('/api/twilio/token', async (req: Request, res: Response) => {
     try {
-      if (!req.session.employeeId) {
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -12967,16 +12980,17 @@ Return only the rewritten description, nothing else.`,
           message: 'Twilio API Key not configured. Set TWILIO_API_KEY and TWILIO_API_SECRET secrets.',
         });
       }
-      // Identity isolation: only admins (the owner) get the shared inbound
-      // identity that the answer webhook dials. Other employees get a
-      // per-employee identity so their devices don't ring on inbound customer
-      // calls — twilio-answer only <Dial>s the owner identity.
-      const requestingEmployee = await storage.getEmployee(req.session.employeeId);
-      const ownerIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+      // One inbound identity per business. Every admin used to receive the
+      // shared `treemarkables-owner` identity, so another business's TestFlight
+      // app rang for Treemarkables calls. Crew still get a personal identity
+      // so their phones don't ring the business line.
+      const requestingEmployee = await storage.getEmployee(employeeId);
+      const businessId = requestingEmployee?.businessId || req.session.businessId;
+      if (!businessId) {
+        return res.status(403).json({ success: false, message: 'No business on this account' });
+      }
       const isAdmin = requestingEmployee?.role === 'admin';
-      const clientIdentity = isAdmin
-        ? ownerIdentity
-        : `treemarkables-emp-${req.session.employeeId}`;
+      const clientIdentity = voiceIdentityForEmployee(businessId, employeeId, isAdmin);
       const twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
       // Platform-aware push credential. iOS uses an APNs VoIP push credential;
       // Android uses an FCM push credential (a different SID registered in the
@@ -13032,7 +13046,22 @@ Return only the rewritten description, nothing else.`,
   // today's flow byte-for-byte.
   const buildDialJulesTwimlBody = async (req: Request): Promise<string> => {
     const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER;
-    const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+    // Dial the business that owns the line, not a shared identity every
+    // admin app registers for. An unmapped number falls back to the platform
+    // default business (the original single-tenant line), never to a name
+    // that other businesses' devices are still bound to.
+    const inboundToForIdentity = String(req.body?.To || '');
+    let dialBusinessId = await resolveBusinessIdByChannel('phone', inboundToForIdentity);
+    if (!dialBusinessId) {
+      try {
+        dialBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+      } catch {
+        dialBusinessId = undefined;
+      }
+    }
+    const clientIdentity = dialBusinessId
+      ? inboundVoiceIdentity(dialBusinessId)
+      : (process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner');
     const hasClient = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
 
     // Must have at least one destination — Client app OR phone number
@@ -13260,8 +13289,12 @@ ${phoneTarget}
     // calledTo = our own line for tenant resolution, direction=outbound flips
     // the stored direction and skips inbound-lead extraction. `&` between
     // query params must be `&amp;` inside an XML attribute.
+    const callerBusinessId = businessIdFromVoiceClient(from);
+    const callerBusinessQuery = isBusinessId(callerBusinessId)
+      ? `&amp;callerBusinessId=${encodeURIComponent(callerBusinessId)}`
+      : '';
     const recordingCallbackUrl =
-      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(dialTo)}&amp;calledTo=${encodeURIComponent(twilioLine)}&amp;direction=outbound`;
+      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(dialTo)}&amp;calledTo=${encodeURIComponent(twilioLine)}&amp;direction=outbound${callerBusinessQuery}`;
 
     console.log(`📞 Outgoing web call: ${from} → ${dialTo} (callerId ${callerId})`);
     return res.send(`<?xml version="1.0" encoding="UTF-8"?>
@@ -13713,7 +13746,13 @@ ${dialBody}</Response>`);
         // defaulting to Treemarkables and matching customers across all tenants.
         // Unmapped number → undefined → unchanged prior (single-tenant) behaviour.
         const calledToRaw = String(req.query.calledTo || To || '');
-        const inboundBizId = await resolveBusinessIdByChannel('phone', calledToRaw);
+        // Outbound calls are placed by a signed-in Voice client. Log them on
+        // that client's business, not on whoever owns the shared caller-id line.
+        const callerBusinessQuery = String(req.query.callerBusinessId || '');
+        const callerBusinessId = isBusinessId(callerBusinessQuery) ? callerBusinessQuery : undefined;
+        const inboundBizId = (isOutbound && callerBusinessId)
+          ? callerBusinessId
+          : await resolveBusinessIdByChannel('phone', calledToRaw);
         if (inboundBizId) {
           console.log(`🏢 Inbound line ${calledToRaw} resolved to business ${inboundBizId}`);
         }
