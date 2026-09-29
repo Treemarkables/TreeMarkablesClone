@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Job-card email photos on the diary — branch `cursor/email-diary-photo-thumbs-7f02` — 2026-09-29 — email diary rows store the photo paths that were sent and show them as thumbnails; photos leave as JPEG file attachments (plus inline cid), not webp thumbs or data URIs. Do not merge until review. [PR #599]
 - Diary error details on the job card — branch `cursor/diary-error-details-6ef1` — 2026-09-29 — when the diary fails to load or refresh, the card shows the request, HTTP status, server message, and time (copyable) so a screenshot replaces the server logs. Same fields plus jobId go to /api/client-errors. A diary 500 returns that message as JSON, without a stack. Do not merge until review. [PR #598]
 - iOS white screen on dispatch skeleton — branch `cursor/ios-boot-web-guarantee-2b78` — 2026-09-29 — #595 treated the text-less dispatch jobs-loading card as a painted page, so the cover lifted and the installed text-only native probe reloaded the WebView white. Web: ignore text-less cards, hard timeout, boot errors, appReady signal. Do not merge until review.
 - Job diary silent spinner — branch `cursor/diary-load-harden-32c2` — 2026-09-28 — diary for a job whose reply row is a full Apple Mail HTML document (blank description) stays on Loading. Bound retries, proposals failure must not block entries, per-entry fallback, visible Retry. Do not merge until review. [PR #597]

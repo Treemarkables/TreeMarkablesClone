@@ -200,6 +200,7 @@ import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
+import { buildPhotoEmailParts, type DiaryFileAttachment } from "./emailPhotoAttachments";
 import { renderBrandedEmail, renderInvoiceEmail } from "./emailTemplates";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter, type BeforeAfterBranding } from "./photoStorage";
@@ -12285,8 +12286,17 @@ Return only the rewritten description, nothing else.`,
         }
       }
 
-      // Process attachments (logo + photos + invoice PDF)
-      const emailAttachments = [];
+      // Process attachments (logo + photos + invoice PDF).
+      // nonPhotoDiaryAttachments is only files that actually go on the message
+      // (the invoice PDF). Photos are stored on the diary row itself.
+      const emailAttachments: Array<{
+        content: string;
+        filename: string;
+        type: string;
+        disposition?: string;
+        content_id?: string;
+      }> = [];
+      const nonPhotoDiaryAttachments: DiaryFileAttachment[] = [];
       
       // Generate and attach invoice PDF using the shared helper.
       // Microsoft recipients: skip the attachment entirely — Microsoft's filters strip PDFs from
@@ -12304,11 +12314,17 @@ Return only the rewritten description, nothing else.`,
             ? selectedPhotos.filter(isSupportedPhotoUrl)
             : [];
           const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer, invoiceTemplate, pdfPhotos);
+          const invoicePdfFilename = `Invoice-${invoiceForPdf.invoiceNumber || 'unknown'}.pdf`;
           emailAttachments.push({
             content: pdfBuffer.toString('base64'),
-            filename: `Invoice-${invoiceForPdf.invoiceNumber || 'unknown'}.pdf`,
+            filename: invoicePdfFilename,
             type: 'application/pdf',
             disposition: 'attachment'
+          });
+          nonPhotoDiaryAttachments.push({
+            url: invoiceForPdf.id ? `/api/invoices/${invoiceForPdf.id}/pdf` : '',
+            filename: invoicePdfFilename,
+            contentType: 'application/pdf',
           });
           console.log(`📄 Invoice PDF attached: Invoice-${invoiceForPdf.invoiceNumber}.pdf (${Math.round(pdfBuffer.length / 1024)}KB)`);
         } catch (pdfError) {
@@ -12324,95 +12340,79 @@ Return only the rewritten description, nothing else.`,
       // colour (renderInvoiceEmail), not an inline logo image — so no logo CID
       // attachment is needed here. The PDF (above) renders its own logo.
 
-      // Embed photos as true inline CID attachments — no external URL dependency.
-      // Photos are fetched from object storage server-side and embedded directly in the
-      // email body, so they display in every email client regardless of auth or server state.
+      // Photos go out as real JPEG file attachments. The HTML may also show
+      // them inline via cid: references. They are never written into the HTML
+      // as data: URIs — Gmail and Outlook commonly block those, so the
+      // recipient would see a broken image and no file to open.
       //
-      // EXCEPTION — Microsoft-hosted addresses (Hotmail / Outlook.com / Live / MSN):
-      // Microsoft's spam filters silently strip PDF attachments from emails that contain
-      // many CID-embedded images. To ensure the PDF lands in the inbox, we skip the photo
-      // CID loop for these recipients and show a text link to the invoice page instead.
-      // Gmail and all other providers are unaffected.
+      // Originals are downscaled (same sharp settings as the invoice PDF) so a
+      // handful of phone photos stays well under the ~30MB provider limit.
+      // Pre-generated webp thumbnails are not used: Outlook often won't render
+      // webp, and the old code labelled those webp bytes with the .jpg filename.
+      //
+      // Microsoft-hosted addresses (Hotmail / Outlook.com / Live / MSN): their
+      // filters strip PDF attachments from messages that also contain many
+      // CID-embedded images. Those recipients still get the photos as normal
+      // file attachments, without the inline CID copies.
       let photoGalleryHtml = '';
       let embeddedPhotoCount = 0;
+      const sentPhotoUrls: string[] = [];
 
       if (selectedPhotos && selectedPhotos.length > 0) {
-        if (recipientIsMicrosoft) {
-          // Skip CID embedding for Microsoft recipients so the PDF is not stripped.
-          // No fallback text needed — the pdfDownloadBanner above already links the
-          // customer to the online invoice page where the photos render in-browser.
-          const photoCount = selectedPhotos.filter(isSupportedPhotoUrl).length;
-          console.log(`📸 Skipped ${photoCount} photo CID attachment(s) for Microsoft-hosted recipient ${to} — using single online-view banner`);
-        } else {
-          const photoStorage = new PhotoStorageService();
-          const photoHtmlParts: string[] = [];
+        const photoStorage = new PhotoStorageService();
+        const prepared: Array<{ sourceUrl: string; jpeg: Buffer }> = [];
+        const seenPhotoUrls = new Set<string>();
 
-          console.log(`📸 Embedding ${selectedPhotos.length} photo(s) as inline CID attachments...`);
-
-          for (let i = 0; i < selectedPhotos.length; i++) {
-            const photoUrl = selectedPhotos[i];
-            if (!isSupportedPhotoUrl(photoUrl)) continue;
-
-            const fileName = path.basename(photoUrl);
-            const cid = `job-photo-${i}`;
-
-            // For GCS-backed photos, try the thumbnail first (small, fast); fall
-            // back to the original if missing. For local /photos/ paths, just
-            // load the file directly.
-            let photoData: { buffer: Buffer; contentType: string } | null = null;
-            if (photoUrl.startsWith('/objects/photos/')) {
-              const thumbFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png|heic|heif)$/i, '.webp')}`;
-              const thumbPath = `/objects/photos/${thumbFileName}`;
-              const thumb = await photoStorage.downloadPhotoBuffer(thumbPath);
-              if (thumb?.buffer) {
-                photoData = { buffer: thumb.buffer, contentType: thumb.contentType || 'image/webp' };
-              }
-            }
-            if (!photoData) {
-              photoData = await loadPhotoBytesForAttachment(photoUrl, photoStorage);
-            }
-
-            if (photoData && photoData.buffer) {
-              // Attach as inline CID image — email client renders it directly in the body
-              emailAttachments.push({
-                content: photoData.buffer.toString('base64'),
-                filename: fileName,
-                type: photoData.contentType || 'image/jpeg',
-                content_id: cid
-              });
-              photoHtmlParts.push(`
-                <div style="display: inline-block; margin: 5px; vertical-align: top;">
-                  <img src="cid:${cid}" alt="Job Photo ${i + 1}"
-                    style="max-width: 200px; max-height: 200px; border-radius: 8px;
-                           border: 1px solid #ddd; display: block;" />
-                </div>
-              `);
-              embeddedPhotoCount++;
-              console.log(`📷 Photo ${i + 1} embedded as CID "${cid}" (${Math.round(photoData.buffer.length / 1024)}KB, ${photoData.contentType})`);
-            } else {
-              console.warn(`⚠️ Could not fetch photo buffer for ${photoUrl} — skipping`);
-            }
+        for (const photoUrl of selectedPhotos) {
+          if (!isSupportedPhotoUrl(photoUrl) || seenPhotoUrls.has(photoUrl)) continue;
+          seenPhotoUrls.add(photoUrl);
+          const photoData = await loadPhotoBytesForAttachment(photoUrl, photoStorage);
+          if (!photoData?.buffer) {
+            console.warn(`⚠️ Could not fetch photo buffer for ${photoUrl} — skipping`);
+            continue;
           }
-
-          if (photoHtmlParts.length > 0) {
-            photoGalleryHtml = `
-              <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9;
-                          border-radius: 8px; font-family: Arial, sans-serif;">
-                <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">
-                  Photos (${embeddedPhotoCount}):
-                </p>
-                <div>
-                  ${photoHtmlParts.join('')}
-                </div>
-              </div>
-            `;
+          try {
+            const jpeg = await sharp(photoData.buffer)
+              .rotate()
+              .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 80 })
+              .toBuffer();
+            prepared.push({ sourceUrl: photoUrl, jpeg });
+          } catch (photoErr) {
+            console.warn(`⚠️ Could not downscale photo for email ${photoUrl}`, photoErr);
           }
         }
+
+        const builtPhotos = buildPhotoEmailParts({
+          photos: prepared,
+          embedInline: !recipientIsMicrosoft,
+        });
+        for (const part of builtPhotos.attachments) {
+          emailAttachments.push(part);
+        }
+        photoGalleryHtml = builtPhotos.inlineHtml;
+        embeddedPhotoCount = builtPhotos.sentUrls.length;
+        sentPhotoUrls.push(...builtPhotos.sentUrls);
+        if (builtPhotos.skipped > 0) {
+          console.warn(`📸 Skipped ${builtPhotos.skipped} photo(s) to stay under the email size budget`);
+        }
+        console.log(
+          `📸 Prepared ${embeddedPhotoCount} photo(s) as JPEG file attachment(s)${
+            recipientIsMicrosoft ? ' (no inline CID — Microsoft recipient)' : ' plus inline CID images'
+          }`,
+        );
       }
       
-      // Append photo gallery to email HTML if we have photos
+      // Append the inline gallery when we embedded cid: images. Otherwise, if
+      // the photos went out as files only, say so in the body.
       if (photoGalleryHtml) {
         emailHtml = emailHtml + photoGalleryHtml;
+      } else if (embeddedPhotoCount > 0) {
+        emailHtml += `
+          <p style="margin-top: 16px; font-family: Arial, sans-serif; color: #333;">
+            Photos (${embeddedPhotoCount}) are attached to this email.
+          </p>
+        `;
       }
       
       // Log final attachment summary before sending
@@ -12476,10 +12476,16 @@ Return only the rewritten description, nothing else.`,
               authorRole: 'system',
               tags: ['communication', 'email', invoiceId ? 'invoice' : '', quoteId ? 'quote' : ''].filter(Boolean),
               isPrivate: false,
+              ...(sentPhotoUrls.length > 0
+                ? { photos: sentPhotoUrls, photoUrl: sentPhotoUrls[0] }
+                : {}),
               metadata: {
                 emailAddress: to,
                 quoteId: quoteId || undefined,
-                sendgridMessageId: emailResult.messageId
+                sendgridMessageId: emailResult.messageId,
+                ...(nonPhotoDiaryAttachments.length > 0
+                  ? { attachments: nonPhotoDiaryAttachments }
+                  : {}),
               }
             });
             

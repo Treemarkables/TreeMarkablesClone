@@ -12,9 +12,11 @@ import {
   cleanDiaryContent,
   describeDiaryFailure,
   emailBubbleMessage,
+  emailEntryPhotoUrls,
   entryFailureDetail,
   fetchDiaryTimelineSources,
   formatDiaryTimestamp,
+  hideEmbeddedPhotoNote,
   markDiaryFailure,
   reportDiaryClientError,
   stripTrailingOnWrote,
@@ -312,6 +314,67 @@ describe("job diary shapes from a blank-description Apple Mail reply", () => {
     assert.equal(payload.message, "boom");
     assert.equal(typeof payload.timestamp, "string");
     assert.equal(payload.context, "JobDiarySection");
+  });
+
+  it("keeps sent email photo paths and hides the embedded-count line only when they exist", () => {
+    const description = [
+      "Email sent to admin@example.net.nz",
+      "",
+      "Photos: 4 photo(s) embedded",
+      "",
+      "Message:",
+      "<p>Hi Jae</p>",
+    ].join("\n");
+    const photoPaths = [
+      "/objects/photos/1790649620570_287afc69.jpg",
+      "/objects/photos/e8c1af41.jpeg",
+      "/objects/photos/0f4daa8c.jpeg",
+      "/objects/photos/14a0de3a.jpeg",
+    ];
+    const row = {
+      id: "entry-photo-email",
+      entryType: "email",
+      title: "Email sent: Sponsorship ",
+      description,
+      content: null,
+      authorName: "System",
+      createdAt: "2026-09-28T03:42:00.000Z",
+      photos: photoPaths,
+      photoUrl: photoPaths[0],
+      metadata: {
+        emailAddress: "admin@example.net.nz",
+        sendgridMessageId: "re_test",
+        attachments: [
+          {
+            url: "/api/invoices/inv-1/pdf",
+            filename: "Invoice-100.pdf",
+            contentType: "application/pdf",
+          },
+        ],
+      },
+    };
+    const [entry] = assembleDiaryEntries({
+      diary: { data: [row] },
+      proposals: { data: [] },
+      servicem8: { data: [] },
+      schedule: { data: [] },
+    });
+    assert.ok(entry);
+    assert.deepEqual(emailEntryPhotoUrls(entry), photoPaths);
+    const bubble = emailBubbleMessage(entry);
+    assert.equal(bubble.isSent, true);
+    assert.match(bubble.recipientInfo, /Photos: 4 photo\(s\) embedded/);
+    assert.equal(
+      hideEmbeddedPhotoNote(bubble.recipientInfo, true),
+      "admin@example.net.nz",
+    );
+    assert.equal(hideEmbeddedPhotoNote(bubble.text, true).includes("Photos:"), false);
+    assert.match(hideEmbeddedPhotoNote(bubble.text, true), /Hi Jae/);
+    // Old rows recorded a count and left photos null. The grey line stays.
+    assert.equal(
+      hideEmbeddedPhotoNote(bubble.recipientInfo, emailEntryPhotoUrls({ photos: null, photoUrl: null }).length > 0),
+      bubble.recipientInfo,
+    );
   });
 
   it("strips a long missed On-wrote tail without hanging", () => {

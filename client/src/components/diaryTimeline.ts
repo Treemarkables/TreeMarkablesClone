@@ -188,6 +188,34 @@ export function emailBubbleMessage(entry: {
   return { text: messageText, isSent, isReceived, recipientInfo };
 }
 
+/** Photo object paths stored on a diary row. photos[] wins; photoUrl is the legacy single. */
+export function emailEntryPhotoUrls(entry: {
+  photos?: readonly string[] | null;
+  photoUrl?: string | null;
+}): string[] {
+  const fromList = Array.isArray(entry.photos)
+    ? entry.photos.filter((url): url is string => typeof url === "string" && url.length > 0)
+    : [];
+  if (fromList.length > 0) return fromList;
+  if (typeof entry.photoUrl === "string" && entry.photoUrl.length > 0) return [entry.photoUrl];
+  return [];
+}
+
+/**
+ * Drop the grey "Photos: N photo(s) embedded" note once the row has real
+ * photo paths to render as thumbnails. Old rows with a null photos column
+ * keep the note. The pattern is line-bounded so a long miss stays linear.
+ */
+export function hideEmbeddedPhotoNote(text: string, hasStoredPhotos: boolean): string {
+  if (!hasStoredPhotos || !text) return text;
+  if (!/photos:/i.test(text)) return text;
+  const stripped = text.replace(
+    /[^\S\n]*Photos:\s*\d+\s*photo\(s\)\s*embedded[^\S\n]*/gi,
+    "",
+  );
+  return stripped.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export function formatDiaryTimestamp(
   timestamp: unknown,
   pattern = "h:mm a dd/MM/yy",

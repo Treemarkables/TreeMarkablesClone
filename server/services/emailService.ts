@@ -138,9 +138,11 @@ class EmailService {
         ? params.from
         : (params.fromName ? this.composeFrom(params.fromName, baseFrom) : baseFrom);
       
-      // Map attachments to Resend format
-      // Resend SDK Attachment$1 interface uses camelCase: contentType, contentId
-      // parseAttachments() internally converts: contentType→content_type, contentId→content_id
+      // Map attachments to Resend format.
+      // Resend SDK Attachment uses camelCase: contentType, contentId.
+      // A contentId makes the part inline (HTML references it as cid:).
+      // Omitting contentId makes it a normal file attachment. Resend has no
+      // separate disposition field — callers that need both send two parts.
       const resendAttachments = params.attachments?.map(att => ({
         filename: att.filename,
         content: Buffer.from(att.content, 'base64'),
@@ -186,7 +188,8 @@ class EmailService {
         console.log(`📎 Sending email with ${resendAttachments.length} file attachment(s):`);
         resendAttachments.forEach((att, idx) => {
           const sizeKB = Math.round(att.content.length / 1024);
-          console.log(`  ${idx + 1}. ${att.filename} (${sizeKB}KB, type: ${att.contentType || 'unknown'})`);
+          const role = att.contentId ? `inline cid:${att.contentId}` : 'attachment';
+          console.log(`  ${idx + 1}. ${att.filename} (${sizeKB}KB, type: ${att.contentType || 'unknown'}, ${role})`);
         });
       }
 
