@@ -104,6 +104,8 @@ import { registerJobsNotBilledRoutes } from "./jobsNotBilledRoutes";
 import {
   isStripeConfigured,
   businessOwnsStripeAccount,
+  invoiceCardCheckoutDisabled,
+  invoiceOnlinePaymentEnabled,
   getPublishableKey,
   createDepositCheckoutSession,
   createInvoiceCheckoutSession,
@@ -199,7 +201,7 @@ import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
-import { renderBrandedEmail, renderInvoiceEmail } from "./emailTemplates";
+import { renderBrandedEmail, renderInvoiceEmail, invoiceBankTransferNote } from "./emailTemplates";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter, type BeforeAfterBranding } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
@@ -12210,6 +12212,13 @@ Return only the rewritten description, nothing else.`,
           console.warn('Invoice review link skipped:', reviewErr);
         }
 
+        // The email does not share the public-page card check. The pay label
+        // was hardcoded. Treemarkables production invoices are bank transfer
+        // only, so the button is "View invoice" and offerCardPayment forces
+        // that label even if ctaText is passed through.
+        const invoiceCardsOff = invoiceCardCheckoutDisabled(
+          invoice?.businessId ?? validatedInvoiceData?.businessId,
+        );
         invoiceHtml = renderInvoiceEmail({
           customerName: invCustomerName,
           intro: emailBody,
@@ -12223,7 +12232,8 @@ Return only the rewritten description, nothing else.`,
           paidAmount: 0,
           balanceDue: totalAmount,
           ctaUrl: onlineInvoiceUrl,
-          ctaText: 'View & pay invoice online',
+          ctaText: invoiceCardsOff ? 'View invoice' : 'View & pay invoice online',
+          offerCardPayment: !invoiceCardsOff,
           bank: {
             accountName: invBizSettings?.bankAccountName || undefined,
             accountNumber: invBizSettings?.bankAccountNumber || undefined,
@@ -14713,10 +14723,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           customer: customer || null,
           job: job || null,
           company,
-          // Whether this business can take card payments online — Treemarkables (platform
-          // account) or a Connect tenant with charges enabled. Drives the "Pay now" button;
-          // everyone else shows bank-transfer details instead.
-          onlinePaymentEnabled: businessOwnsStripeAccount(invoice.businessId) || !!bizSettings?.stripeConnectChargesEnabled,
+          // Pay now on the public invoice. Treemarkables production is bank
+          // transfer only, even though businessOwnsStripeAccount is still true
+          // (deposits and job-card payments keep the platform account). Other
+          // businesses: platform account, or Connect charges enabled.
+          onlinePaymentEnabled: invoiceOnlinePaymentEnabled({
+            businessId: invoice.businessId,
+            ownsPlatformAccount: businessOwnsStripeAccount(invoice.businessId),
+            connectChargesEnabled: !!bizSettings?.stripeConnectChargesEnabled,
+          }),
           sections: sections.map(s => ({
             ...s,
             images: Array.isArray(s.images) ? s.images : [],
@@ -14855,8 +14870,18 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (invoice.status === 'cancelled') {
         return res.status(400).json({ success: false, message: 'This invoice has been cancelled' });
       }
-      // Card payments: Treemarkables (platform account) or a Connect tenant with charges
-      // enabled (direct charge → funds go to the tenant). Everyone else → bank transfer.
+      // Treemarkables production invoices are bank transfer only. Refuse before
+      // any Checkout session is created. businessOwnsStripeAccount is still true
+      // for this business; deposits and job-card payments do not use this route.
+      if (invoiceCardCheckoutDisabled(invoice.businessId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Online card payment is not available for this invoice. Please pay using the bank-transfer details on your invoice.',
+        });
+      }
+      // Card payments: a Connect tenant with charges enabled (direct charge →
+      // funds go to the tenant), or a business that still owns the platform
+      // account. Everyone else → bank transfer.
       const { canTakeCard: invoiceCanCard, connectedAccountId: invoiceConnectAccount } = await resolveCardPayment(invoice.businessId);
       if (!invoiceCanCard) {
         return res.status(403).json({
@@ -14958,25 +14983,40 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const total = subtotal + gst;
 
       const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
+      const invoiceCardsOff = invoiceCardCheckoutDisabled(invoice.businessId);
+      const bankSettings = invoiceCardsOff && invoice.businessId
+        ? await storage.getBusinessSettingsForBusiness(invoice.businessId)
+        : null;
+      const bankFineprint = invoiceCardsOff
+        ? invoiceBankTransferNote({
+            accountName: bankSettings?.bankAccountName,
+            accountNumber: bankSettings?.bankAccountNumber,
+            reference: `Invoice ${invoice.invoiceNumber}`,
+          })
+        : null;
       const htmlContent = renderBrandedEmail({
         company: { name: __emailIdentity.name, tagline: __emailIdentity.tagline, address: __emailIdentity.address, phone: __emailIdentity.phone, email: __emailIdentity.email, gstNumber: __emailIdentity.gstNumber },
         customerName,
-        intro: message || 'Your invoice is ready. Tap below to view the full breakdown and payment details — bank transfer instructions are on the invoice.',
+        intro: message || (invoiceCardsOff
+          ? 'Your invoice is ready. Please pay by bank transfer using the account details below.'
+          : 'Your invoice is ready. Tap below to view the full breakdown and payment details — bank transfer instructions are on the invoice.'),
         documentLabel: `Invoice #${invoice.invoiceNumber}`,
         totalAmount: total,
         totalLabel: 'due',
         ctaText: 'View Invoice',
         ctaUrl: invoiceViewUrl,
         ctaHint: 'Opens your invoice in the browser — no login required.',
+        fineprint: bankFineprint ?? undefined,
       });
 
+      const plainInvoice = `Invoice ${invoice.invoiceNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD.`;
       const emailResult = await emailService.sendEmail({
         to,
         cc,
         fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         html: htmlContent,
-        text: `Invoice ${invoice.invoiceNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD.`,
+        text: bankFineprint ? `${plainInvoice} ${bankFineprint}` : plainInvoice,
         jobNumber: job?.jobNumber,
       });
 
