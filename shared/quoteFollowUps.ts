@@ -42,6 +42,11 @@ export interface QuoteSignal {
   email?: string | null;
   /** Where this quote lives. Defaults to the quotes table. */
   sourceType?: FollowUpSourceType;
+  /**
+   * Job-only signals (no quotes row and no proposal document) count only when
+   * jobs.proposal_sent is set. quote_presented_date and sent_later do not.
+   */
+  proposalSent?: boolean | null;
   /** Job status, used to stop when the job has moved on or been lost. */
   jobStatus?: string | null;
   /** Set when a newer document on the same job replaces this one. */
@@ -179,6 +184,163 @@ export function customerFirstName(name: string | null | undefined): string {
   const first = trimmed.split(/\s+/)[0] ?? "";
   if (/ltd|limited|trust|council|inc$/i.test(first) && !trimmed.includes(" ")) return "";
   return first;
+}
+
+const ORG_NAME = /\b(ltd|limited|trust|inc|incorporated|council|district|company|group|corp|corporation|department|board|committee|association|school|university|holdings)\b/i;
+
+function looksLikeOrganisation(name: string): boolean {
+  return ORG_NAME.test(name);
+}
+
+function nameTokens(name: string): string[] {
+  const trimmed = name.trim();
+  const parts = trimmed.includes(",")
+    ? trimmed.split(",").reverse().join(" ")
+    : trimmed;
+  return parts
+    .split(/\s+/)
+    .map((token) => token.replace(/[^a-zA-Z'-]/g, "").toLowerCase())
+    .filter((token) => token.length > 0);
+}
+
+function soundex(word: string): string {
+  const cleaned = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (!cleaned) return "";
+  const codes: Record<string, string> = {
+    b: "1", f: "1", p: "1", v: "1",
+    c: "2", g: "2", j: "2", k: "2", q: "2", s: "2", x: "2", z: "2",
+    d: "3", t: "3",
+    l: "4",
+    m: "5", n: "5",
+    r: "6",
+  };
+  let out = cleaned[0]!.toUpperCase();
+  let previous = codes[cleaned[0]!] ?? "";
+  for (let i = 1; i < cleaned.length && out.length < 4; i++) {
+    const char = cleaned[i]!;
+    const code = codes[char] ?? "";
+    if (code) {
+      if (code !== previous) out += code;
+      previous = code;
+    } else if (char !== "h" && char !== "w") {
+      previous = "";
+    }
+  }
+  return out.padEnd(4, "0");
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const prev = new Array<number>(b.length + 1);
+  const next = new Array<number>(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    next[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      next[j] = Math.min(next[j - 1]! + 1, prev[j]! + 1, prev[j - 1]! + cost);
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = next[j]!;
+  }
+  return prev[b.length] ?? 0;
+}
+
+function tokensSimilar(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))) return true;
+  if (a[0] === b[0] && soundex(a) !== "" && soundex(a) === soundex(b)) return true;
+  const dist = levenshtein(a, b);
+  if (dist <= 1 && Math.min(a.length, b.length) >= 3) return true;
+  if (dist <= 2 && Math.min(a.length, b.length) >= 4 && a[0] === b[0]) return true;
+  return false;
+}
+
+/**
+ * Same person, including a different spelling (Allen / Alan) and "Last, First".
+ * An organisation and a person are not the same.
+ */
+export function namesAreSamePerson(
+  customerName: string | null | undefined,
+  contactName: string | null | undefined,
+): boolean {
+  const customer = (customerName ?? "").trim();
+  const contact = (contactName ?? "").trim();
+  if (!customer || !contact) return true;
+  if (looksLikeOrganisation(customer) !== looksLikeOrganisation(contact)) return false;
+  const customerTokens = nameTokens(customer);
+  const contactTokens = nameTokens(contact);
+  if (customerTokens.length === 0 || contactTokens.length === 0) return true;
+  const customerLast = customerTokens.length > 1 ? customerTokens[customerTokens.length - 1]! : "";
+  const contactLast = contactTokens.length > 1 ? contactTokens[contactTokens.length - 1]! : "";
+  const customerFirst = customerTokens[0]!;
+  const contactFirst = contactTokens[0]!;
+  if (customerLast && contactLast) {
+    if (!tokensSimilar(customerLast, contactLast)) return false;
+    return tokensSimilar(customerFirst, contactFirst);
+  }
+  const shorter = customerTokens.length <= contactTokens.length ? customerTokens : contactTokens;
+  const longer = customerTokens.length <= contactTokens.length ? contactTokens : customerTokens;
+  return shorter.every((token) => longer.some((other) => tokensSimilar(token, other)));
+}
+
+export interface FollowUpIdentity {
+  /** Customer record name for the list. */
+  customerName: string | null;
+  /** Name to greet. Customer-record spelling when it is the same person. */
+  recipientName: string | null;
+  /** Job contact when they are a different person. Null when they are the customer. */
+  contactName: string | null;
+  samePerson: boolean;
+}
+
+/**
+ * List label is the customer record. A different job contact stays the
+ * SMS/email recipient and is mentioned separately. A spelling variant of the
+ * same person (Allen vs Alan) uses the customer record for both.
+ */
+export function resolveFollowUpIdentity(input: {
+  customerName?: string | null;
+  contactName?: string | null;
+}): FollowUpIdentity {
+  const customerName = (input.customerName ?? "").trim() || null;
+  const contactName = (input.contactName ?? "").trim() || null;
+  if (!contactName) {
+    return { customerName, recipientName: customerName, contactName: null, samePerson: true };
+  }
+  if (!customerName) {
+    return { customerName: contactName, recipientName: contactName, contactName: null, samePerson: true };
+  }
+  if (namesAreSamePerson(customerName, contactName)) {
+    return { customerName, recipientName: customerName, contactName: null, samePerson: true };
+  }
+  return { customerName, recipientName: contactName, contactName, samePerson: false };
+}
+
+/**
+ * A check-in or re-quote belongs in the queue only when a quote or proposal
+ * was actually sent.
+ *
+ * - quote: that quotes row has sent_date
+ * - job: jobs.proposal_sent (quote_presented_date / sent_later / status quote do not count)
+ * - proposal: proposals.sent_date, jobs.proposal_sent, or the proposal row the
+ *   detector already accepted (diary SMS/email often leaves sent_date empty)
+ */
+export function followUpHasSentDocument(input: {
+  sourceType?: string | null;
+  quoteSentDate?: string | Date | null;
+  proposalDocumentSentDate?: string | Date | null;
+  proposalRecorded?: boolean | null;
+  jobProposalSent?: boolean | null;
+}): boolean {
+  const type = input.sourceType === "proposal" || input.sourceType === "job" ? input.sourceType : "quote";
+  if (type === "quote") return timeOf(input.quoteSentDate) != null;
+  if (type === "job") return input.jobProposalSent === true;
+  return input.jobProposalSent === true
+    || timeOf(input.proposalDocumentSentDate) != null
+    || input.proposalRecorded === true;
 }
 
 export function quietDaysSince(
@@ -451,6 +613,10 @@ export function planQuoteFollowUps(input: PlanQuoteFollowUpsInput): FollowUpPlan
       continue;
     }
 
+    // A job with only quote_presented_date, sent_later, or status quote was
+    // never sent. Check-ins and re-quotes wait for proposal_sent.
+    if ((quote.sourceType ?? "quote") === "job" && quote.proposalSent !== true) continue;
+
     if (!input.settings.enabled) continue;
     const status = quote.status.trim().toLowerCase();
     if (!OPEN_STATUSES.has(status)) continue;
@@ -581,7 +747,7 @@ function sourceRank(sourceType: FollowUpSourceType | undefined): number {
 
 /**
  * One follow-up per job. A sent proposal beats a quotes-table row, which beats
- * a job that only has quote_presented_date. A won, lost, or accepted job
+ * a job whose proposal_sent flag is set. A won, lost, or accepted job
  * stops every document on that job.
  */
 export function collapseFollowUpSources(signals: QuoteSignal[]): QuoteSignal[] {
@@ -731,6 +897,55 @@ function internalTokens(text: string): string[] {
  * finished rows are never rewritten. Calling this again on the rewritten
  * text returns keep.
  */
+export interface FollowUpNameRefreshInput {
+  status: string;
+  draftEditedAt?: string | Date | null;
+  message: string;
+  subject: string | null;
+  recipientName?: string | null;
+  customerName?: string | null;
+  contactName?: string | null;
+}
+
+export type FollowUpNameRefreshPlan =
+  | { action: "keep" }
+  | { action: "rewrite"; message: string; subject: string | null; recipientName: string | null };
+
+/**
+ * Untouched drafts that greet a spelling variant of the customer (Allen vs
+ * Alan) are rewritten onto the customer-record spelling. A different person
+ * stays the greeting. Edited drafts are left alone.
+ */
+export function planFollowUpNameRefresh(input: FollowUpNameRefreshInput): FollowUpNameRefreshPlan {
+  const status = input.status.trim().toLowerCase();
+  if (status !== "draft" && status !== "snoozed") return { action: "keep" };
+  if (input.draftEditedAt) return { action: "keep" };
+  const customerName = (input.customerName ?? "").trim();
+  if (!customerName) return { action: "keep" };
+  const identity = resolveFollowUpIdentity({
+    customerName,
+    contactName: input.contactName,
+  });
+  if (!identity.samePerson) return { action: "keep" };
+  const desiredFirst = customerFirstName(identity.recipientName);
+  if (!desiredFirst) return { action: "keep" };
+  const currentFirst = input.message.match(/^Hi ([^,\n]+)/)?.[1]?.trim() ?? "";
+  const desiredRecipient = identity.recipientName;
+  if (!currentFirst || currentFirst === desiredFirst) {
+    if (desiredRecipient && (input.recipientName ?? "").trim() !== desiredRecipient && namesAreSamePerson(input.recipientName, desiredRecipient)) {
+      return { action: "rewrite", message: input.message, subject: input.subject, recipientName: desiredRecipient };
+    }
+    return { action: "keep" };
+  }
+  if (!namesAreSamePerson(currentFirst, desiredFirst)) return { action: "keep" };
+  return {
+    action: "rewrite",
+    message: input.message.replace(`Hi ${currentFirst}`, `Hi ${desiredFirst}`),
+    subject: input.subject,
+    recipientName: desiredRecipient,
+  };
+}
+
 export function planUntouchedDraftRefresh(input: UntouchedDraftInput): UntouchedDraftPlan {
   const status = input.status.trim().toLowerCase();
   if (status !== "draft" && status !== "snoozed") return { action: "keep" };
