@@ -25,9 +25,11 @@ import { APP_URL } from '../config/appUrl';
  *    number's voice webhook still points at the answer handler that rings the app.
  *    Config-level check only (no real call placed).
  *
- * On any failure → email the owner + push admins. Alerts are state-transition based
- * with a periodic re-alert, so a sustained outage doesn't spam every cycle, and a
- * "recovered" note is sent when things go green again.
+ * Results are logged every cycle. Owner email and admin push for failed,
+ * recovered, and alertOwner() on this same channel are off
+ * (healthChannelNotifiesOwner). In-memory alert state is per instance, so a
+ * restart or the second app instance used to send another "failed" and another
+ * "recovered" whenever the Gmail IMAP poll tripped its watchdog.
  */
 
 const INTERVAL_MS = 15 * 60 * 1000; // run every 15 minutes
@@ -36,6 +38,15 @@ const REALERT_MS = 6 * 60 * 60 * 1000; // re-alert at most every 6h while still 
 const FALLBACK_OWNER_EMAIL = 'accounts@treemarkables.nz';
 const VOICE_WEBHOOK_PATH = '/api/webhooks/twilio-answer';
 const HEALTHCHECK_SOURCE = 'health_check';
+
+/**
+ * Owner email and admin push for health-check failed, recovered, and
+ * alertOwner() (the same channel) are off. The checks, the IMAP watchdog,
+ * and the [health] logs stay. Flip the return value to turn the channel back on.
+ */
+function healthChannelNotifiesOwner(): boolean {
+  return false;
+}
 
 type CheckResult = { name: string; ok: boolean; detail: string };
 
@@ -340,6 +351,10 @@ async function pushPlatformAdmins(options: {
 
 async function sendAlert(failures: CheckResult[]): Promise<void> {
   const lines = failures.map((f) => `- ${f.name}: ${f.detail}`).join('\n');
+  if (!healthChannelNotifiesOwner()) {
+    console.log(`[health] owner email and admin push suppressed (failed):\n${lines}`);
+    return;
+  }
   const subject = `[ALERT] Treemarkables health check failed (${failures.length})`;
   const text =
     `An automated health check just failed:\n\n${lines}\n\n` +
@@ -371,9 +386,9 @@ async function sendAlert(failures: CheckResult[]): Promise<void> {
 }
 
 /**
- * Generic owner alert on the health-check channel (email + admin push). Used by
- * other guards (dbHygiene.ts) so every "something needs a human" signal lands in
- * the same inbox with the same shape.
+ * Same channel as health-check failed/recovered: owner email + admin push.
+ * Used by dbHygiene.ts. Delivery is off with the rest of this channel;
+ * callers still run and the suppression is logged.
  */
 export async function alertOwner(opts: {
   subject: string;
@@ -383,6 +398,11 @@ export async function alertOwner(opts: {
   pushTitle: string;
   pushBody: string;
 }): Promise<void> {
+  if (!healthChannelNotifiesOwner()) {
+    const lines = opts.lines.map((l) => `${l.label}: ${l.detail}`).join('; ');
+    console.log(`[health] owner email and admin push suppressed (alertOwner): ${opts.subject}${lines ? ` — ${lines}` : ''}`);
+    return;
+  }
   const when = new Date().toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' });
   const text =
     `${opts.intro}\n\n${opts.lines.map((l) => `- ${l.label}: ${l.detail}`).join('\n')}\n\n` +
@@ -409,6 +429,10 @@ export async function alertOwner(opts: {
 }
 
 async function sendRecovery(): Promise<void> {
+  if (!healthChannelNotifiesOwner()) {
+    console.log('[health] owner email and admin push suppressed (recovered)');
+    return;
+  }
   const subject = 'Treemarkables health check recovered';
   const text = 'The previously failing health check is passing again. All monitored systems are back to healthy.';
   try {
