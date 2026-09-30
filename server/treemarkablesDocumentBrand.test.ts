@@ -227,6 +227,86 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
     assert.equal(inflow.next, true);
   });
 
+  it("does not rewrite diary JSON that embeds an Apple Mail html document", async () => {
+    const diaryJson = JSON.stringify({
+      success: true,
+      data: [
+        {
+          id: "entry-reply",
+          entryType: "email",
+          title: "Email reply: Re: Booking",
+          description: "Hi there",
+          content:
+            '<html class="apple-mail-supports-explicit-dark-mode"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head><body>See you Friday.</body></html>',
+        },
+      ],
+    });
+    assert.ok(diaryJson.toLowerCase().indexOf("<html") < 512);
+
+    const mw = createTreemarkablesDocumentBrandMiddleware();
+    const result = await new Promise<RunResult>((resolve) => {
+      const headers: Record<string, string> = {};
+      const req = {
+        method: "GET",
+        path: "/api/jobs/job-1/diary",
+        originalUrl: "/api/jobs/job-1/diary?limit=100",
+        hostname: "app.inflowapp.co.nz",
+        headers: { host: "app.inflowapp.co.nz", "x-forwarded-host": "www.treemarkables.co.nz" },
+      };
+      const res = {
+        statusCode: 200,
+        headersSent: false,
+        status(code: number) {
+          this.statusCode = code;
+          return this;
+        },
+        setHeader(name: string, value: string) {
+          headers[name.toLowerCase()] = value;
+          this.headersSent = true;
+        },
+        type() {
+          return this;
+        },
+        send(body: string) {
+          resolve({ next: false, status: this.statusCode, headers, body });
+          return this;
+        },
+        sendFile() {
+          return this;
+        },
+        end(chunk?: string) {
+          resolve({ next: false, status: this.statusCode, headers, body: chunk ?? "" });
+          return this;
+        },
+      };
+      mw(req as never, res as never, () => {
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.send(diaryJson);
+      });
+    });
+
+    assert.equal(result.body, diaryJson);
+    assert.equal(JSON.parse(result.body).data[0].content.includes("<html"), true);
+    assert.equal(result.headers["content-type"], "application/json; charset=utf-8");
+    assert.doesNotMatch(result.body, /treemarkables-document-brand/);
+  });
+
+  it("does not treat JSON that merely contains an html tag as a document", async () => {
+    const json = JSON.stringify({
+      note: '<html><head></head><body>embedded</body></html>',
+    });
+    const result = await run("GET", "/dispatch", "www.treemarkables.co.nz", json);
+    assert.equal(result.body, json);
+    assert.equal(JSON.parse(result.body).note.includes("<html"), true);
+    assert.equal(result.headers["content-type"], undefined);
+  });
+
+  it("still brands an html document that has leading whitespace", async () => {
+    const result = await run("GET", "/", "www.treemarkables.co.nz", `\n${INFLOW_HTML}`);
+    assert.match(result.body, /<title>Treemarkables/);
+    assert.doesNotMatch(result.body, /<title>Inflow<\/title>/);
+  });
+
   it("rewrites HTML sent via res.end on a Treemarkables host", async () => {
     const result = await run("GET", "/", "www.treemarkables.co.nz", INFLOW_HTML);
     assert.equal(result.next, false);

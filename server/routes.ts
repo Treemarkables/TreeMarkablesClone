@@ -8001,6 +8001,33 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // A diary load is JSON with a real status, including when encoding fails.
+  // An empty 2xx is what Safari reports as a pattern error with no status.
+  const sendDiaryJson = (res: Response, status: number, body: unknown) => {
+    if (res.headersSent) return;
+    const failure = { success: false, message: "Error fetching diary entries" };
+    let httpStatus = status;
+    let encoded: string;
+    try {
+      const value = JSON.stringify(body);
+      if (typeof value !== "string" || value.length === 0) {
+        encoded = JSON.stringify(failure);
+        httpStatus = 500;
+      } else {
+        encoded = value;
+      }
+    } catch (error) {
+      encoded = JSON.stringify({
+        success: false,
+        message: clientSafeErrorText(error, "Error fetching diary entries"),
+      });
+      httpStatus = 500;
+    }
+    res.status(httpStatus);
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.send(encoded);
+  };
+
   // Get job diary entries
   app.get('/api/jobs/:jobId/diary', async (req: Request, res: Response) => {
     try {
@@ -8016,7 +8043,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Handle temporary job IDs
       if (jobId.startsWith('temp-')) {
         const tempEntries = (global as any).tempDiaryEntries?.get(jobId) || [];
-        res.json({ success: true, data: tempEntries });
+        sendDiaryJson(res, 200, { success: true, data: tempEntries });
         return;
       }
 
@@ -8059,14 +8086,15 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         return transformed;
       });
       
-      res.json({ success: true, data: transformedEntries });
+      sendDiaryJson(res, 200, { success: true, data: transformedEntries });
     } catch (error) {
       console.error('Error fetching job diary entries:', error);
       // The job card shows this message. Keep the real reason (timeout, bad
       // column, JSON failure) and drop stacks and connection strings.
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, message: clientSafeErrorText(error, 'Error fetching diary entries') });
-      }
+      sendDiaryJson(res, 500, {
+        success: false,
+        message: clientSafeErrorText(error, 'Error fetching diary entries'),
+      });
     }
   });
 
