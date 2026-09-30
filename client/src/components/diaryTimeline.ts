@@ -245,6 +245,8 @@ export interface DiaryFailureDetails {
 
 type DiaryFailureError = Error & { diaryFailure?: DiaryFailureDetails };
 
+type DiaryBodyError = Error & { status?: number; serverMessage?: string };
+
 /** One line, no connection strings or bearer tokens, capped for an on-screen card. */
 export function publicErrorText(value: string): string {
   const flat = value.replace(/\s+/g, " ").trim();
@@ -687,16 +689,16 @@ function responseStatus(status: unknown): number | null {
  * Safari words that "The string did not match the expected pattern." Keep the
  * HTTP status and a short redacted snippet so the diary card does not say none.
  */
-function diaryUnparsedBody(status: number | null, body: string, cause: unknown): Error {
+function diaryUnparsedBody(status: number | null, body: string, cause: unknown): DiaryBodyError {
   const snippet = publicErrorText(body) || "(empty body)";
   const reason =
     cause instanceof Error && cause.message.trim()
       ? cause.message.trim()
       : "Response was not JSON";
   const message = publicErrorText(`${reason} — ${snippet}`) || reason;
-  const error = new Error(message);
-  if (status != null) (error as { status: number }).status = status;
-  (error as { serverMessage: string }).serverMessage = message;
+  const error: DiaryBodyError = new Error(message);
+  if (status != null) error.status = status;
+  error.serverMessage = message;
   return error;
 }
 
