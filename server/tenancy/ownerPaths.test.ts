@@ -13,4 +13,9 @@ describe("public video captions owner path", () => {
     assert.equal(isOwnerPath(`/api/videos/${id}`), false);
     assert.equal(isOwnerPath(`/api/videos/${id}/captions/regenerate`), false);
   });
+
+  it("lets the assistant job action run without a browser session", () => {
+    assert.equal(isOwnerPath("/api/assistant/jobs"), true);
+    assert.equal(isOwnerPath("/api/assistant/chat"), false);
+  });
 });
