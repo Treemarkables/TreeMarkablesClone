@@ -20,9 +20,9 @@ import { alertOwner } from './healthCheck';
  *    expiresAt. Archived rows stay in the table (the de-dup checks read them),
  *    they just leave the bell.
  *
- * 2. GROWTH GUARD — measure the things that blew up last time and alert the
- *    owner (email + admin push, same channel as the health check) when they
- *    cross a threshold:
+ * 2. GROWTH GUARD — measure the things that blew up last time and report them
+ *    on the health-check channel (alertOwner). That channel no longer emails
+ *    the owner or pushes admins; the finding is logged instead. It watches:
  *      - notifications created in the last 24h
  *      - any single notification type > N in 24h (a runaway cron)
  *      - unarchived notifications (bell payload size)
@@ -32,8 +32,8 @@ import { alertOwner } from './healthCheck';
  *    them but a repeat of the Sep 2026 pattern trips within a day.
  *
  * Both instances run this (RUN_CRONS is per-app, not per-instance). The
- * retention UPDATE is idempotent, and alerts are state-transition based with a
- * 24h re-alert ceiling, so a duplicate run costs at most one extra email.
+ * retention UPDATE is idempotent, and the growth-guard report is state-transition
+ * based with a 24h ceiling, so a duplicate run logs at most one extra line.
  */
 
 const INTERVAL_MS = 24 * 60 * 60 * 1000;
