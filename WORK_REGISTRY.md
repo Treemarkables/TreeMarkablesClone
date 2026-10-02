@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Staff Management iOS header — branch `cursor/staff-header-safe-area-f20c` — 2026-10-02 — /settings/staff is outside SidebarLayout, so its header draws under the iOS status bar. Pad that bar with the safe-area inset and keep back/Add on screen. Other admin screens stay in the shell. Do not merge until review. [PR #608]
 - iOS native boot watchdog — branch `cursor/ios-boot-native-watchdog-2b78` — 2026-09-29 — cold open: wait for appReady, reload once if the remote page has not committed, then bundled boot-fallback.html. Rebased onto main after #601. Empty probe is not an immediate reload. Needs a TestFlight build. Draft only. [PR #600]
 - Silence health-check owner alerts — branch `cursor/silence-health-check-alerts-cb10` — 2026-09-30 — health checks, IMAP watchdog, and [health] logs stay. Owner email and admin push are off for failed, recovered, and alertOwner on that same channel (db hygiene growth report logs only). Quotes, jobs, and inbound mail notifications unchanged. Draft only. [PR #606]
 - Job 4128 diary JSON parse — branch `cursor/diary-json-response-2ac2` — 2026-09-29 — Apple Mail `<html` inside the diary JSON was rewritten into an HTML 200 by the Treemarkables document middleware, so Safari's response.json() failed with status none. Diary stays JSON; a parse failure keeps the HTTP status and a short body snippet. Do not merge until review. [PR #604]
