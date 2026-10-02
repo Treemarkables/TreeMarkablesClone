@@ -1149,7 +1149,7 @@ export default function StaffManagement() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAdmin } = useAuth();
+  const { isAdmin, abandonCachedSession } = useAuth();
 
   // Fetch staff data
   const { data: staffData, isLoading } = useQuery<{
@@ -1183,6 +1183,19 @@ export default function StaffManagement() {
       return dateB - dateA;
     });
 
+  const reportStaffError = (error: { message?: string }, fallback: string) => {
+    // Missing session, not a non-admin role. The cached user is stale.
+    if ((error.message || "").includes("Please log in")) {
+      abandonCachedSession();
+      return;
+    }
+    toast({
+      title: "Error",
+      description: error.message || fallback,
+      variant: "destructive",
+    });
+  };
+
   // Create staff mutation
   const createStaffMutation = useMutation({
     mutationFn: async (data: StaffFormData) => {
@@ -1202,12 +1215,8 @@ export default function StaffManagement() {
         window.scrollTo({ top: 0, behavior: "smooth" });
       }, 100);
     },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add staff member",
-        variant: "destructive",
-      });
+    onError: (error: { message?: string }) => {
+      reportStaffError(error, "Failed to add staff member");
     },
   });
 

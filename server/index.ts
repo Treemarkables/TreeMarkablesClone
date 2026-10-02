@@ -25,6 +25,8 @@ import path from "path";
 import { fileURLToPath } from 'url';
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import { clearLegacyDomainSessionCookie } from "./security/authSession";
+import { preferEmployeeSessionCookie, SESSION_COOKIE_NAME, SESSION_COOKIE_SAMESITE } from "./security/sessionCookie";
 import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
 import { sweepStaleInboundDocuments } from "./services/supplierInvoiceIngest";
@@ -193,9 +195,29 @@ if (!isDevelopment && !process.env.SESSION_SECRET) {
   throw new Error('SESSION_SECRET must be set in production — refusing to start with a default signing secret');
 }
 
+const sessionSecret = process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production';
+
+// Before express-session reads the cookie. A duplicate legacy sid must not
+// hide the signed-in employee (see sessionCookie.ts).
+app.use(preferEmployeeSessionCookie({
+  secrets: [sessionSecret],
+  hasEmployee: async (sid) => {
+    const result = await pool.query(
+      `SELECT 1 FROM session
+        WHERE sid = $1
+          AND expire > NOW()
+          AND COALESCE(sess->>'employeeId', '') <> ''
+        LIMIT 1`,
+      [sid],
+    );
+    return result.rows.length > 0;
+  },
+  onPreferred: clearLegacyDomainSessionCookie,
+}));
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
+    secret: sessionSecret,
     // resave:false — connect-pg-simple implements `touch`, so express-session
     // keeps the session fresh (and rolling expiry works) without rewriting the
     // whole row when nothing changed. resave:true forced a session-table WRITE to
@@ -204,7 +226,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     rolling: true,
-    name: 'treemarkables.sid',
+    name: SESSION_COOKIE_NAME,
     store: new PgSession({
       pool: pool as any,
       tableName: 'session',
@@ -213,16 +235,16 @@ app.use(
     }),
     cookie: {
       // Local dev runs over http://localhost, where browsers silently drop a
-      // `Secure` cookie — and `SameSite=None` *requires* Secure, so the session
-      // cookie would never persist and every post-login /api/auth/me would 401,
-      // bouncing the user back to /login. Use lax + non-secure in dev. Production
-      // (https, PWA/iOS webview cross-site context) keeps secure + sameSite:none.
+      // `Secure` cookie. Production stays Secure. SameSite is Lax in both:
+      // None was stored and then dropped by the iOS WKWebView, so the shell
+      // kept showing the cached user while Add Staff arrived with no session.
+      // The webview's document is the app host, so Lax is sent on these fetches.
       secure: !isDevelopment,
       httpOnly: true,
       maxAge: isDevelopment
         ? 1000 * 60 * 60 * 24 * 90
         : 1000 * 60 * 60 * 24 * 30,
-      sameSite: isDevelopment ? 'lax' : 'none',
+      sameSite: SESSION_COOKIE_SAMESITE,
       // Host-only cookie: omit domain so it scopes to app.treemarkables.co.nz
       // exactly. Domain-scoped cookies (.treemarkables.co.nz) caused PWA users
       // to lose sessions on Chrome's installed-PWA storage partition.

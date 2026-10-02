@@ -131,7 +131,7 @@ import { getSubscriberOwnerContact, listSubscriberSummaries } from "./adminSubsc
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import { checkLoginThrottle, clearLoginIdentifierThrottle } from "./security/loginThrottle";
 import { disableMfa, getMfaRow, mfaLoginGate } from "./security/mfaService";
-import { beginPendingMfaSession, establishEmployeeSession } from "./security/authSession";
+import { beginPendingMfaSession, clearHostSessionCookie, clearLegacyDomainSessionCookie, establishEmployeeSession } from "./security/authSession";
 import { registerMfaAndSessionRoutes } from "./security/mfaRoutes";
 import { AUDIT_ACTIONS, recordAuthEvent } from "./security/auditLog";
 import {
@@ -2624,22 +2624,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // cookie was set in server/index.ts, otherwise the browser ignores the
       // clear and the stale SID lingers into the next login. Host-only (no
       // domain attribute) — see comment in server/index.ts session config.
-      res.clearCookie('treemarkables.sid', {
-        path: '/',
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-      });
-      // Also clear the legacy domain-scoped variant so browsers that still
-      // have it from before the host-only migration don't send it on the
-      // next login and confuse the session lookup.
-      res.clearCookie('treemarkables.sid', {
-        path: '/',
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        domain: '.treemarkables.co.nz',
-      });
+      clearHostSessionCookie(res);
+      // Legacy domain cookie is sent first on app.treemarkables.co.nz and
+      // hides the host-only session. Clear both SameSite variants.
+      clearLegacyDomainSessionCookie(res);
       
       res.json({
         success: true,
@@ -2678,14 +2666,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('[ACCOUNT-DELETE] Session destroy error:', err);
           // The account is already gone; report success regardless.
         }
-        // Mirror logout's cookie clearing (attributes must match server/index.ts).
-        res.clearCookie('treemarkables.sid', {
-          path: '/', httpOnly: true, secure: true, sameSite: 'none',
-        });
-        res.clearCookie('treemarkables.sid', {
-          path: '/', httpOnly: true, secure: true, sameSite: 'none',
-          domain: '.treemarkables.co.nz',
-        });
+        clearHostSessionCookie(res);
+        clearLegacyDomainSessionCookie(res);
         res.json({ success: true, message: 'Account deleted' });
       });
     } catch (error) {
