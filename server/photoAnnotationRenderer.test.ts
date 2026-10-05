@@ -188,4 +188,42 @@ describe("bakeAnnotations stroke scale", () => {
     assert.equal(ring[2] > 180 && ring[0] < 80, true);
     assert.equal(isWhite(await rgbAt(baked, 100, 100)), true);
   });
+
+  it("bakes text at its box, and a moved box leaves the old spot blank", async () => {
+    const source = await sharp({
+      create: {
+        width: 400,
+        height: 400,
+        channels: 3,
+        background: { r: 255, g: 255, b: 255 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const note = {
+      type: "text" as const,
+      id: "note",
+      color: "#000000",
+      fontSize: 0.08,
+      text: "NOTE",
+      boxWidth: 0.4,
+      boxHeight: 0.2,
+    };
+    const high = await bakeAnnotations(
+      source,
+      [{ ...note, x: 0.1, y: 0.1 }],
+      { stageWidth: 400 },
+    );
+    const low = await bakeAnnotations(
+      source,
+      [{ ...note, x: 0.1, y: 0.55 }],
+      { stageWidth: 400 },
+    );
+    // y is a fraction of width. 0.1 * 400 = 40, plus the glyph body.
+    const highInk = await rgbAt(high, 50, 55);
+    const lowInk = await rgbAt(low, 50, 235);
+    assert.equal(highInk[0] < 80 && highInk[1] < 80 && highInk[2] < 80, true);
+    assert.equal(isWhite(await rgbAt(low, 50, 55)), true);
+    assert.equal(lowInk[0] < 80 && lowInk[1] < 80 && lowInk[2] < 80, true);
+  });
 });

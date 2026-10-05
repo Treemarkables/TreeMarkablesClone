@@ -100,9 +100,60 @@ export interface AnnotationTextFrame {
   xPx: number;
   yPx: number;
   widthPx: number;
+  /** Box height. Legacy marks use the height of the wrapped lines. */
+  heightPx: number;
   fontSizePx: number;
   lineHeightPx: number;
+  /** Every wrapped line, including ones below the box. */
   lines: string[];
+  /** Lines that fit inside `heightPx`. */
+  visibleLines: string[];
+}
+
+export interface AnnotationTextBoxNorm {
+  x: number;
+  y: number;
+  boxWidth: number;
+  boxHeight: number;
+}
+
+/**
+ * Keep a text box on the photo. Width and height are fractions of image
+ * width, same as x and y. Font size is not changed here.
+ */
+export function clampAnnotationTextBox(
+  box: AnnotationTextBoxNorm,
+  imageWidthPx: number,
+  imageHeightPx: number,
+  fontSizeNorm: number,
+): AnnotationTextBoxNorm {
+  const widthPx = imageWidthPx > 0 ? imageWidthPx : 1;
+  const heightPx = imageHeightPx > 0 ? imageHeightPx : 1;
+  const fontPx = Math.max(1, (fontSizeNorm > 0 ? fontSizeNorm : 0.04) * widthPx);
+  const pad = Math.max(2, fontPx * 0.2);
+  const minW = Math.max(fontPx * 3, fontPx);
+  const minH = fontPx * ANNOTATION_LINE_HEIGHT;
+  const maxW = Math.max(minW, widthPx - pad * 2);
+  const maxH = Math.max(minH, heightPx - pad * 2);
+  const boxWidthPx = clampPx(box.boxWidth * widthPx, minW, maxW);
+  const boxHeightPx = clampPx(box.boxHeight * widthPx, minH, maxH);
+  let xPx = (Number.isFinite(box.x) ? box.x : 0) * widthPx;
+  let yPx = (Number.isFinite(box.y) ? box.y : 0) * widthPx;
+  const maxX = widthPx - pad - boxWidthPx;
+  const maxY = heightPx - pad - boxHeightPx;
+  xPx = clampPx(xPx, pad, Math.max(pad, maxX));
+  yPx = clampPx(yPx, pad, Math.max(pad, maxY));
+  return {
+    x: xPx / widthPx,
+    y: yPx / widthPx,
+    boxWidth: boxWidthPx / widthPx,
+    boxHeight: boxHeightPx / widthPx,
+  };
+}
+
+function clampPx(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
 }
 
 /**
@@ -117,6 +168,10 @@ export function annotationTextFrame(input: {
   text: string;
   imageWidthPx: number;
   imageHeightPx: number;
+  /** Explicit wrap width, fraction of image width. Omit for older marks. */
+  boxWidthNorm?: number;
+  /** Explicit box height, fraction of image width. Omit to fit the lines. */
+  boxHeightNorm?: number;
 }): AnnotationTextFrame {
   const imageWidthPx = input.imageWidthPx;
   const imageHeightPx = input.imageHeightPx;
@@ -125,13 +180,68 @@ export function annotationTextFrame(input: {
   const lineHeightPx = fontSizePx * ANNOTATION_LINE_HEIGHT;
 
   if (!(imageWidthPx > 0)) {
+    const lines = wrapAnnotationText(input.text, 0, fontSizePx);
     return {
       xPx: 0,
       yPx: 0,
       widthPx: 0,
+      heightPx: lineHeightPx,
       fontSizePx,
       lineHeightPx,
-      lines: wrapAnnotationText(input.text, 0, fontSizePx),
+      lines,
+      visibleLines: lines.slice(0, 1),
+    };
+  }
+
+  const boxWidthNorm = input.boxWidthNorm;
+  const explicitWidth =
+    boxWidthNorm != null && Number.isFinite(boxWidthNorm) && boxWidthNorm > 0;
+  if (explicitWidth) {
+    const boxHeightNorm =
+      input.boxHeightNorm != null &&
+      Number.isFinite(input.boxHeightNorm) &&
+      input.boxHeightNorm > 0
+        ? input.boxHeightNorm
+        : undefined;
+    let placed = clampAnnotationTextBox(
+      {
+        x: input.xNorm,
+        y: input.yNorm,
+        boxWidth: boxWidthNorm,
+        boxHeight: boxHeightNorm ?? lineHeightPx / imageWidthPx,
+      },
+      imageWidthPx,
+      imageHeightPx > 0 ? imageHeightPx : imageWidthPx,
+      fontSizeNorm,
+    );
+    const lines = wrapAnnotationText(
+      input.text,
+      placed.boxWidth * imageWidthPx,
+      fontSizePx,
+    );
+    if (boxHeightNorm == null) {
+      const contentH = Math.max(lineHeightPx, lines.length * lineHeightPx);
+      placed = clampAnnotationTextBox(
+        { ...placed, boxHeight: contentH / imageWidthPx },
+        imageWidthPx,
+        imageHeightPx > 0 ? imageHeightPx : imageWidthPx,
+        fontSizeNorm,
+      );
+    }
+    const xPx = placed.x * imageWidthPx;
+    const yPx = placed.y * imageWidthPx;
+    const widthPx = placed.boxWidth * imageWidthPx;
+    const heightPx = placed.boxHeight * imageWidthPx;
+    const fit = Math.max(1, Math.floor((heightPx + 0.5) / lineHeightPx));
+    return {
+      xPx,
+      yPx,
+      widthPx,
+      heightPx,
+      fontSizePx,
+      lineHeightPx,
+      lines,
+      visibleLines: lines.slice(0, fit),
     };
   }
 
@@ -166,5 +276,14 @@ export function annotationTextFrame(input: {
   }
   if (yPx < 0) yPx = 0;
 
-  return { xPx, yPx, widthPx, fontSizePx, lineHeightPx, lines };
+  return {
+    xPx,
+    yPx,
+    widthPx,
+    heightPx: blockH,
+    fontSizePx,
+    lineHeightPx,
+    lines,
+    visibleLines: lines,
+  };
 }
