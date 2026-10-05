@@ -10,6 +10,7 @@
 // Matches the existing composeBeforeAfter pattern in photoStorage.ts.
 
 import sharp from "sharp";
+import { annotationTextFrame } from "@shared/annotationTextWrap";
 
 type ShapeBase = { id: string; color: string };
 type StrokedBase = ShapeBase & { strokeWidth: number };
@@ -53,7 +54,7 @@ const escapeXml = (s: string): string =>
 // client's convention — see PhotoAnnotator's coord-helper comment). So both
 // x and y multiply by `W`, not separate width/height. Distances and radii
 // likewise scale with W.
-function shapeToSvg(s: AnnotationShape, W: number): string {
+function shapeToSvg(s: AnnotationShape, W: number, H: number): string {
   const px = (n: number) => n * W;
 
   switch (s.type) {
@@ -126,21 +127,33 @@ function shapeToSvg(s: AnnotationShape, W: number): string {
     }
 
     case "text": {
-      const fontSize = px(s.fontSize);
+      const frame = annotationTextFrame({
+        xNorm: s.x,
+        yNorm: s.y,
+        fontSizeNorm: s.fontSize,
+        text: s.text,
+        imageWidthPx: W,
+        imageHeightPx: H,
+      });
+      if (frame.lines.length === 0) return "";
       // Konva strokes glyph outlines when stroke + strokeWidth are set; SVG
       // equivalent uses paint-order="stroke fill" so the fill sits on top of
       // a thin black outline — keeps text legible on any background.
-      const strokeW = Math.max(1, fontSize * 0.04);
-      const x = px(s.x);
-      // Konva positions text by top-left; SVG <text> uses the baseline. Shift
-      // down by ~fontSize so the rendered text appears in the same place the
-      // user typed.
-      const y = px(s.y) + fontSize;
+      const strokeW = Math.max(1, frame.fontSizePx * 0.04);
+      // Konva positions text by top-left; SVG <text> uses the baseline. The
+      // first line shifts down by ~fontSize so it stays where a short label
+      // used to sit. Further lines step by the same line height the editor uses.
+      const tspans = frame.lines
+        .map((line, i) => {
+          const baseline = frame.yPx + frame.fontSizePx + i * frame.lineHeightPx;
+          return `<tspan x="${frame.xPx}" y="${baseline}">${escapeXml(line)}</tspan>`;
+        })
+        .join("");
       return (
-        `<text x="${x}" y="${y}" font-family="Inter, Arial, sans-serif" ` +
-        `font-size="${fontSize}" font-weight="bold" fill="${s.color}" ` +
+        `<text font-family="Arial, sans-serif" ` +
+        `font-size="${frame.fontSizePx}" font-weight="bold" fill="${s.color}" ` +
         `stroke="black" stroke-width="${strokeW}" paint-order="stroke fill">` +
-        `${escapeXml(s.text)}</text>`
+        `${tspans}</text>`
       );
     }
   }
@@ -169,7 +182,7 @@ export async function bakeAnnotations(
 
   const overlaySvg =
     `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">` +
-    shapes.map((s) => shapeToSvg(s, width)).join("") +
+    shapes.map((s) => shapeToSvg(s, width, height)).join("") +
     `</svg>`;
 
   return sharp(rotated)

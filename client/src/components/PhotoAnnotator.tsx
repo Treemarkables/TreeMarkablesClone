@@ -18,6 +18,11 @@ import {
   Image as KonvaImage,
 } from "react-konva";
 import type Konva from "konva";
+import { annotationTextFrame } from "@shared/annotationTextWrap";
+import {
+  strokePhase,
+  type ActiveStroke,
+} from "@/components/photoAnnotatorGestures";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,6 +68,24 @@ export type AnnotationShape =
 
 const COLORS = ["#FF3B30", "#34C759", "#FFFFFF", "#000000", "#FFCC00", "#3498DB"];
 const STROKE_WIDTHS = [2, 4, 8];
+
+function isSignificant(drafting: AnnotationShape): boolean {
+  if (drafting.type === "pen") return drafting.points.length >= 4;
+  if (drafting.type === "arrow") {
+    const [x1, y1, x2, y2] = drafting.points;
+    return Math.hypot(x2 - x1, y2 - y1) > 0.005;
+  }
+  if (drafting.type === "rect") {
+    return Math.abs(drafting.w) > 0.005 && Math.abs(drafting.h) > 0.005;
+  }
+  if (drafting.type === "circle") return drafting.r > 0.005;
+  return false;
+}
+
+function pointerIdOf(e: Konva.KonvaEventObject<PointerEvent>): number | null {
+  const id = e.evt?.pointerId;
+  return typeof id === "number" ? id : null;
+}
 
 export interface PhotoAnnotatorProps {
   open: boolean;
@@ -209,6 +232,9 @@ export default function PhotoAnnotator({
     initialAnnotations ?? [],
   );
   const [drafting, setDrafting] = useState<AnnotationShape | null>(null);
+  // The stroke under the finger. Updated synchronously so a move or lift
+  // that arrives before React re-renders still belongs to this symbol.
+  const activeStrokeRef = useRef<ActiveStroke<AnnotationShape> | null>(null);
 
   // Text overlay state — separate from shapes until committed
   const [textEditing, setTextEditing] = useState<{
@@ -222,6 +248,7 @@ export default function PhotoAnnotator({
   useEffect(() => {
     if (open) {
       setShapes(initialAnnotations ?? []);
+      activeStrokeRef.current = null;
       setDrafting(null);
       setTextEditing(null);
     }
@@ -238,7 +265,7 @@ export default function PhotoAnnotator({
     [denom],
   );
 
-  const pointerNorm = (e: Konva.KonvaEventObject<unknown>) => {
+  const pointerNorm = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return null;
     const pos = stage.getPointerPosition();
@@ -246,9 +273,52 @@ export default function PhotoAnnotator({
     return toNorm(pos.x, pos.y);
   };
 
+  const finishActiveStroke = () => {
+    const active = activeStrokeRef.current;
+    if (!active) return;
+    activeStrokeRef.current = null;
+    // Discard zero/near-zero shapes — likely accidental taps.
+    if (isSignificant(active.draft)) {
+      setShapes((s) => [...s, active.draft]);
+    }
+    setDrafting(null);
+  };
+  const finishStrokeRef = useRef(finishActiveStroke);
+  finishStrokeRef.current = finishActiveStroke;
+
+  // Finger-up outside the canvas (or a cancelled touch) still has to end
+  // the stroke, or the next symbol is ignored as a second finger.
+  useEffect(() => {
+    const onUp = (ev: PointerEvent) => {
+      const pointerId = typeof ev.pointerId === "number" ? ev.pointerId : null;
+      if (
+        strokePhase(activeStrokeRef.current, { type: "up", pointerId }) !==
+        "finish"
+      ) {
+        return;
+      }
+      finishStrokeRef.current();
+    };
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
+
   // --- drawing handlers
-  const handlePointerDown = (e: Konva.KonvaEventObject<unknown>) => {
+  // Pointer events only. Mouse + touch both fire for one finger on a phone,
+  // and the extra down/up after the first symbol cancelled the next one.
+  const handlePointerDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
     if (textEditing) return; // committing text on next blur
+    const pointerId = pointerIdOf(e);
+    if (
+      strokePhase(activeStrokeRef.current, { type: "down", pointerId }) ===
+      "ignore"
+    ) {
+      return;
+    }
     const p = pointerNorm(e);
     if (!p) return;
 
@@ -263,24 +333,25 @@ export default function PhotoAnnotator({
       return;
     }
 
+    let shape: AnnotationShape | null = null;
     if (tool === "pen") {
-      setDrafting({
+      shape = {
         type: "pen",
         id,
         color,
         strokeWidth,
         points: [p.x, p.y],
-      });
+      };
     } else if (tool === "arrow") {
-      setDrafting({
+      shape = {
         type: "arrow",
         id,
         color,
         strokeWidth,
         points: [p.x, p.y, p.x, p.y],
-      });
+      };
     } else if (tool === "rect") {
-      setDrafting({
+      shape = {
         type: "rect",
         id,
         color,
@@ -289,9 +360,9 @@ export default function PhotoAnnotator({
         y: p.y,
         w: 0,
         h: 0,
-      });
+      };
     } else if (tool === "circle") {
-      setDrafting({
+      shape = {
         type: "circle",
         id,
         color,
@@ -299,50 +370,68 @@ export default function PhotoAnnotator({
         x: p.x,
         y: p.y,
         r: 0,
-      });
+      };
+    }
+    if (!shape) return;
+
+    activeStrokeRef.current = { pointerId, draft: shape };
+    setDrafting(shape);
+    if (pointerId != null) {
+      try {
+        e.target.getStage()?.container().setPointerCapture(pointerId);
+      } catch {
+        // The pointer can already be gone on a very fast tap.
+      }
     }
   };
 
-  const handlePointerMove = (e: Konva.KonvaEventObject<unknown>) => {
-    if (!drafting) return;
+  const handlePointerMove = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    const pointerId = pointerIdOf(e);
+    if (
+      strokePhase(activeStrokeRef.current, { type: "move", pointerId }) !==
+      "update"
+    ) {
+      return;
+    }
+    const draftingNow = activeStrokeRef.current?.draft;
+    if (!draftingNow) return;
     const p = pointerNorm(e);
     if (!p) return;
-    if (drafting.type === "pen") {
-      setDrafting({ ...drafting, points: [...drafting.points, p.x, p.y] });
-    } else if (drafting.type === "arrow") {
-      setDrafting({
-        ...drafting,
-        points: [drafting.points[0], drafting.points[1], p.x, p.y],
-      });
-    } else if (drafting.type === "rect") {
-      setDrafting({
-        ...drafting,
-        w: p.x - drafting.x,
-        h: p.y - drafting.y,
-      });
-    } else if (drafting.type === "circle") {
-      const dx = p.x - drafting.x;
-      const dy = p.y - drafting.y;
-      setDrafting({ ...drafting, r: Math.sqrt(dx * dx + dy * dy) });
+    let next: AnnotationShape = draftingNow;
+    if (draftingNow.type === "pen") {
+      next = { ...draftingNow, points: [...draftingNow.points, p.x, p.y] };
+    } else if (draftingNow.type === "arrow") {
+      next = {
+        ...draftingNow,
+        points: [draftingNow.points[0], draftingNow.points[1], p.x, p.y],
+      };
+    } else if (draftingNow.type === "rect") {
+      next = {
+        ...draftingNow,
+        w: p.x - draftingNow.x,
+        h: p.y - draftingNow.y,
+      };
+    } else if (draftingNow.type === "circle") {
+      const dx = p.x - draftingNow.x;
+      const dy = p.y - draftingNow.y;
+      next = { ...draftingNow, r: Math.sqrt(dx * dx + dy * dy) };
     }
+    activeStrokeRef.current = {
+      pointerId: activeStrokeRef.current?.pointerId ?? pointerId,
+      draft: next,
+    };
+    setDrafting(next);
   };
 
-  const handlePointerUp = () => {
-    if (!drafting) return;
-    // Discard zero/near-zero shapes — likely accidental taps
-    let significant = true;
-    if (drafting.type === "pen") {
-      significant = drafting.points.length >= 4;
-    } else if (drafting.type === "arrow") {
-      const [x1, y1, x2, y2] = drafting.points;
-      significant = Math.hypot(x2 - x1, y2 - y1) > 0.005;
-    } else if (drafting.type === "rect") {
-      significant = Math.abs(drafting.w) > 0.005 && Math.abs(drafting.h) > 0.005;
-    } else if (drafting.type === "circle") {
-      significant = drafting.r > 0.005;
+  const handlePointerUp = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    const pointerId = pointerIdOf(e);
+    if (
+      strokePhase(activeStrokeRef.current, { type: "up", pointerId }) !==
+      "finish"
+    ) {
+      return;
     }
-    if (significant) setShapes((s) => [...s, drafting]);
-    setDrafting(null);
+    finishActiveStroke();
   };
 
   const commitText = () => {
@@ -452,24 +541,39 @@ export default function PhotoAnnotator({
             listening={false}
           />
         );
-      case "text":
+      case "text": {
+        // Width is the space left on the photo. Without it Konva draws one
+        // line and the words run off the right edge.
+        const frame = annotationTextFrame({
+          xNorm: s.x,
+          yNorm: s.y,
+          fontSizeNorm: s.fontSize,
+          text: s.text,
+          imageWidthPx: stageSize.w,
+          imageHeightPx: stageSize.h,
+        });
         return (
           <Text
             key={s.id}
-            x={px(s.x)}
-            y={px(s.y)}
-            text={s.text}
+            x={frame.xPx}
+            y={frame.yPx}
+            width={Math.max(1, frame.widthPx)}
+            text={frame.lines.join("\n")}
+            wrap="word"
+            lineHeight={1.2}
             fill={s.color}
-            fontSize={px(s.fontSize)}
+            fontSize={frame.fontSizePx}
             fontStyle="bold"
+            fontFamily="Arial"
             // Faint outline so text is legible on any background. Konva
             // strokes the glyph itself when stroke + strokeWidth are set.
             stroke="black"
-            strokeWidth={Math.max(1, px(s.fontSize) * 0.04)}
+            strokeWidth={Math.max(1, frame.fontSizePx * 0.04)}
             fillAfterStrokeEnabled
             listening={false}
           />
         );
+      }
     }
   };
 
@@ -481,6 +585,30 @@ export default function PhotoAnnotator({
     : 0;
   const stageOffsetY = containerEl
     ? (containerEl.clientHeight - stageSize.h) / 2
+    : 0;
+
+  const editingNorm =
+    textEditing && stageSize.w > 0
+      ? toNorm(textEditing.px, textEditing.py)
+      : null;
+  const editingFrame = editingNorm
+    ? annotationTextFrame({
+        xNorm: editingNorm.x,
+        yNorm: editingNorm.y,
+        fontSizeNorm: 0.04,
+        text: textEditing?.value || " ",
+        imageWidthPx: stageSize.w,
+        imageHeightPx: stageSize.h,
+      })
+    : null;
+  const editingMaxH = editingFrame
+    ? Math.max(editingFrame.lineHeightPx, stageSize.h - editingFrame.yPx - 4)
+    : 0;
+  const editingDesired = editingFrame
+    ? Math.max(
+        editingFrame.lineHeightPx,
+        editingFrame.lines.length * editingFrame.lineHeightPx + 8,
+      )
     : 0;
 
   return (
@@ -523,7 +651,7 @@ export default function PhotoAnnotator({
         {/* Canvas area */}
         <div
           ref={containerRef}
-          className="flex-1 relative overflow-hidden flex items-center justify-center select-none"
+          className="flex-1 relative overflow-hidden flex items-center justify-center select-none touch-none"
         >
           {/* Temporary diagnostic strip — leaves a breadcrumb when the
               canvas appears blank so we can tell which state we're in
@@ -565,12 +693,11 @@ export default function PhotoAnnotator({
               ref={stageRef}
               width={stageSize.w}
               height={stageSize.h}
-              onMouseDown={handlePointerDown}
-              onMouseMove={handlePointerMove}
-              onMouseUp={handlePointerUp}
-              onTouchStart={handlePointerDown}
-              onTouchMove={handlePointerMove}
-              onTouchEnd={handlePointerUp}
+              style={{ touchAction: "none" }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
             >
               <Layer>
                 <KonvaImage
@@ -585,8 +712,10 @@ export default function PhotoAnnotator({
             </Stage>
           )}
 
-          {/* Text input overlay (HTML, not Konva, so the user can type) */}
-          {textEditing && (
+          {/* Text input overlay (HTML, not Konva, so the user can type).
+              The box is the same width the saved mark will wrap to, so a
+              long note stays on the photo instead of running off the side. */}
+          {textEditing && editingFrame && (
             <textarea
               autoFocus
               value={textEditing.value}
@@ -602,13 +731,22 @@ export default function PhotoAnnotator({
                   setTextEditing(null);
                 }
               }}
-              className="absolute bg-transparent border border-white/60 outline-none resize-none font-bold leading-tight p-1"
+              rows={1}
+              className="absolute bg-transparent border border-white/60 outline-none resize-none font-bold p-1 box-border"
               style={{
-                left: stageOffsetX + textEditing.px,
-                top: stageOffsetY + textEditing.py,
+                left: stageOffsetX + editingFrame.xPx,
+                top: stageOffsetY + editingFrame.yPx,
+                width: Math.max(1, editingFrame.widthPx),
+                height: Math.min(editingDesired, editingMaxH),
+                maxHeight: editingMaxH,
                 color,
-                fontSize: stageSize.w * 0.04,
-                minWidth: 80,
+                fontSize: editingFrame.fontSizePx,
+                lineHeight: 1.2,
+                fontFamily: "Arial, sans-serif",
+                whiteSpace: "pre-wrap",
+                overflowWrap: "anywhere",
+                wordBreak: "break-word",
+                overflowY: editingDesired > editingMaxH ? "auto" : "hidden",
                 textShadow:
                   "0 0 2px black, 0 0 2px black, 0 0 2px black, 0 0 2px black",
               }}
