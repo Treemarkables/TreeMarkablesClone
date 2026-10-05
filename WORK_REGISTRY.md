@@ -18,7 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
-- Job photo arrow shaft and editor overlay — branch `cursor/photo-annotator-arrow-shaft-d1cd` — 2026-10-05 — iPhone annotator draws arrowheads only: track the drag on the window so the shaft follows the finger, drop the debug src/stage strip, and let the editor cover the screen so the photo is contain-fit. Draft only.
+- Job photo arrow shaft and editor overlay — branch `cursor/photo-annotator-arrow-shaft-d1cd` — 2026-10-05 — iPhone annotator draws arrowheads only: track the drag on the window so the shaft follows the finger, drop the debug src/stage strip, and let the editor cover the screen so the photo is contain-fit. Draft only. [PR #612]
 - Job card photo markup — branch `cursor/photo-markup-multi-symbol-wrap-7ae2` — 2026-10-05 — phone annotator: more than one symbol on the same photo, and markup text wraps inside the photo. Saved shape JSON stays compatible. Draft only. [PR #610]
 - Add staff session cookie — branch `cursor/add-staff-session-cookie-1059` — 2026-10-02 — owner add-staff 403 "Please log in": prefer a duplicate sid that has an employee, and set the session cookie SameSite=Lax so the iOS webview stores it. Crew sessions are not replaced. Do not merge until review. [PR #609]
 - Staff Management iOS header — branch `cursor/staff-header-safe-area-f20c` — 2026-10-02 — /settings/staff is outside SidebarLayout, so its header draws under the iOS status bar. Pad that bar with the safe-area inset and keep back/Add on screen. Other admin screens stay in the shell. Do not merge until review. [PR #608]
