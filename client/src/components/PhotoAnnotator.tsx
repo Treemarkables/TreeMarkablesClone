@@ -23,6 +23,14 @@ import {
   strokePhase,
   type ActiveStroke,
 } from "@/components/photoAnnotatorGestures";
+import {
+  ANNOTATOR_DIALOG_CLASS,
+  arrowHeadScreenPx,
+  clientToStagePx,
+  fitImageContain,
+  isSignificantMark,
+  moveDraft,
+} from "@/components/photoAnnotatorGeometry";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,16 +78,8 @@ const COLORS = ["#FF3B30", "#34C759", "#FFFFFF", "#000000", "#FFCC00", "#3498DB"
 const STROKE_WIDTHS = [2, 4, 8];
 
 function isSignificant(drafting: AnnotationShape): boolean {
-  if (drafting.type === "pen") return drafting.points.length >= 4;
-  if (drafting.type === "arrow") {
-    const [x1, y1, x2, y2] = drafting.points;
-    return Math.hypot(x2 - x1, y2 - y1) > 0.005;
-  }
-  if (drafting.type === "rect") {
-    return Math.abs(drafting.w) > 0.005 && Math.abs(drafting.h) > 0.005;
-  }
-  if (drafting.type === "circle") return drafting.r > 0.005;
-  return false;
+  if (drafting.type === "text") return false;
+  return isSignificantMark(drafting);
 }
 
 function pointerIdOf(e: Konva.KonvaEventObject<PointerEvent>): number | null {
@@ -191,13 +191,14 @@ export default function PhotoAnnotator({
         if (rect.width > 0) cw = rect.width;
         if (rect.height > 0) ch = rect.height;
       }
-      if (cw === 0 || ch === 0) return;
-
-      const imgRatio = image.naturalWidth / image.naturalHeight;
-      const conRatio = cw / ch;
-      const w = conRatio > imgRatio ? ch * imgRatio : cw;
-      const h = conRatio > imgRatio ? ch : cw / imgRatio;
-      setStageSize({ w, h });
+      const next = fitImageContain(
+        image.naturalWidth,
+        image.naturalHeight,
+        cw,
+        ch,
+      );
+      if (next.w <= 0 || next.h <= 0) return;
+      setStageSize(next);
     };
 
     update();
@@ -295,9 +296,42 @@ export default function PhotoAnnotator({
   const finishStrokeRef = useRef(finishActiveStroke);
   finishStrokeRef.current = finishActiveStroke;
 
-  // Finger-up outside the canvas (or a cancelled touch) still has to end
-  // the stroke, or the next symbol is ignored as a second finger.
+  // Track the finger on the window, not via setPointerCapture on the stage
+  // container. Konva listens on the inner .konvajs-content node; capture on
+  // the parent never delivers pointermove, so the end point stays on the
+  // start point. A zero-length Konva arrow still paints its triangle, which
+  // is the head-only mark on iPhone. clientX/clientY still arrive here for
+  // the whole drag, including a lift outside the photo.
   useEffect(() => {
+    const applyClient = (ev: PointerEvent) => {
+      const active = activeStrokeRef.current;
+      const stage = stageRef.current;
+      const content = stage?.content;
+      if (!active || !stage || !content || active.draft.type === "text") return;
+      const pt = clientToStagePx(
+        ev.clientX,
+        ev.clientY,
+        content.getBoundingClientRect(),
+        stage.width(),
+        stage.height(),
+      );
+      if (!pt) return;
+      const width = stage.width();
+      if (!(width > 0)) return;
+      const next = moveDraft(active.draft, pt.x / width, pt.y / width);
+      activeStrokeRef.current = { pointerId: active.pointerId, draft: next };
+      setDrafting(next);
+    };
+    const onMove = (ev: PointerEvent) => {
+      const pointerId = typeof ev.pointerId === "number" ? ev.pointerId : null;
+      if (
+        strokePhase(activeStrokeRef.current, { type: "move", pointerId }) !==
+        "update"
+      ) {
+        return;
+      }
+      applyClient(ev);
+    };
     const onUp = (ev: PointerEvent) => {
       const pointerId = typeof ev.pointerId === "number" ? ev.pointerId : null;
       if (
@@ -306,11 +340,14 @@ export default function PhotoAnnotator({
       ) {
         return;
       }
+      if (ev.type !== "pointercancel") applyClient(ev);
       finishStrokeRef.current();
     };
+    window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
     return () => {
+      window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
@@ -387,62 +424,6 @@ export default function PhotoAnnotator({
     editedRef.current = true;
     activeStrokeRef.current = { pointerId, draft: shape };
     setDrafting(shape);
-    if (pointerId != null) {
-      try {
-        e.target.getStage()?.container().setPointerCapture(pointerId);
-      } catch {
-        // The pointer can already be gone on a very fast tap.
-      }
-    }
-  };
-
-  const handlePointerMove = (e: Konva.KonvaEventObject<PointerEvent>) => {
-    const pointerId = pointerIdOf(e);
-    if (
-      strokePhase(activeStrokeRef.current, { type: "move", pointerId }) !==
-      "update"
-    ) {
-      return;
-    }
-    const draftingNow = activeStrokeRef.current?.draft;
-    if (!draftingNow) return;
-    const p = pointerNorm(e);
-    if (!p) return;
-    let next: AnnotationShape = draftingNow;
-    if (draftingNow.type === "pen") {
-      next = { ...draftingNow, points: [...draftingNow.points, p.x, p.y] };
-    } else if (draftingNow.type === "arrow") {
-      next = {
-        ...draftingNow,
-        points: [draftingNow.points[0], draftingNow.points[1], p.x, p.y],
-      };
-    } else if (draftingNow.type === "rect") {
-      next = {
-        ...draftingNow,
-        w: p.x - draftingNow.x,
-        h: p.y - draftingNow.y,
-      };
-    } else if (draftingNow.type === "circle") {
-      const dx = p.x - draftingNow.x;
-      const dy = p.y - draftingNow.y;
-      next = { ...draftingNow, r: Math.sqrt(dx * dx + dy * dy) };
-    }
-    activeStrokeRef.current = {
-      pointerId: activeStrokeRef.current?.pointerId ?? pointerId,
-      draft: next,
-    };
-    setDrafting(next);
-  };
-
-  const handlePointerUp = (e: Konva.KonvaEventObject<PointerEvent>) => {
-    const pointerId = pointerIdOf(e);
-    if (
-      strokePhase(activeStrokeRef.current, { type: "up", pointerId }) !==
-      "finish"
-    ) {
-      return;
-    }
-    finishActiveStroke();
   };
 
   const commitText = () => {
@@ -555,8 +536,8 @@ export default function PhotoAnnotator({
             stroke={s.color}
             strokeWidth={s.strokeWidth}
             fill={s.color}
-            pointerLength={Math.max(10, s.strokeWidth * 3)}
-            pointerWidth={Math.max(10, s.strokeWidth * 3)}
+            pointerLength={arrowHeadScreenPx(s.strokeWidth)}
+            pointerWidth={arrowHeadScreenPx(s.strokeWidth)}
             listening={false}
           />
         );
@@ -658,7 +639,7 @@ export default function PhotoAnnotator({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="max-w-none w-screen h-[100dvh] p-0 gap-0 border-0 rounded-none sm:rounded-none flex flex-col bg-black translate-x-0 translate-y-0 left-0 top-0"
+        className={ANNOTATOR_DIALOG_CLASS}
         data-testid="modal-photo-annotator"
       >
         {/* Top bar — pt accounts for the iPhone status bar / notch */}
@@ -697,19 +678,6 @@ export default function PhotoAnnotator({
           ref={containerRef}
           className="flex-1 relative overflow-hidden flex items-center justify-center select-none touch-none"
         >
-          {/* Temporary diagnostic strip — leaves a breadcrumb when the
-              canvas appears blank so we can tell which state we're in
-              (no src? loaded but no stage? errored?). Remove once the
-              iOS image-load path is solid. */}
-          <div className="absolute top-2 left-2 right-2 z-10 text-[10px] text-white/60 font-mono bg-black/40 px-2 py-1 rounded pointer-events-none">
-            src: {src ? `…${src.slice(-30)}` : "(empty)"} · img:{" "}
-            {image
-              ? `${image.naturalWidth}×${image.naturalHeight}`
-              : imageError
-                ? "ERR"
-                : "loading"}{" "}
-            · stage: {Math.round(stageSize.w)}×{Math.round(stageSize.h)}
-          </div>
           {/* Surface load failures instead of leaving the canvas mysteriously
               blank — saves a lot of "what's wrong?" guessing. */}
           {imageError && (
@@ -739,9 +707,6 @@ export default function PhotoAnnotator({
               height={stageSize.h}
               style={{ touchAction: "none" }}
               onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
             >
               <Layer>
                 <KonvaImage
