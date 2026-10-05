@@ -39,6 +39,8 @@ export type AnnotationShape =
       y: number;
       text: string;
       fontSize: number;
+      boxWidth?: number;
+      boxHeight?: number;
     });
 
 const XML_ENTITIES: Record<string, string> = {
@@ -146,8 +148,10 @@ function shapeToSvg(
         text: s.text,
         imageWidthPx: W,
         imageHeightPx: H,
+        boxWidthNorm: s.boxWidth,
+        boxHeightNorm: s.boxHeight,
       });
-      if (frame.lines.length === 0) return "";
+      if (frame.visibleLines.length === 0) return "";
       // Konva strokes glyph outlines when stroke + strokeWidth are set; SVG
       // equivalent uses paint-order="stroke fill" so the fill sits on top of
       // a thin black outline — keeps text legible on any background.
@@ -155,7 +159,7 @@ function shapeToSvg(
       // Konva positions text by top-left; SVG <text> uses the baseline. The
       // first line shifts down by ~fontSize so it stays where a short label
       // used to sit. Further lines step by the same line height the editor uses.
-      const tspans = frame.lines
+      const tspans = frame.visibleLines
         .map((line, i) => {
           const baseline = frame.yPx + frame.fontSizePx + i * frame.lineHeightPx;
           return `<tspan x="${frame.xPx}" y="${baseline}">${escapeXml(line)}</tspan>`;

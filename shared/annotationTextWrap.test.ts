@@ -110,4 +110,22 @@ describe("annotationTextFrame", () => {
     assert.ok(bottom <= 1000, `ran off bottom: ${bottom}`);
     assert.ok(frame.yPx < 920);
   });
+
+  it("uses an explicit box width for wrapping and keeps that position", () => {
+    const frame = annotationTextFrame({
+      xNorm: 0.2,
+      yNorm: 0.15,
+      fontSizeNorm: 0.04,
+      text: "Power lines through the canopy, do not climb, use the bucket truck from the drive",
+      imageWidthPx: 1000,
+      imageHeightPx: 1200,
+      boxWidthNorm: 0.3,
+      boxHeightNorm: 0.2,
+    });
+    assert.equal(frame.xPx, 200);
+    assert.equal(frame.yPx, 150);
+    assert.ok(Math.abs(frame.widthPx - 300) < 1);
+    assert.ok(frame.lines.length > 1);
+    assert.ok(frame.visibleLines.length >= 1);
+  });
 });
