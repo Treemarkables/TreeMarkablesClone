@@ -95,6 +95,7 @@ import {
   savePhotoAnnotation,
   fetchPhotoAnnotationsBatch,
 } from "@/lib/photoAnnotations";
+import { applyAnnotationBatch } from "@/lib/photoAnnotationLookup";
 import { MdStickyNote2, MdEmail } from "react-icons/md";
 
 // ── Email-thread helpers ────────────────────────────────────────────────────
@@ -1422,16 +1423,26 @@ export function JobDiarySection({
     fetchPhotoAnnotationsBatch(missing)
       .then((map) => {
         if (cancelled) return;
-        setAnnotationsByUrl((m) => {
-          const next = { ...m };
-          for (const url of missing) {
-            const rec = map[url];
-            next[url] = rec
-              ? { annotatedUrl: rec.annotatedUrl, shapes: rec.annotations }
-              : { annotatedUrl: null, shapes: [] };
-          }
-          return next;
-        });
+        setAnnotationsByUrl((m) =>
+          applyAnnotationBatch(
+            m,
+            missing,
+            Object.fromEntries(
+              missing.map((url) => {
+                const rec = map[url];
+                if (!rec) return [url, undefined];
+                return [
+                  url,
+                  {
+                    annotatedUrl: rec.annotatedUrl,
+                    shapes: Array.isArray(rec.annotations) ? rec.annotations : [],
+                  },
+                ];
+              }),
+            ),
+            () => ({ annotatedUrl: null, shapes: [] }),
+          ),
+        );
       })
       .catch(() => {
         // Network errors shouldn't break the thumbnails — just leave them
@@ -3449,7 +3460,7 @@ export function JobDiarySection({
                                 return (
                                   <div className="mt-2">
                                     <img
-                                      src={url}
+                                      src={resolveDisplayUrl(url)}
                                       alt="Job photo"
                                       loading="lazy"
                                       className="max-w-[64px] h-auto max-h-[64px] rounded-lg cursor-pointer hover-elevate object-contain"
@@ -3482,7 +3493,7 @@ export function JobDiarySection({
                                   {entryPhotos.map((url, i) => (
                                     <img
                                       key={`${entry.id}-${i}`}
-                                      src={url}
+                                      src={resolveDisplayUrl(url)}
                                       alt={`Job photo ${i + 1}`}
                                       loading="lazy"
                                       className="w-full aspect-square object-contain rounded-lg cursor-pointer hover-elevate bg-gray-100 dark:bg-gray-800"
@@ -4244,12 +4255,13 @@ export function JobDiarySection({
           // and the shapes can be re-edited in place.
           src={currentSourceUrl ?? ""}
           initialAnnotations={currentAnnotation?.shapes ?? null}
-          onSave={async ({ annotations }) => {
+          onSave={async ({ annotations, stageWidth }) => {
             if (!currentSourceUrl) return;
             try {
               const rec = await savePhotoAnnotation({
                 sourceUrl: currentSourceUrl,
                 annotations,
+                stageWidth,
                 annotatedBy:
                   currentUser?.firstName && currentUser?.lastName
                     ? `${currentUser.firstName} ${currentUser.lastName}`
@@ -4263,7 +4275,7 @@ export function JobDiarySection({
                   annotatedUrl: rec.annotatedUrl
                     ? `${rec.annotatedUrl}?t=${Date.now()}`
                     : null,
-                  shapes: rec.annotations,
+                  shapes: Array.isArray(rec.annotations) ? rec.annotations : annotations,
                 },
               }));
             } catch (err) {
@@ -4272,6 +4284,9 @@ export function JobDiarySection({
                 description: err instanceof Error ? err.message : String(err),
                 variant: "destructive",
               });
+              // PhotoAnnotator only stays open when this rejects. Swallowing
+              // the error closed the editor and left the original photo up.
+              throw err;
             }
           }}
         />
