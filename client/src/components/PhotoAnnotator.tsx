@@ -100,6 +100,8 @@ export interface PhotoAnnotatorProps {
    *  tainted-canvas territory entirely. */
   onSave: (payload: {
     annotations: AnnotationShape[];
+    /** Stage width in CSS pixels, so the server can scale screen-pixel strokes. */
+    stageWidth: number;
   }) => Promise<void> | void;
 }
 
@@ -235,6 +237,9 @@ export default function PhotoAnnotator({
   // The stroke under the finger. Updated synchronously so a move or lift
   // that arrives before React re-renders still belongs to this symbol.
   const activeStrokeRef = useRef<ActiveStroke<AnnotationShape> | null>(null);
+  // Once the user draws, a late annotation fetch must not replace the canvas
+  // with the (still empty) server copy.
+  const editedRef = useRef(false);
 
   // Text overlay state — separate from shapes until committed
   const [textEditing, setTextEditing] = useState<{
@@ -244,14 +249,18 @@ export default function PhotoAnnotator({
     value: string;
   } | null>(null);
 
-  // Reset on open
+  // Load saved shapes when the editor opens. Skip once the user has drawn,
+  // or a prefetch that resolves mid-stroke wipes the marks before Save.
   useEffect(() => {
-    if (open) {
-      setShapes(initialAnnotations ?? []);
-      activeStrokeRef.current = null;
-      setDrafting(null);
-      setTextEditing(null);
+    if (!open) {
+      editedRef.current = false;
+      return;
     }
+    if (editedRef.current) return;
+    setShapes(initialAnnotations ?? []);
+    activeStrokeRef.current = null;
+    setDrafting(null);
+    setTextEditing(null);
   }, [open, initialAnnotations]);
 
   // --- coord helpers: normalize against width so x and y share a denominator
@@ -328,6 +337,7 @@ export default function PhotoAnnotator({
         : `${Date.now()}-${Math.random()}`;
 
     if (tool === "text") {
+      editedRef.current = true;
       const pos = fromNorm(p.x, p.y);
       setTextEditing({ id, px: pos.x, py: pos.y, value: "" });
       return;
@@ -374,6 +384,7 @@ export default function PhotoAnnotator({
     }
     if (!shape) return;
 
+    editedRef.current = true;
     activeStrokeRef.current = { pointerId, draft: shape };
     setDrafting(shape);
     if (pointerId != null) {
@@ -455,8 +466,14 @@ export default function PhotoAnnotator({
     setTextEditing(null);
   };
 
-  const undo = () => setShapes((s) => s.slice(0, -1));
-  const clearAll = () => setShapes([]);
+  const undo = () => {
+    editedRef.current = true;
+    setShapes((s) => s.slice(0, -1));
+  };
+  const clearAll = () => {
+    editedRef.current = true;
+    setShapes([]);
+  };
 
   // --- save
   // Server bakes the composite PNG from the shape JSON (see
@@ -469,7 +486,34 @@ export default function PhotoAnnotator({
     setSaving(true);
     setSaveError(null);
     try {
-      await onSave({ annotations: shapes });
+      // Include the stroke still under the finger and text that hasn't
+      // blurred yet. Both live outside `shapes` until the next render, so
+      // reading state alone drops the mark the user just made.
+      const pending: AnnotationShape[] = [...shapes];
+      const active = activeStrokeRef.current;
+      if (
+        active &&
+        isSignificant(active.draft) &&
+        !pending.some((shape) => shape.id === active.draft.id)
+      ) {
+        pending.push(active.draft);
+      }
+      if (textEditing) {
+        const value = textEditing.value.trim();
+        if (value) {
+          const n = toNorm(textEditing.px, textEditing.py);
+          pending.push({
+            type: "text",
+            id: textEditing.id,
+            x: n.x,
+            y: n.y,
+            text: value,
+            color,
+            fontSize: 0.04,
+          });
+        }
+      }
+      await onSave({ annotations: pending, stageWidth: stageSize.w });
       onClose();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));

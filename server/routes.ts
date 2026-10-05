@@ -205,6 +205,11 @@ import { renderBrandedEmail, renderInvoiceEmail } from "./emailTemplates";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter, type BeforeAfterBranding } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
+import {
+  deletePhotoAnnotation,
+  findPhotoAnnotations,
+  upsertPhotoAnnotation,
+} from "./photoAnnotationStore";
 import { renderSiteMapSnapshot, renderImageSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
@@ -18475,9 +18480,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         }
 
         // Composite the annotations onto the source via sharp + SVG overlay.
+        // stageWidth is the editor stage in CSS pixels so a 4px stroke is
+        // scaled onto the full-resolution photo instead of staying 4px tall.
+        const stageWidthRaw = Number(req.body?.stageWidth);
+        const stageWidth =
+          Number.isFinite(stageWidthRaw) && stageWidthRaw > 1 ? stageWidthRaw : undefined;
         const bakedBuffer = await bakeAnnotations(
           downloaded.buffer,
           annotations as AnnotationShape[],
+          { stageWidth },
         );
 
         // Write the baked PNG to GCS at a deterministic filename derived from
@@ -18508,24 +18519,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           'Unknown';
 
         // Upsert by sourceUrl — second-and-later saves update in place.
-        const [row] = await db
-          .insert(schema.photoAnnotations)
-          .values({
-            sourceUrl,
-            annotations: annotations as any,
-            annotatedUrl: servedUrl,
-            annotatedBy,
-          })
-          .onConflictDoUpdate({
-            target: schema.photoAnnotations.sourceUrl,
-            set: {
-              annotations: annotations as any,
-              annotatedUrl: servedUrl,
-              annotatedBy,
-              updatedAt: new Date(),
-            },
-          })
-          .returning();
+        // withTenant stamps business_id so RLS keeps the row (see photoAnnotationStore).
+        const row = await upsertPhotoAnnotation({
+          sourceUrl,
+          annotations,
+          annotatedUrl: servedUrl,
+          annotatedBy,
+        });
 
         console.log(`✅ Baked annotations for ${sourceUrl} → ${servedUrl} (by ${annotatedBy})`);
         return res.json({ success: true, annotation: row });
@@ -18547,11 +18547,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (!sourceUrl) {
         return res.status(400).json({ success: false, message: 'Missing sourceUrl' });
       }
-      const [row] = await db
-        .select()
-        .from(schema.photoAnnotations)
-        .where(eq(schema.photoAnnotations.sourceUrl, sourceUrl))
-        .limit(1);
+      const [row] = await findPhotoAnnotations([sourceUrl]);
       return res.json({ success: true, annotation: row ?? null });
     } catch (error) {
       console.error('Error fetching photo annotation:', error);
@@ -18575,10 +18571,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (sourceUrls.length === 0) {
         return res.json({ success: true, annotations: {} });
       }
-      const rows = await db
-        .select()
-        .from(schema.photoAnnotations)
-        .where(inArray(schema.photoAnnotations.sourceUrl, sourceUrls));
+      const rows = await findPhotoAnnotations(sourceUrls);
       const annotations: Record<string, typeof rows[number]> = {};
       for (const row of rows) {
         annotations[row.sourceUrl] = row;
@@ -18624,9 +18617,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         }
       }
 
-      await db
-        .delete(schema.photoAnnotations)
-        .where(eq(schema.photoAnnotations.sourceUrl, sourceUrl));
+      await deletePhotoAnnotation(sourceUrl);
 
       return res.json({ success: true });
     } catch (error) {

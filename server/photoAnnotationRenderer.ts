@@ -11,6 +11,7 @@
 
 import sharp from "sharp";
 import { annotationTextFrame } from "@shared/annotationTextWrap";
+import { annotationMarkStrokePx } from "./photoAnnotationStroke";
 
 type ShapeBase = { id: string; color: string };
 type StrokedBase = ShapeBase & { strokeWidth: number };
@@ -54,8 +55,17 @@ const escapeXml = (s: string): string =>
 // client's convention — see PhotoAnnotator's coord-helper comment). So both
 // x and y multiply by `W`, not separate width/height. Distances and radii
 // likewise scale with W.
-function shapeToSvg(s: AnnotationShape, W: number, H: number): string {
+function shapeToSvg(
+  s: AnnotationShape,
+  W: number,
+  H: number,
+  stageWidth?: number,
+): string {
   const px = (n: number) => n * W;
+  const stroke =
+    "strokeWidth" in s
+      ? annotationMarkStrokePx(s.strokeWidth, W, stageWidth)
+      : 1;
 
   switch (s.type) {
     case "pen": {
@@ -66,7 +76,7 @@ function shapeToSvg(s: AnnotationShape, W: number, H: number): string {
       }
       return (
         `<polyline points="${pts.join(" ")}" stroke="${s.color}" ` +
-        `stroke-width="${s.strokeWidth}" fill="none" ` +
+        `stroke-width="${stroke}" fill="none" ` +
         `stroke-linecap="round" stroke-linejoin="round"/>`
       );
     }
@@ -81,9 +91,11 @@ function shapeToSvg(s: AnnotationShape, W: number, H: number): string {
       const len = Math.hypot(dx, dy);
       if (len < 1) return "";
 
-      // Match the Konva arrowhead geometry from the client.
-      const headLen = Math.max(10, s.strokeWidth * 3);
-      const headW = Math.max(10, s.strokeWidth * 3);
+      // Match the Konva arrowhead geometry from the client (screen pixels),
+      // then scale with the stroke so the head survives the full-resolution bake.
+      const head = annotationMarkStrokePx(Math.max(10, s.strokeWidth * 3), W, stageWidth);
+      const headLen = head;
+      const headW = head;
       const ux = dx / len;
       const uy = dy / len;
       const baseX = x2 - ux * headLen;
@@ -99,7 +111,7 @@ function shapeToSvg(s: AnnotationShape, W: number, H: number): string {
       // Line stops at the head's base so it doesn't poke through the triangle.
       return (
         `<line x1="${x1}" y1="${y1}" x2="${baseX}" y2="${baseY}" ` +
-        `stroke="${s.color}" stroke-width="${s.strokeWidth}" stroke-linecap="round"/>` +
+        `stroke="${s.color}" stroke-width="${stroke}" stroke-linecap="round"/>` +
         `<polygon points="${x2},${y2} ${leftX},${leftY} ${rightX},${rightY}" fill="${s.color}"/>`
       );
     }
@@ -115,14 +127,14 @@ function shapeToSvg(s: AnnotationShape, W: number, H: number): string {
       const ny = h < 0 ? y + h : y;
       return (
         `<rect x="${nx}" y="${ny}" width="${Math.abs(w)}" height="${Math.abs(h)}" ` +
-        `stroke="${s.color}" stroke-width="${s.strokeWidth}" fill="none"/>`
+        `stroke="${s.color}" stroke-width="${stroke}" fill="none"/>`
       );
     }
 
     case "circle": {
       return (
         `<circle cx="${px(s.x)}" cy="${px(s.y)}" r="${px(s.r)}" ` +
-        `stroke="${s.color}" stroke-width="${s.strokeWidth}" fill="none"/>`
+        `stroke="${s.color}" stroke-width="${stroke}" fill="none"/>`
       );
     }
 
@@ -166,6 +178,7 @@ function shapeToSvg(s: AnnotationShape, W: number, H: number): string {
 export async function bakeAnnotations(
   sourceBuffer: Buffer,
   shapes: AnnotationShape[],
+  options?: { stageWidth?: number },
 ): Promise<Buffer> {
   if (shapes.length === 0) {
     return sharp(sourceBuffer).png().toBuffer();
@@ -182,7 +195,7 @@ export async function bakeAnnotations(
 
   const overlaySvg =
     `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">` +
-    shapes.map((s) => shapeToSvg(s, width, height)).join("") +
+    shapes.map((s) => shapeToSvg(s, width, height, options?.stageWidth)).join("") +
     `</svg>`;
 
   return sharp(rotated)
