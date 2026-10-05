@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import sharp from "sharp";
 import { bakeAnnotations } from "./photoAnnotationRenderer.ts";
+import { annotationMarkStrokePx } from "./photoAnnotationStroke.ts";
 
 async function rgbAt(
   png: Buffer,
@@ -95,5 +96,96 @@ describe("bakeAnnotations stroke scale", () => {
     assert.equal(isRed(await rgbAt(baked, 90, 20)), true);
     assert.equal(isRed(await rgbAt(baked, 90, 26)), true);
     assert.equal(isWhite(await rgbAt(baked, 90, 50)), true);
+  });
+
+  it("paints an arrow shaft, not only the head, and keeps it on the same pixels", async () => {
+    const width = 400;
+    const height = 300;
+    const stageWidth = 100;
+    const source = await sharp({
+      create: {
+        width,
+        height,
+        channels: 3,
+        background: { r: 255, g: 255, b: 255 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    // Horizontal arrow. y is a fraction of WIDTH: 0.4 * 400 = row 160.
+    // Head is max(10, 4*3) = 12 screen px → 12/100*400 = 48 image px.
+    // The shaft midpoint sits well before that triangle.
+    const stroke = 4;
+    const head = annotationMarkStrokePx(Math.max(10, stroke * 3), width, stageWidth);
+    const x1 = 0.1 * width;
+    const x2 = 0.9 * width;
+    const y = 0.4 * width;
+    const shaftMidX = Math.round((x1 + (x2 - head)) / 2);
+    const shaftMidY = Math.round(y);
+
+    const arrow = {
+      type: "arrow" as const,
+      id: "arrow",
+      color: "#FF0000",
+      strokeWidth: stroke,
+      points: [0.1, 0.4, 0.9, 0.4] as [number, number, number, number],
+    };
+
+    const baked = await bakeAnnotations(source, [arrow], { stageWidth });
+
+    assert.equal(isRed(await rgbAt(baked, shaftMidX, shaftMidY)), true);
+    assert.equal(isWhite(await rgbAt(baked, shaftMidX, shaftMidY + 24)), true);
+    assert.equal(isRed(await rgbAt(baked, Math.round(x2 - 4), shaftMidY)), true);
+    assert.ok(x2 - head > x1 + 10);
+    assert.ok(shaftMidX < x2 - head);
+
+    const stub = await bakeAnnotations(
+      source,
+      [
+        {
+          ...arrow,
+          id: "stub",
+          points: [0.5, 0.4, 0.5, 0.4],
+        },
+      ],
+      { stageWidth },
+    );
+    assert.equal(isWhite(await rgbAt(stub, Math.round(0.5 * width), shaftMidY)), true);
+  });
+
+  it("scales a thicker stroke and a circle, and keeps a second colour", async () => {
+    const source = await sharp({
+      create: {
+        width: 200,
+        height: 200,
+        channels: 3,
+        background: { r: 255, g: 255, b: 255 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const baked = await bakeAnnotations(
+      source,
+      [
+        {
+          type: "circle",
+          id: "ring",
+          color: "#0000FF",
+          strokeWidth: 8,
+          x: 0.5,
+          y: 0.5,
+          r: 0.2,
+        },
+      ],
+      { stageWidth: 50 },
+    );
+
+    // Centre (100, 100). Radius 0.2 * 200 = 40. Stroke 8/50*200 = 32,
+    // so a pixel 40px right of centre is inside the ring, and the hole is white.
+    const ring = await rgbAt(baked, 140, 100);
+    assert.equal(ring[2] > 180 && ring[0] < 80, true);
+    assert.equal(isWhite(await rgbAt(baked, 100, 100)), true);
   });
 });
