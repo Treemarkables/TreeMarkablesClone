@@ -30,6 +30,8 @@ import type { DocumentTemplate, Customer, Proposal, DocumentBlock } from "@share
 import { DEFAULT_PROPOSAL_BLOCKS } from "@shared/schema";
 import { proposalAcceptLink } from "@shared/customerLinks";
 import { lineItemsForNewProposal } from "./proposalCreateLineItems";
+import { mergeJobLinesIntoProposalBlocks } from "./proposalEditLineItems";
+import { tryAcquireSend } from "@shared/proposalSend";
 
 // Minimal typed interfaces for browser SpeechRecognition (not in TypeScript lib by default)
 interface SpeechRecognitionAlternative { readonly transcript: string; }
@@ -1449,6 +1451,9 @@ export function ProposalBuilderV2({
   const initCreateRef = useRef(false);
   const initEditRef = useRef<string | null>(null);
   const editHasLineItemsRef = useRef(false);
+  // First load of a saved proposal is the baseline. Don't auto-save it —
+  // that rewrite is what duplicated lines when it overlapped with Send.
+  const takeEditBaseline = useRef(false);
   // Create-mode prefill: the starter line item to open in the editor, and the
   // original URLs of auto-added job photos (for the annotated-PNG swap).
   const [autoEditItemId, setAutoEditItemId] = useState<string | null>(null);
@@ -1461,6 +1466,7 @@ export function ProposalBuilderV2({
       initCreateRef.current = false;
       initEditRef.current = null;
       editHasLineItemsRef.current = false;
+      takeEditBaseline.current = false;
       autoPhotoSourcesRef.current = [];
       setAutoEditItemId(null);
       setDraftId(null);
@@ -1579,56 +1585,43 @@ export function ProposalBuilderV2({
         };
       });
 
-      // Auto-import job line items if any Line Items block is empty and the job has items
+      // Job lines are only a seed when this proposal has none of its own.
+      // Never copy them onto a saved proposal — that doubled Job 4208.
       const jobLineItems: IncomingLineItemRaw[] = Array.isArray((job as { lineItems?: IncomingLineItemRaw[] } | null)?.lineItems)
         ? ((job as { lineItems: IncomingLineItemRaw[] }).lineItems)
         : [];
-      if (jobLineItems.length > 0 && !editHasLineItemsRef.current) {
-        const filled = loadedBlocks.map((b) => {
-          const normTitle = b.title.toLowerCase();
-          const isLineItemsBlock =
-            b.type === "lineItems" ||
-            normTitle.includes("line item") ||
-            normTitle === "items" ||
-            normTitle === "pricing" ||
-            normTitle === "services" ||
-            normTitle === "quote";
-          if (isLineItemsBlock && b.lineItems.length === 0) {
-            const imported: LineItem[] = jobLineItems.map((item, idx) => {
-              const qty = parseFloat(String(item.quantity ?? 1)) || 1;
-              const rawTotal = parseFloat(String(
-                (item as { totalPrice?: string | number }).totalPrice ??
-                (item as { total?: string | number }).total ??
-                item.price ?? 0
-              )) || 0;
-              const rawUnit = parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0;
-              const unitPrice = rawUnit || (rawTotal > 0 ? rawTotal / qty : 0);
-              const total = rawTotal || (qty * unitPrice);
-              return {
-                id: item.id || `import-${idx}`,
-                description: item.description || item.name || "",
-                quantity: qty,
-                unitPrice,
-                totalPrice: total || qty * unitPrice,
-                unit: item.unit || "each",
-                category: item.category || item.itemCode || "",
-                isOptional: item.isOptional || false,
-                selected: true,
-                pricingType: item.pricingType || "normal",
-                choices: item.choices || [],
-                priceIncludesTax: item.priceIncludesTax || false,
-                costPrice: parseFloat(String(item.costPrice ?? 0)) || unitPrice,
-                markupPct: parseFloat(String(item.markupPct ?? 0)) || 0,
-              };
-            });
-            return { ...b, lineItems: imported };
-          }
-          return b;
-        });
-        setBlocks(filled);
-      } else {
-        setBlocks(loadedBlocks);
-      }
+      const imported: LineItem[] = jobLineItems.map((item, idx) => {
+        const qty = parseFloat(String(item.quantity ?? 1)) || 1;
+        const rawTotal = parseFloat(String(
+          (item as { totalPrice?: string | number }).totalPrice ??
+          (item as { total?: string | number }).total ??
+          item.price ?? 0
+        )) || 0;
+        const rawUnit = parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0;
+        const unitPrice = rawUnit || (rawTotal > 0 ? rawTotal / qty : 0);
+        const total = rawTotal || (qty * unitPrice);
+        return {
+          id: item.id || `import-${idx}`,
+          description: item.description || item.name || "",
+          quantity: qty,
+          unitPrice,
+          totalPrice: total || qty * unitPrice,
+          unit: item.unit || "each",
+          category: item.category || item.itemCode || "",
+          isOptional: item.isOptional || false,
+          selected: true,
+          pricingType: item.pricingType || "normal",
+          choices: item.choices || [],
+          priceIncludesTax: item.priceIncludesTax || false,
+          costPrice: parseFloat(String(item.costPrice ?? 0)) || unitPrice,
+          markupPct: parseFloat(String(item.markupPct ?? 0)) || 0,
+        };
+      });
+      const merged = mergeJobLinesIntoProposalBlocks(loadedBlocks, imported);
+      setBlocks(loadedBlocks.map((block, index) => (
+        merged[index].lineItems === block.lineItems ? block : { ...block, lineItems: merged[index].lineItems }
+      )));
+      takeEditBaseline.current = true;
     }
   }, [existingData, job, mode, isOpen, proposalId]);
 
@@ -1895,6 +1888,13 @@ export function ProposalBuilderV2({
   const latestPayloadRef = useRef<ReturnType<typeof buildPayload> | null>(null);
   const latestSnapshotRef = useRef<string | null>(null);
   const latestDraftIdRef = useRef<string | null>(null);
+  // Saves run one at a time so auto-save and Send cannot both insert lines.
+  const saveTail = useRef<Promise<void>>(Promise.resolve());
+  function enqueueSave<T>(fn: () => Promise<T>): Promise<T> {
+    const run = saveTail.current.then(fn, fn);
+    saveTail.current = run.then(() => undefined, () => undefined);
+    return run;
+  }
 
   useEffect(() => {
     if (!isOpen || blocks.length === 0) return;
@@ -1906,6 +1906,12 @@ export function ProposalBuilderV2({
     latestSnapshotRef.current = snap;
     latestPayloadRef.current = buildPayload();
     latestDraftIdRef.current = draftId ?? null;
+    if (takeEditBaseline.current) {
+      takeEditBaseline.current = false;
+      lastSnapshot.current = snap;
+      setAutoSaveStatus("saved");
+      return;
+    }
     if (snap === lastSnapshot.current) return;
     // Auto-save only takes over after the user has committed once with the
     // Save button (or opened an existing record in edit mode, which seeds
@@ -1917,16 +1923,19 @@ export function ProposalBuilderV2({
     }
     setAutoSaveStatus("unsaved");
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(async () => {
-      const hasContent = proposalTitle || blocks.some((b) => b.description || b.photos.length > 0 || b.lineItems.length > 0);
-      if (!hasContent) return;
-      setAutoSaveStatus("saving");
-      try {
-        await saveDraftMutation.mutateAsync(buildPayload());
-        lastSnapshot.current = snap;
-      } catch {
-        // handled in mutation
-      }
+    autoSaveTimer.current = setTimeout(() => {
+      void enqueueSave(async () => {
+        if (lastSnapshot.current === snap) return;
+        const hasContent = proposalTitle || blocks.some((b) => b.description || b.photos.length > 0 || b.lineItems.length > 0);
+        if (!hasContent) return;
+        setAutoSaveStatus("saving");
+        try {
+          await saveDraftMutation.mutateAsync(buildPayload());
+          lastSnapshot.current = snap;
+        } catch {
+          // handled in mutation
+        }
+      });
     }, 2000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2008,30 +2017,37 @@ export function ProposalBuilderV2({
   }, [onRequestJobSave, jobId, toast]);
 
   const ensureDraftSaved = useCallback(async (): Promise<string | null> => {
-    // Always flush the latest state before sending — auto-save only watches
-    // blocks/title, so a discount-only (or deposit-only) change may not have
-    // been persisted yet. Previously this returned early when a draftId already
-    // existed, which meant the email/live link went out with stale totals and
-    // the applied discount silently vanished.
-    const resolvedJobId = draftId ? jobId || null : await ensureJobSaved();
-    if (!draftId && onRequestJobSave && !resolvedJobId) return null;
-    setAutoSaveStatus("saving");
-    try {
-      const payload = buildPayload();
-      const res = await saveDraftMutation.mutateAsync({ ...payload, jobId: resolvedJobId || payload.jobId });
-      const id = res?.data?.id || res?.id || draftId;
-      if (id) {
-        if (!draftId) setDraftId(id);
-        return id;
-      }
-    } catch {
-      toast({ title: "Save Failed", description: "Could not save proposal.", variant: "destructive" });
-      // For an existing draft, let the send proceed with what's already saved
-      // rather than blocking entirely.
-      return draftId;
+    // Flush unsaved edits before sending so a discount-only change is not
+    // left behind. An unchanged proposal is not written again — resend must
+    // not touch the line items or the total.
+    const snap = JSON.stringify({ blocks, proposalTitle, discountAmount, discountType, depositType, depositValue, validUntil });
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
     }
-    return draftId;
-  }, [draftId, ensureJobSaved, buildPayload, saveDraftMutation, onRequestJobSave, toast, jobId]);
+    return enqueueSave(async () => {
+      if (draftId && snap === lastSnapshot.current) return draftId;
+      const resolvedJobId = draftId ? jobId || null : await ensureJobSaved();
+      if (!draftId && onRequestJobSave && !resolvedJobId) return null;
+      setAutoSaveStatus("saving");
+      try {
+        const payload = buildPayload();
+        const res = await saveDraftMutation.mutateAsync({ ...payload, jobId: resolvedJobId || payload.jobId });
+        const id = res?.data?.id || res?.id || draftId;
+        if (id) {
+          lastSnapshot.current = snap;
+          if (!draftId) setDraftId(id);
+          return id;
+        }
+      } catch {
+        toast({ title: "Save Failed", description: "Could not save proposal.", variant: "destructive" });
+        // For an existing draft, let the send proceed with what's already saved
+        // rather than blocking entirely.
+        return draftId;
+      }
+      return draftId;
+    });
+  }, [blocks, proposalTitle, discountAmount, discountType, depositType, depositValue, validUntil, draftId, ensureJobSaved, buildPayload, saveDraftMutation, onRequestJobSave, toast, jobId]);
 
   const handleDownloadPdf = useCallback(async () => {
     setDownloadingPdf(true);
@@ -2088,7 +2104,15 @@ export function ProposalBuilderV2({
     });
   }, [customer, job, draftId, grandTotal, isQuote]);
 
+  const emailSendBusy = useRef(false);
+  const smsSendBusy = useRef(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [smsSending, setSmsSending] = useState(false);
+
   const handleSendEmail = async () => {
+    if (!tryAcquireSend(emailSendBusy)) return;
+    setEmailSending(true);
+    try {
     if (!emailForm.to.trim() || !emailForm.subject.trim()) {
       toast({ title: "Missing Information", description: "Please enter recipient email and subject.", variant: "destructive" });
       return;
@@ -2101,9 +2125,16 @@ export function ProposalBuilderV2({
     const effectiveDraftId = await ensureDraftSaved();
     if (!effectiveDraftId) return;
     await sendEmailMutation.mutateAsync({ proposalId: effectiveDraftId, to: emailForm.to, subject: emailForm.subject, message: emailForm.message, cc: emailForm.cc });
+    } finally {
+      emailSendBusy.current = false;
+      setEmailSending(false);
+    }
   };
 
   const handleSendSms = async () => {
+    if (!tryAcquireSend(smsSendBusy)) return;
+    setSmsSending(true);
+    try {
     if (!smsForm.to.trim() || !smsForm.message.trim()) {
       toast({ title: "Missing Information", description: "Please enter phone number and message.", variant: "destructive" });
       return;
@@ -2127,6 +2158,10 @@ export function ProposalBuilderV2({
       customerId: resolvedCustomerId,
       proposalId: effectiveDraftId || undefined,
     });
+    } finally {
+      smsSendBusy.current = false;
+      setSmsSending(false);
+    }
   };
 
   const handleClose = async () => {
@@ -2807,8 +2842,8 @@ export function ProposalBuilderV2({
               </div>
               <div className="flex gap-2 mt-4">
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setShowEmailDialog(false)}>Cancel</Button>
-                <Button type="button" className="flex-1" onClick={handleSendEmail} disabled={sendEmailMutation.isPending}>
-                  {sendEmailMutation.isPending ? "Sending…" : "Send Email"}
+                <Button type="button" className="flex-1" onClick={handleSendEmail} disabled={emailSending || sendEmailMutation.isPending}>
+                  {emailSending || sendEmailMutation.isPending ? "Sending…" : "Send Email"}
                 </Button>
               </div>
             </div>
@@ -2844,8 +2879,8 @@ export function ProposalBuilderV2({
               </div>
               <div className="flex gap-2 mt-4">
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setShowSmsDialog(false)}>Cancel</Button>
-                <Button type="button" className="flex-1" onClick={handleSendSms} disabled={sendSmsMutation.isPending}>
-                  {sendSmsMutation.isPending ? "Sending…" : "Send SMS"}
+                <Button type="button" className="flex-1" onClick={handleSendSms} disabled={smsSending || sendSmsMutation.isPending}>
+                  {smsSending || sendSmsMutation.isPending ? "Sending…" : "Send SMS"}
                 </Button>
               </div>
             </div>

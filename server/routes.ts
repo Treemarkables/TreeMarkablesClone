@@ -24,6 +24,8 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
+import { clearProposalContent, withProposalContentLock } from "./proposalContentLock";
+import { beginProposalSend, releaseProposalSend } from "./proposalSendClaim";
 import { clientSafeErrorText } from "./httpErrorText";
 import { buildTodayOverview, createTodayExtraInstruction, deleteTodayExtraInstruction, HttpError } from "./todayOverview";
 import { loadEffectiveRiskLinksForJobs, loadRiskLinksForJobs, recordRiskAssessmentChecklistDone } from "./jhaJobRisk";
@@ -11629,9 +11631,22 @@ Return only the rewritten description, nothing else.`,
       console.log('📧 EMAIL HTML CONTENT:', htmlContent);
       console.log('📧 EMAIL TEXT CONTENT:', `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our services.'}`);
 
+      const sendClaim = await beginProposalSend(proposalId, 'email', String(to));
+      if (sendClaim === 'duplicate') {
+        console.log(`📧 Suppressed duplicate proposal email for ${proposalId} → ${to}`);
+        return res.json({
+          success: true,
+          deduped: true,
+          message: 'Proposal email already sent',
+          data: { proposalId, proposalNumber, recipient: to, sentAt: new Date().toISOString() },
+        });
+      }
+
       // Send email using EmailService (photos are hosted URLs, no attachments needed)
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
-      const emailResult = await emailService.sendEmail({
+      let emailResult;
+      try {
+      emailResult = await emailService.sendEmail({
         to,
         cc,
         fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
@@ -11641,8 +11656,13 @@ Return only the rewritten description, nothing else.`,
         jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
         jobNumber: job?.jobNumber // Fallback if no id (legacy numeric alias)
       });
+      } catch (sendError) {
+        await releaseProposalSend(proposalId, 'email', String(to));
+        throw sendError;
+      }
 
       if (!emailResult.success) {
+        await releaseProposalSend(proposalId, 'email', String(to));
         return res.status(500).json({
           success: false,
           message: emailResult.error || 'Failed to send proposal email'
@@ -11870,7 +11890,20 @@ Return only the rewritten description, nothing else.`,
         `The quote is attached as a PDF. Or reply to this email with: I accept quote ${quoteNumber}`,
       ].join('\n\n');
 
-      const emailResult = await emailService.sendEmail({
+      const sendClaim = await beginProposalSend(proposalId, 'email', String(to));
+      if (sendClaim === 'duplicate') {
+        console.log(`📧 Suppressed duplicate quote email for ${proposalId} → ${to}`);
+        return res.json({
+          success: true,
+          deduped: true,
+          message: 'Quote email already sent',
+          data: { proposalId, quoteNumber, recipient: to, sentAt: new Date().toISOString() },
+        });
+      }
+
+      let emailResult;
+      try {
+      emailResult = await emailService.sendEmail({
         to,
         cc,
         fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
@@ -11886,8 +11919,13 @@ Return only the rewritten description, nothing else.`,
           },
         ],
       });
+      } catch (sendError) {
+        await releaseProposalSend(proposalId, 'email', String(to));
+        throw sendError;
+      }
 
       if (!emailResult.success) {
+        await releaseProposalSend(proposalId, 'email', String(to));
         return res.status(500).json({
           success: false,
           message: emailResult.error || 'Failed to send quote email',
@@ -22552,9 +22590,30 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       console.log('📱 Sending SMS via diary:', { to, message: message.substring(0, 50) + '...' });
-      
+
+      if (proposalId) {
+        const sendClaim = await beginProposalSend(String(proposalId), 'sms', String(to));
+        if (sendClaim === 'duplicate') {
+          console.log(`📱 Suppressed duplicate proposal SMS for ${proposalId} → ${to}`);
+          return res.json({
+            success: true,
+            deduped: true,
+            message: 'SMS already sent',
+          });
+        }
+      }
+
       // Send SMS using the service
-      const success = await smsService.sendSMS({ to, message });
+      let success = false;
+      try {
+        success = await smsService.sendSMS({ to, message });
+      } catch (sendError) {
+        if (proposalId) await releaseProposalSend(String(proposalId), 'sms', String(to));
+        throw sendError;
+      }
+      if (!success && proposalId) {
+        await releaseProposalSend(String(proposalId), 'sms', String(to));
+      }
       
       if (success) {
         // Save phone number to job contact and customer so reply matching works
@@ -28040,6 +28099,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const validatedData = updateProposalSchema.parse(req.body);
       const proposal = await storage.updateProposal(req.params.id, validatedData);
       
+      // One save at a time. Overlapping saves each used to insert a full copy
+      // of the lines (the second delete only removed the sections it had read).
+      await withProposalContentLock(proposal.id, async () => {
       // Delete existing sections and recreate them (simpler than updating)
       if (req.body.sections && Array.isArray(req.body.sections)) {
         console.log('📝 PUT proposal - updating sections:', {
@@ -28052,11 +28114,15 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           }))
         });
         
-        // First, delete all existing sections for this proposal
-        const existingSections = await storage.getProposalSectionsByProposal(proposal.id);
-        for (const section of existingSections) {
-          await storage.deleteProposalSection(section.id);
-        }
+        // Delete every current section and line (including ones another save
+        // just inserted, and lines whose section is already gone) before insert.
+        await clearProposalContent(proposal.id, {
+          listSections: (id) => storage.getProposalSectionsByProposal(id),
+          deleteSection: (id) => storage.deleteProposalSection(id),
+          listItems: (id) => storage.getProposalLineItemsByProposal(id),
+          deleteItemChoices: (id) => storage.deleteProposalLineItemChoicesByLineItem(id),
+          deleteItem: (id) => storage.deleteProposalLineItem(id),
+        });
 
         // NOTE: Do NOT write section[0].description back into job.description here —
         // see matching comment in POST /api/proposals. Job description is the source
@@ -28175,7 +28241,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       } catch (error) {
         console.error('❌ Error recomputing/syncing job prices (PUT):', error);
       }
-      
+      });
+
       res.json({
         success: true,
         data: proposal,
