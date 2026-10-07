@@ -133,30 +133,6 @@ interface QuotePresentationData {
   averageValue: number;
 }
 
-interface ServicePerformance {
-  id: string;
-  name: string;
-  type: "material" | "service";
-  category: string;
-  totalRevenue: number;
-  totalCost: number;
-  totalQuantity: number;
-  invoiceCount: number;
-  grossMargin: number;
-  marginPercentage: number;
-}
-
-interface ServicePerformanceData {
-  services: ServicePerformance[];
-  summary: {
-    totalRevenue: number;
-    totalCost: number;
-    grossMargin: number;
-    marginPercentage: number;
-    servicesTracked: number;
-  };
-}
-
 interface ManHoursMetrics {
   totalJobs: number;
   jobsWithEstimates: number;
@@ -171,31 +147,6 @@ interface ManHoursMetrics {
   totalActualHours: number;
   overestimatedJobs: number;
   underestimatedJobs: number;
-}
-
-interface CrewEfficiencyEmployee {
-  employeeId: string;
-  employeeName: string;
-  staffId: string | null;
-  paidHours: number;
-  billableHours: number;
-  nonBillableHours: number;
-  efficiencyRate: number;
-  status: string;
-}
-
-interface CrewEfficiencyData {
-  employees: CrewEfficiencyEmployee[];
-  totals: {
-    totalPaidHours: number;
-    totalBillableHours: number;
-    totalNonBillableHours: number;
-    overallEfficiencyRate: number;
-  };
-  period: {
-    from: string;
-    to: string;
-  };
 }
 
 interface RoleCompletionEmployee {
@@ -220,31 +171,6 @@ interface RoleCompletionData {
     completionRate: number;
   };
   period: { from: string | null; to: string | null };
-}
-
-interface StaffWorkDaysEmployee {
-  employeeId: string;
-  employeeName: string;
-  totalHours: number;
-  daysWorked: number;
-  avgHoursPerDay: number;
-  attendanceRate: number;
-}
-
-interface StaffWorkDaysData {
-  employees: StaffWorkDaysEmployee[];
-  totals: {
-    totalHours: number;
-    totalDaysWorked: number;
-    avgDaysPerEmployee: number;
-    avgAttendance: number;
-    workingDaysInPeriod: number;
-    activeEmployeeCount: number;
-  };
-  period: {
-    from: string;
-    to: string;
-  };
 }
 
 interface DispatchAISummary {
@@ -283,12 +209,7 @@ interface ChecklistUsageData {
 export default function MetricsDashboard() {
   // Role checklist usage card (Kaitiaki / Kaiwhangai / Kaitirotiro) is Treemarkables-only.
   const roleChecklistEnabled = useRoleChecklistFeature();
-  const [kpiCollapsed, setKpiCollapsed] = useState(false);
   const [manHoursCollapsed, setManHoursCollapsed] = useState(false);
-  const [servicePerformanceCollapsed, setServicePerformanceCollapsed] =
-    useState(false);
-  const [crewEfficiencyCollapsed, setCrewEfficiencyCollapsed] = useState(false);
-  const [staffWorkDaysCollapsed, setStaffWorkDaysCollapsed] = useState(false);
   const [roleCompletionCollapsed, setRoleCompletionCollapsed] = useState(false);
   const [showAdvancedMetrics, setShowAdvancedMetrics] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
@@ -784,17 +705,6 @@ export default function MetricsDashboard() {
       staleTime: 5 * 60 * 1000,
     });
 
-  // Service Performance query
-  const { data: servicePerformanceData, isLoading: servicePerformanceLoading } =
-    useQuery<ServicePerformanceData>({
-      queryKey: ["/api/analytics/service-performance"],
-      queryFn: () =>
-        fetch("/api/analytics/service-performance")
-          .then((res) => res.json())
-          .then((res) => res.data),
-      staleTime: 5 * 60 * 1000,
-    });
-
   // Unsuccessful Jobs Analytics query
   interface UnsuccessfulJobsData {
     totalUnsuccessful: number;
@@ -860,29 +770,6 @@ export default function MetricsDashboard() {
     retry: false,
   });
 
-  // Crew Efficiency query - compares billable hours vs Xero paid hours
-  const {
-    data: crewEfficiency,
-    isLoading: crewEfficiencyLoading,
-    error: crewEfficiencyError,
-  } = useQuery<CrewEfficiencyData>({
-    queryKey: ["/api/xero/payroll/efficiency", dateRange?.from, dateRange?.to],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (dateRange?.from) params.append("startDate", dateRange.from);
-      if (dateRange?.to) params.append("endDate", dateRange.to);
-      return fetch(`/api/xero/payroll/efficiency?${params}`)
-        .then((res) => res.json())
-        .then((res) => {
-          if (!res.success) throw new Error(res.message);
-          return res.data;
-        });
-    },
-    enabled: Boolean(dateRange?.from && dateRange?.to),
-    retry: false,
-    staleTime: 30000,
-  });
-
   // Role completion - how often each person finishes their role checklist.
   // Reads snapshots frozen at job close, so editing the task lists in Settings
   // doesn't rewrite past jobs.
@@ -905,31 +792,6 @@ export default function MetricsDashboard() {
     // Same tenant gate as the checklist itself — no point polling for roles a
     // tenant doesn't have.
     enabled: roleChecklistEnabled && Boolean(dateRange?.from && dateRange?.to),
-    staleTime: 30000,
-  });
-
-  // Staff Work Days query - tracks hours and days worked from Xero timesheets
-  const {
-    data: staffWorkDays,
-    isLoading: staffWorkDaysLoading,
-    error: staffWorkDaysError,
-  } = useQuery<StaffWorkDaysData | null>({
-    queryKey: ["/api/xero/payroll/work-days", dateRange?.from, dateRange?.to],
-    queryFn: async () => {
-      try {
-        const params = new URLSearchParams();
-        if (dateRange?.from) params.append("startDate", dateRange.from);
-        if (dateRange?.to) params.append("endDate", dateRange.to);
-        const res = await fetch(`/api/xero/payroll/work-days?${params}`);
-        const data = await res.json();
-        if (!data.success) return null; // Return null instead of throwing to prevent cascade errors
-        return data.data;
-      } catch {
-        return null; // Silently fail and return null
-      }
-    },
-    enabled: Boolean(dateRange?.from && dateRange?.to),
-    retry: false,
     staleTime: 30000,
   });
 
