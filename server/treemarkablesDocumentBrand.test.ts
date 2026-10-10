@@ -255,6 +255,7 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
       ...TREEMARKABLES_PUBLIC_PREFIXES,
       "/blog/hazardous-tree-removal-gisborne-5-signs-dangerous-tree",
       "/blog/why-regular-tree-pruning-protects-your-home-gisborne",
+      "/blog/flying-fox-branch-lowering-gisborne",
       "/mulch",
       "/mulch/thanks",
     ];
