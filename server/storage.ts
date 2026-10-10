@@ -330,7 +330,7 @@ export interface IStorage {
   getUninvoicedCompletedJobs(completedBetween: { from: Date; to: Date }): Promise<Job[]>;
   getJobsScheduledAroundNZDate(nzDate: string): Promise<Array<Job & { customerName: string | null }>>;
   getCompletedJobsWithCustomerNames(): Promise<Array<Job & { customerName: string | null; invoiceAmountIncGst: number | null }>>;
-  getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean; sort?: "createdAt" | "recentActivity" }): Promise<{ jobs: Job[]; total: number }>;
+  getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }, sort?: "recentActivity"): Promise<{ jobs: Job[]; total: number }>;
   searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
   createJobFromCall(params: {
     callId: string;
@@ -2118,7 +2118,7 @@ class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean; sort?: "createdAt" | "recentActivity" }): Promise<{ jobs: Job[]; total: number }> {
+  async getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }, sort?: "recentActivity"): Promise<{ jobs: Job[]; total: number }> {
     const limit = options?.limit ?? 10; // Default to 10 jobs
     const offset = options?.offset ?? 0;
     
@@ -2162,7 +2162,7 @@ class DatabaseStorage implements IStorage {
     // Keep the columns in sync with shared/dispatchJobOrder.ts.
     // The builders below are only joined into the query for that sort. Other
     // callers still order by created_at and do not run these scans.
-    const sortByRecentActivity = options?.sort === "recentActivity";
+    const sortByRecentActivity = sort === "recentActivity";
     const diaryLatest = db
       .select({
         jobId: schema.jobDiaryEntries.jobId,

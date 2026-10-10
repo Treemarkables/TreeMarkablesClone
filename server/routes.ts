@@ -6291,8 +6291,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         offset: parsedOffset,
         excludeCompleted: excludeCompleted === 'true',
         excludeArchived: excludeArchived === 'true',
-        ...(sortByRecentActivity ? { sort: "recentActivity" as const } : {}),
-      });
+      }, sortByRecentActivity ? "recentActivity" : undefined);
 
       // Serialize timestamps to ISO UTC format
       const serializedJobs = await attachCustomerNames(result.jobs.map(serializeJobTimestamps));
