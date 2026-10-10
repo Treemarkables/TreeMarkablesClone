@@ -21,6 +21,7 @@ import {
   applyTreemarkablesDocumentHead,
 } from "./treemarkablesDocumentBrand";
 import { createTreemarkablesApexRedirectMiddleware } from "./treemarkablesApexRedirect";
+import { createTreemarkablesAppHostSeoMiddleware } from "./treemarkablesAppHostSeo";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
@@ -119,6 +120,11 @@ app.get('/health', (_req, res) => {
 // DNS for the apex is not in this repo; until it points here the redirect
 // never runs. /health is exempt. www and the app hosts are not redirected.
 app.use(createTreemarkablesApexRedirectMiddleware());
+
+// app.treemarkables.co.nz: public marketing paths 301 to www. `/` stays,
+// because the iOS shell and a logged-in session enter the app there.
+// http://www → https://www is DigitalOcean's edge, not this process.
+app.use(createTreemarkablesAppHostSeoMiddleware());
 
 // www.treemarkables.co.nz / treemarkables.co.nz: first HTML byte is Treemarkables
 // branded (title/meta/icons/og), and public marketing routes include a static

@@ -6,7 +6,9 @@
  * process until Cloudflare + DigitalOcean are updated (see the PR). Once they
  * do, this preserves the path and query and forces https://www.
  *
- * www, app.treemarkables.co.nz, and Inflow hosts are unchanged. /health stays
+ * www and Inflow hosts are unchanged. app.treemarkables.co.nz marketing
+ * paths are a separate middleware (treemarkablesAppHostSeo.ts): `/` on that
+ * host is the iOS and logged-in app entry and must not 301. /health stays
  * on the apex so a platform health check is not turned into a redirect.
  */
 import type { RequestHandler } from "express";
