@@ -1870,7 +1870,7 @@ async function generateInvoicePDFBuffer(
         case 'companyInfo': {
           const parts: string[] = [];
           if (cfg.showName !== false) parts.push(co.name);
-          if (cfg.showAddress !== false) parts.push(co.address);
+          if (cfg.showAddress !== false && co.address) parts.push(co.address);
           if (cfg.showPhone !== false) parts.push(`Ph: ${co.phone}`);
           if (cfg.showEmail !== false) parts.push(co.email);
           if (cfg.showGST) parts.push(`GST: ${co.gstNumber}`);
@@ -2074,7 +2074,7 @@ async function generateInvoicePDFBuffer(
 
           const parts: string[] = [];
           if (cfg.showCompanyName !== false) parts.push(co.name);
-          if (cfg.showAddress !== false) parts.push(co.address.replace(/\n/g, ', '));
+          if (cfg.showAddress !== false && co.address) parts.push(co.address.replace(/\n/g, ', '));
           if (cfg.showPhone !== false) parts.push(`Phone: ${co.phone}`);
           if (cfg.showEmail !== false) parts.push(`Email: ${co.email}`);
           doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();

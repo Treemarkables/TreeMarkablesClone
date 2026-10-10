@@ -404,7 +404,7 @@ export function renderDocumentBlock(
       return (
         <div key={block.id} className="mb-4 text-xs space-y-0.5 text-gray-700">
           {cfg.showName && <div className="font-semibold text-gray-900">{co.name}</div>}
-          {cfg.showAddress && <div>{co.address}</div>}
+          {cfg.showAddress && co.address && <div>{co.address}</div>}
           {cfg.showPhone && <div>Ph: {co.phone}</div>}
           {cfg.showEmail && <div>{co.email}</div>}
           {cfg.showGST && <div>GST: {co.gstNumber}</div>}
@@ -542,7 +542,7 @@ export function renderDocumentBlock(
       const cfg = block.config as DocumentBlockConfigFooter;
       const parts: string[] = [];
       if (cfg.showCompanyName) parts.push(co.name);
-      if (cfg.showAddress) parts.push(co.address.replace(/\n/g, ', '));
+      if (cfg.showAddress && co.address) parts.push(co.address.replace(/\n/g, ', '));
       if (cfg.showPhone) parts.push(`Phone: ${co.phone}`);
       if (cfg.showEmail) parts.push(`Email: ${co.email}`);
       return (

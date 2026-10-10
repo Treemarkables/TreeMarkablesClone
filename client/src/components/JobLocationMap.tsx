@@ -3,18 +3,24 @@ import { MapPin, Building2, ChevronDown, ChevronUp, ExternalLink, Navigation } f
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  TREEMARKABLES_YARD_ADDRESS,
+  isTreemarkablesBusiness,
+  treemarkablesYardDirectionsEmbedUrl,
+  treemarkablesYardDirectionsUrl,
+} from "@shared/treemarkablesYard";
 
 interface JobLocationMapProps {
   jobAddress: string;
+  /** Signed-in business. The depot pin is Treemarkables only. */
+  businessId?: string | null;
   className?: string;
 }
 
-// Yard/depot location - 213 Stanley Road, Gisborne, New Zealand
-const YARD_ADDRESS = "213 Stanley Road, Gisborne, New Zealand";
-
-export function JobLocationMap({ jobAddress, className = "" }: JobLocationMapProps) {
+export function JobLocationMap({ jobAddress, businessId, className = "" }: JobLocationMapProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [mapMode, setMapMode] = useState<'satellite' | 'directions'>('satellite');
+  const showYard = isTreemarkablesBusiness(businessId);
 
   if (!jobAddress) {
     return null;
@@ -22,19 +28,19 @@ export function JobLocationMap({ jobAddress, className = "" }: JobLocationMapPro
 
   // Encode addresses for Google Maps
   const encodedJobAddress = encodeURIComponent(jobAddress);
-  const encodedYardAddress = encodeURIComponent(YARD_ADDRESS);
 
   // Satellite view of job location (bird's eye)
   const satelliteMapUrl = `https://maps.google.com/maps?q=${encodedJobAddress}&t=k&z=18&output=embed`;
-  
-  // Directions view showing both yard and job location with route
-  const directionsMapUrl = `https://maps.google.com/maps?saddr=${encodedYardAddress}&daddr=${encodedJobAddress}&output=embed`;
 
-  // Current embed URL based on mode
-  const mapEmbedUrl = mapMode === 'satellite' ? satelliteMapUrl : directionsMapUrl;
+  // Directions from the LINZ yard point, so the pin is not a street-name guess.
+  const directionsMapUrl = treemarkablesYardDirectionsEmbedUrl(jobAddress);
 
-  // Google Maps directions URL (opens in new tab)
-  const directionsUrl = `https://www.google.com/maps/dir/${encodedYardAddress}/${encodedJobAddress}`;
+  const activeMode = showYard ? mapMode : 'satellite';
+  const mapEmbedUrl = activeMode === 'satellite' ? satelliteMapUrl : directionsMapUrl;
+
+  const directionsUrl = showYard
+    ? treemarkablesYardDirectionsUrl(jobAddress)
+    : `https://www.google.com/maps/search/?api=1&query=${encodedJobAddress}`;
 
   // Google Maps satellite view URL (opens in new tab)
   const satelliteViewUrl = `https://www.google.com/maps/place/${encodedJobAddress}/@-38.65,178.02,17z/data=!3m1!1e3`;
@@ -62,7 +68,7 @@ export function JobLocationMap({ jobAddress, className = "" }: JobLocationMapPro
       <CollapsibleContent className="mt-2">
         <Card className="overflow-hidden">
           <CardContent className="p-0">
-            {/* Map mode toggle */}
+            {showYard && (
             <div className="flex gap-1 p-2 bg-muted/50 border-b">
               <Button
                 variant={mapMode === 'satellite' ? 'secondary' : 'ghost'}
@@ -83,11 +89,12 @@ export function JobLocationMap({ jobAddress, className = "" }: JobLocationMapPro
                 Route from Yard
               </Button>
             </div>
+            )}
             
             {/* Map embed - satellite or directions view */}
             <div className="relative w-full h-52 bg-muted">
               <iframe
-                key={mapMode}
+                key={activeMode}
                 src={mapEmbedUrl}
                 width="100%"
                 height="100%"
@@ -95,7 +102,7 @@ export function JobLocationMap({ jobAddress, className = "" }: JobLocationMapPro
                 allowFullScreen
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
-                title={mapMode === 'satellite' ? "Job location satellite map" : "Route from yard to job"}
+                title={activeMode === 'satellite' ? "Job location satellite map" : "Route from yard to job"}
                 className="absolute inset-0"
               />
             </div>
@@ -111,14 +118,15 @@ export function JobLocationMap({ jobAddress, className = "" }: JobLocationMapPro
                 </div>
               </div>
               
-              {/* Yard address */}
+              {showYard && (
               <div className="flex items-start gap-2 text-xs">
                 <Building2 className="h-3.5 w-3.5 mt-0.5 text-blue-500 flex-shrink-0" />
                 <div className="min-w-0 flex-1">
                   <span className="font-medium text-foreground">Yard</span>
-                  <p className="text-muted-foreground break-words">{YARD_ADDRESS}</p>
+                  <p className="text-muted-foreground break-words">{TREEMARKABLES_YARD_ADDRESS}</p>
                 </div>
               </div>
+              )}
               
               {/* Action buttons */}
               <div className="flex gap-2 pt-1">

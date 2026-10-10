@@ -423,7 +423,7 @@ export default function SettingsCompany() {
           <Textarea
             value={form.companyAddress ?? ""}
             onChange={(e) => set("companyAddress", e.target.value)}
-            placeholder="e.g. 213 Stanley Road, Gisborne"
+            placeholder="e.g. 26 Cochrane Street, Gisborne"
             rows={2}
           />
         </div>

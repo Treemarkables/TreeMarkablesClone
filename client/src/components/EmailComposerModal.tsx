@@ -1935,7 +1935,7 @@ export function EmailComposerModal({
                       isDefault: true,
                       isActive: true,
                       companyName: "Treemarkables",
-                      companyAddress: "Hauroa rd\nGisborne, 4010",
+                      companyAddress: "26 Cochrane Street, Gisborne",
                       companyEmail: "quotes@treemarkables.nz",
                       companyPhone: "027 216 6882",
                       gstNumber: "GST123456789",
