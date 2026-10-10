@@ -15,6 +15,7 @@ import {
   TREEMARKABLES_WEB_MANIFEST,
 } from "./treemarkablesDocumentBrand.ts";
 import { MARKETING_PAGES } from "../shared/treemarkablesPageCopy.ts";
+import { TREEMARKABLES_PUBLIC_PREFIXES } from "../shared/treemarkablesMarketingPaths.ts";
 
 const INFLOW_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -238,11 +239,29 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
     const coast = applyTreemarkablesDocumentHead(INFLOW_HTML, "/east-coast");
     const coastMain = mainOf(coast);
     assert.match(coast, /<h1>East Coast Arborist<\/h1>/);
-    assert.match(coastMain, /Tolaga Bay/);
-    assert.match(coastMain, /Tokomaru Bay/);
-    assert.match(coastMain, /Ruatoria/);
+    assert.match(
+      coast,
+      /Arborist for the Tairāwhiti East Coast: tree removal, pruning, stump grinding and hedge trimming/,
+    );
+    assert.match(coastMain, /Tairāwhiti East Coast/);
     assert.match(coastMain, /Gisborne District Council/);
     assert.doesNotMatch(coastMain, /Wairoa District Council/);
+    assert.doesNotMatch(coast, /Tolaga Bay|Tokomaru Bay|Ruatoria/);
+
+    const coastTowns = /Tolaga Bay|Tokomaru Bay|Ruatoria/;
+    const marketingRoutes = [
+      "/",
+      "/home",
+      ...TREEMARKABLES_PUBLIC_PREFIXES,
+      "/blog/hazardous-tree-removal-gisborne-5-signs-dangerous-tree",
+      "/blog/why-regular-tree-pruning-protects-your-home-gisborne",
+      "/mulch",
+      "/mulch/thanks",
+    ];
+    for (const urlPath of marketingRoutes) {
+      const html = applyTreemarkablesDocumentHead(INFLOW_HTML, urlPath);
+      assert.doesNotMatch(html, coastTowns, urlPath);
+    }
 
     const stump = applyTreemarkablesDocumentHead(INFLOW_HTML, "/stump-grinding");
     assert.match(stump, /<title>Stump Grinding &amp; Stump Removal Gisborne<\/title>/);

@@ -229,7 +229,7 @@ export default function Home() {
             })}
           </div>
           <p className="mt-8 text-mute">
-            Also an arborist in <Link href="/wairoa" className="text-forest font-semibold">Wairoa</Link> and along the <Link href="/east-coast" className="text-forest font-semibold">Tairāwhiti East Coast</Link>, including Tolaga Bay, Tokomaru Bay and Ruatoria.
+            Also an arborist in <Link href="/wairoa" className="text-forest font-semibold">Wairoa</Link> and along the <Link href="/east-coast" className="text-forest font-semibold">Tairāwhiti East Coast</Link>.
           </p>
         </div>
       </section>
