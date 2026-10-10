@@ -97,6 +97,7 @@ import {
   formatTime12Hour,
 } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
+import { compareByRecentActivity } from "@shared/dispatchJobOrder";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -211,8 +212,14 @@ interface JobAssignment {
   notes?: string;
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
   lastActivityAt?: string; // For activity-based sorting
-  workOrderAt?: string; // Timestamp stamped once when the job first became a work order — used for FIFO sorting on the Work Order tab
-  createdAt?: string; // Immutable job-creation timestamp — fallback for FIFO sorting when workOrderAt is NULL (legacy jobs)
+  // Server greatest of updated_at, diary, proposal sent/accepted, and created_at.
+  // Unscheduled sorts by compareByRecentActivity, which also reads the fields below.
+  recentActivityAt?: string;
+  updatedAt?: string;
+  proposalSentDate?: string;
+  quotePresentedDate?: string;
+  workOrderAt?: string; // Timestamp stamped once when the job first became a work order — FIFO on the Work Order chip only
+  createdAt?: string; // Immutable job-creation timestamp — fallback when no activity stamp exists
   totalAmount?: string; // Job price for display on dispatch board (exc-GST normalised)
   subtotal?: string; // Exc-GST subtotal from job record (preferred price source)
   scheduledDate?: string; // The job's scheduled start date from the API. Used by the "Scheduled" filter post-2026-05 ('scheduled' status retired — date presence is the new signal).
@@ -1342,6 +1349,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: staffId,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
+          recentActivityAt: apiJob.recentActivityAt,
+          updatedAt: apiJob.updatedAt,
+          proposalSentDate: apiJob.proposalSentDate,
+          quotePresentedDate: apiJob.quotePresentedDate,
           workOrderAt: apiJob.workOrderAt,
           createdAt: apiJob.createdAt,
           scheduledDate: apiJob.scheduledDate || undefined,
@@ -1439,6 +1450,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: undefined,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
+          recentActivityAt: apiJob.recentActivityAt,
+          updatedAt: apiJob.updatedAt,
+          proposalSentDate: apiJob.proposalSentDate,
+          quotePresentedDate: apiJob.quotePresentedDate,
           workOrderAt: apiJob.workOrderAt,
           createdAt: apiJob.createdAt,
           scheduledDate: apiJob.scheduledDate || undefined,
@@ -1924,19 +1939,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         if (diff !== 0) return diff;
       }
 
-      // Work Order tab: FIFO by when the job first became a work order (oldest conversion at top),
-      // then priority as tiebreaker. Falls back to createdAt (not lastActivityAt) for legacy
-      // jobs that predate the workOrderAt column — lastActivityAt gets bumped on every email,
-      // note, or edit, which caused those jobs to reshuffle whenever they were touched.
-      // createdAt is immutable so positions stay stable.
-      // FIFO only applies when Unscheduled or Work Order is the sole active
-      // filter — mixed selections (e.g. Unscheduled + Scheduled) fall through
-      // to the activity sort below. On the Work Order view, oldest-accepted
-      // first surfaces the work that has waited longest to be invoiced.
-      if (
-        jobFilters.length === 1 &&
-        (jobFilters[0] === "work_order" || jobFilters[0] === "work_order_all")
-      ) {
+      // Work Order chip only (every accepted job, booked or not): FIFO by when
+      // the job first became a work order, oldest first, then priority. That
+      // view is the not-yet-invoiced pool — oldest accepted surfaces work that
+      // has waited longest to invoice. Falls back to createdAt for legacy rows
+      // with no workOrderAt. Mixed filters do not use this.
+      if (jobFilters.length === 1 && jobFilters[0] === "work_order_all") {
         const getAcceptedTime = (job: JobAssignment): number => {
           if (job.workOrderAt) return new Date(job.workOrderAt).getTime();
           if (job.createdAt) return new Date(job.createdAt).getTime();
@@ -1953,6 +1961,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const pa = priorityRank[a.priority] ?? 4;
         const pb = priorityRank[b.priority] ?? 4;
         return pa - pb; // urgent first on ties
+      }
+
+      // Unscheduled (sole filter): most recently active first. Do not use
+      // startTime here — cards with no booking are given a synthetic "now",
+      // which would tie every unbooked job. Awaiting-confirmation is a filter
+      // toggle, not a sort group.
+      if (jobFilters.length === 1 && jobFilters[0] === "work_order") {
+        return compareByRecentActivity(a, b);
       }
 
       // Default: sort by most recently active (descending) — jobs with recent messages or changes appear at top

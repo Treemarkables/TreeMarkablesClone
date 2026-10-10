@@ -4106,7 +4106,7 @@ The Treemarkables Team`;
         // Refresh job data and staff assignments for the calendar, dispatch
         // board, and staff schedule. The calendar grid and dispatch board
         // use parameterised keys like ["/api/jobs?limit=10000&offset=0"] and
-        // ["/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true"],
+        // DISPATCH_JOBS_QUERY_KEY (the Unscheduled list, sorted by recent activity),
         // so a plain ["/api/jobs"] invalidation won't match them (TanStack
         // compares array elements, not string prefixes). Use a predicate to
         // catch every /api/jobs* variant so those views refetch immediately
@@ -4167,7 +4167,7 @@ The Treemarkables Team`;
 
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs?limit=10000&offset=0"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true"] });
+      queryClient.invalidateQueries({ queryKey: [DISPATCH_JOBS_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
