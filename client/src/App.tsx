@@ -68,6 +68,9 @@ const MulchThanks = lazy(() => import("@/pages/MulchThanks"));
 const Blog = lazy(() => import("@/pages/Blog"));
 const BlogPost = lazy(() => import("@/pages/BlogPost"));
 const SummerOffer = lazy(() => import("@/pages/SummerOffer"));
+const EmergencyTreeRemoval = lazy(() => import("@/pages/EmergencyTreeRemoval"));
+const Wairoa = lazy(() => import("@/pages/Wairoa"));
+const EastCoast = lazy(() => import("@/pages/EastCoast"));
 const Contact = lazy(() => import("@/pages/Contact"));
 const PrivacyPolicy = lazy(() => import("@/pages/PrivacyPolicy"));
 const JobDashboard = lazy(() => import("@/pages/JobDashboard"));
@@ -267,6 +270,9 @@ const PublicMulchThanks = withPublicBoot(MulchThanks);
 const PublicBlog = withPublicBoot(Blog);
 const PublicBlogPost = withPublicBoot(BlogPost);
 const PublicSummerOffer = withPublicBoot(SummerOffer);
+const PublicEmergencyTreeRemoval = withPublicBoot(EmergencyTreeRemoval);
+const PublicWairoa = withPublicBoot(Wairoa);
+const PublicEastCoast = withPublicBoot(EastCoast);
 const PublicContact = withPublicBoot(Contact);
 const PublicPrivacyPolicy = withPublicBoot(PrivacyPolicy);
 const PublicCustomerPortal = withPublicBoot(CustomerPortal);
@@ -1283,6 +1289,9 @@ function Router() {
       '/tree-pruning',
       '/stump-grinding',
       '/hedge-trimming',
+      '/emergency-tree-removal',
+      '/wairoa',
+      '/east-coast',
       '/mulch',
       '/blog',
       '/summer-offer',
@@ -1306,6 +1315,9 @@ function Router() {
       <Route path="/tree-pruning" component={PublicTreePruning}/>
       <Route path="/stump-grinding" component={PublicStumpGrinding}/>
       <Route path="/hedge-trimming" component={PublicHedgeTrimming}/>
+      <Route path="/emergency-tree-removal" component={PublicEmergencyTreeRemoval}/>
+      <Route path="/wairoa" component={PublicWairoa}/>
+      <Route path="/east-coast" component={PublicEastCoast}/>
       <Route path="/mulch" component={PublicMulch}/>
       <Route path="/mulch/thanks" component={PublicMulchThanks}/>
       <Route path="/blog" component={PublicBlog}/>

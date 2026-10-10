@@ -64,10 +64,13 @@ export default function Header() {
 
   const serviceLinks = [
     { href: "/tree-removal", label: "Tree Removal" },
+    { href: "/emergency-tree-removal", label: "Emergency" },
     { href: "/summer-offer", label: "Summer Offer" },
     { href: "/tree-pruning", label: "Tree Pruning" },
     { href: "/stump-grinding", label: "Stump Grinding" },
-    { href: "/hedge-trimming", label: "Hedge Trimming" }
+    { href: "/hedge-trimming", label: "Hedge Trimming" },
+    { href: "/wairoa", label: "Wairoa" },
+    { href: "/east-coast", label: "East Coast" }
   ];
 
   return (

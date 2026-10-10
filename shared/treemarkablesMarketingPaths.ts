@@ -38,9 +38,12 @@ export const APP_HOST_NEVER_REDIRECT_PREFIXES = [
 
 export const TREEMARKABLES_PUBLIC_PREFIXES = [
   "/tree-removal",
+  "/emergency-tree-removal",
   "/tree-pruning",
   "/stump-grinding",
   "/hedge-trimming",
+  "/wairoa",
+  "/east-coast",
   "/summer-offer",
   "/blog",
   "/contact",

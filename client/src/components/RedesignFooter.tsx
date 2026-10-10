@@ -40,6 +40,9 @@ export default function RedesignFooter() {
               <li><Link href="/tree-pruning" className="hover:text-neon transition-colors">Tree Pruning</Link></li>
               <li><Link href="/stump-grinding" className="hover:text-neon transition-colors">Stump Grinding</Link></li>
               <li><Link href="/hedge-trimming" className="hover:text-neon transition-colors">Hedge Trimming</Link></li>
+              <li><Link href="/emergency-tree-removal" className="hover:text-neon transition-colors">Emergency Tree Removal</Link></li>
+              <li><Link href="/wairoa" className="hover:text-neon transition-colors">Arborist Wairoa</Link></li>
+              <li><Link href="/east-coast" className="hover:text-neon transition-colors">East Coast Arborist</Link></li>
               <li><Link href="/blog" className="hover:text-neon transition-colors">Tree Care Blog</Link></li>
             </ul>
           </div>

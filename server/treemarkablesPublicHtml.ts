@@ -13,6 +13,19 @@
  * self-serving rating markup can be penalised. Follow-up, not this change.
  */
 import { isTreemarkablesPublicPath, normalisePublicPath } from "@shared/treemarkablesMarketingPaths";
+import {
+  EAST_COAST_PAGE,
+  EMERGENCY_PAGE,
+  HEDGE_PAGE,
+  HOME_PAGE,
+  STUMP_PAGE,
+  SUMMER_PAGE,
+  TREE_PRUNING_PAGE,
+  TREE_REMOVAL_PAGE,
+  WAIROA_PAGE,
+  type FaqItem,
+  type MarketingPage,
+} from "@shared/treemarkablesPageCopy";
 
 const ORIGIN = "https://www.treemarkables.co.nz";
 const PHONE_DISPLAY = "027 216 6882";
@@ -23,9 +36,12 @@ const ADDRESS_LINE = "26 Cochrane Street, Gisborne, NZ";
 const NAV: Array<[string, string]> = [
   ["/", "Home"],
   ["/tree-removal", "Tree removal"],
+  ["/emergency-tree-removal", "Emergency"],
   ["/tree-pruning", "Tree pruning"],
   ["/stump-grinding", "Stump grinding"],
   ["/hedge-trimming", "Hedge trimming"],
+  ["/wairoa", "Wairoa"],
+  ["/east-coast", "East Coast"],
   ["/summer-offer", "Summer offer"],
   ["/blog", "Blog"],
   ["/contact", "Contact"],
@@ -35,6 +51,34 @@ interface PageCopy {
   h1: string;
   lede: string;
   extra?: string;
+  faqs?: FaqItem[];
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function faqHtml(faqs: FaqItem[] | undefined, heading: string | undefined): string {
+  if (!faqs?.length) return "";
+  const items = faqs
+    .map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`)
+    .join("");
+  return `<section id="faq"><h2>${escapeHtml(heading || "Questions")}</h2>${items}</section>`;
+}
+
+function landingHtml(page: MarketingPage): string {
+  const sections = (page.sections || [])
+    .map((section) => {
+      const paras = section.paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
+      return `<h2>${escapeHtml(section.heading)}</h2>${paras}`;
+    })
+    .join("");
+  const services = page.services?.length
+    ? `<h2>${escapeHtml(page.serviceHeading || "Services")}</h2><ul>${page.services
+        .map((service) => `<li><a href="${service.href}">${escapeHtml(service.label)}</a></li>`)
+        .join("")}</ul>`
+    : "";
+  return sections + services + faqHtml(page.faqs, page.faqHeading);
 }
 
 const HAZARD_SLUG = "hazardous-tree-removal-gisborne-5-signs-dangerous-tree";
@@ -42,40 +86,44 @@ const PRUNING_SLUG = "why-regular-tree-pruning-protects-your-home-gisborne";
 
 const PAGES: Record<string, PageCopy> = {
   "/": {
-    h1: "Tree care done once, done right.",
-    lede:
-      "Gisborne's trusted arborists for safe tree removals, expert pruning and tidy clean-ups — backed by 18+ years and 130+ five-star reviews. We work across Gisborne, Tairāwhiti, Wairoa and the East Coast.",
+    h1: HOME_PAGE.h1,
+    lede: HOME_PAGE.lede,
     extra: `
       <h2>Full-service tree care across Tairāwhiti</h2>
       <ul>
         <li><a href="/tree-removal">Tree removal</a> — safe, controlled removals, from hazardous trees to tight-access sections. 24/7 emergency callouts.</li>
+        <li><a href="/emergency-tree-removal">Emergency tree removal</a> — storm damage and fallen trees, day or night.</li>
         <li><a href="/tree-pruning">Tree pruning</a> — healthier structure, better light, and a tidier canopy.</li>
         <li><a href="/stump-grinding">Stump grinding</a> — ground out below the surface so you can reclaim the space.</li>
         <li><a href="/hedge-trimming">Hedge trimming</a> — crisp, healthy hedges shaped to last.</li>
+        <li><a href="/wairoa">Arborist in Wairoa</a> — homes and farms, travelling from Gisborne.</li>
+        <li><a href="/east-coast">East Coast arborist</a> — Tolaga Bay, Tokomaru Bay, Ruatoria and the Tairāwhiti coast.</li>
       </ul>
-      <p>Free, no-obligation quotes. We visit, assess the job in person, and leave a clear itemised price before any work begins. Fully insured.</p>
+      <p>Free, no-obligation quotes. We visit, assess the job in person, and leave a clear itemised price before any work begins. Fully insured. Yard: ${ADDRESS_LINE}.</p>
     `,
   },
   "/tree-removal": {
-    h1: "Get that risky tree down — safely.",
-    lede:
-      "Gisborne's certified arborists for hazardous, storm-damaged and unwanted trees. Fully insured, fast response, and not a branch left behind. Homes and farms across Gisborne, Wairoa and the East Coast.",
+    h1: TREE_REMOVAL_PAGE.h1,
+    lede: `${TREE_REMOVAL_PAGE.lede} Homes and farms across Gisborne, Wairoa and the East Coast.`,
     extra: `
-      <p>We remove trees close to houses, powerlines and tight driveways, and we respond to storm damage day or night. You'll get a clear quote before we start, and the site is raked and blown down when we leave.</p>
+      <p>We remove trees close to houses, powerlines and tight driveways, and we respond to storm damage day or night. You'll get a clear quote before we start, and the site is raked and blown down when we leave. For a tree that has already come down, see <a href="/emergency-tree-removal">emergency tree removal</a>.</p>
       <p>See also <a href="/tree-pruning">tree pruning</a>, <a href="/stump-grinding">stump grinding</a> and <a href="/hedge-trimming">hedge trimming</a>.</p>
+      ${faqHtml(TREE_REMOVAL_PAGE.faqs, TREE_REMOVAL_PAGE.faqHeading)}
     `,
+    faqs: TREE_REMOVAL_PAGE.faqs,
   },
   "/tree-pruning": {
-    h1: "Pruned right, growing strong.",
-    lede:
-      "Expert pruning to keep your trees healthy, safe and beautifully shaped — qualified arborists across Gisborne and the East Coast.",
+    h1: TREE_PRUNING_PAGE.h1,
+    lede: TREE_PRUNING_PAGE.lede,
     extra: `
       <p>We prune to preserve the tree. Crown reduction, shaping and deadwood removal keep weight off roofs and let light and air through the canopy. Removal only if it is truly needed.</p>
-      <p>See also <a href="/tree-removal">tree removal</a>, <a href="/stump-grinding">stump grinding</a> and our <a href="/blog/why-regular-tree-pruning-protects-your-home-gisborne">guide to regular pruning</a>.</p>
+      <p>See also <a href="/tree-removal">tree removal</a>, <a href="/stump-grinding">stump grinding</a>, <a href="/wairoa">Wairoa</a>, the <a href="/east-coast">East Coast</a>, and our <a href="/blog/why-regular-tree-pruning-protects-your-home-gisborne">guide to regular pruning</a>.</p>
+      ${faqHtml(TREE_PRUNING_PAGE.faqs, TREE_PRUNING_PAGE.faqHeading)}
     `,
+    faqs: TREE_PRUNING_PAGE.faqs,
   },
   "/stump-grinding": {
-    h1: "Stumps gone. Ground flush.",
+    h1: STUMP_PAGE.h1,
     lede:
       "Remove unsightly stumps safely and fast. Two grinders — a narrow-access machine for tight spots and the biggest in Gisborne for the heavy stuff.",
     extra: `
@@ -84,20 +132,19 @@ const PAGES: Record<string, PageCopy> = {
     `,
   },
   "/hedge-trimming": {
-    h1: "Sharp hedges, zero fuss.",
-    lede:
-      "Privacy, windbreaks and clean lines — kept in shape year-round. Gisborne's coastal winds grow hedges fast; we keep them tidy.",
+    h1: HEDGE_PAGE.h1,
+    lede: HEDGE_PAGE.lede,
     extra: `
       <p>We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Big or small.</p>
       <p>See also <a href="/tree-pruning">tree pruning</a> and <a href="/tree-removal">tree removal</a>.</p>
     `,
   },
   "/summer-offer": {
-    h1: "Road to Summer: win up to $1000 back on your tree care",
+    h1: SUMMER_PAGE.h1,
     lede:
       "Book any tree care service before November 30th and stand a 1-in-90 chance to win up to $1000 off your job. Our way of saying thanks to our Gisborne community.",
     extra: `
-      <p>The offer covers tree removal, pruning, stump grinding, hedge trimming and emergency callouts with Treemarkables in Gisborne and the surrounding East Coast.</p>
+      <p>The offer covers tree removal, pruning, stump grinding, hedge trimming and <a href="/emergency-tree-removal">emergency callouts</a> with Treemarkables in Gisborne and the surrounding East Coast.</p>
       <p><a href="/contact">Book now and enter</a> or call ${PHONE_DISPLAY}.</p>
     `,
   },
@@ -128,6 +175,9 @@ const PAGES: Record<string, PageCopy> = {
         <li><a href="/tree-pruning">Tree pruning</a></li>
         <li><a href="/stump-grinding">Stump grinding</a></li>
         <li><a href="/hedge-trimming">Hedge trimming</a></li>
+        <li><a href="/emergency-tree-removal">Emergency tree removal</a></li>
+        <li><a href="/wairoa">Arborist in Wairoa</a></li>
+        <li><a href="/east-coast">East Coast arborist</a></li>
       </ul>
     `,
   },
@@ -176,6 +226,24 @@ const PAGES: Record<string, PageCopy> = {
       <p>Call ${PHONE_DISPLAY} or <a href="/contact">ask for a quote</a>. For a tree that should come out rather than be pruned, see <a href="/tree-removal">tree removal</a>.</p>
     `,
   },
+  "/emergency-tree-removal": {
+    h1: EMERGENCY_PAGE.h1,
+    lede: EMERGENCY_PAGE.lede,
+    extra: landingHtml(EMERGENCY_PAGE),
+    faqs: EMERGENCY_PAGE.faqs,
+  },
+  "/wairoa": {
+    h1: WAIROA_PAGE.h1,
+    lede: WAIROA_PAGE.lede,
+    extra: landingHtml(WAIROA_PAGE),
+    faqs: WAIROA_PAGE.faqs,
+  },
+  "/east-coast": {
+    h1: EAST_COAST_PAGE.h1,
+    lede: EAST_COAST_PAGE.lede,
+    extra: landingHtml(EAST_COAST_PAGE),
+    faqs: EAST_COAST_PAGE.faqs,
+  },
 };
 
 const UNKNOWN_BLOG: PageCopy = {
@@ -216,8 +284,8 @@ function pageHtml(pathname: string): string {
       ${navHtml()}
     </header>
     <main>
-      <h1>${copy.h1}</h1>
-      <p>${copy.lede}</p>
+      <h1>${escapeHtml(copy.h1)}</h1>
+      <p>${escapeHtml(copy.lede)}</p>
       ${copy.extra || ""}
       <p>
         <a class="tm-cta" href="/contact">Get a free quote</a>
@@ -227,7 +295,7 @@ function pageHtml(pathname: string): string {
     <footer>
       <p>Treemarkables. ${ADDRESS_LINE}.</p>
       <p>Phone <a href="tel:${PHONE_TEL}">${PHONE_DISPLAY}</a>. Email <a href="mailto:quotes@treemarkables.nz">quotes@treemarkables.nz</a>.</p>
-      <p>Serving Gisborne, Tairāwhiti, Wairoa and the East Coast.</p>
+      <p>Serving <a href="/">Gisborne</a>, <a href="/east-coast">Tairāwhiti East Coast</a> and <a href="/wairoa">Wairoa</a>.</p>
       <p><a href="/privacy-policy">Privacy policy</a></p>
     </footer>
   </div>
@@ -273,7 +341,7 @@ function localBusiness(): Record<string, unknown> {
     "@id": `${ORIGIN}/#business`,
     name: "Treemarkables",
     description:
-      "Residential arborists in Gisborne, New Zealand. Tree removal, pruning, stump grinding and hedge trimming across Tairāwhiti, Wairoa and the East Coast.",
+      "Residential arborists in Gisborne, New Zealand. Tree removal, pruning, stump grinding, hedge trimming and 24/7 emergency callouts across Tairāwhiti, Wairoa and the East Coast.",
     url: `${ORIGIN}/`,
     telephone: PHONE_SCHEMA,
     email: "quotes@treemarkables.nz",
@@ -290,6 +358,9 @@ function localBusiness(): Record<string, unknown> {
       { "@type": "AdministrativeArea", name: "Tairāwhiti" },
       { "@type": "City", name: "Wairoa" },
       { "@type": "AdministrativeArea", name: "East Coast" },
+      { "@type": "City", name: "Tolaga Bay" },
+      { "@type": "City", name: "Tokomaru Bay" },
+      { "@type": "City", name: "Ruatoria" },
     ],
     hasOfferCatalog: {
       "@type": "OfferCatalog",
@@ -299,7 +370,9 @@ function localBusiness(): Record<string, unknown> {
         ["Tree pruning", "/tree-pruning"],
         ["Stump grinding", "/stump-grinding"],
         ["Hedge trimming", "/hedge-trimming"],
-        ["Emergency tree removal", "/tree-removal"],
+        ["Emergency tree removal", "/emergency-tree-removal"],
+        ["Arborist Wairoa", "/wairoa"],
+        ["East Coast arborist", "/east-coast"],
       ].map(([name, path]) => ({
         "@type": "Offer",
         itemOffered: {
@@ -328,6 +401,18 @@ function blogPosting(meta: BlogMeta): Record<string, unknown> {
   };
 }
 
+function faqPage(faqs: FaqItem[]): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
+  };
+}
+
 function scriptTag(data: Record<string, unknown>): string {
   const json = JSON.stringify(data).replace(/</g, "\\u003c");
   return `<script type="application/ld+json">${json}</script>`;
@@ -340,6 +425,8 @@ export function treemarkablesJsonLd(pathname: string): string {
   const blocks = [localBusiness()];
   const post = BLOG_META[path];
   if (post) blocks.push(blogPosting(post));
+  const faqs = pageCopy(path).faqs;
+  if (faqs?.length) blocks.push(faqPage(faqs));
   return blocks.map(scriptTag).join("\n    ");
 }
 

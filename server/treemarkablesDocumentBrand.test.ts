@@ -14,6 +14,7 @@ import {
   TREEMARKABLES_CANONICAL_ORIGIN,
   TREEMARKABLES_WEB_MANIFEST,
 } from "./treemarkablesDocumentBrand.ts";
+import { MARKETING_PAGES } from "../shared/treemarkablesPageCopy.ts";
 
 const INFLOW_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -160,8 +161,8 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
 
   it("rewrites Inflow index.html to Treemarkables first-byte tags", () => {
     const branded = applyTreemarkablesDocumentHead(INFLOW_HTML, "/");
-    assert.match(branded, /<title>Treemarkables — Gisborne's Number 1 Arborist &amp; Tree Care<\/title>/);
-    assert.match(branded, /meta name="description" content="Gisborne's trusted arborists/);
+    assert.match(branded, /<title>Arborist Gisborne \| Tree Removal &amp; Pruning \| Treemarkables<\/title>/);
+    assert.match(branded, /meta name="description" content="5-star rated arborist in Gisborne/);
     assert.match(branded, /apple-mobile-web-app-title" content="Treemarkables"/);
     assert.match(branded, /rel="canonical" href="https:\/\/www\.treemarkables\.co\.nz\/"/);
     assert.match(branded, /property="og:title"/);
@@ -173,7 +174,7 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
     assert.doesNotMatch(branded, /inflow-icon/);
     assert.doesNotMatch(branded, /<title>Inflow<\/title>/);
     assert.doesNotMatch(branded, /job management for field-services teams/);
-    assert.match(branded, /<h1>Tree care done once, done right\.<\/h1>/);
+    assert.match(branded, /<h1>Arborist Gisborne<\/h1>/);
     assert.match(branded, /027 216 6882/);
     assert.match(branded, /26 Cochrane Street, Gisborne, NZ/);
     assert.match(branded, /HomeAndConstructionBusiness/);
@@ -188,10 +189,78 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
     assert.equal(once, twice);
     assert.match(once, /<title>Tree Removal Gisborne/);
     assert.match(once, /canonical" href="https:\/\/www\.treemarkables\.co\.nz\/tree-removal"/);
-    assert.match(once, /<h1>Get that risky tree down — safely\.<\/h1>/);
+    assert.match(once, /<h1>Tree Removal Gisborne<\/h1>/);
+    assert.match(once, /Check with Gisborne District Council for protected or notable trees/);
+    assert.match(once, /FAQPage/);
+    assert.doesNotMatch(once, /aggregateRating/);
     assert.equal((once.match(/<h1>/g) || []).length, 1);
-    assert.equal((once.match(/application\/ld\+json/g) || []).length, 1);
+    assert.equal((once.match(/application\/ld\+json/g) || []).length, 2);
     assert.equal((once.match(/treemarkables-document-brand/g) || []).length, 2);
+  });
+
+  it("keeps titles and descriptions inside the length budget", () => {
+    for (const page of Object.values(MARKETING_PAGES)) {
+      assert.ok(page.title.length <= 60, `${page.path} title ${page.title.length}: ${page.title}`);
+      assert.ok(
+        page.description.length <= 155,
+        `${page.path} description ${page.description.length}: ${page.description}`,
+      );
+      assert.match(page.description, /027 216 6882/);
+      assert.doesNotMatch(page.description, /aggregateRating/);
+    }
+  });
+
+  it("prerenders the new local pages without rating markup or stump hire", () => {
+    const mainOf = (html: string) => {
+      const start = html.indexOf("<main>");
+      const end = html.indexOf("</main>");
+      return html.slice(start, end);
+    };
+    const emergency = applyTreemarkablesDocumentHead(INFLOW_HTML, "/emergency-tree-removal");
+    const emergencyMain = mainOf(emergency);
+    assert.match(emergency, /<title>Emergency Tree Removal Gisborne \| 24\/7<\/title>/);
+    assert.match(emergency, /<h1>Emergency Tree Removal Gisborne<\/h1>/);
+    assert.match(emergencyMain, /24\/7/);
+    assert.match(emergencyMain, /027 216 6882/);
+    assert.match(emergencyMain, /electricity company/);
+    assert.match(emergency, /FAQPage/);
+    assert.doesNotMatch(emergency, /aggregateRating/);
+    assert.doesNotMatch(emergencyMain, /Tolaga Bay/);
+
+    const wairoa = applyTreemarkablesDocumentHead(INFLOW_HTML, "/wairoa");
+    const wairoaMain = mainOf(wairoa);
+    assert.match(wairoa, /<h1>Arborist Wairoa<\/h1>/);
+    assert.match(wairoaMain, /Wairoa District Council/);
+    assert.match(wairoaMain, /href="\/tree-removal"/);
+    assert.doesNotMatch(wairoaMain, /Tolaga Bay/);
+    assert.doesNotMatch(wairoa, /aggregateRating/);
+
+    const coast = applyTreemarkablesDocumentHead(INFLOW_HTML, "/east-coast");
+    const coastMain = mainOf(coast);
+    assert.match(coast, /<h1>East Coast Arborist<\/h1>/);
+    assert.match(coastMain, /Tolaga Bay/);
+    assert.match(coastMain, /Tokomaru Bay/);
+    assert.match(coastMain, /Ruatoria/);
+    assert.match(coastMain, /Gisborne District Council/);
+    assert.doesNotMatch(coastMain, /Wairoa District Council/);
+
+    const stump = applyTreemarkablesDocumentHead(INFLOW_HTML, "/stump-grinding");
+    assert.match(stump, /<title>Stump Grinding &amp; Stump Removal Gisborne<\/title>/);
+    assert.match(stump, /<h1>Stump Grinding &amp; Stump Removal Gisborne<\/h1>/);
+    assert.doesNotMatch(stump, /hire/i);
+
+    const summer = applyTreemarkablesDocumentHead(INFLOW_HTML, "/summer-offer");
+    assert.match(summer, /<title>Win up to \$1000 Back \| Gisborne Tree Care<\/title>/);
+    assert.match(summer, /<h1>Win up to \$1000 back on your tree care<\/h1>/);
+
+    const sitemap = fs.readFileSync(path.resolve("sitemap.xml"), "utf8");
+    for (const urlPath of ["/emergency-tree-removal", "/wairoa", "/east-coast"]) {
+      assert.match(sitemap, new RegExp(`https://www\\.treemarkables\\.co\\.nz${urlPath}<`));
+    }
+    const robots = fs.readFileSync(path.resolve("robots.txt"), "utf8");
+    assert.match(robots, /Allow: \/emergency-tree-removal\$/);
+    assert.match(robots, /Allow: \/wairoa\$/);
+    assert.match(robots, /Allow: \/east-coast\$/);
   });
 
   it("is a no-op on Inflow and legacy app hosts", async () => {
@@ -312,14 +381,14 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
 
   it("still brands an html document that has leading whitespace", async () => {
     const result = await run("GET", "/", "www.treemarkables.co.nz", `\n${INFLOW_HTML}`);
-    assert.match(result.body, /<title>Treemarkables/);
+    assert.match(result.body, /<title>Arborist Gisborne/);
     assert.doesNotMatch(result.body, /<title>Inflow<\/title>/);
   });
 
   it("rewrites HTML sent via res.end on a Treemarkables host", async () => {
     const result = await run("GET", "/", "www.treemarkables.co.nz", INFLOW_HTML);
     assert.equal(result.next, false);
-    assert.match(result.body, /<title>Treemarkables/);
+    assert.match(result.body, /<title>Arborist Gisborne/);
     assert.doesNotMatch(result.body, /<title>Inflow<\/title>/);
     assert.match(result.body, /canonical/);
   });
@@ -370,8 +439,8 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
   it("rewrites the real client/index.html and keeps the React mount", () => {
     const html = fs.readFileSync(path.resolve("client/index.html"), "utf8");
     const branded = applyTreemarkablesDocumentHead(html, "/");
-    assert.match(branded, /<title>Treemarkables/);
-    assert.match(branded, /<h1>Tree care done once, done right\.<\/h1>/);
+    assert.match(branded, /<title>Arborist Gisborne/);
+    assert.match(branded, /<h1>Arborist Gisborne<\/h1>/);
     assert.match(branded, /027 216 6882/);
     assert.match(branded, /26 Cochrane Street, Gisborne, NZ/);
     assert.doesNotMatch(branded, /Stanley Road/);

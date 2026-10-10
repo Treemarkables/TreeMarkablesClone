@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Treemarkables local SEO — #618, branch `cursor/treemarkables-local-seo-18ce` — 2026-10-10 — rewrite marketing titles, descriptions and H1s, add /emergency-tree-removal, /wairoa and /east-coast in the prerender, sitemap and nav. No aggregateRating. Stump page title only (no hire; the page says it is not a hire grinder). No TestFlight. Draft only.
 - App-host marketing 301 — branch `cursor/app-host-marketing-redirect-2e08` — 2026-10-10 — on app.treemarkables.co.nz, 301 sitemap marketing paths to https://www.treemarkables.co.nz (query kept). `/` stays (iOS and logged-in entry) with noindex + www canonical. No redirect of login, dashboard, api, dispatch, proposal, invoice, portal, or assets. App-host robots.txt omits the www sitemap. No TestFlight rebuild. Draft only. [PR #617]
 - Treemarkables yard address — branch `cursor/treemarkables-yard-address-c9a3` — 2026-10-10 — hardcoded invoices, emails, and the job-map yard pin move from 213 Stanley Road to 26 Cochrane Street, Gisborne. Production document_templates and business_settings rows are not updated. Draft only. [PR #616]
 - Treemarkables marketing SEO — branch `cursor/treemarkables-seo-prerender-f110` — 2026-10-10 — first-byte HTML for public www routes (H1, copy, phone, address, JSON-LD) and apex→www 301. No aggregateRating. Staff/app hosts unchanged. DNS for the bare domain is outside the repo. [PR #615]

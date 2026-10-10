@@ -10,6 +10,9 @@ Allow: /tree-removal$
 Allow: /tree-pruning$
 Allow: /stump-grinding$
 Allow: /hedge-trimming$
+Allow: /emergency-tree-removal$
+Allow: /wairoa$
+Allow: /east-coast$
 Allow: /blog$
 Allow: /blog/
 Allow: /summer-offer$

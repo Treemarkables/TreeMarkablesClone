@@ -5,6 +5,7 @@ import RedesignReviews from "@/components/RedesignReviews";
 import SEO from "@/components/SEO";
 import InquiryForm from "@/components/InquiryForm";
 import ContactFormModal from "@/components/ContactFormModal";
+import { STUMP_PAGE } from "@shared/treemarkablesPageCopy";
 import {
   Phone,
   Mail,
@@ -101,11 +102,11 @@ export default function StumpGrinding() {
   return (
     <div className="scroll-smooth bg-paper text-ink antialiased selection:bg-neon selection:text-black">
       <SEO
-        title="Stump Grinding Gisborne – Complete Stump Removal"
-        description="Eliminate unsightly stumps with our powerful stump grinding service. Serving Gisborne, Wairoa and rural properties. Book your stump removal today."
+        title={STUMP_PAGE.title}
+        description={STUMP_PAGE.description}
         keywords="stump grinding Gisborne, fast stump removal, tidy stump grinding, Wairoa stump removal, rural stump grinding, powerful stump grinder, book stump removal"
-        ogTitle="Stump Grinding Gisborne – Fast & Tidy Stump Removal"
-        ogDescription="Eliminate unsightly stumps with our powerful stump grinding service. Serving Gisborne, Wairoa and rural properties. Book your stump removal today."
+        ogTitle={STUMP_PAGE.title}
+        ogDescription={STUMP_PAGE.description}
         ogImage="https://www.treemarkables.co.nz/stump-grinding.jpg"
         canonicalUrl="https://www.treemarkables.co.nz/stump-grinding"
         structuredData={structuredData}
@@ -124,7 +125,7 @@ export default function StumpGrinding() {
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-neon">Stump Grinding · Gisborne &amp; East Coast</span>
             </div>
             <h1 className="font-display font-bold text-white leading-[0.95] tracking-tight" style={{ fontSize: "clamp(40px,6.5vw,84px)" }}>
-              Stumps gone.<br /><span className="text-neon">Ground flush.</span>
+              {STUMP_PAGE.h1}
             </h1>
             <p className="mt-6 text-lg md:text-xl text-white/70 max-w-xl leading-relaxed">
               Remove unsightly stumps safely and fast. Two grinders — a narrow-access machine for tight spots and the biggest in Gisborne for the heavy stuff.

@@ -37,6 +37,9 @@ const MARKETING_CASES: Array<{ path: string; location: string }> = [
   { path: "/tree-pruning", location: `${WWW}/tree-pruning` },
   { path: "/stump-grinding", location: `${WWW}/stump-grinding` },
   { path: "/hedge-trimming", location: `${WWW}/hedge-trimming` },
+  { path: "/emergency-tree-removal", location: `${WWW}/emergency-tree-removal` },
+  { path: "/wairoa", location: `${WWW}/wairoa` },
+  { path: "/east-coast", location: `${WWW}/east-coast` },
   { path: "/summer-offer", location: `${WWW}/summer-offer` },
   { path: "/blog", location: `${WWW}/blog` },
   {

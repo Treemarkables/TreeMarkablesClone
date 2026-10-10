@@ -22,6 +22,7 @@ import sliderPhoto1 from "@assets/generated_images/E0AAF8BC-CFB4-4F84-ABE2-2B149
 import sliderPhoto2 from "@assets/generated_images/C145D020-049C-4424-9E2F-A852B84FCA59_1_102_o.jpeg";
 import sliderPhoto3 from "@assets/generated_images/59A2C278-76AD-4BB7-A475-408D758C5760_1_102_a.jpeg";
 import worriedTreeImage from "@assets/generated_images/DCF3191F-E513-401F-AC8B-FF6F329C4A83_1_102_o.jpeg";
+import { GISBORNE_REMOVAL_FAQS, TREE_REMOVAL_PAGE } from "@shared/treemarkablesPageCopy";
 
 declare global {
   interface Window {
@@ -57,11 +58,11 @@ const areas: [string, string][] = [
 ];
 
 const faqs: [string, string][] = [
+  ...GISBORNE_REMOVAL_FAQS.map((item) => [item.q, item.a] as [string, string]),
   ["How much does it cost to remove a tree?", "It depends on size, location, condition and access, and whether stump grinding or debris removal is included. Small trees in the open are quick and affordable; large trees near buildings or structures need more time and gear. You get a clear, itemised quote before any work begins."],
-  ["Do you handle emergencies and storm damage?", "Yes — 24/7. If a tree's come down or is threatening your home, call us any time and we'll respond fast across Tairāwhiti."],
+  ["Do you handle emergencies and storm damage?", "Yes — 24/7. If a tree's come down or is threatening your home, call 027 216 6882 any time and we'll respond fast across Tairāwhiti."],
   ["Is stump grinding included?", "It can be — just let us know. We'll quote removal with or without stump grinding and full debris cleanup so there are no surprises."],
   ["Are you fully insured and qualified?", "Yes — NZ-qualified arborists with $5M public liability cover. We're happy to provide a certificate of currency on request."],
-  ["Do I need council permission?", "Sometimes. Gisborne District Council protects certain notable, heritage and zoned trees. We can help you check before any work is planned."],
 ];
 
 const galleryImages: [string, string][] = [
@@ -119,11 +120,11 @@ export default function TreeRemoval() {
   return (
     <div className="scroll-smooth bg-paper text-ink antialiased selection:bg-neon selection:text-black">
       <SEO
-        title="Tree Removal Gisborne – Safe, Certified & 24/7"
-        description="Need a dangerous or unwanted tree removed? Our certified arborists provide safe tree removal for homes and farms in Gisborne and Wairoa. Contact us for competitive prices."
+        title={TREE_REMOVAL_PAGE.title}
+        description={TREE_REMOVAL_PAGE.description}
         keywords="tree removal Gisborne, safe tree removal, certified arborists Gisborne, dangerous tree removal, unwanted tree removal, Wairoa tree removal, competitive tree removal prices"
-        ogTitle="Tree Removal Gisborne – Safe & Efficient Service"
-        ogDescription="Need a dangerous or unwanted tree removed? Our certified arborists provide safe tree removal for homes and farms in Gisborne and Wairoa. Contact us for competitive prices."
+        ogTitle={TREE_REMOVAL_PAGE.title}
+        ogDescription={TREE_REMOVAL_PAGE.description}
         ogImage="https://www.treemarkables.co.nz/hazardous-tree-removal.jpg"
         canonicalUrl="https://www.treemarkables.co.nz/tree-removal"
         structuredData={structuredData}
@@ -152,10 +153,10 @@ export default function TreeRemoval() {
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-neon">Tree Removal · Gisborne &amp; East Coast</span>
             </div>
             <h1 className="font-display font-bold text-white leading-[0.95] tracking-tight" style={{ fontSize: "clamp(40px,6.5vw,84px)" }}>
-              Get that risky tree<br /><span className="text-neon">down — safely.</span>
+              {TREE_REMOVAL_PAGE.h1}
             </h1>
             <p className="mt-6 text-lg md:text-xl text-white/70 max-w-xl leading-relaxed">
-              Gisborne's certified arborists for hazardous, storm-damaged and unwanted trees. Fully insured, fast response, and not a branch left behind.
+              {TREE_REMOVAL_PAGE.lede}
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <a href="#contact" onClick={(e) => { e.preventDefault(); setIsQuoteOpen(true); }} className="inline-flex items-center gap-2 bg-neon text-black font-bold text-base px-7 py-4 rounded-full hover:brightness-95 transition-all shadow-[0_8px_30px_rgba(57,255,20,0.4)]">
@@ -258,6 +259,10 @@ export default function TreeRemoval() {
               </div>
             ))}
           </div>
+          <p className="text-center mt-8">
+            <a href="/emergency-tree-removal" className="text-forest font-semibold">Emergency tree removal</a>
+            <span className="text-mute"> — 24/7 on 027 216 6882 for storm damage and fallen trees.</span>
+          </p>
         </div>
       </section>
 
@@ -343,7 +348,7 @@ export default function TreeRemoval() {
           <div className="text-center mb-12">
             <div className="text-xs font-bold uppercase tracking-[0.2em] text-forest/70 mb-3">FAQ</div>
             <h2 className="font-display font-bold text-ink leading-tight tracking-tight" style={{ fontSize: "clamp(28px,3.8vw,48px)" }}>
-              Tree removal questions, answered.
+              Gisborne tree removal questions
             </h2>
           </div>
           <div className="space-y-3">

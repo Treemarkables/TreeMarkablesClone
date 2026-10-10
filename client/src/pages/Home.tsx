@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { SiFacebook } from "react-icons/si";
 import logoImage from "@assets/logo-11_1775755479888.png";
+import { HOME_PAGE } from "@shared/treemarkablesPageCopy";
 import SEO from "@/components/SEO";
 import HeaderV2 from "@/components/HeaderV2";
 import InquiryForm from "@/components/InquiryForm";
@@ -50,7 +51,7 @@ const services = [
   { title: "Tree Pruning", desc: "Healthier structure, better light, and a tidier canopy.", img: "/tree-pruning.jpg", route: "/tree-pruning" },
   { title: "Stump Grinding", desc: "Ground out below the surface — reclaim your space.", img: "/stump-grinding.jpg", route: "/stump-grinding" },
   { title: "Hedge Trimming", desc: "Crisp, healthy hedges shaped to last.", img: "/hedge-trimming.jpg", route: "/hedge-trimming" },
-  { title: "24/7 Emergency", desc: "Storm damage? We respond fast, day or night.", img: "/emergency-tree-removal.jpg", route: "/tree-removal" },
+  { title: "24/7 Emergency", desc: "Storm damage? We respond fast, day or night.", img: "/emergency-tree-removal.jpg", route: "/emergency-tree-removal" },
   { title: "Mulch Delivery", desc: "Fresh arborist mulch, delivered to your gate.", img: "/team-photo-real.jpg", route: "#contact" },
 ];
 
@@ -121,8 +122,10 @@ export default function Home() {
   return (
     <div className="scroll-smooth bg-paper text-ink antialiased selection:bg-neon selection:text-black">
       <SEO
-        title="Treemarkables — Gisborne's Number 1 Arborist & Tree Care"
-        description="Gisborne's trusted arborists for safe tree removals, expert pruning, stump grinding and hedge trimming across Tairāwhiti and the East Coast."
+        title={HOME_PAGE.title}
+        description={HOME_PAGE.description}
+        ogTitle={HOME_PAGE.title}
+        ogDescription={HOME_PAGE.description}
         canonicalUrl="https://www.treemarkables.co.nz/"
       />
 
@@ -140,10 +143,10 @@ export default function Home() {
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-neon">Gisborne · Wairoa · East Coast</span>
             </div>
             <h1 className="font-display font-bold text-white leading-[0.95] tracking-tight" style={{ fontSize: "clamp(44px,7vw,92px)" }}>
-              Tree care done<br />once, <span className="text-neon">done right.</span>
+              {HOME_PAGE.h1}
             </h1>
             <p className="mt-6 text-lg md:text-xl text-white/70 max-w-xl leading-relaxed">
-              Gisborne's trusted arborists for safe tree removals, expert pruning and tidy clean-ups — backed by 18+ years and 130+ five-star reviews.
+              {HOME_PAGE.lede}
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <a href="#contact" className="inline-flex items-center gap-2 bg-neon text-black font-bold text-base px-7 py-4 rounded-full hover:brightness-95 transition-all shadow-[0_8px_30px_rgba(57,255,20,0.4)]">
@@ -225,6 +228,9 @@ export default function Home() {
               );
             })}
           </div>
+          <p className="mt-8 text-mute">
+            Also an arborist in <Link href="/wairoa" className="text-forest font-semibold">Wairoa</Link> and along the <Link href="/east-coast" className="text-forest font-semibold">Tairāwhiti East Coast</Link>, including Tolaga Bay, Tokomaru Bay and Ruatoria.
+          </p>
         </div>
       </section>
 
@@ -448,6 +454,9 @@ export default function Home() {
                 <li><Link href="/tree-pruning" className="hover:text-neon transition-colors">Tree Pruning</Link></li>
                 <li><Link href="/stump-grinding" className="hover:text-neon transition-colors">Stump Grinding</Link></li>
                 <li><Link href="/hedge-trimming" className="hover:text-neon transition-colors">Hedge Trimming</Link></li>
+                <li><Link href="/emergency-tree-removal" className="hover:text-neon transition-colors">Emergency Tree Removal</Link></li>
+                <li><Link href="/wairoa" className="hover:text-neon transition-colors">Arborist Wairoa</Link></li>
+                <li><Link href="/east-coast" className="hover:text-neon transition-colors">East Coast Arborist</Link></li>
                 <li><Link href="/blog" className="hover:text-neon transition-colors">Tree Care Blog</Link></li>
               </ul>
             </div>

@@ -5,6 +5,7 @@ import RedesignReviews from "@/components/RedesignReviews";
 import SEO from "@/components/SEO";
 import InquiryForm from "@/components/InquiryForm";
 import ContactFormModal from "@/components/ContactFormModal";
+import { HEDGE_PAGE } from "@shared/treemarkablesPageCopy";
 import {
   Phone,
   Mail,
@@ -113,11 +114,11 @@ export default function HedgeTrimming() {
   return (
     <div className="scroll-smooth bg-paper text-ink antialiased selection:bg-neon selection:text-black">
       <SEO
-        title="Hedge Trimming Gisborne – Expert Shaping & Care"
-        description="Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote."
+        title={HEDGE_PAGE.title}
+        description={HEDGE_PAGE.description}
         keywords="hedge trimming Gisborne, neat hedges, year-round hedge care, coastal hedge trimming, hedge shaping, hedge maintenance, surrounding areas hedge care"
-        ogTitle="Hedge Trimming Gisborne – Neat & Healthy Hedges"
-        ogDescription="Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote."
+        ogTitle={HEDGE_PAGE.title}
+        ogDescription={HEDGE_PAGE.description}
         ogImage="https://www.treemarkables.co.nz/hedge-trimming.jpg"
         canonicalUrl="https://www.treemarkables.co.nz/hedge-trimming"
         structuredData={structuredData}
@@ -136,10 +137,10 @@ export default function HedgeTrimming() {
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-neon">Hedge Trimming · Gisborne &amp; East Coast</span>
             </div>
             <h1 className="font-display font-bold text-white leading-[0.95] tracking-tight" style={{ fontSize: "clamp(40px,6.5vw,84px)" }}>
-              Sharp hedges,<br /><span className="text-neon">zero fuss.</span>
+              {HEDGE_PAGE.h1}
             </h1>
             <p className="mt-6 text-lg md:text-xl text-white/70 max-w-xl leading-relaxed">
-              Privacy, windbreaks and clean lines — kept in shape year-round. Gisborne's coastal winds grow hedges fast; we keep them tidy.
+              {HEDGE_PAGE.lede}
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <a href="#contact" onClick={(e) => { e.preventDefault(); setIsQuoteOpen(true); }} className="inline-flex items-center gap-2 bg-neon text-black font-bold text-base px-7 py-4 rounded-full hover:brightness-95 transition-all shadow-[0_8px_30px_rgba(57,255,20,0.4)]">
