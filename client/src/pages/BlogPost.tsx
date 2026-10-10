@@ -7,8 +7,90 @@ import { Calendar, User, ArrowLeft, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
+interface MarketingBlogPost {
+  title: string;
+  seoTitle?: string;
+  excerpt: string;
+  date: string;
+  datePublished?: string;
+  author: string;
+  readTime: string;
+  image?: string;
+  seoKeywords?: string;
+  schemaKeywords?: string[];
+  about?: string;
+  content: string;
+}
+
 // Blog post data - in a real app this would come from a CMS or database
-const blogPosts = {
+const blogPosts: Record<string, MarketingBlogPost> = {
+  "flying-fox-branch-lowering-gisborne": {
+    title: "How We Lower Big Branches Over Tight Spaces with a Flying Fox",
+    seoTitle: "Flying Fox Branch Lowering in Gisborne | Treemarkables",
+    excerpt: "Need a big branch lowered past a house, fence or garden in Gisborne? See how a flying fox keeps the drop controlled. Call 027 216 6882 for a free quote.",
+    date: "October 11, 2026",
+    datePublished: "2026-10-11",
+    author: "Treemarkables",
+    readTime: "5 min read",
+    seoKeywords: "flying fox branch lowering, Gisborne arborist, zip-line tree work, tree pruning Gisborne, tree removal",
+    schemaKeywords: ["flying fox", "branch lowering", "Gisborne", "arborist", "tree pruning", "tree removal"],
+    about: "Flying fox branch lowering",
+    content: `
+      <p>Some branches cannot be dropped straight down. They sit over a house, a fence, a garden, a driveway, or power lines. When that happens, we lower the wood with a flying fox.</p>
+
+      <p>A flying fox is a tensioned line from the tree to a safe landing zone. The branch is rigged to that line, cut free, and sent along it under control. People also call this a zip-line. The wood travels to the landing zone, clear of whatever sits underneath. That spot might be the berm, an open piece of lawn, or another place we agree with you before the saw starts.</p>
+
+      <h2>When we use a flying fox</h2>
+
+      <p>We set one up when the ground under the branch is not a safe drop zone. Around Gisborne homes that usually means one of these:</p>
+      <ul>
+        <li>The limb hangs over a house, garage, or deck.</li>
+        <li>A fence is hard against the tree, or the wood would land in a neighbour's place.</li>
+        <li>A garden, veggie beds, or a glasshouse sit underneath.</li>
+        <li>The driveway is in use, or cars are parked below.</li>
+        <li>Power lines run through the canopy, or close beside it.</li>
+        <li>There is no open ground under the tree at all.</li>
+      </ul>
+
+      <p>An open lawn under the tree usually does not need a line. A flying fox suits the job where the only clear ground is off to the side, so the branch has to travel sideways as well as down.</p>
+
+      <p>Keeping the tree, and only taking limbs, sits with our <a href="/tree-pruning">tree pruning</a>. Taking the whole tree out of a tight section is a <a href="/tree-removal">tree removal</a>, and the same line sends pieces to a landing zone instead of through the garden. If wind has already put a tree on a roof or across a drive, that is <a href="/emergency-tree-removal">emergency tree removal</a>.</p>
+
+      <h2>Why it looks after your property</h2>
+
+      <p>A branch that looks light from the lawn can still crack tiles, bend a fence, or flatten a garden. The line carries that weight to the landing zone. The branch is tied in before the cut, so on a tree you are keeping, the wood comes away without tearing bark on the way down.</p>
+
+      <h2>Why it keeps the crew safe</h2>
+
+      <p>People on the ground should not stand where the wood will fall. The crew receiving the branch are at the landing zone, off to the side of the trunk. The climber stays tied in. The wood arrives on the line, so nobody has to catch it. If a person, a pet, or a vehicle moves into the path, the cut waits.</p>
+
+      <h2>What to expect on the day</h2>
+
+      <p>We visit, look at the tree, and agree where the wood can land. You get a free quote before the job is booked. On the day, a good part of the time is setup. If the line has to cross a boundary, we talk it through with you and the neighbour before we tension anything. The line runs from the tree to a solid anchor at the far end.</p>
+
+      <p>Crew roles stay simple. One person is in the tree, rigging each piece and making the cut. Another manages the line. Another receives the wood at the landing zone and helps break it down. Branches come down one at a time. We then cut the wood up there, move it out as agreed, and rake and blow the work area so the site is left tidy. If gear has to come through the garden, we protect that path before the first cut.</p>
+
+      <h2>Video of a flying fox lower</h2>
+      <div id="flying-fox-video" data-video-embed="pending">
+        <!-- TODO: Jullian, add the Facebook video URL for the flying fox branch-lowering clip here. Do not embed a guessed or example URL. -->
+        <p>This slot is for a Facebook video of a branch coming down on a flying fox. The clip is not on the page yet.</p>
+      </div>
+
+      <h2>Questions we get asked</h2>
+
+      <h3>Is a flying fox more expensive?</h3>
+      <p>It depends on the job. The line, the anchor, and the extra setup can take longer than dropping wood onto an open lawn, so some jobs cost more. On a tight section it can also be the only sensible way to do the work. We price the tree in front of us. The quote is free. Call <a href="tel:+64272166882">027 216 6882</a> or <a href="/contact">ask for a quote</a> and we will tell you what this tree needs.</p>
+
+      <h3>Will my garden be damaged?</h3>
+      <p>Avoiding that is the point of a flying fox. The branch should land in the zone we set. We still need access for people and gear, and a solid place to anchor the line. We walk that with you first. The aim is to finish with the garden as we found it, apart from the limb that had to come off.</p>
+
+      <h3>Do you do this in Wairoa and on the East Coast?</h3>
+      <p>Yes. We are based at 26 Cochrane Street, Gisborne, and we travel for this work. See our <a href="/wairoa">Wairoa</a> page and our <a href="/east-coast">East Coast</a> page. If the drop zone is wrong, we look at a flying fox there too.</p>
+
+      <h2>Talk to us before that branch comes down</h2>
+      <p>If a limb is over the house, the fence, or the garden you want to keep, leave it until we have looked. A ladder is the wrong tool for a cut over a roof. Phone <a href="tel:+64272166882">027 216 6882</a> or <a href="/contact">request a free quote</a>. We will say whether a flying fox is the right way to lower it, or whether a simpler prune or a removal will do.</p>
+    `
+  },
   "hazardous-tree-removal-gisborne-5-signs-dangerous-tree": {
     title: "5 Signs Your Tree Is a Hazard and Needs Removing",
     excerpt: "Worried a tree on your Gisborne property is a hazard? Learn 5 critical signs of a dangerous tree, from dead branches to root decay. Contact Treemarkables for a free hazardous tree removal assessment.",
@@ -160,7 +242,7 @@ const blogPosts = {
 export default function BlogPost() {
   const [, params] = useRoute("/blog/:slug");
   const slug = params?.slug || "";
-  const post = blogPosts[slug as keyof typeof blogPosts];
+  const post = blogPosts[slug];
 
   if (!post) {
     return (
@@ -185,7 +267,7 @@ export default function BlogPost() {
     "@id": `https://www.treemarkables.co.nz/blog/${slug}#article`,
     "headline": post.title,
     "description": post.excerpt,
-    "image": `https://www.treemarkables.co.nz${post.image}`,
+    ...(post.image ? { image: `https://www.treemarkables.co.nz${post.image}` } : {}),
     "author": {
       "@type": "Organization",
       "name": "Treemarkables",
@@ -196,27 +278,27 @@ export default function BlogPost() {
       "name": "Treemarkables",
       "url": "https://www.treemarkables.co.nz"
     },
-    "datePublished": "2025-09-14",
-    "dateModified": "2025-09-14",
+    "datePublished": post.datePublished ?? "2025-09-14",
+    "dateModified": post.datePublished ?? "2025-09-14",
     "mainEntityOfPage": `https://www.treemarkables.co.nz/blog/${slug}`,
     "url": `https://www.treemarkables.co.nz/blog/${slug}`,
     "articleSection": "Tree Care",
-    "keywords": ["tree pruning", "Gisborne", "arborist", "tree care", "property maintenance"],
+    "keywords": post.schemaKeywords ?? ["tree pruning", "Gisborne", "arborist", "tree care", "property maintenance"],
     "about": {
       "@type": "Thing",
-      "name": "Tree Pruning"
+      "name": post.about ?? "Tree Pruning"
     }
   };
 
   return (
     <div className="min-h-screen bg-background">
       <SEO 
-        title={`${post.title} | Treemarkables Blog`}
+        title={post.seoTitle ?? `${post.title} | Treemarkables Blog`}
         description={post.excerpt}
-        keywords="tree pruning Gisborne, arborist advice, tree care tips, property maintenance, storm protection"
+        keywords={post.seoKeywords ?? "tree pruning Gisborne, arborist advice, tree care tips, property maintenance, storm protection"}
         ogTitle={post.title}
         ogDescription={post.excerpt}
-        ogImage={`https://www.treemarkables.co.nz${post.image}`}
+        ogImage={post.image ? `https://www.treemarkables.co.nz${post.image}` : "https://www.treemarkables.co.nz/team-photo.jpg"}
         canonicalUrl={`https://www.treemarkables.co.nz/blog/${slug}`}
         structuredData={structuredData}
       />
@@ -258,15 +340,16 @@ export default function BlogPost() {
             {post.title}
           </h1>
 
-          {/* Featured Image */}
-          <div className="aspect-video bg-muted rounded-lg overflow-hidden mb-12">
-            <img 
-              src={post.image} 
-              alt={post.title}
-              className="w-full h-full object-cover"
-              data-testid="img-post-featured"
-            />
-          </div>
+          {post.image ? (
+            <div className="aspect-video bg-muted rounded-lg overflow-hidden mb-12">
+              <img 
+                src={post.image} 
+                alt={post.title}
+                className="w-full h-full object-cover"
+                data-testid="img-post-featured"
+              />
+            </div>
+          ) : null}
 
           {/* Post Content */}
           <div 

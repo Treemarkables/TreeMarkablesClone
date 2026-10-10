@@ -83,6 +83,9 @@ function landingHtml(page: MarketingPage): string {
 
 const HAZARD_SLUG = "hazardous-tree-removal-gisborne-5-signs-dangerous-tree";
 const PRUNING_SLUG = "why-regular-tree-pruning-protects-your-home-gisborne";
+const FOX_SLUG = "flying-fox-branch-lowering-gisborne";
+const FOX_DESCRIPTION =
+  "Need a big branch lowered past a house, fence or garden in Gisborne? See how a flying fox keeps the drop controlled. Call 027 216 6882 for a free quote.";
 
 const PAGES: Record<string, PageCopy> = {
   "/": {
@@ -154,6 +157,10 @@ const PAGES: Record<string, PageCopy> = {
       "Expert advice and tips from Gisborne's professional arborists. Learn how to keep your trees healthy and your property safe.",
     extra: `
       <article>
+        <h2><a href="/blog/${FOX_SLUG}">How We Lower Big Branches Over Tight Spaces with a Flying Fox</a></h2>
+        <p>${FOX_DESCRIPTION}</p>
+      </article>
+      <article>
         <h2><a href="/blog/${HAZARD_SLUG}">5 Signs Your Tree Is a Hazard and Needs Removing</a></h2>
         <p>Worried a tree on your Gisborne property is a hazard? Learn 5 critical signs of a dangerous tree, from dead branches to root decay. Contact Treemarkables for a free assessment.</p>
       </article>
@@ -210,6 +217,61 @@ const PAGES: Record<string, PageCopy> = {
       <p>A decaying tree in an empty paddock is not the same risk as a tree within falling distance of a house, driveway, play area or power line. If any warning sign above sits over a target, proactive removal is a safety measure.</p>
       <p>Treemarkables assesses and removes hazardous trees across Gisborne and the East Coast. Call ${PHONE_DISPLAY} or <a href="/contact">request a free assessment</a>. If the tree can be kept, <a href="/tree-pruning">pruning</a> may be the better job.</p>
     `,
+  },
+  [`/blog/${FOX_SLUG}`]: {
+    h1: "How We Lower Big Branches Over Tight Spaces with a Flying Fox",
+    lede:
+      "Some branches cannot be dropped straight down. They sit over a house, a fence, a garden, a driveway, or power lines. When that happens, we lower the wood with a flying fox.",
+    extra: `
+      <p>A flying fox is a tensioned line from the tree to a safe landing zone. The branch is rigged to that line, cut free, and sent along it under control. People also call this a zip-line. The wood travels to the landing zone, clear of whatever sits underneath. That spot might be the berm, an open piece of lawn, or another place we agree with you before the saw starts.</p>
+      <h2>When we use a flying fox</h2>
+      <p>We set one up when the ground under the branch is not a safe drop zone. Around Gisborne homes that usually means one of these:</p>
+      <ul>
+        <li>The limb hangs over a house, garage, or deck.</li>
+        <li>A fence is hard against the tree, or the wood would land in a neighbour's place.</li>
+        <li>A garden, veggie beds, or a glasshouse sit underneath.</li>
+        <li>The driveway is in use, or cars are parked below.</li>
+        <li>Power lines run through the canopy, or close beside it.</li>
+        <li>There is no open ground under the tree at all.</li>
+      </ul>
+      <p>An open lawn under the tree usually does not need a line. A flying fox suits the job where the only clear ground is off to the side, so the branch has to travel sideways as well as down.</p>
+      <p>Keeping the tree, and only taking limbs, sits with our <a href="/tree-pruning">tree pruning</a>. Taking the whole tree out of a tight section is a <a href="/tree-removal">tree removal</a>, and the same line sends pieces to a landing zone instead of through the garden. If wind has already put a tree on a roof or across a drive, that is <a href="/emergency-tree-removal">emergency tree removal</a>.</p>
+      <h2>Why it looks after your property</h2>
+      <p>A branch that looks light from the lawn can still crack tiles, bend a fence, or flatten a garden. The line carries that weight to the landing zone. The branch is tied in before the cut, so on a tree you are keeping, the wood comes away without tearing bark on the way down.</p>
+      <h2>Why it keeps the crew safe</h2>
+      <p>People on the ground should not stand where the wood will fall. The crew receiving the branch are at the landing zone, off to the side of the trunk. The climber stays tied in. The wood arrives on the line, so nobody has to catch it. If a person, a pet, or a vehicle moves into the path, the cut waits.</p>
+      <h2>What to expect on the day</h2>
+      <p>We visit, look at the tree, and agree where the wood can land. You get a free quote before the job is booked. On the day, a good part of the time is setup. If the line has to cross a boundary, we talk it through with you and the neighbour before we tension anything. The line runs from the tree to a solid anchor at the far end.</p>
+      <p>Crew roles stay simple. One person is in the tree, rigging each piece and making the cut. Another manages the line. Another receives the wood at the landing zone and helps break it down. Branches come down one at a time. We then cut the wood up there, move it out as agreed, and rake and blow the work area so the site is left tidy. If gear has to come through the garden, we protect that path before the first cut.</p>
+      <h2>Video of a flying fox lower</h2>
+      <div id="flying-fox-video" data-video-embed="pending">
+        <!-- TODO: Jullian, add the Facebook video URL for the flying fox branch-lowering clip here. Do not embed a guessed or example URL. -->
+        <p>This slot is for a Facebook video of a branch coming down on a flying fox. The clip is not on the page yet.</p>
+      </div>
+      <h2>Questions we get asked</h2>
+      <h3>Is a flying fox more expensive?</h3>
+      <p>It depends on the job. The line, the anchor, and the extra setup can take longer than dropping wood onto an open lawn, so some jobs cost more. On a tight section it can also be the only sensible way to do the work. We price the tree in front of us. The quote is free. Call <a href="tel:${PHONE_TEL}">${PHONE_DISPLAY}</a> or <a href="/contact">ask for a quote</a> and we will tell you what this tree needs.</p>
+      <h3>Will my garden be damaged?</h3>
+      <p>Avoiding that is the point of a flying fox. The branch should land in the zone we set. We still need access for people and gear, and a solid place to anchor the line. We walk that with you first. The aim is to finish with the garden as we found it, apart from the limb that had to come off.</p>
+      <h3>Do you do this in Wairoa and on the East Coast?</h3>
+      <p>Yes. We are based at 26 Cochrane Street, Gisborne, and we travel for this work. See our <a href="/wairoa">Wairoa</a> page and our <a href="/east-coast">East Coast</a> page. If the drop zone is wrong, we look at a flying fox there too.</p>
+      <h2>Talk to us before that branch comes down</h2>
+      <p>If a limb is over the house, the fence, or the garden you want to keep, leave it until we have looked. A ladder is the wrong tool for a cut over a roof. Phone <a href="tel:${PHONE_TEL}">${PHONE_DISPLAY}</a> or <a href="/contact">request a free quote</a>. We will say whether a flying fox is the right way to lower it, or whether a simpler prune or a removal will do.</p>
+    `,
+    faqs: [
+      {
+        q: "Is a flying fox more expensive?",
+        a: "It depends on the job. The line, the anchor, and the extra setup can take longer than dropping wood onto an open lawn, so some jobs cost more. On a tight section it can also be the only sensible way to do the work. We price the tree in front of us. The quote is free. Call 027 216 6882 or ask for a quote and we will tell you what this tree needs.",
+      },
+      {
+        q: "Will my garden be damaged?",
+        a: "Avoiding that is the point of a flying fox. The branch should land in the zone we set. We still need access for people and gear, and a solid place to anchor the line. We walk that with you first. The aim is to finish with the garden as we found it, apart from the limb that had to come off.",
+      },
+      {
+        q: "Do you do this in Wairoa and on the East Coast?",
+        a: "Yes. We are based at 26 Cochrane Street, Gisborne, and we travel for this work. See our Wairoa page and our East Coast page. If the drop zone is wrong, we look at a flying fox there too.",
+      },
+    ],
   },
   [`/blog/${PRUNING_SLUG}`]: {
     h1: "Why Regular Tree Pruning Protects Your Home in Gisborne",
@@ -312,7 +374,7 @@ interface BlogMeta {
   headline: string;
   description: string;
   date: string;
-  image: string;
+  image?: string;
 }
 
 const BLOG_META: Record<string, BlogMeta> = {
@@ -331,6 +393,12 @@ const BLOG_META: Record<string, BlogMeta> = {
       "Gisborne's mild climate and coastal winds create conditions where branches can grow quickly and pose risks to homes. Regular pruning is preventive maintenance.",
     date: "2025-09-14",
     image: `${ORIGIN}/tree-pruning.jpg`,
+  },
+  [`/blog/${FOX_SLUG}`]: {
+    slug: FOX_SLUG,
+    headline: "How We Lower Big Branches Over Tight Spaces with a Flying Fox",
+    description: FOX_DESCRIPTION,
+    date: "2026-10-11",
   },
 };
 
@@ -389,7 +457,7 @@ function blogPosting(meta: BlogMeta): Record<string, unknown> {
     "@id": `${ORIGIN}/blog/${meta.slug}#article`,
     headline: meta.headline,
     description: meta.description,
-    image: meta.image,
+    ...(meta.image ? { image: meta.image } : {}),
     datePublished: meta.date,
     dateModified: meta.date,
     author: { "@type": "Organization", name: "Treemarkables", url: `${ORIGIN}/` },

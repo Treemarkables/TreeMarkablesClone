@@ -47,6 +47,10 @@ const MARKETING_CASES: Array<{ path: string; location: string }> = [
     location: `${WWW}/blog/why-regular-tree-pruning-protects-your-home-gisborne?utm=ad`,
   },
   {
+    path: "/blog/flying-fox-branch-lowering-gisborne",
+    location: `${WWW}/blog/flying-fox-branch-lowering-gisborne`,
+  },
+  {
     path: "/stump-grinding?gclid=1&utm_source=google",
     location: `${WWW}/stump-grinding?gclid=1&utm_source=google`,
   },

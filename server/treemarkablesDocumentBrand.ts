@@ -165,6 +165,16 @@ const PAGE_META: Record<string, DocumentBrandMeta> = {
     ogTitle: "Why Regular Tree Pruning Protects Your Home in Gisborne",
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/tree-pruning.jpg`,
   },
+  "/blog/flying-fox-branch-lowering-gisborne": {
+    title: "Flying Fox Branch Lowering in Gisborne | Treemarkables",
+    description:
+      "Need a big branch lowered past a house, fence or garden in Gisborne? See how a flying fox keeps the drop controlled. Call 027 216 6882 for a free quote.",
+    canonicalPath: "/blog/flying-fox-branch-lowering-gisborne",
+    ogTitle: "How We Lower Big Branches Over Tight Spaces with a Flying Fox",
+    ogDescription:
+      "Need a big branch lowered past a house, fence or garden in Gisborne? See how a flying fox keeps the drop controlled. Call 027 216 6882 for a free quote.",
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/team-photo.jpg`,
+  },
   "/mulch": {
     title: "Order Mulch — Treemarkables",
     description: "Aged arborist mulch delivered across Gisborne. $35/m³ + GST plus $80 delivery, minimum 4 m³.",
