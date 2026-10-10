@@ -23,9 +23,12 @@ const HOME = "/";
 
 const serviceLinks = [
   { href: "/tree-removal", label: "Tree Removal" },
+  { href: "/emergency-tree-removal", label: "Emergency" },
   { href: "/tree-pruning", label: "Tree Pruning" },
   { href: "/stump-grinding", label: "Stump Grinding" },
   { href: "/hedge-trimming", label: "Hedge Trimming" },
+  { href: "/wairoa", label: "Wairoa" },
+  { href: "/east-coast", label: "East Coast" },
 ];
 
 const sectionLinks = [

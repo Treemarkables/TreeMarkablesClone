@@ -5,6 +5,7 @@ import RedesignReviews from "@/components/RedesignReviews";
 import SEO from "@/components/SEO";
 import InquiryForm from "@/components/InquiryForm";
 import ContactFormModal from "@/components/ContactFormModal";
+import { GISBORNE_PRUNING_FAQS, TREE_PRUNING_PAGE } from "@shared/treemarkablesPageCopy";
 import {
   Phone,
   Mail,
@@ -50,10 +51,10 @@ const areas: [string, string][] = [
 ];
 
 const faqs: [string, string][] = [
+  ...GISBORNE_PRUNING_FAQS.map((item) => [item.q, item.a] as [string, string]),
   ["When is the best time to prune?", "It depends on the species and goal. Structural pruning suits late winter to early spring, deadwooding can be done year-round, and flowering trees are best pruned just after they finish flowering."],
   ["Will pruning hurt my tree?", "Done correctly, no — proper pruning improves health, structure and safety. We make clean cuts in the right places and never over-prune."],
   ["Can you reduce a tree's height without removing it?", "Yes — crown reduction lowers height or spread while keeping the natural shape, ideal for trees that have outgrown their space."],
-  ["Do you clean up afterwards?", "Always — all clippings and green waste are cleared and the site left tidy."],
   ["Do you provide free quotes?", "Yes — free, no-obligation on-site assessments across Gisborne and the East Coast."],
   ["Are you insured and qualified?", "Yes — NZ-qualified arborists with $5M public liability cover. Certificate of currency available on request."],
 ];
@@ -102,11 +103,11 @@ export default function TreePruning() {
   return (
     <div className="scroll-smooth bg-paper text-ink antialiased selection:bg-neon selection:text-black">
       <SEO
-        title="Tree Pruning Gisborne – Qualified Arborists"
-        description="Improve tree health and safety with our expert tree pruning services. Treemarkables offers crown reduction and shaping across Gisborne and the wider East Coast. Free assessments available."
+        title={TREE_PRUNING_PAGE.title}
+        description={TREE_PRUNING_PAGE.description}
         keywords="tree pruning Gisborne, professional arborists, tree health, crown reduction, tree shaping, East Coast tree pruning, free tree assessments, Gisborne tree care"
-        ogTitle="Tree Pruning Gisborne – Professional Arborists"
-        ogDescription="Improve tree health and safety with our expert tree pruning services. Treemarkables offers crown reduction and shaping across Gisborne and the wider East Coast. Free assessments available."
+        ogTitle={TREE_PRUNING_PAGE.title}
+        ogDescription={TREE_PRUNING_PAGE.description}
         ogImage="https://www.treemarkables.co.nz/tree-pruning.jpg"
         canonicalUrl="https://www.treemarkables.co.nz/tree-pruning"
         structuredData={structuredData}
@@ -125,10 +126,10 @@ export default function TreePruning() {
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-neon">Tree Pruning · Gisborne &amp; East Coast</span>
             </div>
             <h1 className="font-display font-bold text-white leading-[0.95] tracking-tight" style={{ fontSize: "clamp(40px,6.5vw,84px)" }}>
-              Pruned right,<br /><span className="text-neon">growing strong.</span>
+              {TREE_PRUNING_PAGE.h1}
             </h1>
             <p className="mt-6 text-lg md:text-xl text-white/70 max-w-xl leading-relaxed">
-              Expert pruning to keep your trees healthy, safe and beautifully shaped — qualified arborists across Gisborne and the East Coast.
+              {TREE_PRUNING_PAGE.lede}
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <a href="#contact" onClick={(e) => { e.preventDefault(); setIsQuoteOpen(true); }} className="inline-flex items-center gap-2 bg-neon text-black font-bold text-base px-7 py-4 rounded-full hover:brightness-95 transition-all shadow-[0_8px_30px_rgba(57,255,20,0.4)]">
@@ -259,7 +260,7 @@ export default function TreePruning() {
           <div className="text-center mb-12">
             <div className="text-xs font-bold uppercase tracking-[0.2em] text-forest/70 mb-3">FAQ</div>
             <h2 className="font-display font-bold text-ink leading-tight tracking-tight" style={{ fontSize: "clamp(28px,3.8vw,48px)" }}>
-              Tree pruning questions, answered.
+              Gisborne tree pruning questions
             </h2>
           </div>
           <div className="space-y-3">

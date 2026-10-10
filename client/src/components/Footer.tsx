@@ -88,6 +88,21 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/emergency-tree-removal" className="text-gray-300 hover:text-orange-400 transition-colors">
+                  Emergency Tree Removal
+                </Link>
+              </li>
+              <li>
+                <Link href="/wairoa" className="text-gray-300 hover:text-orange-400 transition-colors">
+                  Arborist Wairoa
+                </Link>
+              </li>
+              <li>
+                <Link href="/east-coast" className="text-gray-300 hover:text-orange-400 transition-colors">
+                  East Coast Arborist
+                </Link>
+              </li>
+              <li>
                 <Link href="/blog" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-blog">
                   Tree Care Blog
                 </Link>

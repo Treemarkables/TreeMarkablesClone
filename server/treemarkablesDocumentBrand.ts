@@ -22,6 +22,17 @@ import type { IncomingHttpHeaders } from "http";
 import type { Request, RequestHandler, Response } from "express";
 import fs from "fs";
 import { injectTreemarkablesPublicHtml, treemarkablesJsonLd } from "./treemarkablesPublicHtml";
+import {
+  EAST_COAST_PAGE,
+  EMERGENCY_PAGE,
+  HEDGE_PAGE,
+  HOME_PAGE,
+  STUMP_PAGE,
+  SUMMER_PAGE,
+  TREE_PRUNING_PAGE,
+  TREE_REMOVAL_PAGE,
+  WAIROA_PAGE,
+} from "@shared/treemarkablesPageCopy";
 
 export const TREEMARKABLES_DOCUMENT_HOSTS = new Set([
   "www.treemarkables.co.nz",
@@ -50,46 +61,71 @@ export interface DocumentBrandMeta {
 
 /** Copy already used by client/src/pages/* SEO components — keep first-byte in sync. */
 export const DEFAULT_TREEMARKABLES_META: DocumentBrandMeta = {
-  title: "Treemarkables — Gisborne's Number 1 Arborist & Tree Care",
-  description:
-    "Gisborne's trusted arborists for safe tree removals, expert pruning, stump grinding and hedge trimming across Tairāwhiti and the East Coast.",
+  title: HOME_PAGE.title,
+  description: HOME_PAGE.description,
   canonicalPath: "/",
+  ogTitle: HOME_PAGE.title,
+  ogDescription: HOME_PAGE.description,
   ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/team-photo.jpg`,
 };
 
 const PAGE_META: Record<string, DocumentBrandMeta> = {
   "/": DEFAULT_TREEMARKABLES_META,
   "/tree-removal": {
-    title: "Tree Removal Gisborne – Safe, Certified & 24/7",
-    description:
-      "Need a dangerous or unwanted tree removed? Our certified arborists provide safe tree removal for homes and farms in Gisborne and Wairoa. Contact us for competitive prices.",
+    title: TREE_REMOVAL_PAGE.title,
+    description: TREE_REMOVAL_PAGE.description,
     canonicalPath: "/tree-removal",
-    ogTitle: "Tree Removal Gisborne – Safe & Efficient Service",
+    ogTitle: TREE_REMOVAL_PAGE.title,
+    ogDescription: TREE_REMOVAL_PAGE.description,
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/hazardous-tree-removal.jpg`,
   },
   "/tree-pruning": {
-    title: "Tree Pruning Gisborne – Qualified Arborists",
-    description:
-      "Improve tree health and safety with our expert tree pruning services. Treemarkables offers crown reduction and shaping across Gisborne and the wider East Coast. Free assessments available.",
+    title: TREE_PRUNING_PAGE.title,
+    description: TREE_PRUNING_PAGE.description,
     canonicalPath: "/tree-pruning",
-    ogTitle: "Tree Pruning Gisborne – Professional Arborists",
+    ogTitle: TREE_PRUNING_PAGE.title,
+    ogDescription: TREE_PRUNING_PAGE.description,
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/tree-pruning.jpg`,
   },
   "/stump-grinding": {
-    title: "Stump Grinding Gisborne – Complete Stump Removal",
-    description:
-      "Eliminate unsightly stumps with our powerful stump grinding service. Serving Gisborne, Wairoa and rural properties. Book your stump removal today.",
+    title: STUMP_PAGE.title,
+    description: STUMP_PAGE.description,
     canonicalPath: "/stump-grinding",
-    ogTitle: "Stump Grinding Gisborne – Fast & Tidy Stump Removal",
+    ogTitle: STUMP_PAGE.title,
+    ogDescription: STUMP_PAGE.description,
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/stump-grinding.jpg`,
   },
   "/hedge-trimming": {
-    title: "Hedge Trimming Gisborne – Expert Shaping & Care",
-    description:
-      "Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote.",
+    title: HEDGE_PAGE.title,
+    description: HEDGE_PAGE.description,
     canonicalPath: "/hedge-trimming",
-    ogTitle: "Hedge Trimming Gisborne – Neat & Healthy Hedges",
+    ogTitle: HEDGE_PAGE.title,
+    ogDescription: HEDGE_PAGE.description,
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/hedge-trimming.jpg`,
+  },
+  "/emergency-tree-removal": {
+    title: EMERGENCY_PAGE.title,
+    description: EMERGENCY_PAGE.description,
+    canonicalPath: "/emergency-tree-removal",
+    ogTitle: EMERGENCY_PAGE.title,
+    ogDescription: EMERGENCY_PAGE.description,
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}${EMERGENCY_PAGE.ogImage}`,
+  },
+  "/wairoa": {
+    title: WAIROA_PAGE.title,
+    description: WAIROA_PAGE.description,
+    canonicalPath: "/wairoa",
+    ogTitle: WAIROA_PAGE.title,
+    ogDescription: WAIROA_PAGE.description,
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}${WAIROA_PAGE.ogImage}`,
+  },
+  "/east-coast": {
+    title: EAST_COAST_PAGE.title,
+    description: EAST_COAST_PAGE.description,
+    canonicalPath: "/east-coast",
+    ogTitle: EAST_COAST_PAGE.title,
+    ogDescription: EAST_COAST_PAGE.description,
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}${EAST_COAST_PAGE.ogImage}`,
   },
   "/contact": {
     title: "Contact Us – Get a Free Quote | Treemarkables",
@@ -142,13 +178,11 @@ const PAGE_META: Record<string, DocumentBrandMeta> = {
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/team-photo.jpg`,
   },
   "/summer-offer": {
-    title: "Win $1000 Back - Summer Tree Care Offer | Treemarkables Gisborne",
-    description:
-      "Book any tree care service this summer and win up to $1000 back! 1-in-90 chance to win. Professional tree removal, pruning & emergency services in Gisborne.",
+    title: SUMMER_PAGE.title,
+    description: SUMMER_PAGE.description,
     canonicalPath: "/summer-offer",
-    ogTitle: "Win $1000 Back on Tree Care - Summer Offer",
-    ogDescription:
-      "Book any tree service this summer for your chance to win $1000 back! Professional arborists serving Gisborne and surrounding areas.",
+    ogTitle: SUMMER_PAGE.title,
+    ogDescription: SUMMER_PAGE.description,
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/team-photo.jpg`,
   },
 };

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Check, Star, Users, Clock, Shield, Award, Phone, Mail, Target, Plus, Minus } from "lucide-react";
 import { Link } from "wouter";
+import { SUMMER_PAGE } from "@shared/treemarkablesPageCopy";
 const heroBackground = "/arborist-drone.jpg";
 const teamPhoto = "/team-photo.jpg";
 
@@ -97,11 +98,11 @@ export default function SummerOffer() {
   return (
     <div className="min-h-screen bg-background">
       <SEO 
-        title="Win $1000 Back - Summer Tree Care Offer | Treemarkables Gisborne"
-        description="Book any tree care service this summer and win up to $1000 back! 1-in-90 chance to win. Professional tree removal, pruning & emergency services in Gisborne."
+        title={SUMMER_PAGE.title}
+        description={SUMMER_PAGE.description}
         keywords="tree removal offer, Gisborne tree care discount, win money back tree service, summer tree removal special, $1000 tree care rebate"
-        ogTitle="Win $1000 Back on Tree Care - Summer Offer"
-        ogDescription="Book any tree service this summer for your chance to win $1000 back! Professional arborists serving Gisborne and surrounding areas."
+        ogTitle={SUMMER_PAGE.title}
+        ogDescription={SUMMER_PAGE.description}
         canonicalUrl="https://www.treemarkables.co.nz/summer-offer"
       />
       <Header />
@@ -131,9 +132,7 @@ export default function SummerOffer() {
           </div>
           
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-6" data-testid="text-hero-title">
-            Road to Summer:<br />
-            <span className="text-yellow-400">Win Up to $1000 Back</span><br />
-            on Your Tree Care!
+            {SUMMER_PAGE.h1}
           </h1>
           
           <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto" data-testid="text-hero-subtitle">
