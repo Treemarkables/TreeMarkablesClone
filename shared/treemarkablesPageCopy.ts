@@ -273,23 +273,23 @@ export const EAST_COAST_PAGE: MarketingPage = {
   path: "/east-coast",
   title: "East Coast Arborist | Tairāwhiti",
   description:
-    "Arborist for Tolaga Bay, Tokomaru Bay, Ruatoria and the Tairāwhiti East Coast. Call 027 216 6882 for a free quote.",
+    "Arborist for the Tairāwhiti East Coast: tree removal, pruning, stump grinding and hedge trimming. Call 027 216 6882 for a free quote.",
   h1: "East Coast Arborist",
   lede:
-    "Treemarkables works the Tairāwhiti East Coast from Gisborne, including Tolaga Bay, Tokomaru Bay and Ruatoria. Tree removal, pruning, stump grinding and hedge trimming for homes and farms along the coast.",
+    "Treemarkables works the Tairāwhiti East Coast from Gisborne. Tree removal, pruning, stump grinding and hedge trimming for homes and farms along the coast.",
   ogImage: "/tree-pruning.jpg",
   serviceHeading: "Tree care along the East Coast",
   services: SERVICE_LINKS,
   faqHeading: "East Coast arborist questions",
   sections: [
     {
-      heading: "Towns we travel to",
+      heading: "The Tairāwhiti East Coast",
       paragraphs: [
-        "Tolaga Bay, Tokomaru Bay, Ruatoria and the communities between them on the coast road are part of the round we do from 26 Cochrane Street, Gisborne.",
+        "Homes and farms along the Tairāwhiti East Coast are part of the round we do from 26 Cochrane Street, Gisborne.",
         "If you are further up the coast, call " +
           PHONE +
           " and we will tell you whether we can take the job before you wait on a visit.",
-        "The crew comes from Gisborne with the gear that the site needs. Tell us the town when you ask for a quote.",
+        "The crew comes from Gisborne with the gear that the site needs. Tell us where the property is when you ask for a quote.",
       ],
     },
     {
@@ -305,14 +305,14 @@ export const EAST_COAST_PAGE: MarketingPage = {
       paragraphs: [
         "Many places up the coast are down a long drive, a narrow track, or a gate a large truck will not fit. Tell us about the drive, where a vehicle can turn, and whether there is a bridge or a ford.",
         "Tight access is a normal job. We have a narrow-access stump grinder for gates and side paths, and larger gear when the site is open.",
-        "For protected or notable trees in these towns, check with Gisborne District Council before any cutting.",
+        "For protected or notable trees along the East Coast, check with Gisborne District Council before any cutting.",
       ],
     },
   ],
   faqs: [
     {
-      q: "Which East Coast towns do you cover?",
-      a: "Tolaga Bay, Tokomaru Bay, Ruatoria and other Tairāwhiti coast towns we can reach from Gisborne. Call if you are further north and we will say whether we can come.",
+      q: "Do you work the Tairāwhiti East Coast?",
+      a: "Yes. Tree removal, pruning, stump grinding and hedge trimming for homes and farms along the coast, travelling from Gisborne. Call 027 216 6882 if you are further north and we will say whether we can come.",
     },
     {
       q: "Can you prune a wind-loaded tree instead of removing it?",
@@ -324,7 +324,7 @@ export const EAST_COAST_PAGE: MarketingPage = {
     },
     {
       q: "Who do I ask about a protected tree on the East Coast?",
-      a: "Check with Gisborne District Council for protected or notable trees in Tolaga Bay, Tokomaru Bay, Ruatoria and the other coast towns in that district.",
+      a: "Check with Gisborne District Council for protected or notable trees on the Tairāwhiti East Coast.",
     },
     {
       q: "Who do I call after a coastal storm?",

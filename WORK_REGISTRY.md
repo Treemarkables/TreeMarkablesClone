@@ -18,7 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
-- Treemarkables local SEO — #618, branch `cursor/treemarkables-local-seo-18ce` — 2026-10-10 — rewrite marketing titles, descriptions and H1s, add /emergency-tree-removal, /wairoa and /east-coast in the prerender, sitemap and nav. No aggregateRating. Stump page title only (no hire; the page says it is not a hire grinder). No TestFlight. Draft only.
+- East Coast town names — #619, branch `cursor/east-coast-generic-copy-18ce` — 2026-10-10 — drop Tolaga Bay, Tokomaru Bay and Ruatoria from /east-coast copy, homepage, and JSON-LD areaServed. Page stays generic to the Tairāwhiti East Coast. No TestFlight. Draft only.
 - App-host marketing 301 — branch `cursor/app-host-marketing-redirect-2e08` — 2026-10-10 — on app.treemarkables.co.nz, 301 sitemap marketing paths to https://www.treemarkables.co.nz (query kept). `/` stays (iOS and logged-in entry) with noindex + www canonical. No redirect of login, dashboard, api, dispatch, proposal, invoice, portal, or assets. App-host robots.txt omits the www sitemap. No TestFlight rebuild. Draft only. [PR #617]
 - Treemarkables yard address — branch `cursor/treemarkables-yard-address-c9a3` — 2026-10-10 — hardcoded invoices, emails, and the job-map yard pin move from 213 Stanley Road to 26 Cochrane Street, Gisborne. Production document_templates and business_settings rows are not updated. Draft only. [PR #616]
 - Treemarkables marketing SEO — branch `cursor/treemarkables-seo-prerender-f110` — 2026-10-10 — first-byte HTML for public www routes (H1, copy, phone, address, JSON-LD) and apex→www 301. No aggregateRating. Staff/app hosts unchanged. DNS for the bare domain is outside the repo. [PR #615]
@@ -235,6 +235,7 @@ Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [P
 - Job video save on iOS — branch `cursor/fix-video-save-ios-4c52` — 2026-09-22 — Media Library download toast "Could not save video" / WebKit NotAllowedError. Not showSaveFilePicker. Share sheet was called after the video download, so the tap had expired. Stage the file and share on the next tap (same as /videos). Desktop anchor download unchanged. No native rebuild. [PR #582]
 
 ## Recently done
+- Treemarkables local SEO — MERGED [PR #618] 2026-10-10 (`d0f21849`, branch `cursor/treemarkables-local-seo-18ce`). Marketing titles, descriptions and H1s, plus /emergency-tree-removal, /wairoa and /east-coast in the prerender, sitemap and nav.
 - Job photo arrow shaft and editor overlay — MERGED [PR #612] 2026-10-05 (`10fb0148`, branch `cursor/photo-annotator-arrow-shaft-d1cd`). Window pointer tracking draws the arrow shaft, the debug strip is gone, and the editor covers the screen.
 - Job photo annotation persist — MERGED [PR #611] 2026-10-05 (`af037213`, branch `cursor/photo-annotation-persist-d1cd`). Saved markup stays on the photo after close/reopen: tenant-stamp the row, scale editor strokes onto the full image, diary thumbnail and photos grid use the baked image.
 - Quote follow-ups, invoices not in Xero, and completed jobs not billed — MERGED [PR #593] 2026-09-28 (`3f97eca3`).

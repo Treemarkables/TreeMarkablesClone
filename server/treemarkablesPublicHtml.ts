@@ -97,7 +97,7 @@ const PAGES: Record<string, PageCopy> = {
         <li><a href="/stump-grinding">Stump grinding</a> — ground out below the surface so you can reclaim the space.</li>
         <li><a href="/hedge-trimming">Hedge trimming</a> — crisp, healthy hedges shaped to last.</li>
         <li><a href="/wairoa">Arborist in Wairoa</a> — homes and farms, travelling from Gisborne.</li>
-        <li><a href="/east-coast">East Coast arborist</a> — Tolaga Bay, Tokomaru Bay, Ruatoria and the Tairāwhiti coast.</li>
+        <li><a href="/east-coast">East Coast arborist</a> — tree care along the Tairāwhiti East Coast.</li>
       </ul>
       <p>Free, no-obligation quotes. We visit, assess the job in person, and leave a clear itemised price before any work begins. Fully insured. Yard: ${ADDRESS_LINE}.</p>
     `,
@@ -358,9 +358,6 @@ function localBusiness(): Record<string, unknown> {
       { "@type": "AdministrativeArea", name: "Tairāwhiti" },
       { "@type": "City", name: "Wairoa" },
       { "@type": "AdministrativeArea", name: "East Coast" },
-      { "@type": "City", name: "Tolaga Bay" },
-      { "@type": "City", name: "Tokomaru Bay" },
-      { "@type": "City", name: "Ruatoria" },
     ],
     hasOfferCatalog: {
       "@type": "OfferCatalog",
