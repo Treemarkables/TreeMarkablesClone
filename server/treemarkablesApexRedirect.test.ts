@@ -99,7 +99,9 @@ describe("public marketing first byte", () => {
       const branded = applyTreemarkablesDocumentHead(html, route);
       assert.match(branded, /<h1>[^<]+<\/h1>/);
       assert.match(branded, /027 216 6882/);
-      assert.match(branded, /213 Stanley Road, Awapuni, Gisborne 4010/);
+      assert.match(branded, /26 Cochrane Street, Gisborne, NZ/);
+      assert.doesNotMatch(branded, /Stanley Road/);
+      assert.doesNotMatch(branded, /"postalCode"/);
       assert.match(branded, /Tairāwhiti/);
       assert.match(branded, /"@type":"HomeAndConstructionBusiness"/);
       assert.match(branded, /\+64 27 216 6882/);

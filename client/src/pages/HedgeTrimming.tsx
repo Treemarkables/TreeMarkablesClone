@@ -340,7 +340,7 @@ export default function HedgeTrimming() {
               </a>
               <div className="flex items-center gap-3 text-mute">
                 <span className="h-10 w-10 rounded-full bg-forest/10 text-forest flex items-center justify-center"><MapPin className="h-5 w-5" /></span>
-                <span>213 Stanley Road, Awapuni, Gisborne 4010</span>
+                <span>26 Cochrane Street, Gisborne, NZ</span>
               </div>
             </div>
           </div>

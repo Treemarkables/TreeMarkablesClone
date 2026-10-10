@@ -48,7 +48,7 @@ export default function RedesignFooter() {
             <ul className="space-y-2.5 text-white/55 text-sm">
               <li><a href={`tel:${PHONE}`} onClick={handlePhoneClick} className="hover:text-neon transition-colors">027 216 6882</a></li>
               <li><a href="mailto:quotes@treemarkables.nz" className="hover:text-neon transition-colors">quotes@treemarkables.nz</a></li>
-              <li>213 Stanley Road, Awapuni, Gisborne 4010</li>
+              <li>26 Cochrane Street, Gisborne, NZ</li>
               <li>Gisborne, Tairāwhiti, Wairoa &amp; the East Coast</li>
               <li className="flex items-center gap-1.5 pt-1 text-neon/90"><Clock className="h-3.5 w-3.5" />24/7 emergency</li>
             </ul>

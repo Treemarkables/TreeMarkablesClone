@@ -18,7 +18,7 @@ const ORIGIN = "https://www.treemarkables.co.nz";
 const PHONE_DISPLAY = "027 216 6882";
 const PHONE_TEL = "+64272166882";
 const PHONE_SCHEMA = "+64 27 216 6882";
-const ADDRESS_LINE = "213 Stanley Road, Awapuni, Gisborne 4010, New Zealand";
+const ADDRESS_LINE = "26 Cochrane Street, Gisborne, NZ";
 
 const NAV: Array<[string, string]> = [
   ["/", "Home"],
@@ -280,10 +280,9 @@ function localBusiness(): Record<string, unknown> {
     image: `${ORIGIN}/team-photo.jpg`,
     address: {
       "@type": "PostalAddress",
-      streetAddress: "213 Stanley Road",
-      addressLocality: "Awapuni",
+      streetAddress: "26 Cochrane Street",
+      addressLocality: "Gisborne",
       addressRegion: "Gisborne",
-      postalCode: "4010",
       addressCountry: "NZ",
     },
     areaServed: [

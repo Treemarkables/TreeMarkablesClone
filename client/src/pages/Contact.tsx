@@ -257,7 +257,7 @@ export default function Contact() {
                           Service Area
                         </p>
                         <p className="text-muted-foreground">
-                          213 Stanley Road, Awapuni, Gisborne 4010
+                          26 Cochrane Street, Gisborne, NZ
                         </p>
                         <p className="text-muted-foreground">
                           Gisborne, Tairāwhiti, Wairoa &amp; East Coast

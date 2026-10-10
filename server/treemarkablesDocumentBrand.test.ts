@@ -175,7 +175,7 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
     assert.doesNotMatch(branded, /job management for field-services teams/);
     assert.match(branded, /<h1>Tree care done once, done right\.<\/h1>/);
     assert.match(branded, /027 216 6882/);
-    assert.match(branded, /213 Stanley Road, Awapuni, Gisborne 4010/);
+    assert.match(branded, /26 Cochrane Street, Gisborne, NZ/);
     assert.match(branded, /HomeAndConstructionBusiness/);
     assert.doesNotMatch(branded, /aggregateRating/);
     assert.doesNotMatch(branded, /id="inflow-boot"/);
@@ -373,7 +373,10 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
     assert.match(branded, /<title>Treemarkables/);
     assert.match(branded, /<h1>Tree care done once, done right\.<\/h1>/);
     assert.match(branded, /027 216 6882/);
-    assert.match(branded, /213 Stanley Road/);
+    assert.match(branded, /26 Cochrane Street, Gisborne, NZ/);
+    assert.doesNotMatch(branded, /Stanley Road/);
+    assert.doesNotMatch(branded, /Awapuni/);
+    assert.doesNotMatch(branded, /"postalCode"/);
     assert.match(branded, /"@type":"HomeAndConstructionBusiness"/);
     assert.doesNotMatch(branded, /aggregateRating/);
     assert.doesNotMatch(branded, /<p class="boot-title">Opening Inflow<\/p>/);
