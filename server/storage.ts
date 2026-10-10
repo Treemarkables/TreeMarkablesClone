@@ -330,7 +330,7 @@ export interface IStorage {
   getUninvoicedCompletedJobs(completedBetween: { from: Date; to: Date }): Promise<Job[]>;
   getJobsScheduledAroundNZDate(nzDate: string): Promise<Array<Job & { customerName: string | null }>>;
   getCompletedJobsWithCustomerNames(): Promise<Array<Job & { customerName: string | null; invoiceAmountIncGst: number | null }>>;
-  getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
+  getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean; sort?: "createdAt" | "recentActivity" }): Promise<{ jobs: Job[]; total: number }>;
   searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
   createJobFromCall(params: {
     callId: string;
@@ -2118,7 +2118,7 @@ class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }> {
+  async getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean; sort?: "createdAt" | "recentActivity" }): Promise<{ jobs: Job[]; total: number }> {
     const limit = options?.limit ?? 10; // Default to 10 jobs
     const offset = options?.offset ?? 0;
     
@@ -2152,20 +2152,94 @@ class DatabaseStorage implements IStorage {
       customerPhone: schema.customers.phone,
       customerMobile: schema.customers.mobile,
     };
-    const jobsQuery = whereClause
-      ? db.select(baseSelect)
-        .from(schema.jobs)
-        .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
-        .where(whereClause)
-        .orderBy(desc(schema.jobs.createdAt))
-        .limit(limit)
-        .offset(offset)
-      : db.select(baseSelect)
-        .from(schema.jobs)
-        .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
-        .orderBy(desc(schema.jobs.createdAt))
-        .limit(limit)
-        .offset(offset);
+
+    // Dispatch Unscheduled (sort=recentActivity) orders by the latest of the
+    // job row, the newest diary entry, and proposal/quote sent or accepted.
+    // One grouped scan per table, then a hash join — not a lateral lookup per
+    // job. job_diary_entries has no job_id index (pkey + business_id only);
+    // correlated MAX subqueries were previously 5–10s on this list.
+    // GREATEST skips nulls. created_at is inside it, and is also the tiebreak.
+    // Keep the columns in sync with shared/dispatchJobOrder.ts.
+    // The builders below are only joined into the query for that sort. Other
+    // callers still order by created_at and do not run these scans.
+    const sortByRecentActivity = options?.sort === "recentActivity";
+    const diaryLatest = db
+      .select({
+        jobId: schema.jobDiaryEntries.jobId,
+        latestDiaryAt: sql<Date | null>`max(${schema.jobDiaryEntries.createdAt})`.as("latest_diary_at"),
+      })
+      .from(schema.jobDiaryEntries)
+      .groupBy(schema.jobDiaryEntries.jobId)
+      .as("diary_latest");
+    const proposalLatest = db
+      .select({
+        jobId: schema.proposals.jobId,
+        latestProposalAt: sql<Date | null>`max(GREATEST(${schema.proposals.sentDate}, ${schema.proposals.responseDate}, ${schema.proposals.signedDate}))`.as("latest_proposal_at"),
+      })
+      .from(schema.proposals)
+      .groupBy(schema.proposals.jobId)
+      .as("proposal_latest");
+    const quoteLatest = db
+      .select({
+        jobId: schema.quotes.jobId,
+        latestQuoteAt: sql<Date | null>`max(GREATEST(${schema.quotes.sentDate}, ${schema.quotes.responseDate}))`.as("latest_quote_at"),
+      })
+      .from(schema.quotes)
+      .groupBy(schema.quotes.jobId)
+      .as("quote_latest");
+    const recentActivityExpr = () => sql`GREATEST(
+      ${schema.jobs.updatedAt},
+      ${schema.jobs.createdAt},
+      ${schema.jobs.lastActivityAt},
+      ${schema.jobs.proposalSentDate},
+      ${schema.jobs.quotePresentedDate},
+      ${schema.jobs.workOrderAt},
+      ${diaryLatest.latestDiaryAt},
+      ${proposalLatest.latestProposalAt},
+      ${quoteLatest.latestQuoteAt}
+    )`;
+
+    const jobsQuery = sortByRecentActivity
+      ? (whereClause
+        ? db.select({
+            ...baseSelect,
+            recentActivityAt: recentActivityExpr().as("recent_activity_at"),
+          })
+          .from(schema.jobs)
+          .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+          .leftJoin(diaryLatest, eq(diaryLatest.jobId, schema.jobs.id))
+          .leftJoin(proposalLatest, eq(proposalLatest.jobId, schema.jobs.id))
+          .leftJoin(quoteLatest, eq(quoteLatest.jobId, schema.jobs.id))
+          .where(whereClause)
+          .orderBy(sql`${recentActivityExpr()} DESC NULLS LAST`, desc(schema.jobs.createdAt))
+          .limit(limit)
+          .offset(offset)
+        : db.select({
+            ...baseSelect,
+            recentActivityAt: recentActivityExpr().as("recent_activity_at"),
+          })
+          .from(schema.jobs)
+          .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+          .leftJoin(diaryLatest, eq(diaryLatest.jobId, schema.jobs.id))
+          .leftJoin(proposalLatest, eq(proposalLatest.jobId, schema.jobs.id))
+          .leftJoin(quoteLatest, eq(quoteLatest.jobId, schema.jobs.id))
+          .orderBy(sql`${recentActivityExpr()} DESC NULLS LAST`, desc(schema.jobs.createdAt))
+          .limit(limit)
+          .offset(offset))
+      : (whereClause
+        ? db.select(baseSelect)
+          .from(schema.jobs)
+          .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+          .where(whereClause)
+          .orderBy(desc(schema.jobs.createdAt))
+          .limit(limit)
+          .offset(offset)
+        : db.select(baseSelect)
+          .from(schema.jobs)
+          .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+          .orderBy(desc(schema.jobs.createdAt))
+          .limit(limit)
+          .offset(offset));
 
     // Get total count (for pagination)
     const countQuery = whereClause
@@ -2214,6 +2288,7 @@ class DatabaseStorage implements IStorage {
         customerPhone: row.customerPhone || row.customerMobile,
         confirmationReplySentAt: diary?.replySentAt ?? null,
         customerReplyReceivedAt: diary?.customerReplyAt ?? null,
+        ...(row.recentActivityAt != null ? { recentActivityAt: row.recentActivityAt } : {}),
       };
     });
     

@@ -336,7 +336,7 @@ function serializeJobTimestamps(job: any): any {
   const serialized = { ...job };
   
   // Convert timestamp fields to ISO UTC strings
-  const timestampFields = ['scheduledDate', 'scheduledEndDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt', 'customerReplyReceivedAt'];
+  const timestampFields = ['scheduledDate', 'scheduledEndDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt', 'customerReplyReceivedAt', 'recentActivityAt', 'proposalSentDate', 'quotePresentedDate'];
   
   for (const field of timestampFields) {
     if (serialized[field]) {
@@ -6224,7 +6224,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.get('/api/jobs', async (req: Request, res: Response) => {
     try {
-      const { customerId, status, limit, offset, excludeCompleted, excludeArchived } = req.query;
+      const { customerId, status, limit, offset, excludeCompleted, excludeArchived, sort } = req.query;
+      // Dispatch Unscheduled asks for this. Other list callers keep createdAt order.
+      const sortByRecentActivity = sort === "recentActivity";
 
       // Parse pagination params
       const parsedLimit = limit ? parseInt(limit as string) : 10;
@@ -6289,6 +6291,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         offset: parsedOffset,
         excludeCompleted: excludeCompleted === 'true',
         excludeArchived: excludeArchived === 'true',
+        ...(sortByRecentActivity ? { sort: "recentActivity" as const } : {}),
       });
 
       // Serialize timestamps to ISO UTC format
