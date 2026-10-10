@@ -18,7 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
-- Staff schedule day restore — branch `cursor/staff-schedule-restore-day-a049` — 2026-10-10 — Live Roster stays on the day a job was opened from (`?date=` plus swipes on the job card no longer change the day). Square job blocks on phones. No TestFlight.
+- Staff schedule day restore — branch `cursor/staff-schedule-restore-day-a049` — 2026-10-10 — Live Roster stays on the day a job was opened from (`?date=` plus swipes on the job card no longer change the day). Square job blocks on phones. No TestFlight. [PR #622]
 - East Coast town names — #619, branch `cursor/east-coast-generic-copy-18ce` — 2026-10-10 — drop Tolaga Bay, Tokomaru Bay and Ruatoria from /east-coast copy, homepage, and JSON-LD areaServed. Page stays generic to the Tairāwhiti East Coast. No TestFlight. Draft only.
 - App-host marketing 301 — branch `cursor/app-host-marketing-redirect-2e08` — 2026-10-10 — on app.treemarkables.co.nz, 301 sitemap marketing paths to https://www.treemarkables.co.nz (query kept). `/` stays (iOS and logged-in entry) with noindex + www canonical. No redirect of login, dashboard, api, dispatch, proposal, invoice, portal, or assets. App-host robots.txt omits the www sitemap. No TestFlight rebuild. Draft only. [PR #617]
 - Treemarkables yard address — branch `cursor/treemarkables-yard-address-c9a3` — 2026-10-10 — hardcoded invoices, emails, and the job-map yard pin move from 213 Stanley Road to 26 Cochrane Street, Gisborne. Production document_templates and business_settings rows are not updated. Draft only. [PR #616]
