@@ -173,7 +173,13 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
     assert.doesNotMatch(branded, /inflow-icon/);
     assert.doesNotMatch(branded, /<title>Inflow<\/title>/);
     assert.doesNotMatch(branded, /job management for field-services teams/);
-    assert.match(branded, /<div id="root"><\/div>/);
+    assert.match(branded, /<h1>Tree care done once, done right\.<\/h1>/);
+    assert.match(branded, /027 216 6882/);
+    assert.match(branded, /213 Stanley Road, Awapuni, Gisborne 4010/);
+    assert.match(branded, /HomeAndConstructionBusiness/);
+    assert.doesNotMatch(branded, /aggregateRating/);
+    assert.doesNotMatch(branded, /id="inflow-boot"/);
+    assert.match(branded, /<div id="root">/);
   });
 
   it("is idempotent and path-aware", () => {
@@ -182,6 +188,9 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
     assert.equal(once, twice);
     assert.match(once, /<title>Tree Removal Gisborne/);
     assert.match(once, /canonical" href="https:\/\/www\.treemarkables\.co\.nz\/tree-removal"/);
+    assert.match(once, /<h1>Get that risky tree down — safely\.<\/h1>/);
+    assert.equal((once.match(/<h1>/g) || []).length, 1);
+    assert.equal((once.match(/application\/ld\+json/g) || []).length, 1);
     assert.equal((once.match(/treemarkables-document-brand/g) || []).length, 2);
   });
 
@@ -358,14 +367,29 @@ describe("Treemarkables document branding (first-byte, host-aware)", () => {
     assert.equal(JSON.parse(result.body).name, "Treemarkables");
   });
 
-  it("rewrites the real client/index.html without touching the React mount", () => {
+  it("rewrites the real client/index.html and keeps the React mount", () => {
     const html = fs.readFileSync(path.resolve("client/index.html"), "utf8");
     const branded = applyTreemarkablesDocumentHead(html, "/");
     assert.match(branded, /<title>Treemarkables/);
+    assert.match(branded, /<h1>Tree care done once, done right\.<\/h1>/);
+    assert.match(branded, /027 216 6882/);
+    assert.match(branded, /213 Stanley Road/);
+    assert.match(branded, /"@type":"HomeAndConstructionBusiness"/);
+    assert.doesNotMatch(branded, /aggregateRating/);
+    assert.doesNotMatch(branded, /<p class="boot-title">Opening Inflow<\/p>/);
+    assert.doesNotMatch(branded, /id="inflow-boot"/);
     assert.match(branded, /<div id="root"><\/div>/);
     assert.match(branded, /src="\/src\/main\.tsx"/);
     assert.doesNotMatch(branded, /inflow-icon/);
     assert.doesNotMatch(branded, /<title>Inflow<\/title>/);
+    const twice = applyTreemarkablesDocumentHead(branded, "/");
+    assert.equal(twice, branded);
+
+    const dispatch = applyTreemarkablesDocumentHead(html, "/dispatch");
+    assert.match(dispatch, /<div id="root"><\/div>/);
+    assert.match(dispatch, /<p class="boot-title">Opening Inflow<\/p>/);
+    assert.doesNotMatch(dispatch, /application\/ld\+json/);
+    assert.doesNotMatch(dispatch, /id="tm-prerender"/);
   });
 
   it("rewrites index.html sendFile on a Treemarkables host", async () => {

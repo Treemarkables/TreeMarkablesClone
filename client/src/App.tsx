@@ -22,6 +22,7 @@ import { WebCallButton } from "@/components/WebCallButton";
 import { lazy, Suspense, startTransition, type ComponentType } from "react";
 import { isAppBooted, watchUntilRealPagePainted } from "@/lib/nativeBootRecovery";
 import { useMarkAppBooted } from "@/lib/useMarkAppBooted";
+import { isTreemarkablesPublicPath } from "@shared/treemarkablesMarketingPaths";
 
 // ---------------------------------------------------------------------------
 // Flash-free navigation. Wouter v3 reads the browser location through
@@ -214,6 +215,22 @@ function BootPlaceholder() {
       </p>
     </div>
   );
+}
+
+// Public pages on the Treemarkables marketing host already have their copy in
+// the first HTML byte. Painting "Opening Inflow" here is what Google was
+// using as the homepage snippet, and it replaces that copy. Staff hosts
+// (app.treemarkables.co.nz, Inflow) keep the boot shell.
+function isTreemarkablesMarketingDocument(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname.split(":")[0].trim().toLowerCase().replace(/\.$/, "");
+  if (host !== "www.treemarkables.co.nz" && host !== "treemarkables.co.nz") return false;
+  return isTreemarkablesPublicPath(window.location.pathname);
+}
+
+function MarketingAwareBoot() {
+  if (isTreemarkablesMarketingDocument()) return null;
+  return <BootPlaceholder />;
 }
 
 // Inner (sidebar) Suspense fallback. After the first real page has painted,
@@ -1239,7 +1256,7 @@ function Router() {
     // Home page — this prevents the visible "Home ↔ Dispatch" flicker on every server restart.
     // No spinner: just the background, so there's no loading ring on startup.
     if (isLoading) {
-      return <BootPlaceholder />;
+      return <MarketingAwareBoot />;
     }
     if (isAuthenticated) {
       const pending = peekNotificationNav();
@@ -2059,7 +2076,7 @@ function App() {
                   Login, Home, marketing and the customer-facing viewers, plus
                   Router's own early <Home/> return. Sidebar pages resolve at the
                   inner boundary above before reaching here. */}
-              <Suspense fallback={<BootPlaceholder />}>
+              <Suspense fallback={<MarketingAwareBoot />}>
                 <Router />
               </Suspense>
             </WebCallProvider>

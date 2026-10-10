@@ -299,7 +299,7 @@ export default function StumpGrinding() {
               </a>
               <div className="flex items-center gap-3 text-mute">
                 <span className="h-10 w-10 rounded-full bg-forest/10 text-forest flex items-center justify-center"><MapPin className="h-5 w-5" /></span>
-                <span>Gisborne &amp; surrounding areas</span>
+                <span>213 Stanley Road, Awapuni, Gisborne 4010</span>
               </div>
             </div>
           </div>

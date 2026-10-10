@@ -257,7 +257,10 @@ export default function Contact() {
                           Service Area
                         </p>
                         <p className="text-muted-foreground">
-                          Gisborne, Wairoa & East Coast
+                          213 Stanley Road, Awapuni, Gisborne 4010
+                        </p>
+                        <p className="text-muted-foreground">
+                          Gisborne, Tairāwhiti, Wairoa &amp; East Coast
                         </p>
                       </div>
                     </div>

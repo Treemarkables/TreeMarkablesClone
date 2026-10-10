@@ -215,6 +215,13 @@
         function realScreen() {
           var root = document.getElementById('root');
           if (!root) return false;
+          // Marketing pages ship a static snapshot outside #root. That copy is
+          // the page until React paints; don't reload it as a failed boot.
+          var prerender = document.getElementById('tm-prerender');
+          if (prerender) {
+            var preText = ((prerender.innerText || '') + '').replace(/\s+/g, ' ').trim();
+            if (preText) return true;
+          }
           var main = root.querySelector('main');
           var scope = main || root;
           var text = ((scope.innerText || '') + '').replace(/\s+/g, ' ').trim();

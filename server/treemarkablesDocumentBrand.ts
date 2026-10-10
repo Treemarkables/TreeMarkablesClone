@@ -6,9 +6,13 @@
  * This middleware rewrites that first HTML byte — and the web manifest /
  * Inflow icon URLs — on Treemarkables hosts only.
  *
+ * Public marketing routes also get a static HTML snapshot inside #root
+ * (real H1, copy, phone, address, links) plus JSON-LD, and the Inflow boot
+ * loader is removed for those routes only. The React app still mounts into
+ * #root and replaces that snapshot. Staff routes keep the Inflow shell.
+ *
  * Intentionally NOT the PR #516 cutover:
- *   - React UI / layout is unchanged (same SPA)
- *   - no static treemarkables-site/ marketing HTML
+ *   - same SPA, not a separate treemarkables-site/
  *   - no 301 of /login, /dispatch, etc. off www
  *
  * No-op on Inflow hosts (app.inflowapp.co.nz, www.inflowapp.co.nz) and on
@@ -17,6 +21,7 @@
 import type { IncomingHttpHeaders } from "http";
 import type { Request, RequestHandler, Response } from "express";
 import fs from "fs";
+import { injectTreemarkablesPublicHtml, treemarkablesJsonLd } from "./treemarkablesPublicHtml";
 
 export const TREEMARKABLES_DOCUMENT_HOSTS = new Set([
   "www.treemarkables.co.nz",
@@ -107,6 +112,22 @@ const PAGE_META: Record<string, DocumentBrandMeta> = {
     canonicalPath: "/blog",
     ogTitle: "Tree Care Blog - Expert Tips from Gisborne Arborists",
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/team-photo.jpg`,
+  },
+  "/blog/hazardous-tree-removal-gisborne-5-signs-dangerous-tree": {
+    title: "5 Signs Your Tree Is a Hazard and Needs Removing | Treemarkables Blog",
+    description:
+      "Worried a tree on your Gisborne property is a hazard? Learn 5 critical signs of a dangerous tree, from dead branches to root decay.",
+    canonicalPath: "/blog/hazardous-tree-removal-gisborne-5-signs-dangerous-tree",
+    ogTitle: "5 Signs Your Tree Is a Hazard and Needs Removing",
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/hazardous-tree-gisborne.jpg`,
+  },
+  "/blog/why-regular-tree-pruning-protects-your-home-gisborne": {
+    title: "Why Regular Tree Pruning Protects Your Home in Gisborne | Treemarkables Blog",
+    description:
+      "Gisborne's mild climate and coastal winds create conditions where branches can grow quickly and pose risks to homes. Regular pruning is preventive maintenance.",
+    canonicalPath: "/blog/why-regular-tree-pruning-protects-your-home-gisborne",
+    ogTitle: "Why Regular Tree Pruning Protects Your Home in Gisborne",
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/tree-pruning.jpg`,
   },
   "/mulch": {
     title: "Order Mulch — Treemarkables",
@@ -240,10 +261,12 @@ function replaceOrInsertMeta(
   return html;
 }
 
-function brandHeadBlock(meta: DocumentBrandMeta): string {
+function brandHeadBlock(meta: DocumentBrandMeta, pathname: string): string {
   const canonical = canonicalUrl(meta.canonicalPath);
   const ogTitle = meta.ogTitle || meta.title;
   const ogDescription = meta.ogDescription || meta.description;
+  const jsonLd = treemarkablesJsonLd(pathname);
+  const schema = jsonLd ? `\n    ${jsonLd}` : "";
   return `${BRAND_START}
     <link rel="canonical" href="${escapeAttr(canonical)}" />
     <meta property="og:type" content="website" />
@@ -260,7 +283,7 @@ function brandHeadBlock(meta: DocumentBrandMeta): string {
     <meta name="twitter:description" content="${escapeAttr(ogDescription)}" />
     <meta name="twitter:image" content="${escapeAttr(meta.ogImage)}" />
     <meta name="author" content="Treemarkables" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow" />${schema}
     ${BRAND_END}`;
 }
 
@@ -288,7 +311,7 @@ export function applyTreemarkablesDocumentHead(html: string, pathname: string = 
     );
   }
 
-  const block = brandHeadBlock(meta);
+  const block = brandHeadBlock(meta, pathname);
   if (next.includes(BRAND_START)) {
     next = next.replace(
       new RegExp(`${BRAND_START.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*?${BRAND_END.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
@@ -298,7 +321,7 @@ export function applyTreemarkablesDocumentHead(html: string, pathname: string = 
     next = next.replace(/<\/head>/i, `    ${block}\n  </head>`);
   }
 
-  return next;
+  return injectTreemarkablesPublicHtml(next, pathname);
 }
 
 function invokeSendFileCallback(optionsOrCb: unknown, maybeCb: unknown, err?: Error): void {

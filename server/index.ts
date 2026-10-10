@@ -20,6 +20,7 @@ import {
   requestIsTreemarkablesDocumentHost,
   applyTreemarkablesDocumentHead,
 } from "./treemarkablesDocumentBrand";
+import { createTreemarkablesApexRedirectMiddleware } from "./treemarkablesApexRedirect";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
@@ -114,9 +115,15 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
 });
 
+// Bare treemarkables.co.nz → https://www.treemarkables.co.nz (path kept).
+// DNS for the apex is not in this repo; until it points here the redirect
+// never runs. /health is exempt. www and the app hosts are not redirected.
+app.use(createTreemarkablesApexRedirectMiddleware());
+
 // www.treemarkables.co.nz / treemarkables.co.nz: first HTML byte is Treemarkables
-// branded (title/meta/icons/og). Does not change the React UI, does not 301 app
-// paths, and is a no-op on Inflow hosts. See server/treemarkablesDocumentBrand.ts.
+// branded (title/meta/icons/og), and public marketing routes include a static
+// page snapshot plus LocalBusiness JSON-LD. Staff routes stay the Inflow shell.
+// No 301 of /login or /dispatch off www. No-op on Inflow hosts.
 app.use(createTreemarkablesDocumentBrandMiddleware());
 
 // Legacy-domain redirect. Customer document links already sent out (invoices,

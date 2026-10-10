@@ -421,7 +421,7 @@ export default function Home() {
               </a>
               <div className="flex items-center gap-3 text-white/70">
                 <span className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center"><MapPin className="h-5 w-5" /></span>
-                <span>Gisborne &amp; surrounding areas</span>
+                <span>213 Stanley Road, Awapuni, Gisborne 4010</span>
               </div>
             </div>
           </div>
@@ -456,7 +456,8 @@ export default function Home() {
               <ul className="space-y-2.5 text-white/55 text-sm">
                 <li><a href={`tel:${PHONE}`} onClick={handlePhoneClick} className="hover:text-neon transition-colors">027 216 6882</a></li>
                 <li><a href="mailto:quotes@treemarkables.nz" className="hover:text-neon transition-colors">quotes@treemarkables.nz</a></li>
-                <li>Gisborne &amp; surrounds</li>
+                <li>213 Stanley Road, Awapuni, Gisborne 4010</li>
+                <li>Gisborne, Tairāwhiti, Wairoa &amp; the East Coast</li>
                 <li className="flex items-center gap-1.5 pt-1 text-neon/90"><Clock className="h-3.5 w-3.5" />24/7 emergency</li>
               </ul>
             </div>

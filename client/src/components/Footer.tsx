@@ -116,7 +116,10 @@ export default function Footer() {
                 027-216-6882
               </a>
               <p className="text-gray-300 text-sm" data-testid="text-footer-location">
-                Gisborne & Surrounding Areas
+                213 Stanley Road, Awapuni, Gisborne 4010
+              </p>
+              <p className="text-gray-300 text-sm">
+                Gisborne, Tairāwhiti, Wairoa &amp; the East Coast
               </p>
             </div>
           </div>
