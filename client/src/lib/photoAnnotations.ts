@@ -18,6 +18,9 @@ export async function savePhotoAnnotation(params: {
   sourceUrl: string;
   annotations: AnnotationShape[];
   annotatedBy?: string;
+  /** Editor stage width in CSS pixels. The server scales stroke widths
+   *  (stored as screen pixels) onto the full-resolution photo with this. */
+  stageWidth?: number;
 }): Promise<PhotoAnnotationRecord> {
   // Server bakes the composite PNG from the shape JSON (see
   // server/photoAnnotationRenderer.ts). The client only sends data.
@@ -29,6 +32,7 @@ export async function savePhotoAnnotation(params: {
       sourceUrl: params.sourceUrl,
       annotations: params.annotations,
       annotatedBy: params.annotatedBy,
+      stageWidth: params.stageWidth,
     }),
   });
   if (!res.ok) {

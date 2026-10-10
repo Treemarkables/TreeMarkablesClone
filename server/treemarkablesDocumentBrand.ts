@@ -209,8 +209,11 @@ function canonicalUrl(canonicalPath: string): string {
 }
 
 function looksLikeHtmlDocument(body: string): boolean {
-  const start = body.slice(0, 512).toLowerCase();
-  return start.includes("<!doctype html") || start.includes("<html");
+  // The body has to start as a document. `includes("<html")` in the first 512
+  // characters also matches diary JSON whose newest row is an Apple Mail
+  // message (`"content":"<html..."`), and branding that string breaks JSON.
+  const start = body.slice(0, 512).trimStart().toLowerCase();
+  return start.startsWith("<!doctype html") || start.startsWith("<html");
 }
 
 function replaceOrInsertMeta(
@@ -387,6 +390,12 @@ export function createTreemarkablesDocumentBrandMiddleware(): RequestHandler {
       res.setHeader("Cache-Control", "no-store");
       res.type("text/plain").send("Not found");
       return;
+    }
+
+    // API bodies stay JSON. A diary row can embed a full HTML email; sniffing
+    // that and rewriting the 200 is what Safari reports as a JSON parse error.
+    if (pathname === "/api" || pathname.startsWith("/api/")) {
+      return next();
     }
 
     interceptHtmlResponses(res, pathname);

@@ -92,3 +92,24 @@ public func shouldReload(
 
     return elapsed >= unbooted
 }
+
+/// What to do when the web app has not signalled ready.
+///
+/// `elapsed` is seconds since the last load attempt. A document that is still
+/// loading is left alone until `loadingStall` (cancelling it early is the
+/// white WebView). The first miss reloads once, cache-busting. The next miss
+/// shows the bundled fallback instead of reloading again.
+public func bootReadyAction(
+    appReady: Bool,
+    elapsed: TimeInterval,
+    isLoading: Bool,
+    cacheBusts: Int,
+    readyTimeout: TimeInterval = 12,
+    loadingStall: TimeInterval = WebViewBootPolicy.loadingStall
+) -> String {
+    if appReady { return "wait" }
+    let due = isLoading ? elapsed >= loadingStall : elapsed >= readyTimeout
+    if !due { return "wait" }
+    if cacheBusts >= 1 { return "fallback" }
+    return "reload"
+}

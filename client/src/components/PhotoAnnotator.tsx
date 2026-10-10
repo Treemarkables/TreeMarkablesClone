@@ -15,9 +15,32 @@ import {
   Circle,
   Arrow,
   Text,
+  Group,
   Image as KonvaImage,
 } from "react-konva";
 import type Konva from "konva";
+import { annotationTextFrame } from "@shared/annotationTextWrap";
+import {
+  strokePhase,
+  type ActiveStroke,
+} from "@/components/photoAnnotatorGestures";
+import {
+  ANNOTATOR_DIALOG_CLASS,
+  arrowHeadScreenPx,
+  clientToStagePx,
+  fitImageContain,
+  isSignificantMark,
+  moveDraft,
+} from "@/components/photoAnnotatorGeometry";
+import {
+  applyTextBoxPointer,
+  defaultTextBox,
+  fontSizeNormForStroke,
+  textBoxCoveringContent,
+  type TextBoxHandle,
+  type TextBoxNorm,
+} from "@/components/photoAnnotatorTextBox";
+import { PhotoAnnotatorTextBox } from "@/components/PhotoAnnotatorTextBox";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,11 +81,59 @@ export type AnnotationShape =
       x: number;
       y: number;
       text: string;
-      fontSize: number; // normalized fraction of image width
+      fontSize: number; // normalized fraction of image width; toolbar size, not the box
+      /** Wrap width, fraction of image width. Older marks omit this. */
+      boxWidth?: number;
+      /** Box height, fraction of image width. Older marks omit this. */
+      boxHeight?: number;
     });
 
 const COLORS = ["#FF3B30", "#34C759", "#FFFFFF", "#000000", "#FFCC00", "#3498DB"];
 const STROKE_WIDTHS = [2, 4, 8];
+
+type TextEditing = TextBoxNorm & {
+  id: string;
+  value: string;
+  fontSize: number;
+  color: string;
+};
+
+type TextDrag = {
+  pointerId: number;
+  handle: TextBoxHandle;
+  start: TextBoxNorm;
+  originX: number;
+  originY: number;
+  moved: boolean;
+  mode: "edit" | "selected";
+  shapeId: string;
+  fontSize: number;
+  text: string;
+};
+
+function textShapeFromDraft(draft: TextEditing, value: string): AnnotationShape {
+  return {
+    type: "text",
+    id: draft.id,
+    x: draft.x,
+    y: draft.y,
+    text: value,
+    color: draft.color,
+    fontSize: draft.fontSize,
+    boxWidth: draft.boxWidth,
+    boxHeight: draft.boxHeight,
+  };
+}
+
+function isSignificant(drafting: AnnotationShape): boolean {
+  if (drafting.type === "text") return false;
+  return isSignificantMark(drafting);
+}
+
+function pointerIdOf(e: Konva.KonvaEventObject<PointerEvent>): number | null {
+  const id = e.evt?.pointerId;
+  return typeof id === "number" ? id : null;
+}
 
 export interface PhotoAnnotatorProps {
   open: boolean;
@@ -77,6 +148,8 @@ export interface PhotoAnnotatorProps {
    *  tainted-canvas territory entirely. */
   onSave: (payload: {
     annotations: AnnotationShape[];
+    /** Stage width in CSS pixels, so the server can scale screen-pixel strokes. */
+    stageWidth: number;
   }) => Promise<void> | void;
 }
 
@@ -166,13 +239,14 @@ export default function PhotoAnnotator({
         if (rect.width > 0) cw = rect.width;
         if (rect.height > 0) ch = rect.height;
       }
-      if (cw === 0 || ch === 0) return;
-
-      const imgRatio = image.naturalWidth / image.naturalHeight;
-      const conRatio = cw / ch;
-      const w = conRatio > imgRatio ? ch * imgRatio : cw;
-      const h = conRatio > imgRatio ? ch : cw / imgRatio;
-      setStageSize({ w, h });
+      const next = fitImageContain(
+        image.naturalWidth,
+        image.naturalHeight,
+        cw,
+        ch,
+      );
+      if (next.w <= 0 || next.h <= 0) return;
+      setStageSize(next);
     };
 
     update();
@@ -209,22 +283,35 @@ export default function PhotoAnnotator({
     initialAnnotations ?? [],
   );
   const [drafting, setDrafting] = useState<AnnotationShape | null>(null);
+  // The stroke under the finger. Updated synchronously so a move or lift
+  // that arrives before React re-renders still belongs to this symbol.
+  const activeStrokeRef = useRef<ActiveStroke<AnnotationShape> | null>(null);
+  // Once the user draws, a late annotation fetch must not replace the canvas
+  // with the (still empty) server copy.
+  const editedRef = useRef(false);
 
-  // Text overlay state — separate from shapes until committed
-  const [textEditing, setTextEditing] = useState<{
-    id: string;
-    px: number; // stage-pixel x (for overlay positioning)
-    py: number;
-    value: string;
-  } | null>(null);
+  // Text box being typed. Position and size are fractions of image width.
+  const [textEditing, setTextEditing] = useState<TextEditing | null>(null);
+  const textEditingRef = useRef<TextEditing | null>(null);
+  textEditingRef.current = textEditing;
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+  const textDragRef = useRef<TextDrag | null>(null);
+  const editTextRef = useRef<(id: string) => void>(() => {});
 
-  // Reset on open
+  // Load saved shapes when the editor opens. Skip once the user has drawn,
+  // or a prefetch that resolves mid-stroke wipes the marks before Save.
   useEffect(() => {
-    if (open) {
-      setShapes(initialAnnotations ?? []);
-      setDrafting(null);
-      setTextEditing(null);
+    if (!open) {
+      editedRef.current = false;
+      return;
     }
+    if (editedRef.current) return;
+    setShapes(initialAnnotations ?? []);
+    activeStrokeRef.current = null;
+    setDrafting(null);
+    setTextEditing(null);
+    setSelectedTextId(null);
+    textDragRef.current = null;
   }, [open, initialAnnotations]);
 
   // --- coord helpers: normalize against width so x and y share a denominator
@@ -233,12 +320,8 @@ export default function PhotoAnnotator({
     (px: number, py: number) => ({ x: px / denom, y: py / denom }),
     [denom],
   );
-  const fromNorm = useCallback(
-    (nx: number, ny: number) => ({ x: nx * denom, y: ny * denom }),
-    [denom],
-  );
 
-  const pointerNorm = (e: Konva.KonvaEventObject<unknown>) => {
+  const pointerNorm = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return null;
     const pos = stage.getPointerPosition();
@@ -246,9 +329,149 @@ export default function PhotoAnnotator({
     return toNorm(pos.x, pos.y);
   };
 
+  const finishActiveStroke = () => {
+    const active = activeStrokeRef.current;
+    if (!active) return;
+    activeStrokeRef.current = null;
+    // Discard zero/near-zero shapes — likely accidental taps.
+    if (isSignificant(active.draft)) {
+      setShapes((s) => [...s, active.draft]);
+    }
+    setDrafting(null);
+  };
+  const finishStrokeRef = useRef(finishActiveStroke);
+  finishStrokeRef.current = finishActiveStroke;
+
+  // Track the finger on the window, not via setPointerCapture on the stage
+  // container. Konva listens on the inner .konvajs-content node; capture on
+  // the parent never delivers pointermove, so the end point stays on the
+  // start point. A zero-length Konva arrow still paints its triangle, which
+  // is the head-only mark on iPhone. clientX/clientY still arrive here for
+  // the whole drag, including a lift outside the photo.
+  useEffect(() => {
+    const applyClient = (ev: PointerEvent) => {
+      const active = activeStrokeRef.current;
+      const stage = stageRef.current;
+      const content = stage?.content;
+      if (!active || !stage || !content || active.draft.type === "text") return;
+      const pt = clientToStagePx(
+        ev.clientX,
+        ev.clientY,
+        content.getBoundingClientRect(),
+        stage.width(),
+        stage.height(),
+      );
+      if (!pt) return;
+      const width = stage.width();
+      if (!(width > 0)) return;
+      const next = moveDraft(active.draft, pt.x / width, pt.y / width);
+      activeStrokeRef.current = { pointerId: active.pointerId, draft: next };
+      setDrafting(next);
+    };
+    const onMove = (ev: PointerEvent) => {
+      const pointerId = typeof ev.pointerId === "number" ? ev.pointerId : null;
+      if (
+        strokePhase(activeStrokeRef.current, { type: "move", pointerId }) !==
+        "update"
+      ) {
+        return;
+      }
+      applyClient(ev);
+    };
+    const onUp = (ev: PointerEvent) => {
+      const pointerId = typeof ev.pointerId === "number" ? ev.pointerId : null;
+      if (
+        strokePhase(activeStrokeRef.current, { type: "up", pointerId }) !==
+        "finish"
+      ) {
+        return;
+      }
+      if (ev.type !== "pointercancel") applyClient(ev);
+      finishStrokeRef.current();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
+
+  // Drag and resize use the same window pointer stream as drawing. The
+  // handle calls preventDefault so the textarea keeps the keyboard.
+  useEffect(() => {
+    const onMove = (ev: PointerEvent) => {
+      const drag = textDragRef.current;
+      if (!drag || ev.pointerId !== drag.pointerId) return;
+      const stage = stageRef.current;
+      if (!stage || !(stage.width() > 0)) return;
+      const dx = (ev.clientX - drag.originX) / stage.width();
+      const dy = (ev.clientY - drag.originY) / stage.width();
+      if (Math.hypot(dx, dy) > 0.01) drag.moved = true;
+      const movedBox = applyTextBoxPointer(
+        drag.start,
+        drag.handle,
+        dx,
+        dy,
+        stage.width(),
+        stage.height(),
+        drag.fontSize,
+      );
+      const typing =
+        drag.mode === "edit" ? textEditingRef.current?.value : undefined;
+      const next = textBoxCoveringContent(
+        movedBox,
+        typing ?? drag.text,
+        drag.fontSize,
+        stage.width(),
+        stage.height(),
+      );
+      if (drag.mode === "edit") {
+        setTextEditing((current) =>
+          current && current.id === drag.shapeId ? { ...current, ...next } : current,
+        );
+      } else {
+        setShapes((current) =>
+          current.map((shape) =>
+            shape.type === "text" && shape.id === drag.shapeId
+              ? { ...shape, ...next }
+              : shape,
+          ),
+        );
+      }
+      editedRef.current = true;
+    };
+    const onUp = (ev: PointerEvent) => {
+      const drag = textDragRef.current;
+      if (!drag || ev.pointerId !== drag.pointerId) return;
+      textDragRef.current = null;
+      if (drag.mode === "selected" && drag.handle === "move" && !drag.moved) {
+        editTextRef.current(drag.shapeId);
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
+
   // --- drawing handlers
-  const handlePointerDown = (e: Konva.KonvaEventObject<unknown>) => {
-    if (textEditing) return; // committing text on next blur
+  // Pointer events only. Mouse + touch both fire for one finger on a phone,
+  // and the extra down/up after the first symbol cancelled the next one.
+  const handlePointerDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    const pointerId = pointerIdOf(e);
+    if (
+      strokePhase(activeStrokeRef.current, { type: "down", pointerId }) ===
+      "ignore"
+    ) {
+      return;
+    }
     const p = pointerNorm(e);
     if (!p) return;
 
@@ -258,29 +481,102 @@ export default function PhotoAnnotator({
         : `${Date.now()}-${Math.random()}`;
 
     if (tool === "text") {
-      const pos = fromNorm(p.x, p.y);
-      setTextEditing({ id, px: pos.x, py: pos.y, value: "" });
+      editedRef.current = true;
+      const px = p.x * (stageSize.w || 1);
+      const py = p.y * (stageSize.w || 1);
+      const hit = [...shapes]
+        .reverse()
+        .find((shape) => {
+          if (shape.type !== "text") return false;
+          const frame = annotationTextFrame({
+            xNorm: shape.x,
+            yNorm: shape.y,
+            fontSizeNorm: shape.fontSize,
+            text: shape.text,
+            imageWidthPx: stageSize.w,
+            imageHeightPx: stageSize.h,
+            boxWidthNorm: shape.boxWidth,
+            boxHeightNorm: shape.boxHeight,
+          });
+          return (
+            px >= frame.xPx &&
+            px <= frame.xPx + frame.widthPx &&
+            py >= frame.yPx &&
+            py <= frame.yPx + frame.heightPx
+          );
+        });
+      if (hit && hit.type === "text") {
+        if (textEditing && textEditing.id !== hit.id) commitText();
+        const frame = annotationTextFrame({
+          xNorm: hit.x,
+          yNorm: hit.y,
+          fontSizeNorm: hit.fontSize,
+          text: hit.text,
+          imageWidthPx: stageSize.w,
+          imageHeightPx: stageSize.h,
+          boxWidthNorm: hit.boxWidth,
+          boxHeightNorm: hit.boxHeight,
+        });
+        const width = stageSize.w || 1;
+        setSelectedTextId(hit.id);
+        const native = e.evt;
+        if (typeof native.pointerId === "number") {
+          startTextDrag(
+            "move",
+            native,
+            "selected",
+            hit.id,
+            {
+              x: frame.xPx / width,
+              y: frame.yPx / width,
+              boxWidth: hit.boxWidth ?? frame.widthPx / width,
+              boxHeight: hit.boxHeight ?? frame.heightPx / width,
+            },
+            hit.fontSize,
+            hit.text,
+          );
+        }
+        return;
+      }
+      if (textEditing) commitText();
+      const fontSize = fontSizeNormForStroke(strokeWidth);
+      const box = defaultTextBox(
+        p.x,
+        p.y,
+        fontSize,
+        stageSize.w,
+        stageSize.h,
+      );
+      setSelectedTextId(id);
+      setTextEditing({
+        id,
+        ...box,
+        value: "",
+        fontSize,
+        color,
+      });
       return;
     }
 
+    let shape: AnnotationShape | null = null;
     if (tool === "pen") {
-      setDrafting({
+      shape = {
         type: "pen",
         id,
         color,
         strokeWidth,
         points: [p.x, p.y],
-      });
+      };
     } else if (tool === "arrow") {
-      setDrafting({
+      shape = {
         type: "arrow",
         id,
         color,
         strokeWidth,
         points: [p.x, p.y, p.x, p.y],
-      });
+      };
     } else if (tool === "rect") {
-      setDrafting({
+      shape = {
         type: "rect",
         id,
         color,
@@ -289,9 +585,9 @@ export default function PhotoAnnotator({
         y: p.y,
         w: 0,
         h: 0,
-      });
+      };
     } else if (tool === "circle") {
-      setDrafting({
+      shape = {
         type: "circle",
         id,
         color,
@@ -299,75 +595,152 @@ export default function PhotoAnnotator({
         x: p.x,
         y: p.y,
         r: 0,
-      });
+      };
     }
-  };
+    if (!shape) return;
 
-  const handlePointerMove = (e: Konva.KonvaEventObject<unknown>) => {
-    if (!drafting) return;
-    const p = pointerNorm(e);
-    if (!p) return;
-    if (drafting.type === "pen") {
-      setDrafting({ ...drafting, points: [...drafting.points, p.x, p.y] });
-    } else if (drafting.type === "arrow") {
-      setDrafting({
-        ...drafting,
-        points: [drafting.points[0], drafting.points[1], p.x, p.y],
-      });
-    } else if (drafting.type === "rect") {
-      setDrafting({
-        ...drafting,
-        w: p.x - drafting.x,
-        h: p.y - drafting.y,
-      });
-    } else if (drafting.type === "circle") {
-      const dx = p.x - drafting.x;
-      const dy = p.y - drafting.y;
-      setDrafting({ ...drafting, r: Math.sqrt(dx * dx + dy * dy) });
-    }
-  };
-
-  const handlePointerUp = () => {
-    if (!drafting) return;
-    // Discard zero/near-zero shapes — likely accidental taps
-    let significant = true;
-    if (drafting.type === "pen") {
-      significant = drafting.points.length >= 4;
-    } else if (drafting.type === "arrow") {
-      const [x1, y1, x2, y2] = drafting.points;
-      significant = Math.hypot(x2 - x1, y2 - y1) > 0.005;
-    } else if (drafting.type === "rect") {
-      significant = Math.abs(drafting.w) > 0.005 && Math.abs(drafting.h) > 0.005;
-    } else if (drafting.type === "circle") {
-      significant = drafting.r > 0.005;
-    }
-    if (significant) setShapes((s) => [...s, drafting]);
-    setDrafting(null);
+    editedRef.current = true;
+    activeStrokeRef.current = { pointerId, draft: shape };
+    setDrafting(shape);
   };
 
   const commitText = () => {
-    if (!textEditing) return;
-    const value = textEditing.value.trim();
-    if (value) {
-      const n = toNorm(textEditing.px, textEditing.py);
-      setShapes((s) => [
-        ...s,
-        {
-          type: "text",
-          id: textEditing.id,
-          x: n.x,
-          y: n.y,
-          text: value,
-          color,
-          fontSize: 0.04, // 4% of image width — looks roughly like 24px on a 600px-wide preview
-        },
-      ]);
-    }
+    const current = textEditingRef.current;
+    if (!current) return;
+    const value = current.value.trim();
+    textEditingRef.current = value ? { ...current, value } : null;
     setTextEditing(null);
+    setShapes((existing) => {
+      const without = existing.filter((shape) => shape.id !== current.id);
+      if (!value) return without;
+      return [...without, textShapeFromDraft(current, value)];
+    });
+    if (value) setSelectedTextId(current.id);
+    editedRef.current = true;
+  };
+  const commitTextRef = useRef(commitText);
+  commitTextRef.current = commitText;
+
+  const beginEditText = (id: string) => {
+    const shape = shapes.find((item) => item.id === id && item.type === "text");
+    if (!shape || shape.type !== "text") return;
+    const frame = annotationTextFrame({
+      xNorm: shape.x,
+      yNorm: shape.y,
+      fontSizeNorm: shape.fontSize,
+      text: shape.text,
+      imageWidthPx: stageSize.w,
+      imageHeightPx: stageSize.h,
+      boxWidthNorm: shape.boxWidth,
+      boxHeightNorm: shape.boxHeight,
+    });
+    const width = stageSize.w || 1;
+    setTextEditing({
+      id: shape.id,
+      x: frame.xPx / width,
+      y: frame.yPx / width,
+      boxWidth: shape.boxWidth ?? frame.widthPx / width,
+      boxHeight: shape.boxHeight ?? frame.heightPx / width,
+      value: shape.text,
+      fontSize: shape.fontSize,
+      color: shape.color,
+    });
+    setSelectedTextId(shape.id);
+  };
+  editTextRef.current = beginEditText;
+
+  const startTextDrag = (
+    handle: TextBoxHandle,
+    event: { pointerId: number; clientX: number; clientY: number },
+    mode: "edit" | "selected",
+    shapeId: string,
+    start: TextBoxNorm,
+    fontSize: number,
+    text: string,
+  ) => {
+    textDragRef.current = {
+      pointerId: event.pointerId,
+      handle,
+      start,
+      originX: event.clientX,
+      originY: event.clientY,
+      moved: false,
+      mode,
+      shapeId,
+      fontSize,
+      text,
+    };
   };
 
-  const undo = () => setShapes((s) => s.slice(0, -1));
-  const clearAll = () => setShapes([]);
+  const chooseTool = (next: Tool) => {
+    if (next !== "text") {
+      commitText();
+      setSelectedTextId(null);
+      textDragRef.current = null;
+    }
+    setTool(next);
+  };
+
+  const patchActiveText = (patch: { color?: string; fontSize?: number }) => {
+    if (tool !== "text") return;
+    const editing = textEditingRef.current;
+    if (editing) {
+      const next = { ...editing, ...patch };
+      const fitted = textBoxCoveringContent(
+        next,
+        next.value,
+        next.fontSize,
+        stageSize.w,
+        stageSize.h,
+      );
+      setTextEditing({ ...next, ...fitted });
+      return;
+    }
+    if (!selectedTextId) return;
+    editedRef.current = true;
+    setShapes((existing) =>
+      existing.map((shape) => {
+        if (shape.type !== "text" || shape.id !== selectedTextId) return shape;
+        const next = { ...shape, ...patch };
+        const width = stageSize.w || 1;
+        const frame = annotationTextFrame({
+          xNorm: next.x,
+          yNorm: next.y,
+          fontSizeNorm: next.fontSize,
+          text: next.text,
+          imageWidthPx: stageSize.w,
+          imageHeightPx: stageSize.h,
+          boxWidthNorm: next.boxWidth,
+          boxHeightNorm: next.boxHeight,
+        });
+        const fitted = textBoxCoveringContent(
+          {
+            x: frame.xPx / width,
+            y: frame.yPx / width,
+            boxWidth: next.boxWidth ?? frame.widthPx / width,
+            boxHeight: next.boxHeight ?? frame.heightPx / width,
+          },
+          next.text,
+          next.fontSize,
+          stageSize.w,
+          stageSize.h,
+        );
+        return { ...next, ...fitted };
+      }),
+    );
+  };
+
+  const undo = () => {
+    editedRef.current = true;
+    setShapes((s) => s.slice(0, -1));
+  };
+  const clearAll = () => {
+    editedRef.current = true;
+    setShapes([]);
+    setTextEditing(null);
+    setSelectedTextId(null);
+    textDragRef.current = null;
+  };
 
   // --- save
   // Server bakes the composite PNG from the shape JSON (see
@@ -380,7 +753,26 @@ export default function PhotoAnnotator({
     setSaving(true);
     setSaveError(null);
     try {
-      await onSave({ annotations: shapes });
+      // Include the stroke still under the finger and text that hasn't
+      // blurred yet. Both live outside `shapes` until the next render, so
+      // reading state alone drops the mark the user just made.
+      const editing = textEditingRef.current;
+      const editingValue = editing?.value.trim() ?? "";
+      const pending: AnnotationShape[] = shapes.filter(
+        (shape) => shape.id !== editing?.id,
+      );
+      const active = activeStrokeRef.current;
+      if (
+        active &&
+        isSignificant(active.draft) &&
+        !pending.some((shape) => shape.id === active.draft.id)
+      ) {
+        pending.push(active.draft);
+      }
+      if (editing && editingValue) {
+        pending.push(textShapeFromDraft(editing, editingValue));
+      }
+      await onSave({ annotations: pending, stageWidth: stageSize.w });
       onClose();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -422,8 +814,8 @@ export default function PhotoAnnotator({
             stroke={s.color}
             strokeWidth={s.strokeWidth}
             fill={s.color}
-            pointerLength={Math.max(10, s.strokeWidth * 3)}
-            pointerWidth={Math.max(10, s.strokeWidth * 3)}
+            pointerLength={arrowHeadScreenPx(s.strokeWidth)}
+            pointerWidth={arrowHeadScreenPx(s.strokeWidth)}
             listening={false}
           />
         );
@@ -452,24 +844,48 @@ export default function PhotoAnnotator({
             listening={false}
           />
         );
-      case "text":
+      case "text": {
+        if (textEditing?.id === s.id) return null;
+        const frame = annotationTextFrame({
+          xNorm: s.x,
+          yNorm: s.y,
+          fontSizeNorm: s.fontSize,
+          text: s.text,
+          imageWidthPx: stageSize.w,
+          imageHeightPx: stageSize.h,
+          boxWidthNorm: s.boxWidth,
+          boxHeightNorm: s.boxHeight,
+        });
         return (
-          <Text
+          <Group
             key={s.id}
-            x={px(s.x)}
-            y={px(s.y)}
-            text={s.text}
-            fill={s.color}
-            fontSize={px(s.fontSize)}
-            fontStyle="bold"
-            // Faint outline so text is legible on any background. Konva
-            // strokes the glyph itself when stroke + strokeWidth are set.
-            stroke="black"
-            strokeWidth={Math.max(1, px(s.fontSize) * 0.04)}
-            fillAfterStrokeEnabled
+            clipX={frame.xPx}
+            clipY={frame.yPx}
+            clipWidth={Math.max(1, frame.widthPx)}
+            clipHeight={Math.max(1, frame.heightPx)}
             listening={false}
-          />
+          >
+            <Text
+              x={frame.xPx}
+              y={frame.yPx}
+              width={Math.max(1, frame.widthPx)}
+              text={frame.visibleLines.join("\n")}
+              wrap="word"
+              lineHeight={1.2}
+              fill={s.color}
+              fontSize={frame.fontSizePx}
+              fontStyle="bold"
+              fontFamily="Arial"
+              // Faint outline so text is legible on any background. Konva
+              // strokes the glyph itself when stroke + strokeWidth are set.
+              stroke="black"
+              strokeWidth={Math.max(1, frame.fontSizePx * 0.04)}
+              fillAfterStrokeEnabled
+              listening={false}
+            />
+          </Group>
         );
+      }
     }
   };
 
@@ -483,10 +899,64 @@ export default function PhotoAnnotator({
     ? (containerEl.clientHeight - stageSize.h) / 2
     : 0;
 
+  const selectedText =
+    !textEditing && tool === "text"
+      ? shapes.find(
+          (shape) => shape.type === "text" && shape.id === selectedTextId,
+        )
+      : undefined;
+  const textChrome =
+    textEditing != null
+      ? {
+          id: textEditing.id,
+          x: textEditing.x,
+          y: textEditing.y,
+          boxWidth: textEditing.boxWidth,
+          boxHeight: textEditing.boxHeight,
+          fontSize: textEditing.fontSize,
+          value: textEditing.value,
+          color: textEditing.color,
+          editing: true,
+        }
+      : selectedText && selectedText.type === "text"
+        ? {
+            id: selectedText.id,
+            x: selectedText.x,
+            y: selectedText.y,
+            boxWidth: selectedText.boxWidth,
+            boxHeight: selectedText.boxHeight,
+            fontSize: selectedText.fontSize,
+            value: selectedText.text,
+            color: selectedText.color,
+            editing: false,
+          }
+        : null;
+  const textFrame =
+    textChrome && stageSize.w > 0
+      ? annotationTextFrame({
+          xNorm: textChrome.x,
+          yNorm: textChrome.y,
+          fontSizeNorm: textChrome.fontSize,
+          text: textChrome.value || " ",
+          imageWidthPx: stageSize.w,
+          imageHeightPx: stageSize.h,
+          boxWidthNorm: textChrome.boxWidth,
+          boxHeightNorm: textChrome.boxHeight,
+        })
+      : null;
+  const textBoxNorm: TextBoxNorm | null = textFrame
+    ? {
+        x: textFrame.xPx / stageSize.w,
+        y: textFrame.yPx / stageSize.w,
+        boxWidth: textFrame.widthPx / stageSize.w,
+        boxHeight: textFrame.heightPx / stageSize.w,
+      }
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="max-w-none w-screen h-[100dvh] p-0 gap-0 border-0 rounded-none sm:rounded-none flex flex-col bg-black translate-x-0 translate-y-0 left-0 top-0"
+        className={ANNOTATOR_DIALOG_CLASS}
         data-testid="modal-photo-annotator"
       >
         {/* Top bar — pt accounts for the iPhone status bar / notch */}
@@ -523,21 +993,8 @@ export default function PhotoAnnotator({
         {/* Canvas area */}
         <div
           ref={containerRef}
-          className="flex-1 relative overflow-hidden flex items-center justify-center select-none"
+          className="flex-1 relative overflow-hidden flex items-center justify-center select-none touch-none"
         >
-          {/* Temporary diagnostic strip — leaves a breadcrumb when the
-              canvas appears blank so we can tell which state we're in
-              (no src? loaded but no stage? errored?). Remove once the
-              iOS image-load path is solid. */}
-          <div className="absolute top-2 left-2 right-2 z-10 text-[10px] text-white/60 font-mono bg-black/40 px-2 py-1 rounded pointer-events-none">
-            src: {src ? `…${src.slice(-30)}` : "(empty)"} · img:{" "}
-            {image
-              ? `${image.naturalWidth}×${image.naturalHeight}`
-              : imageError
-                ? "ERR"
-                : "loading"}{" "}
-            · stage: {Math.round(stageSize.w)}×{Math.round(stageSize.h)}
-          </div>
           {/* Surface load failures instead of leaving the canvas mysteriously
               blank — saves a lot of "what's wrong?" guessing. */}
           {imageError && (
@@ -565,12 +1022,8 @@ export default function PhotoAnnotator({
               ref={stageRef}
               width={stageSize.w}
               height={stageSize.h}
-              onMouseDown={handlePointerDown}
-              onMouseMove={handlePointerMove}
-              onMouseUp={handlePointerUp}
-              onTouchStart={handlePointerDown}
-              onTouchMove={handlePointerMove}
-              onTouchEnd={handlePointerUp}
+              style={{ touchAction: "none" }}
+              onPointerDown={handlePointerDown}
             >
               <Layer>
                 <KonvaImage
@@ -585,34 +1038,55 @@ export default function PhotoAnnotator({
             </Stage>
           )}
 
-          {/* Text input overlay (HTML, not Konva, so the user can type) */}
-          {textEditing && (
-            <textarea
-              autoFocus
-              value={textEditing.value}
-              onChange={(e) =>
-                setTextEditing({ ...textEditing, value: e.target.value })
+          {textChrome && textFrame && textBoxNorm && (
+            <PhotoAnnotatorTextBox
+              left={stageOffsetX + textFrame.xPx}
+              top={stageOffsetY + textFrame.yPx}
+              width={textFrame.widthPx}
+              height={textFrame.heightPx}
+              editing={textChrome.editing}
+              value={textChrome.value}
+              color={textChrome.color}
+              fontSizePx={textFrame.fontSizePx}
+              onChangeText={(value) =>
+                setTextEditing((current) => {
+                  if (!current) return current;
+                  const fitted = textBoxCoveringContent(
+                    current,
+                    value,
+                    current.fontSize,
+                    stageSize.w,
+                    stageSize.h,
+                  );
+                  return { ...current, ...fitted, value };
+                })
               }
-              onBlur={commitText}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  commitText();
-                } else if (e.key === "Escape") {
-                  setTextEditing(null);
-                }
+              onCommit={commitText}
+              onCancel={() => setTextEditing(null)}
+              onHandlePointerDown={(handle, event) =>
+                startTextDrag(
+                  handle,
+                  event,
+                  textChrome.editing ? "edit" : "selected",
+                  textChrome.id,
+                  textBoxNorm,
+                  textChrome.fontSize,
+                  textChrome.value,
+                )
+              }
+              onBodyPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                startTextDrag(
+                  "move",
+                  event,
+                  "selected",
+                  textChrome.id,
+                  textBoxNorm,
+                  textChrome.fontSize,
+                  textChrome.value,
+                );
               }}
-              className="absolute bg-transparent border border-white/60 outline-none resize-none font-bold leading-tight p-1"
-              style={{
-                left: stageOffsetX + textEditing.px,
-                top: stageOffsetY + textEditing.py,
-                color,
-                fontSize: stageSize.w * 0.04,
-                minWidth: 80,
-                textShadow:
-                  "0 0 2px black, 0 0 2px black, 0 0 2px black, 0 0 2px black",
-              }}
-              data-testid="textarea-annotate-text"
             />
           )}
         </div>
@@ -625,31 +1099,31 @@ export default function PhotoAnnotator({
           <ToolBtn
             icon={<ArrowUpRight className="w-5 h-5" />}
             active={tool === "arrow"}
-            onClick={() => setTool("arrow")}
+            onClick={() => chooseTool("arrow")}
             label="Arrow"
           />
           <ToolBtn
             icon={<CircleIcon className="w-5 h-5" />}
             active={tool === "circle"}
-            onClick={() => setTool("circle")}
+            onClick={() => chooseTool("circle")}
             label="Circle"
           />
           <ToolBtn
             icon={<Square className="w-5 h-5" />}
             active={tool === "rect"}
-            onClick={() => setTool("rect")}
+            onClick={() => chooseTool("rect")}
             label="Rect"
           />
           <ToolBtn
             icon={<Pencil className="w-5 h-5" />}
             active={tool === "pen"}
-            onClick={() => setTool("pen")}
+            onClick={() => chooseTool("pen")}
             label="Draw"
           />
           <ToolBtn
             icon={<Type className="w-5 h-5" />}
             active={tool === "text"}
-            onClick={() => setTool("text")}
+            onClick={() => chooseTool("text")}
             label="Text"
           />
 
@@ -659,7 +1133,10 @@ export default function PhotoAnnotator({
             <button
               key={c}
               type="button"
-              onClick={() => setColor(c)}
+              onClick={() => {
+                setColor(c);
+                patchActiveText({ color: c });
+              }}
               className={cn(
                 "w-7 h-7 rounded-full border-2 transition-transform",
                 color === c
@@ -678,7 +1155,10 @@ export default function PhotoAnnotator({
             <button
               key={w}
               type="button"
-              onClick={() => setStrokeWidth(w)}
+              onClick={() => {
+                setStrokeWidth(w);
+                patchActiveText({ fontSize: fontSizeNormForStroke(w) });
+              }}
               className={cn(
                 "w-7 h-7 rounded-full border-2 flex items-center justify-center",
                 strokeWidth === w ? "border-white" : "border-neutral-600",

@@ -7,8 +7,8 @@ let isPolling = false;
 
 // Poller health, surfaced by the 15-min health check (healthCheck.ts). A poller
 // that stops succeeding — bad Gmail credentials, IMAP outage, a processing bug —
-// means customer replies pile up invisibly in Gmail, so it must alert the owner
-// rather than fail quietly.
+// means customer replies pile up invisibly in Gmail. The check logs that; it
+// does not email the owner or push admins.
 let lastSuccessAt: Date | null = null;
 let lastErrorAt: Date | null = null;
 let lastErrorMessage = '';

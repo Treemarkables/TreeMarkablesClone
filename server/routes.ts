@@ -24,6 +24,9 @@ declare module 'express-session' {
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
+import { clearProposalContent, withProposalContentLock } from "./proposalContentLock";
+import { beginProposalSend, releaseProposalSend } from "./proposalSendClaim";
+import { clientSafeErrorText } from "./httpErrorText";
 import { buildTodayOverview, createTodayExtraInstruction, deleteTodayExtraInstruction, HttpError } from "./todayOverview";
 import { loadEffectiveRiskLinksForJobs, loadRiskLinksForJobs, recordRiskAssessmentChecklistDone } from "./jhaJobRisk";
 import { checklistCompletionClearsRiskDue, doneIdsIncludingLinkedJha, jhaCompletionRequiresJob, normalizeJhaJobId, RISK_ASSESSMENT_CHECKLIST_ITEM_ID, type JobRiskAssessmentLink } from "@shared/jhaJobRisk";
@@ -33,6 +36,7 @@ import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
+import { businessIdFromVoiceClient, isBusinessId, voiceIdentityForEmployee, inboundVoiceIdentity } from "./tenancy/voiceIdentity";
 import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
@@ -131,7 +135,7 @@ import { getSubscriberOwnerContact, listSubscriberSummaries } from "./adminSubsc
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import { checkLoginThrottle, clearLoginIdentifierThrottle } from "./security/loginThrottle";
 import { disableMfa, getMfaRow, mfaLoginGate } from "./security/mfaService";
-import { beginPendingMfaSession, establishEmployeeSession } from "./security/authSession";
+import { beginPendingMfaSession, clearHostSessionCookie, clearLegacyDomainSessionCookie, establishEmployeeSession } from "./security/authSession";
 import { registerMfaAndSessionRoutes } from "./security/mfaRoutes";
 import { AUDIT_ACTIONS, recordAuthEvent } from "./security/auditLog";
 import {
@@ -205,6 +209,11 @@ import { renderBrandedEmail, renderInvoiceEmail, invoiceBankTransferNote } from 
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter, type BeforeAfterBranding } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
+import {
+  deletePhotoAnnotation,
+  findPhotoAnnotations,
+  upsertPhotoAnnotation,
+} from "./photoAnnotationStore";
 import { renderSiteMapSnapshot, renderImageSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
@@ -2272,13 +2281,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========================================
   // CLIENT-SIDE ERROR LOGGING
   app.post('/api/client-errors', (req: Request, res: Response) => {
-    const { message, stack, componentStack, url, userAgent } = req.body || {};
+    const {
+      message, stack, componentStack, url, userAgent,
+      context, jobId, entryId, entryType, request: failedRequest, status, serverMessage, timestamp,
+    } = req.body || {};
+    const clip = (value: unknown, max: number) =>
+      typeof value === 'string' ? value.slice(0, max) : undefined;
     console.error('🚨 [CLIENT ERROR]', {
-      message,
+      message: clip(message, 500),
       url,
       userAgent,
-      stack: stack?.slice(0, 500),
-      componentStack: componentStack?.slice(0, 500),
+      stack: clip(stack, 500),
+      componentStack: clip(componentStack, 500),
+      context,
+      jobId,
+      entryId,
+      entryType,
+      request: failedRequest,
+      status,
+      serverMessage: clip(serverMessage, 300),
+      timestamp,
     });
     res.json({ success: true });
   });
@@ -2611,22 +2633,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // cookie was set in server/index.ts, otherwise the browser ignores the
       // clear and the stale SID lingers into the next login. Host-only (no
       // domain attribute) — see comment in server/index.ts session config.
-      res.clearCookie('treemarkables.sid', {
-        path: '/',
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-      });
-      // Also clear the legacy domain-scoped variant so browsers that still
-      // have it from before the host-only migration don't send it on the
-      // next login and confuse the session lookup.
-      res.clearCookie('treemarkables.sid', {
-        path: '/',
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        domain: '.treemarkables.co.nz',
-      });
+      clearHostSessionCookie(res);
+      // Legacy domain cookie is sent first on app.treemarkables.co.nz and
+      // hides the host-only session. Clear both SameSite variants.
+      clearLegacyDomainSessionCookie(res);
       
       res.json({
         success: true,
@@ -2665,14 +2675,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('[ACCOUNT-DELETE] Session destroy error:', err);
           // The account is already gone; report success regardless.
         }
-        // Mirror logout's cookie clearing (attributes must match server/index.ts).
-        res.clearCookie('treemarkables.sid', {
-          path: '/', httpOnly: true, secure: true, sameSite: 'none',
-        });
-        res.clearCookie('treemarkables.sid', {
-          path: '/', httpOnly: true, secure: true, sameSite: 'none',
-          domain: '.treemarkables.co.nz',
-        });
+        clearHostSessionCookie(res);
+        clearLegacyDomainSessionCookie(res);
         res.json({ success: true, message: 'Account deleted' });
       });
     } catch (error) {
@@ -2684,6 +2688,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ── Server-Sent Events ────────────────────────────────────────────────────
   // Clients connect here and receive real-time invalidation signals.
   app.get('/api/sse', (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!req.session.employeeId || !businessId) {
+      return res.status(401).end();
+    }
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -2693,7 +2701,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const ping = setInterval(() => {
       try { res.write(': ping\n\n'); } catch { clearInterval(ping); }
     }, 25000);
-    addClient(res);
+    addClient(res, businessId);
     req.on('close', () => {
       clearInterval(ping);
       removeClient(res);
@@ -7978,9 +7986,38 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       res.json({ success: true, data: transformedEntries, mobile: true });
     } catch (error) {
       console.error('Error fetching mobile diary:', error);
-      res.status(500).json({ success: false, message: 'Error fetching diary entries' });
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: clientSafeErrorText(error, 'Error fetching diary entries') });
+      }
     }
   });
+
+  // A diary load is JSON with a real status, including when encoding fails.
+  // An empty 2xx is what Safari reports as a pattern error with no status.
+  const sendDiaryJson = (res: Response, status: number, body: unknown) => {
+    if (res.headersSent) return;
+    const failure = { success: false, message: "Error fetching diary entries" };
+    let httpStatus = status;
+    let encoded: string;
+    try {
+      const value = JSON.stringify(body);
+      if (typeof value !== "string" || value.length === 0) {
+        encoded = JSON.stringify(failure);
+        httpStatus = 500;
+      } else {
+        encoded = value;
+      }
+    } catch (error) {
+      encoded = JSON.stringify({
+        success: false,
+        message: clientSafeErrorText(error, "Error fetching diary entries"),
+      });
+      httpStatus = 500;
+    }
+    res.status(httpStatus);
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.send(encoded);
+  };
 
   // Get job diary entries
   app.get('/api/jobs/:jobId/diary', async (req: Request, res: Response) => {
@@ -7997,7 +8034,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Handle temporary job IDs
       if (jobId.startsWith('temp-')) {
         const tempEntries = (global as any).tempDiaryEntries?.get(jobId) || [];
-        res.json({ success: true, data: tempEntries });
+        sendDiaryJson(res, 200, { success: true, data: tempEntries });
         return;
       }
 
@@ -8040,10 +8077,15 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         return transformed;
       });
       
-      res.json({ success: true, data: transformedEntries });
+      sendDiaryJson(res, 200, { success: true, data: transformedEntries });
     } catch (error) {
       console.error('Error fetching job diary entries:', error);
-      res.status(500).json({ success: false, message: 'Error fetching diary entries' });
+      // The job card shows this message. Keep the real reason (timeout, bad
+      // column, JSON failure) and drop stacks and connection strings.
+      sendDiaryJson(res, 500, {
+        success: false,
+        message: clientSafeErrorText(error, 'Error fetching diary entries'),
+      });
     }
   });
 
@@ -11591,9 +11633,22 @@ Return only the rewritten description, nothing else.`,
       console.log('📧 EMAIL HTML CONTENT:', htmlContent);
       console.log('📧 EMAIL TEXT CONTENT:', `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our services.'}`);
 
+      const sendClaim = await beginProposalSend(proposalId, 'email', String(to));
+      if (sendClaim === 'duplicate') {
+        console.log(`📧 Suppressed duplicate proposal email for ${proposalId} → ${to}`);
+        return res.json({
+          success: true,
+          deduped: true,
+          message: 'Proposal email already sent',
+          data: { proposalId, proposalNumber, recipient: to, sentAt: new Date().toISOString() },
+        });
+      }
+
       // Send email using EmailService (photos are hosted URLs, no attachments needed)
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
-      const emailResult = await emailService.sendEmail({
+      let emailResult;
+      try {
+      emailResult = await emailService.sendEmail({
         to,
         cc,
         fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
@@ -11603,8 +11658,13 @@ Return only the rewritten description, nothing else.`,
         jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
         jobNumber: job?.jobNumber // Fallback if no id (legacy numeric alias)
       });
+      } catch (sendError) {
+        await releaseProposalSend(proposalId, 'email', String(to));
+        throw sendError;
+      }
 
       if (!emailResult.success) {
+        await releaseProposalSend(proposalId, 'email', String(to));
         return res.status(500).json({
           success: false,
           message: emailResult.error || 'Failed to send proposal email'
@@ -11832,7 +11892,20 @@ Return only the rewritten description, nothing else.`,
         `The quote is attached as a PDF. Or reply to this email with: I accept quote ${quoteNumber}`,
       ].join('\n\n');
 
-      const emailResult = await emailService.sendEmail({
+      const sendClaim = await beginProposalSend(proposalId, 'email', String(to));
+      if (sendClaim === 'duplicate') {
+        console.log(`📧 Suppressed duplicate quote email for ${proposalId} → ${to}`);
+        return res.json({
+          success: true,
+          deduped: true,
+          message: 'Quote email already sent',
+          data: { proposalId, quoteNumber, recipient: to, sentAt: new Date().toISOString() },
+        });
+      }
+
+      let emailResult;
+      try {
+      emailResult = await emailService.sendEmail({
         to,
         cc,
         fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
@@ -11848,8 +11921,13 @@ Return only the rewritten description, nothing else.`,
           },
         ],
       });
+      } catch (sendError) {
+        await releaseProposalSend(proposalId, 'email', String(to));
+        throw sendError;
+      }
 
       if (!emailResult.success) {
+        await releaseProposalSend(proposalId, 'email', String(to));
         return res.status(500).json({
           success: false,
           message: emailResult.error || 'Failed to send quote email',
@@ -12883,7 +12961,7 @@ Return only the rewritten description, nothing else.`,
       }
       
       // Respond to Twilio with TwiML (required)
-      broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary']);
+      broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary'], inboundBizId);
       res.type('text/xml');
       res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
       
@@ -12917,11 +12995,18 @@ Return only the rewritten description, nothing else.`,
         return res.status(400).json({ error: 'Invalid filename' });
       }
       const servingUrl = `/api/recordings/${filename}`;
+      const recordingBusinessId = currentBusinessId();
+      const callScope = recordingBusinessId
+        ? and(eq(schema.calls.recordingUrl, servingUrl), eq(schema.calls.businessId, recordingBusinessId))
+        : eq(schema.calls.recordingUrl, servingUrl);
       const [ownedCall] = await db.select({ id: schema.calls.id })
-        .from(schema.calls).where(eq(schema.calls.recordingUrl, servingUrl)).limit(1);
+        .from(schema.calls).where(callScope).limit(1);
       if (!ownedCall) {
+        const recordScope = recordingBusinessId
+          ? and(eq(schema.callRecords.recordingUrl, servingUrl), eq(schema.callRecords.businessId, recordingBusinessId))
+          : eq(schema.callRecords.recordingUrl, servingUrl);
         const [ownedRecord] = await db.select({ id: schema.callRecords.id })
-          .from(schema.callRecords).where(eq(schema.callRecords.recordingUrl, servingUrl)).limit(1);
+          .from(schema.callRecords).where(recordScope).limit(1);
         if (!ownedRecord) {
           return res.status(404).json({ error: 'Recording not found' });
         }
@@ -12945,7 +13030,8 @@ Return only the rewritten description, nothing else.`,
   // Create them at: Twilio Console → Account → API Keys & Tokens → Create API Key (Standard).
   app.post('/api/twilio/token', async (req: Request, res: Response) => {
     try {
-      if (!req.session.employeeId) {
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -12957,16 +13043,17 @@ Return only the rewritten description, nothing else.`,
           message: 'Twilio API Key not configured. Set TWILIO_API_KEY and TWILIO_API_SECRET secrets.',
         });
       }
-      // Identity isolation: only admins (the owner) get the shared inbound
-      // identity that the answer webhook dials. Other employees get a
-      // per-employee identity so their devices don't ring on inbound customer
-      // calls — twilio-answer only <Dial>s the owner identity.
-      const requestingEmployee = await storage.getEmployee(req.session.employeeId);
-      const ownerIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+      // One inbound identity per business. Every admin used to receive the
+      // shared `treemarkables-owner` identity, so another business's TestFlight
+      // app rang for Treemarkables calls. Crew still get a personal identity
+      // so their phones don't ring the business line.
+      const requestingEmployee = await storage.getEmployee(employeeId);
+      const businessId = requestingEmployee?.businessId || req.session.businessId;
+      if (!businessId) {
+        return res.status(403).json({ success: false, message: 'No business on this account' });
+      }
       const isAdmin = requestingEmployee?.role === 'admin';
-      const clientIdentity = isAdmin
-        ? ownerIdentity
-        : `treemarkables-emp-${req.session.employeeId}`;
+      const clientIdentity = voiceIdentityForEmployee(businessId, employeeId, isAdmin);
       const twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
       // Platform-aware push credential. iOS uses an APNs VoIP push credential;
       // Android uses an FCM push credential (a different SID registered in the
@@ -13022,7 +13109,22 @@ Return only the rewritten description, nothing else.`,
   // today's flow byte-for-byte.
   const buildDialJulesTwimlBody = async (req: Request): Promise<string> => {
     const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER;
-    const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+    // Dial the business that owns the line, not a shared identity every
+    // admin app registers for. An unmapped number falls back to the platform
+    // default business (the original single-tenant line), never to a name
+    // that other businesses' devices are still bound to.
+    const inboundToForIdentity = String(req.body?.To || '');
+    let dialBusinessId = await resolveBusinessIdByChannel('phone', inboundToForIdentity);
+    if (!dialBusinessId) {
+      try {
+        dialBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+      } catch {
+        dialBusinessId = undefined;
+      }
+    }
+    const clientIdentity = dialBusinessId
+      ? inboundVoiceIdentity(dialBusinessId)
+      : (process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner');
     const hasClient = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
 
     // Must have at least one destination — Client app OR phone number
@@ -13250,8 +13352,12 @@ ${phoneTarget}
     // calledTo = our own line for tenant resolution, direction=outbound flips
     // the stored direction and skips inbound-lead extraction. `&` between
     // query params must be `&amp;` inside an XML attribute.
+    const callerBusinessId = businessIdFromVoiceClient(from);
+    const callerBusinessQuery = isBusinessId(callerBusinessId)
+      ? `&amp;callerBusinessId=${encodeURIComponent(callerBusinessId)}`
+      : '';
     const recordingCallbackUrl =
-      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(dialTo)}&amp;calledTo=${encodeURIComponent(twilioLine)}&amp;direction=outbound`;
+      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(dialTo)}&amp;calledTo=${encodeURIComponent(twilioLine)}&amp;direction=outbound${callerBusinessQuery}`;
 
     console.log(`📞 Outgoing web call: ${from} → ${dialTo} (callerId ${callerId})`);
     return res.send(`<?xml version="1.0" encoding="UTF-8"?>
@@ -13703,7 +13809,13 @@ ${dialBody}</Response>`);
         // defaulting to Treemarkables and matching customers across all tenants.
         // Unmapped number → undefined → unchanged prior (single-tenant) behaviour.
         const calledToRaw = String(req.query.calledTo || To || '');
-        const inboundBizId = await resolveBusinessIdByChannel('phone', calledToRaw);
+        // Outbound calls are placed by a signed-in Voice client. Log them on
+        // that client's business, not on whoever owns the shared caller-id line.
+        const callerBusinessQuery = String(req.query.callerBusinessId || '');
+        const callerBusinessId = isBusinessId(callerBusinessQuery) ? callerBusinessQuery : undefined;
+        const inboundBizId = (isOutbound && callerBusinessId)
+          ? callerBusinessId
+          : await resolveBusinessIdByChannel('phone', calledToRaw);
         if (inboundBizId) {
           console.log(`🏢 Inbound line ${calledToRaw} resolved to business ${inboundBizId}`);
         }
@@ -18446,9 +18558,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         }
 
         // Composite the annotations onto the source via sharp + SVG overlay.
+        // stageWidth is the editor stage in CSS pixels so a 4px stroke is
+        // scaled onto the full-resolution photo instead of staying 4px tall.
+        const stageWidthRaw = Number(req.body?.stageWidth);
+        const stageWidth =
+          Number.isFinite(stageWidthRaw) && stageWidthRaw > 1 ? stageWidthRaw : undefined;
         const bakedBuffer = await bakeAnnotations(
           downloaded.buffer,
           annotations as AnnotationShape[],
+          { stageWidth },
         );
 
         // Write the baked PNG to GCS at a deterministic filename derived from
@@ -18479,24 +18597,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           'Unknown';
 
         // Upsert by sourceUrl — second-and-later saves update in place.
-        const [row] = await db
-          .insert(schema.photoAnnotations)
-          .values({
-            sourceUrl,
-            annotations: annotations as any,
-            annotatedUrl: servedUrl,
-            annotatedBy,
-          })
-          .onConflictDoUpdate({
-            target: schema.photoAnnotations.sourceUrl,
-            set: {
-              annotations: annotations as any,
-              annotatedUrl: servedUrl,
-              annotatedBy,
-              updatedAt: new Date(),
-            },
-          })
-          .returning();
+        // withTenant stamps business_id so RLS keeps the row (see photoAnnotationStore).
+        const row = await upsertPhotoAnnotation({
+          sourceUrl,
+          annotations,
+          annotatedUrl: servedUrl,
+          annotatedBy,
+        });
 
         console.log(`✅ Baked annotations for ${sourceUrl} → ${servedUrl} (by ${annotatedBy})`);
         return res.json({ success: true, annotation: row });
@@ -18518,11 +18625,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (!sourceUrl) {
         return res.status(400).json({ success: false, message: 'Missing sourceUrl' });
       }
-      const [row] = await db
-        .select()
-        .from(schema.photoAnnotations)
-        .where(eq(schema.photoAnnotations.sourceUrl, sourceUrl))
-        .limit(1);
+      const [row] = await findPhotoAnnotations([sourceUrl]);
       return res.json({ success: true, annotation: row ?? null });
     } catch (error) {
       console.error('Error fetching photo annotation:', error);
@@ -18546,10 +18649,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (sourceUrls.length === 0) {
         return res.json({ success: true, annotations: {} });
       }
-      const rows = await db
-        .select()
-        .from(schema.photoAnnotations)
-        .where(inArray(schema.photoAnnotations.sourceUrl, sourceUrls));
+      const rows = await findPhotoAnnotations(sourceUrls);
       const annotations: Record<string, typeof rows[number]> = {};
       for (const row of rows) {
         annotations[row.sourceUrl] = row;
@@ -18595,9 +18695,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         }
       }
 
-      await db
-        .delete(schema.photoAnnotations)
-        .where(eq(schema.photoAnnotations.sourceUrl, sourceUrl));
+      await deletePhotoAnnotation(sourceUrl);
 
       return res.json({ success: true });
     } catch (error) {
@@ -22532,9 +22630,30 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       console.log('📱 Sending SMS via diary:', { to, message: message.substring(0, 50) + '...' });
-      
+
+      if (proposalId) {
+        const sendClaim = await beginProposalSend(String(proposalId), 'sms', String(to));
+        if (sendClaim === 'duplicate') {
+          console.log(`📱 Suppressed duplicate proposal SMS for ${proposalId} → ${to}`);
+          return res.json({
+            success: true,
+            deduped: true,
+            message: 'SMS already sent',
+          });
+        }
+      }
+
       // Send SMS using the service
-      const success = await smsService.sendSMS({ to, message });
+      let success = false;
+      try {
+        success = await smsService.sendSMS({ to, message });
+      } catch (sendError) {
+        if (proposalId) await releaseProposalSend(String(proposalId), 'sms', String(to));
+        throw sendError;
+      }
+      if (!success && proposalId) {
+        await releaseProposalSend(String(proposalId), 'sms', String(to));
+      }
       
       if (success) {
         // Save phone number to job contact and customer so reply matching works
@@ -28020,6 +28139,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const validatedData = updateProposalSchema.parse(req.body);
       const proposal = await storage.updateProposal(req.params.id, validatedData);
       
+      // One save at a time. Overlapping saves each used to insert a full copy
+      // of the lines (the second delete only removed the sections it had read).
+      await withProposalContentLock(proposal.id, async () => {
       // Delete existing sections and recreate them (simpler than updating)
       if (req.body.sections && Array.isArray(req.body.sections)) {
         console.log('📝 PUT proposal - updating sections:', {
@@ -28032,11 +28154,15 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           }))
         });
         
-        // First, delete all existing sections for this proposal
-        const existingSections = await storage.getProposalSectionsByProposal(proposal.id);
-        for (const section of existingSections) {
-          await storage.deleteProposalSection(section.id);
-        }
+        // Delete every current section and line (including ones another save
+        // just inserted, and lines whose section is already gone) before insert.
+        await clearProposalContent(proposal.id, {
+          listSections: (id) => storage.getProposalSectionsByProposal(id),
+          deleteSection: (id) => storage.deleteProposalSection(id),
+          listItems: (id) => storage.getProposalLineItemsByProposal(id),
+          deleteItemChoices: (id) => storage.deleteProposalLineItemChoicesByLineItem(id),
+          deleteItem: (id) => storage.deleteProposalLineItem(id),
+        });
 
         // NOTE: Do NOT write section[0].description back into job.description here —
         // see matching comment in POST /api/proposals. Job description is the source
@@ -28155,7 +28281,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       } catch (error) {
         console.error('❌ Error recomputing/syncing job prices (PUT):', error);
       }
-      
+      });
+
       res.json({
         success: true,
         data: proposal,

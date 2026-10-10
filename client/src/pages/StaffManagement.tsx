@@ -1149,7 +1149,7 @@ export default function StaffManagement() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAdmin } = useAuth();
+  const { isAdmin, abandonCachedSession } = useAuth();
 
   // Fetch staff data
   const { data: staffData, isLoading } = useQuery<{
@@ -1183,6 +1183,19 @@ export default function StaffManagement() {
       return dateB - dateA;
     });
 
+  const reportStaffError = (error: { message?: string }, fallback: string) => {
+    // Missing session, not a non-admin role. The cached user is stale.
+    if ((error.message || "").includes("Please log in")) {
+      abandonCachedSession();
+      return;
+    }
+    toast({
+      title: "Error",
+      description: error.message || fallback,
+      variant: "destructive",
+    });
+  };
+
   // Create staff mutation
   const createStaffMutation = useMutation({
     mutationFn: async (data: StaffFormData) => {
@@ -1202,12 +1215,8 @@ export default function StaffManagement() {
         window.scrollTo({ top: 0, behavior: "smooth" });
       }, 100);
     },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add staff member",
-        variant: "destructive",
-      });
+    onError: (error: { message?: string }) => {
+      reportStaffError(error, "Failed to add staff member");
     },
   });
 
@@ -1310,25 +1319,36 @@ export default function StaffManagement() {
 
   return (
     <div className="min-h-full bg-background">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      {/* This route renders outside SidebarLayout, so the shell's mobile header
+          never applies env(safe-area-inset-top). Pad the bar itself or the
+          back control, title, and Add button sit under the iOS status bar. */}
+      <div
+        className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+        style={{
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingRight: "env(safe-area-inset-right, 0px)",
+        }}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/settings">
+          <div className="flex items-center justify-between gap-2 sm:gap-4 min-h-16 sm:h-16">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <Link href="/settings" className="shrink-0">
                 <Button
                   variant="ghost"
                   size="sm"
+                  aria-label="Back to settings"
                   data-testid="button-back-to-settings"
+                  className="px-2 sm:px-3"
                 >
-                  <ChevronLeft className="w-4 h-4 mr-2" />
-                  Settings
+                  <ChevronLeft className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Settings</span>
                 </Button>
               </Link>
-              <div className="h-6 w-px bg-gray-300 dark:bg-gray-600" />
-              <div className="flex items-center gap-2">
-                <Users className="w-6 h-6 text-orange-500" />
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 shrink-0" />
+              <div className="flex items-center gap-2 min-w-0">
+                <Users className="w-6 h-6 text-orange-500 shrink-0" />
+                <h1 className="text-xl sm:text-2xl font-bold leading-tight text-gray-900 dark:text-white">
                   Staff Management
                 </h1>
               </div>
@@ -1336,11 +1356,12 @@ export default function StaffManagement() {
 
             <Button
               onClick={() => setIsAddDialogOpen(true)}
-              className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+              className="shrink-0 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
               data-testid="button-add-staff"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Staff Member
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="sm:hidden">Add</span>
+              <span className="hidden sm:inline">Add Staff Member</span>
             </Button>
           </div>
         </div>

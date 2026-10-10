@@ -23,22 +23,31 @@ export function stampSessionClientMeta(req: Request): void {
 }
 
 export function clearLegacyDomainSessionCookie(res: Response): void {
-  res.clearCookie("treemarkables.sid", {
-    path: "/",
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    domain: ".treemarkables.co.nz",
-  });
+  // SameSite must match the cookie being cleared. The legacy domain cookie was
+  // set as None; also clear Lax so a mismatched attribute cannot leave it in
+  // the jar, where it is sent first and hides the host-only owner session.
+  for (const sameSite of ["none", "lax"] as const) {
+    res.clearCookie("treemarkables.sid", {
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite,
+      domain: ".treemarkables.co.nz",
+    });
+  }
 }
 
 export function clearHostSessionCookie(res: Response): void {
-  res.clearCookie("treemarkables.sid", {
-    path: "/",
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-  });
+  // Clear the current Lax cookie and any None cookie issued before that change.
+  // Attributes must match or the browser keeps the sid.
+  for (const sameSite of ["lax", "none"] as const) {
+    res.clearCookie("treemarkables.sid", {
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite,
+    });
+  }
 }
 
 export async function buildAuthPayload(

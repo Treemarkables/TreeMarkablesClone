@@ -65,10 +65,19 @@ export interface DiaryTimelineSources {
   schedule: unknown;
 }
 
+type DiaryResponseBody = {
+  text?: () => Promise<string>;
+};
+
 type JsonRequest = (
   method: string,
   url: string,
-) => Promise<{ json: () => Promise<unknown> }>;
+) => Promise<{
+  status?: number;
+  json: () => Promise<unknown>;
+  text?: () => Promise<string>;
+  clone?: () => DiaryResponseBody;
+}>;
 
 export function diaryText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -225,7 +234,185 @@ function diaryType(entryType: string): DiaryEntry["type"] {
   return "job_event";
 }
 
-function unreadableEntry(id: string): DiaryEntry {
+const DETAIL_LIMIT = 300;
+
+export interface DiaryFailureDetails {
+  request: string;
+  status: number | null;
+  message: string;
+  timestamp: string;
+}
+
+type DiaryFailureError = Error & { diaryFailure?: DiaryFailureDetails };
+
+type DiaryBodyError = Error & { status?: number; serverMessage?: string };
+
+/** One line, no connection strings or bearer tokens, capped for an on-screen card. */
+export function publicErrorText(value: string): string {
+  const flat = value.replace(/\s+/g, " ").trim();
+  const redacted = flat
+    .replace(/postgres(?:ql)?:\/\/\S+/gi, "[redacted]")
+    .replace(/[a-z][a-z0-9+.-]*:\/\/[^/\s:]+:[^@\s/]+@/gi, (match) =>
+      match.replace(/:\/\/[^/\s:]+:[^@\s/]+@/, "://[redacted]@"),
+    )
+    .replace(/\b(password|secret|token|api[_-]?key|authorization)\b\s*[:=]\s*\S+/gi, "$1=[redacted]")
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]");
+  if (!redacted) return "";
+  if (redacted.length <= DETAIL_LIMIT) return redacted;
+  return `${redacted.slice(0, DETAIL_LIMIT - 1)}…`;
+}
+
+/** Errors, strings, and plain objects. Never throws. */
+export function safeErrorText(error: unknown): string {
+  if (error instanceof Error) {
+    const message = error.message?.trim();
+    if (message) return message;
+    return error.name || "Error";
+  }
+  if (typeof error === "string") return error.trim() || "Unknown error";
+  if (typeof error === "number" || typeof error === "boolean" || typeof error === "bigint") {
+    return String(error);
+  }
+  if (error == null) return "Unknown error";
+  if (typeof error === "object" && "message" in error) {
+    const message = (error as { message: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  }
+  try {
+    const seen = new WeakSet<object>();
+    const json = JSON.stringify(error, (_key, value) => {
+      if (typeof value === "bigint") return String(value);
+      if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) return "[circular]";
+        seen.add(value);
+      }
+      return value;
+    });
+    if (json && json !== "{}" && json !== "[]") return json;
+  } catch {
+    // Fall through to String().
+  }
+  try {
+    const text = String(error);
+    if (text && text !== "[object Object]") return text;
+  } catch {
+    // Ignore.
+  }
+  return "Unknown error";
+}
+
+function readHttpStatus(error: unknown): number | null {
+  if (typeof error === "object" && error !== null && "status" in error) {
+    const status = (error as { status: unknown }).status;
+    if (typeof status === "number" && Number.isFinite(status)) return status;
+  }
+  if (error instanceof Error) {
+    const match = /^(\d{3})\b/.exec(error.message);
+    if (match) return Number(match[1]);
+  }
+  return null;
+}
+
+function readServerMessage(error: unknown): string {
+  if (typeof error === "object" && error !== null && "serverMessage" in error) {
+    const serverMessage = (error as { serverMessage: unknown }).serverMessage;
+    if (typeof serverMessage === "string" && serverMessage.trim()) return serverMessage.trim();
+  }
+  if (typeof error === "object" && error !== null && "body" in error) {
+    const body = (error as { body: unknown }).body;
+    if (typeof body === "string" && body.trim()) return body.trim();
+    if (typeof body === "object" && body !== null) {
+      const record = body as { message?: unknown; error?: unknown };
+      if (typeof record.message === "string" && record.message.trim()) return record.message.trim();
+      if (typeof record.error === "string" && record.error.trim()) return record.error.trim();
+    }
+  }
+  return "";
+}
+
+/** Prefer the server's own text. Fall back to error.message, then a safe stringify. */
+export function diaryDetailMessage(error: unknown): string {
+  const serverMessage = readServerMessage(error);
+  const text = serverMessage || safeErrorText(error);
+  return publicErrorText(text) || "Unknown error";
+}
+
+export function requestLabel(request: string): string {
+  const trimmed = request.trim();
+  if (!trimmed) return "unknown";
+  if (trimmed === "render" || trimmed === "unknown" || trimmed === "proposals") return trimmed;
+  try {
+    const url = new URL(trimmed, "http://diary.local");
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return publicErrorText(trimmed).slice(0, 180) || "unknown";
+  }
+}
+
+/**
+ * Keep the original error (status, server message, stack). Stamp a stable
+ * request label and timestamp the first time we see it. A later call does not
+ * replace a specific request with "unknown".
+ */
+export function markDiaryFailure(error: unknown, request: string): Error {
+  const label = requestLabel(request);
+  if (error instanceof Error) {
+    const existing = (error as DiaryFailureError).diaryFailure;
+    if (existing && existing.request !== "unknown") return error;
+    const details: DiaryFailureDetails = {
+      request: label === "unknown" && existing?.request ? existing.request : label,
+      status: existing?.status ?? readHttpStatus(error),
+      message: existing?.message || diaryDetailMessage(error),
+      timestamp: existing?.timestamp || new Date().toISOString(),
+    };
+    (error as DiaryFailureError).diaryFailure = details;
+    if (!error.message.trim()) error.message = details.message;
+    return error;
+  }
+  const message = diaryDetailMessage(error);
+  const wrapped = new Error(message);
+  wrapped.name = "DiaryFailure";
+  (wrapped as DiaryFailureError).diaryFailure = {
+    request: label,
+    status: readHttpStatus(error),
+    message,
+    timestamp: new Date().toISOString(),
+  };
+  return wrapped;
+}
+
+export function describeDiaryFailure(error: unknown, request = "unknown"): DiaryFailureDetails {
+  const marked = markDiaryFailure(error, request);
+  return (marked as DiaryFailureError).diaryFailure as DiaryFailureDetails;
+}
+
+export function formatDiaryFailureCopy(details: DiaryFailureDetails, jobId?: string): string {
+  return [
+    jobId ? `Job: ${jobId}` : "",
+    `Request: ${details.request}`,
+    `Status: ${details.status ?? "none"}`,
+    `Message: ${details.message}`,
+    `Time: ${details.timestamp}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function entryFailureDetail(
+  entryType: string | undefined,
+  entryId: string | undefined,
+  error: unknown,
+): string {
+  const type = (entryType || "entry").replace(/\s+/g, " ").trim() || "entry";
+  const id = (entryId || "unknown").replace(/\s+/g, " ").trim() || "unknown";
+  const message =
+    typeof error === "string" && error.trim()
+      ? publicErrorText(error) || "Unknown error"
+      : diaryDetailMessage(error);
+  return `${type} · ${id} — ${message}`;
+}
+
+function unreadableEntry(id: string, sourceType: string, error: unknown): DiaryEntry {
   return {
     id,
     type: "note",
@@ -233,8 +420,29 @@ function unreadableEntry(id: string): DiaryEntry {
     content: "This entry couldn't be displayed.",
     author: "System",
     timestamp: new Date(0).toISOString(),
-    metadata: { unreadable: true },
+    metadata: {
+      unreadable: true,
+      sourceType,
+      errorMessage: diaryDetailMessage(error),
+    },
   };
+}
+
+function fallbackId(entry: unknown, fallback: string): { id: string; sourceType: string } {
+  const row = asRecord(entry);
+  let id = fallback;
+  let sourceType = "diary";
+  try {
+    id = diaryText(row.id) || fallback;
+  } catch {
+    id = fallback;
+  }
+  try {
+    sourceType = diaryText(row.entryType || row.entry_type) || "diary";
+  } catch {
+    sourceType = "diary";
+  }
+  return { id, sourceType };
 }
 
 function normalizeLocalRow(entry: unknown, index: number): DiaryEntry {
@@ -418,17 +626,18 @@ export function assembleDiaryEntries(sources: DiaryTimelineSources): DiaryEntry[
   payloadData(sources.diary).forEach((entry, index) => {
     try {
       entries.push(normalizeLocalRow(entry, index));
-    } catch {
-      const id = diaryText(asRecord(entry).id) || `diary-unreadable-${index}`;
-      entries.push(unreadableEntry(id));
+    } catch (error) {
+      const fallback = fallbackId(entry, `diary-unreadable-${index}`);
+      entries.push(unreadableEntry(fallback.id, fallback.sourceType, error));
     }
   });
 
   payloadData(sources.proposals).forEach((proposal, index) => {
     try {
       entries.push(normalizeProposal(proposal, index));
-    } catch {
-      entries.push(unreadableEntry(`proposal-unreadable-${index}`));
+    } catch (error) {
+      const fallback = fallbackId(proposal, `proposal-unreadable-${index}`);
+      entries.push(unreadableEntry(fallback.id, "proposal", error));
     }
   });
 
@@ -437,8 +646,9 @@ export function assembleDiaryEntries(sources: DiaryTimelineSources): DiaryEntry[
     serviceRows.forEach((entry, index) => {
       try {
         entries.push(normalizeServiceM8(entry, index));
-      } catch {
-        entries.push(unreadableEntry(`servicem8-unreadable-${index}`));
+      } catch (error) {
+        const fallback = fallbackId(entry, `servicem8-unreadable-${index}`);
+        entries.push(unreadableEntry(fallback.id, "servicem8", error));
       }
     });
   }
@@ -447,8 +657,8 @@ export function assembleDiaryEntries(sources: DiaryTimelineSources): DiaryEntry[
   if (scheduleRows.length > 0) {
     try {
       entries.push(...normalizeBookings(scheduleRows));
-    } catch {
-      entries.push(unreadableEntry("booking-unreadable"));
+    } catch (error) {
+      entries.push(unreadableEntry("booking-unreadable", "booking", error));
     }
   }
 
@@ -470,26 +680,79 @@ export function assembleDiaryEntries(sources: DiaryTimelineSources): DiaryEntry[
   return sortNewestFirst(uniqueEntries);
 }
 
+function responseStatus(status: unknown): number | null {
+  return typeof status === "number" && Number.isFinite(status) ? status : null;
+}
+
+/**
+ * res.json() on an empty or HTML 2xx throws a SyntaxError with no status.
+ * Safari words that "The string did not match the expected pattern." Keep the
+ * HTTP status and a short redacted snippet so the diary card does not say none.
+ */
+function diaryUnparsedBody(status: number | null, body: string, cause: unknown): DiaryBodyError {
+  const snippet = publicErrorText(body) || "(empty body)";
+  const reason =
+    cause instanceof Error && cause.message.trim()
+      ? cause.message.trim()
+      : "Response was not JSON";
+  const message = publicErrorText(`${reason} — ${snippet}`) || reason;
+  const error: DiaryBodyError = new Error(message);
+  if (status != null) error.status = status;
+  error.serverMessage = message;
+  return error;
+}
+
 /**
  * Diary and proposals used to share one Promise.all with no catch on either.
  * A proposals failure rejected the whole query, and retry: true retried forever.
  * Proposals, ServiceM8, and staff bookings are optional. The diary request is not.
  */
+async function readDiaryJson(request: JsonRequest, url: string): Promise<unknown> {
+  let res: Awaited<ReturnType<JsonRequest>>;
+  try {
+    res = await request("GET", url);
+  } catch (error) {
+    throw markDiaryFailure(error, url);
+  }
+  const status = responseStatus(res.status);
+  try {
+    if (typeof res.clone === "function" && typeof res.text === "function") {
+      const copy = res.clone();
+      try {
+        return await res.json();
+      } catch (parseError) {
+        let body = "";
+        try {
+          body = typeof copy.text === "function" ? await copy.text() : "";
+        } catch {
+          body = "";
+        }
+        throw diaryUnparsedBody(status, body, parseError);
+      }
+    }
+    return await res.json();
+  } catch (error) {
+    throw markDiaryFailure(error, url);
+  }
+}
+
+async function readOptionalJson(request: JsonRequest, url: string): Promise<unknown> {
+  try {
+    return await readDiaryJson(request, url);
+  } catch {
+    return { data: [] };
+  }
+}
+
 export async function fetchDiaryTimelineSources(
   urls: { diary: string; proposals: string; servicem8: string; assignments: string },
   request: JsonRequest,
 ): Promise<DiaryTimelineSources> {
   const [diary, proposals, servicem8, schedule] = await Promise.all([
-    request("GET", urls.diary).then((res) => res.json()),
-    request("GET", urls.proposals)
-      .then((res) => res.json())
-      .catch(() => ({ data: [] })),
-    request("GET", urls.servicem8)
-      .then((res) => res.json())
-      .catch(() => ({ data: [] })),
-    request("GET", urls.assignments)
-      .then((res) => res.json())
-      .catch(() => ({ data: [] })),
+    readDiaryJson(request, urls.diary),
+    readOptionalJson(request, urls.proposals),
+    readOptionalJson(request, urls.servicem8),
+    readOptionalJson(request, urls.assignments),
   ]);
   return { diary, proposals, servicem8, schedule };
 }
@@ -498,21 +761,30 @@ export function reportDiaryClientError(
   error: unknown,
   context: string,
   componentStack?: string,
+  extra?: { jobId?: string; entryId?: string; entryType?: string; request?: string },
 ): void {
   if (typeof fetch !== "function") return;
-  const err = error instanceof Error ? error : new Error(diaryText(error) || "Diary error");
+  const details = describeDiaryFailure(error, extra?.request || "unknown");
+  const err = error instanceof Error ? error : markDiaryFailure(error, details.request);
   const url = typeof window !== "undefined" ? window.location.href : "";
   const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
   fetch("/api/client-errors", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      message: err.message,
+      message: details.message,
       stack: err.stack,
       componentStack,
       url,
       userAgent,
       context,
+      jobId: extra?.jobId,
+      entryId: extra?.entryId,
+      entryType: extra?.entryType,
+      request: details.request,
+      status: details.status,
+      serverMessage: details.message,
+      timestamp: details.timestamp,
     }),
   }).catch(() => {});
 }

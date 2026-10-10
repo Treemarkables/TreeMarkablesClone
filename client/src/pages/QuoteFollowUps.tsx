@@ -31,6 +31,7 @@ interface FollowUp {
   quoteNumber: string;
   jobId: string | null;
   customerName: string | null;
+  contactName?: string | null;
   kind: string;
   nudgeStep: number;
   channel: string;
@@ -228,6 +229,9 @@ export default function QuoteFollowUps() {
                   data-testid={`quote-followup-${row.id}`}
                 >
                   <p className="font-medium truncate">{row.customerName || "Customer"}</p>
+                  {row.contactName ? (
+                    <p className="text-xs text-muted-foreground truncate">To {row.contactName}</p>
+                  ) : null}
                   <p className="text-sm text-muted-foreground">
                     Quote {row.quoteNumber} · {kindLabel(row.kind)}
                     {row.waiting ? "" : " · snoozed"}
@@ -244,6 +248,7 @@ export default function QuoteFollowUps() {
                   <p className="font-semibold">{kindLabel(selected.kind)}</p>
                   <p className="text-sm text-muted-foreground">
                     Quote {selected.quoteNumber}
+                    {selected.contactName ? ` · to ${selected.contactName}` : ""}
                     {selected.daysQuiet != null ? ` · quiet for ${selected.daysQuiet} days` : ""}
                     {selected.kind === "requote" && selected.requoteNumber
                       ? ` · new draft ${selected.requoteNumber}`
