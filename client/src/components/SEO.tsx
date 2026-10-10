@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { marketingRobotsContent } from '@shared/treemarkablesMarketingPaths';
 
 interface SEOProps {
   title: string;
@@ -92,8 +93,10 @@ export default function SEO({
       document.head.appendChild(viewportTag);
     }
 
-    // Add robots meta tag
-    updateMetaTag('robots', 'index, follow');
+    // www marketing pages are indexable. The same components also render for a
+    // logged-out browser on app.treemarkables.co.nz `/` (the app shell, which
+    // must not 301). That host stays noindex so it cannot outrank www.
+    updateMetaTag('robots', marketingRobotsContent(window.location.hostname));
 
     // Add author meta tag
     updateMetaTag('author', 'Treemarkables');
