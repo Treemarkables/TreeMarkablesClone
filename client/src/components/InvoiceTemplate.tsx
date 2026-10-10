@@ -407,7 +407,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                   <div key="footer" className="mt-4 pt-3 border-t border-gray-200 text-center">
                     <p className="text-xs text-gray-500 break-words">
                       {template.companyName || 'Treemarkables LTD'}
-                      {template.companyAddress ? ` | ${template.companyAddress.replace(/\n/g, ', ')}` : ' | 213 Stanley Road, Gisborne'}
+                      {co.address ? ` | ${co.address.replace(/\n/g, ', ')}` : ''}
                       {template.companyPhone ? ` | Phone: ${template.companyPhone}` : ' | Phone: 027 216 6882'}
                       {template.companyEmail ? ` | Email: ${template.companyEmail}` : ' | Email: quotes@treemarkables.nz'}
                     </p>

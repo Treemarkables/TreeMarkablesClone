@@ -11,6 +11,8 @@
  *   - Customer-facing URLs hardcoded to https://app.treemarkables.co.nz
  */
 
+import { fallbackCompanyAddress, TREEMARKABLES_YARD_ADDRESS } from '../shared/treemarkablesYard';
+
 const BRAND = {
   neon: '#39FF14',
   black: '#0b0b0b',
@@ -24,7 +26,7 @@ const BRAND = {
 const COMPANY = {
   name: 'Treemarkables LTD',
   tagline: 'Professional Arborists · Gisborne',
-  address: '213 Stanley Road, Gisborne',
+  address: TREEMARKABLES_YARD_ADDRESS,
   phone: '027 216 6882',
   email: 'quotes@treemarkables.nz',
   gstNumber: '131-047-592-GST004',
@@ -164,6 +166,8 @@ function escMultiline(s: string): string {
 
 export function renderBrandedEmail(opts: BrandedEmailOptions): string {
   const b = resolveBrand(opts.brand);
+  const footerAddress = fallbackCompanyAddress(opts.company?.name ?? COMPANY.name, opts.company?.address);
+  const footerAddressHtml = footerAddress ? `${esc(footerAddress)} &middot; ` : '';
   const totalLabel = opts.totalLabel ?? 'incl. GST';
   const ctaHint = opts.ctaHint
     ? `<div style="margin-top:12px;font-size:12px;color:${BRAND.muted};">${esc(opts.ctaHint)}</div>`
@@ -207,7 +211,7 @@ export function renderBrandedEmail(opts: BrandedEmailOptions): string {
       <!-- Footer -->
       <tr><td style="padding:22px 28px;border-top:1px solid ${BRAND.line};color:${BRAND.muted};font-size:12px;line-height:1.6;text-align:center;background:#fafbfc;">
         <div style="font-weight:600;color:${BRAND.ink};">${esc(opts.company?.name || COMPANY.name)}</div>
-        <div>${esc(opts.company?.address || COMPANY.address)} &middot; ${esc(opts.company?.phone || COMPANY.phone)}</div>
+        <div>${footerAddressHtml}${esc(opts.company?.phone || COMPANY.phone)}</div>
         <div><a href="mailto:${opts.company?.email || COMPANY.email}" style="color:${BRAND.muted};text-decoration:none;">${esc(opts.company?.email || COMPANY.email)}</a>${opts.company?.gstNumber ? ` &middot; GST ${esc(opts.company.gstNumber)}` : ''}</div>
       </td></tr>
 

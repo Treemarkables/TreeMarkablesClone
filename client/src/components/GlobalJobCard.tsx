@@ -6837,6 +6837,7 @@ The Treemarkables Team`;
                         {mode === "edit" && editingJob?.address && (
                           <JobLocationMap
                             jobAddress={editingJob.address}
+                            businessId={currentUser?.businessId}
                             className="mt-2"
                           />
                         )}

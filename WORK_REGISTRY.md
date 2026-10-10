@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Treemarkables yard address — branch `cursor/treemarkables-yard-address-c9a3` — 2026-10-10 — hardcoded invoices, emails, and the job-map yard pin move from 213 Stanley Road to 26 Cochrane Street, Gisborne. Production document_templates and business_settings rows are not updated. Draft only.
 - Treemarkables marketing SEO — branch `cursor/treemarkables-seo-prerender-f110` — 2026-10-10 — first-byte HTML for public www routes (H1, copy, phone, address, JSON-LD) and apex→www 301. No aggregateRating. Staff/app hosts unchanged. DNS for the bare domain is outside the repo. [PR #615]
 - Treemarkables invoice bank-only — branch `cursor/tm-invoice-bank-only-943e` — 2026-09-29 — production business a985f349-b6aa-4ef9-a6f9-70aa00e1dcb2 invoices: no Pay now, no invoice Checkout session. Deposits, job-card payments, other businesses, and Inflow subscription billing unchanged. Do not merge until review. [PR #602]
 - Proposal resend doubles line items — branch `cursor/proposal-resend-duplicate-lines-1ff1` — 2026-10-06 — sending or reopening a proposal must not copy line items (Job 4208 $850 became $1,700). Overlapping saves are serialised; a second tap does not send another email or SMS. No live data changes. Draft only.
