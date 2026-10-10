@@ -148,8 +148,8 @@ export function StaffMultiWeekGrid({
     return '#ffffff';
   };
 
-  // Each day is its own job block. Radius is 1rem on every corner — the same
-  // token as Dispatch timeline cards (`rounded-2xl` / `.inflow-chrome-item`).
+  // Each day is its own job block. Desktop keeps the 1rem radius used by
+  // Dispatch timeline cards. Phones are square so the chips are straight-edged.
   const chipStyle = (slot: MultiWeekCellSlot, colors: JobColors, dashed: boolean) => ({
     backgroundColor: colors.bg,
     borderLeft: slot.isRunStart ? `3px ${dashed ? 'dashed' : 'solid'} ${colors.border}` : undefined,
@@ -172,7 +172,7 @@ export function StaffMultiWeekGrid({
         key={slot.id}
         onClick={e => { e.stopPropagation(); onOpenJob(slot.job); }}
         title={`${label} — ${slot.timeLabel}${dashed ? ' (unassigned)' : ''}`}
-        className="block w-[calc(100%-4px)] text-left overflow-hidden shrink-0 hover:brightness-95 transition-all px-1 py-0.5 rounded-2xl"
+        className="block w-[calc(100%-4px)] text-left overflow-hidden shrink-0 hover:brightness-95 transition-all px-1 py-0.5 rounded-none md:rounded-2xl"
         style={chipStyle(slot, colors, dashed)}
       >
         <span className="block text-[10px] font-semibold leading-tight truncate" style={{ color: colors.text }}>

@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Staff schedule day restore — branch `cursor/staff-schedule-restore-day-a049` — 2026-10-10 — Live Roster stays on the day a job was opened from (`?date=` plus swipes on the job card no longer change the day). Square job blocks on phones. No TestFlight. [PR #622]
 - Dispatch Unscheduled recent activity — branch `cursor/dispatch-unscheduled-recent-activity-b138` — 2026-10-10 — Unscheduled rail sorts by latest of updated_at, diary, proposal sent/accepted, last_activity_at, created_at (one grouped SQL pass). Work Order chip stays FIFO. No TestFlight. Draft only. [PR #621]
 - East Coast town names — #619, branch `cursor/east-coast-generic-copy-18ce` — 2026-10-10 — drop Tolaga Bay, Tokomaru Bay and Ruatoria from /east-coast copy, homepage, and JSON-LD areaServed. Page stays generic to the Tairāwhiti East Coast. No TestFlight. Draft only.
 - App-host marketing 301 — branch `cursor/app-host-marketing-redirect-2e08` — 2026-10-10 — on app.treemarkables.co.nz, 301 sitemap marketing paths to https://www.treemarkables.co.nz (query kept). `/` stays (iOS and logged-in entry) with noindex + www canonical. No redirect of login, dashboard, api, dispatch, proposal, invoice, portal, or assets. App-host robots.txt omits the www sitemap. No TestFlight rebuild. Draft only. [PR #617]
