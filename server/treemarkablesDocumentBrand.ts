@@ -22,6 +22,7 @@ import type { IncomingHttpHeaders } from "http";
 import type { Request, RequestHandler, Response } from "express";
 import fs from "fs";
 import { injectTreemarkablesPublicHtml, treemarkablesJsonLd } from "./treemarkablesPublicHtml";
+import { applyHtmlCacheHeaders } from "./staticAssetPolicy";
 import {
   EAST_COAST_PAGE,
   EMERGENCY_PAGE,
@@ -375,7 +376,7 @@ function interceptHtmlResponses(res: Response, pathname: string): void {
   res.send = ((body?: unknown) => {
     if (typeof body === "string" && looksLikeHtmlDocument(body)) {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      applyHtmlCacheHeaders(res);
       return originalSend(brand(body));
     }
     return originalSend(body as Parameters<Response["send"]>[0]);
@@ -387,7 +388,7 @@ function interceptHtmlResponses(res: Response, pathname: string): void {
       try {
         const html = fs.readFileSync(filePath, "utf8");
         res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        applyHtmlCacheHeaders(res);
         originalSend(brand(html));
         invokeSendFileCallback(options, callback);
         return res;
@@ -408,7 +409,7 @@ function interceptHtmlResponses(res: Response, pathname: string): void {
     if (typeof chunk === "string" && looksLikeHtmlDocument(chunk)) {
       if (!res.headersSent) {
         res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        applyHtmlCacheHeaders(res);
       }
       return originalEnd(brand(chunk), encoding as BufferEncoding, cb as () => void);
     }
@@ -417,7 +418,7 @@ function interceptHtmlResponses(res: Response, pathname: string): void {
       if (looksLikeHtmlDocument(asText)) {
         if (!res.headersSent) {
           res.setHeader("Content-Type", "text/html; charset=utf-8");
-          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+          applyHtmlCacheHeaders(res);
         }
         return originalEnd(Buffer.from(brand(asText), "utf8"), encoding as BufferEncoding, cb as () => void);
       }

@@ -270,6 +270,7 @@ function navHtml(): string {
 function pageHtml(pathname: string): string {
   const copy = pageCopy(pathname);
   return `<style>
+    body:has(#tm-prerender){background:#f6f5f0;color:#161616}
     #tm-prerender{box-sizing:border-box;background:#f6f5f0;color:#161616;font-family:Georgia,"Iowan Old Style",serif;line-height:1.55;padding:1.25rem 1.25rem 3rem;max-width:46rem;margin:0 auto}
     #tm-prerender a{color:#0f5c32}
     #tm-prerender h1{font-size:2.1rem;line-height:1.15;margin:0.6rem 0}

@@ -8,6 +8,16 @@ import { isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleCh
 import { noteBootError, startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
+declare global {
+  interface Window {
+    __ENTRY_STARTED?: boolean;
+  }
+}
+
+// Set before any listener so a 404 on this file (the module never runs) is
+// visible to the inline boot script in index.html.
+window.__ENTRY_STARTED = true;
+
 // Sentry frontend init — disabled when VITE_SENTRY_DSN is unset so local
 // development without a DSN doesn't spam Sentry.
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
