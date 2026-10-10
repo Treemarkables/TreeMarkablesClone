@@ -387,7 +387,7 @@ export default function TreeRemoval() {
               </a>
               <div className="flex items-center gap-3 text-mute">
                 <span className="h-10 w-10 rounded-full bg-forest/10 text-forest flex items-center justify-center"><MapPin className="h-5 w-5" /></span>
-                <span>Gisborne &amp; surrounding areas</span>
+                <span>26 Cochrane Street, Gisborne, NZ</span>
               </div>
             </div>
           </div>

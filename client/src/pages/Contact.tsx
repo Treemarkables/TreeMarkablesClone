@@ -257,7 +257,10 @@ export default function Contact() {
                           Service Area
                         </p>
                         <p className="text-muted-foreground">
-                          Gisborne, Wairoa & East Coast
+                          26 Cochrane Street, Gisborne, NZ
+                        </p>
+                        <p className="text-muted-foreground">
+                          Gisborne, Tairāwhiti, Wairoa &amp; East Coast
                         </p>
                       </div>
                     </div>
