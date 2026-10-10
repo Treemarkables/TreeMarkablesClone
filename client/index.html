@@ -193,9 +193,45 @@
       // screen, this cover becomes the error / Retry UI no matter what.
       (function () {
         window.__INFLOW_BOOTED = window.__INFLOW_BOOTED === true;
+        window.__ENTRY_STARTED = window.__ENTRY_STARTED === true;
         window.__INFLOW_HEARTBEAT_MS = Date.now();
         window.__INFLOW_BOOT_ERROR = window.__INFLOW_BOOT_ERROR || '';
         var KEY = 'inflowBootReloadAttempts';
+        var ASSET_KEY = 'assetMismatchReloads';
+        var assetReloadScheduled = false;
+        function assetAttempts() {
+          try {
+            var parsed = JSON.parse(sessionStorage.getItem(ASSET_KEY) || 'null');
+            if (!parsed || typeof parsed.count !== 'number' || typeof parsed.at !== 'number') return 0;
+            if (Date.now() - parsed.at > 180000) return 0;
+            return parsed.count;
+          } catch (e) { return 0; }
+        }
+        // A 404 on /assets/*.js (or the entry CSS) never runs the React bundle.
+        // The marketing snapshot still has text, so the boot watchdog used to
+        // treat that as a painted page and leave visitors on the unstyled HTML.
+        function reloadAssetMismatch(force) {
+          if (assetReloadScheduled) return;
+          if (window.__ENTRY_STARTED && !force) return;
+          var n = assetAttempts();
+          if (n >= 2) return;
+          assetReloadScheduled = true;
+          try { sessionStorage.setItem(ASSET_KEY, JSON.stringify({ count: n + 1, at: Date.now() })); } catch (e) {}
+          setTimeout(function () {
+            if (window.__ENTRY_STARTED && !force) return;
+            cacheBust();
+          }, 400);
+        }
+        window.addEventListener('error', function (event) {
+          var target = event.target;
+          if (!target || target === window || !target.tagName) return;
+          var url = String(target.src || target.href || '');
+          if (url.indexOf('/assets/') === -1) return;
+          var tag = target.tagName;
+          var css = tag === 'LINK' && String(target.rel || '').toLowerCase().indexOf('stylesheet') !== -1;
+          if (tag === 'SCRIPT') reloadAssetMismatch(false);
+          else if (css) reloadAssetMismatch(true);
+        }, true);
         var overlay = document.getElementById('inflow-boot');
         var retry = document.getElementById('inflow-boot-retry');
         var title = overlay ? overlay.querySelector('.boot-title') : null;
@@ -321,6 +357,10 @@
         // (stale index, missing chunk). A fresh heartbeat means JS is alive
         // and a slow route must not be cancelled.
         setTimeout(function () {
+          if (!window.__ENTRY_STARTED) {
+            reloadAssetMismatch(false);
+            return;
+          }
           if (realScreen()) return;
           if (heartbeatAge() < 8000) return;
           reloadOnce();

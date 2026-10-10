@@ -20,6 +20,13 @@ import {
   requestIsTreemarkablesDocumentHost,
   applyTreemarkablesDocumentHead,
 } from "./treemarkablesDocumentBrand";
+import {
+  applyHashedAssetCacheHeaders,
+  applyHtmlCacheHeaders,
+  assertBuiltPrerenderDir,
+  isMissingStaticAsset,
+  writeMissingAsset,
+} from "./staticAssetPolicy";
 import { createTreemarkablesApexRedirectMiddleware } from "./treemarkablesApexRedirect";
 import { createTreemarkablesAppHostSeoMiddleware } from "./treemarkablesAppHostSeo";
 import fs from "fs";
@@ -290,6 +297,7 @@ function resolveAndServeStatic(appInstance: express.Express) {
     const indexPath = path.join(staticDirOverride, "index.html");
     if (fs.existsSync(indexPath)) {
       log(`Verified index.html exists at override path: ${indexPath}`, "static");
+      assertBuiltPrerenderDir(staticDirOverride, (html) => applyTreemarkablesDocumentHead(html, "/"));
       setupStaticServing(appInstance, staticDirOverride);
       return;
     } else {
@@ -317,6 +325,7 @@ function resolveAndServeStatic(appInstance: express.Express) {
     if (exists) {
       log(`Selected static directory: ${candidatePath}`, "static");
       log(`Verified index.html at: ${indexPath}`, "static");
+      assertBuiltPrerenderDir(candidatePath, (html) => applyTreemarkablesDocumentHead(html, "/"));
       setupStaticServing(appInstance, candidatePath);
       return;
     }
@@ -334,10 +343,7 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
   appInstance.use((req, res, next) => {
     const noCacheFiles = ['/sw.js', '/manifest.webmanifest', '/index.html'];
     if (noCacheFiles.some(file => req.path === file || req.path.endsWith(file))) {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Surrogate-Control', 'no-store');
+      applyHtmlCacheHeaders(res);
     }
     next();
   });
@@ -355,7 +361,7 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
       // imported module" crash. index.html / sw.js / manifest are NOT under
       // /assets/ and keep their no-store headers from the middleware above.
       if (filePath.includes(`${path.sep}assets${path.sep}`)) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        applyHashedAssetCacheHeaders(res);
       }
     },
   }));
@@ -365,20 +371,25 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
       return next();
     }
 
-    if (req.originalUrl.startsWith('/assets/') || req.originalUrl.match(/\.(js|css|map|woff|woff2|ttf|png|jpg|svg|ico)(\?.*)?$/)) {
-      return res.status(404).send('Asset not found');
+    if (isMissingStaticAsset(req.originalUrl)) {
+      // Express res.send(string) is text/html. A browser then refuses the
+      // module and the visitor is left on the prerender. Keep the 404, but
+      // as JavaScript or CSS, and do not let the edge cache the miss.
+      writeMissingAsset(res, req.originalUrl);
+      return;
     }
 
     const indexPath = path.join(staticPath, "index.html");
 
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    applyHtmlCacheHeaders(res);
 
     log(`Serving SPA fallback: ${req.originalUrl} -> index.html`, "static");
 
     if (requestIsTreemarkablesDocumentHost(req)) {
       try {
+        // Read from this image's disk every time. Asset hashes stay the ones
+        // Vite wrote for this build; the marketing snapshot is injected here.
+        // Do not cache the branded document in memory.
         const html = fs.readFileSync(indexPath, "utf8");
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         res.send(applyTreemarkablesDocumentHead(html, req.path || "/"));
@@ -394,7 +405,7 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
       }
     }
 
-    res.sendFile(indexPath, (err) => {
+    res.sendFile(indexPath, { cacheControl: false }, (err) => {
       if (err) {
         log(`Error serving index.html: ${err.message}`, "error");
         res.status(500).json({
@@ -665,10 +676,7 @@ function startNotificationQueueWorker() {
     app.use((req, res, next) => {
       const noCacheFiles = ['/sw.js', '/manifest.webmanifest', '/index.html'];
       if (noCacheFiles.some(file => req.path === file || req.path.endsWith(file))) {
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-        res.setHeader('Surrogate-Control', 'no-store');
+        applyHtmlCacheHeaders(res);
       }
       next();
     });
