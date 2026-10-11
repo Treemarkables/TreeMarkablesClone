@@ -590,6 +590,9 @@ export interface IStorage {
   getPendingOutboundMessages(status?: string): Promise<schema.PendingOutboundMessage[]>;
   getPendingOutboundMessage(id: string): Promise<schema.PendingOutboundMessage | undefined>;
   updatePendingOutboundMessage(id: string, updates: Partial<schema.PendingOutboundMessage>): Promise<schema.PendingOutboundMessage>;
+  // Atomic pending → sending. A second caller gets undefined and must not send.
+  claimPendingOutboundMessage(id: string): Promise<schema.PendingOutboundMessage | undefined>;
+  releasePendingOutboundMessageClaim(id: string): Promise<void>;
 
   // Employee Management
   createEmployee(employee: InsertEmployee): Promise<Employee>;
@@ -4947,6 +4950,26 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.pendingOutboundMessages.id, id))
       .returning();
     return updated;
+  }
+
+  async claimPendingOutboundMessage(id: string): Promise<schema.PendingOutboundMessage | undefined> {
+    const [claimed] = await db.update(schema.pendingOutboundMessages)
+      .set({ status: 'sending' })
+      .where(and(
+        eq(schema.pendingOutboundMessages.id, id),
+        eq(schema.pendingOutboundMessages.status, 'pending'),
+      ))
+      .returning();
+    return claimed;
+  }
+
+  async releasePendingOutboundMessageClaim(id: string): Promise<void> {
+    await db.update(schema.pendingOutboundMessages)
+      .set({ status: 'pending' })
+      .where(and(
+        eq(schema.pendingOutboundMessages.id, id),
+        eq(schema.pendingOutboundMessages.status, 'sending'),
+      ));
   }
 
   async createEmployee(employee: InsertEmployee): Promise<Employee> {

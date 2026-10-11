@@ -198,6 +198,7 @@ import {
 } from "@shared/crewDayRoles";
 import { composeCustomerAddress } from "@shared/customerAddress";
 import { statusAfterBooking, statusAfterDiaryBook } from "@shared/jobStatus";
+import { runPendingMessageApproval } from "@shared/holdingMessageApproval";
 import { fillEmptyJobContactFromSources } from "@shared/jobContactFill";
 import { backfillEmptyJobContact } from "./jobContactBackfill";
 import { AutomatedTriggers } from "./services/automatedTriggers";
@@ -29145,91 +29146,96 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Approve and send a pending message
+  // Approve and send a pending message.
+  // The notification bell and the job-diary button both hit this route.
+  // claimPendingOutboundMessage flips pending → sending in one update, so a
+  // second request (double tap, or bell + diary together) cannot send again.
   app.post('/api/pending-messages/:id/approve', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const msg = await storage.getPendingOutboundMessage(req.params.id);
-      if (!msg) return res.status(404).json({ success: false, message: 'Message not found' });
-      if (msg.status !== 'pending') return res.status(400).json({ success: false, message: 'Message is not pending' });
+      let updated: Awaited<ReturnType<typeof storage.updatePendingOutboundMessage>> | undefined;
+      const result = await runPendingMessageApproval(req.params.id, {
+        claim: async (id) => (await storage.claimPendingOutboundMessage(id)) ?? null,
+        lookup: async (id) => (await storage.getPendingOutboundMessage(id)) ?? null,
+        send: async (msg) => {
+          // Same transports as before: SMS, else email, else SMS when a phone
+          // is on file. sent stays false only when neither channel can be used.
+          let sent = false;
+          if (msg.channel === 'sms' && msg.recipientPhone) {
+            await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
+            sent = true;
+          } else if (msg.channel === 'email' && msg.recipientEmail) {
+            // Authed admin route → getBusinessSettings() is RLS-scoped to this tenant.
+            const __updBiz = (await storage.getBusinessSettings())?.businessName || '';
+            await emailService.sendEmail({
+              to: msg.recipientEmail,
+              fromName: __updBiz || undefined, // From shows the tenant's business name; blank → platform default
+              subject: __updBiz ? `Update from ${__updBiz}` : 'Update',
+              html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
+              text: msg.message,
+            });
+            sent = true;
+          } else if (msg.recipientPhone) {
+            // Fallback to SMS if phone available
+            await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
+            sent = true;
+          }
+          return { sent };
+        },
+        markSent: async (msg) => {
+          updated = await storage.updatePendingOutboundMessage(msg.id, {
+            status: 'sent',
+            sentAt: new Date(),
+          });
+        },
+        release: async (msg) => {
+          await storage.releasePendingOutboundMessageClaim(msg.id);
+        },
+        afterSent: async (msg) => {
+          // Log to job diary. A diary failure must not undo the send.
+          if (!msg.jobId) return;
+          try {
+            await storage.createJobDiaryEntry({
+              jobId: msg.jobId,
+              entryType: msg.channel === 'email' ? 'email' : 'sms',
+              title: 'Holding message sent to customer',
+              description: msg.message,
+              content: msg.message,
+              authorName: (req as any).user?.name || 'System',
+              authorRole: (req as any).user?.role || 'system',
+              metadata: {
+                channel: msg.channel,
+                recipientName: msg.recipientName,
+                eventType: 'holding_message_sent',
+              },
+            });
+          } catch (diaryErr) {
+            console.error('Failed to log diary entry after pending-message approve:', diaryErr);
+          }
 
-      // Send via SMS or email
-      let sent = false;
-      if (msg.channel === 'sms' && msg.recipientPhone) {
-        await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
-        sent = true;
-      } else if (msg.channel === 'email' && msg.recipientEmail) {
-        // Authed admin route → getBusinessSettings() is RLS-scoped to this tenant.
-        const __updBiz = (await storage.getBusinessSettings())?.businessName || '';
-        await emailService.sendEmail({
-          to: msg.recipientEmail,
-          fromName: __updBiz || undefined, // From shows the tenant's business name; blank → platform default
-          subject: __updBiz ? `Update from ${__updBiz}` : 'Update',
-          html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
-          text: msg.message,
-        });
-        sent = true;
-      } else if (msg.recipientPhone) {
-        // Fallback to SMS if phone available
-        await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
-        sent = true;
-      }
-
-      // Only mark as sent and log if a transport actually succeeded
-      if (!sent) {
-        return res.status(422).json({
-          success: false,
-          message: 'No deliverable channel: message has no phone number or email address. Please edit the message details and try again.',
-        });
-      }
-
-      const updated = await storage.updatePendingOutboundMessage(req.params.id, {
-        status: 'sent',
-        sentAt: new Date(),
+          // Auto-upgrade lead → quote once the customer has been sent a booking
+          // confirmation for a job that's already booked in the diary. The
+          // dispatch-board staff-assignment flow does this inline; this branch
+          // catches the AI-Smart-Dispatch draft → approve-and-send path so the
+          // job drops out of the lead list as soon as the customer is told a date.
+          try {
+            const linkedJob = await storage.getJob(msg.jobId);
+            if (linkedJob?.scheduledDate) {
+              const next = statusAfterBooking(linkedJob.status);
+              if (next) {
+                await storage.updateJob(msg.jobId, { status: next });
+                console.log(`📊 Auto-upgraded job ${linkedJob.jobNumber} status '${linkedJob.status}' → '${next}' after customer booking message`);
+              }
+            }
+          } catch (statusErr) {
+            console.error('Failed to auto-upgrade job status after pending-message approve:', statusErr);
+          }
+        },
       });
 
-      // Log to job diary. Wrapped in try/catch so a diary failure can't
-      // surface as a 500 to the UI after the SMS/email has already gone out
-      // and the message is already marked sent.
-      if (msg.jobId) {
-        try {
-          await storage.createJobDiaryEntry({
-            jobId: msg.jobId,
-            entryType: msg.channel === 'email' ? 'email' : 'sms',
-            title: 'Holding message sent to customer',
-            description: msg.message,
-            content: msg.message,
-            authorName: (req as any).user?.name || 'System',
-            authorRole: (req as any).user?.role || 'system',
-            metadata: {
-              channel: msg.channel,
-              recipientName: msg.recipientName,
-              eventType: 'holding_message_sent',
-            },
-          });
-        } catch (diaryErr) {
-          console.error('Failed to log diary entry after pending-message approve:', diaryErr);
-        }
-
-        // Auto-upgrade lead → quote once the customer has been sent a booking
-        // confirmation for a job that's already booked in the diary. The
-        // dispatch-board staff-assignment flow does this inline; this branch
-        // catches the AI-Smart-Dispatch draft → approve-and-send path so the
-        // job drops out of the lead list as soon as the customer is told a date.
-        try {
-          const linkedJob = await storage.getJob(msg.jobId);
-          if (linkedJob?.scheduledDate) {
-            const next = statusAfterBooking(linkedJob.status);
-            if (next) {
-              await storage.updateJob(msg.jobId, { status: next });
-              console.log(`📊 Auto-upgraded job ${linkedJob.jobNumber} status '${linkedJob.status}' → '${next}' after customer booking message`);
-            }
-          }
-        } catch (statusErr) {
-          console.error('Failed to auto-upgrade job status after pending-message approve:', statusErr);
-        }
+      if (!result.ok) {
+        return res.status(result.status).json({ success: false, message: result.message });
       }
-
-      res.json({ success: true, data: updated, sent });
+      res.json({ success: true, data: updated, sent: true });
     } catch (error) {
       console.error('Error approving pending message:', error);
       res.status(500).json({ success: false, message: 'Error approving pending message' });
