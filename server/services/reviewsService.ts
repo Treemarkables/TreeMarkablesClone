@@ -36,7 +36,9 @@ import path from "path";
 import {
   facebookErrorInfo,
   facebookGraphUrl,
+  facebookTokenDiagnostics,
   logFacebookApiError,
+  readFacebookPageAccessToken,
   redactFacebookSecrets,
   type FacebookErrorInfo,
 } from "../config/facebookGraph";
@@ -87,6 +89,9 @@ export interface FacebookConnectionStatus {
   message?: string;
   code?: number;
   fbtraceId?: string;
+  tokenLength: number;
+  tokenStartsWithEaa: boolean;
+  tokenHadQuotesOrWhitespace: boolean;
 }
 
 type FacebookFetch = (url: string, init?: RequestInit) => Promise<Response>;
@@ -297,7 +302,7 @@ async function fetchFacebookReviewsPayload(options: FacebookRequestOptions = {})
   const cacheFile = options.cacheFile ?? defaultCacheFile();
   const now = options.now ?? Date.now();
   const ttlMs = options.ttlMs ?? FACEBOOK_REVIEWS_TTL_MS;
-  const token = (env.FACEBOOK_PAGE_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || "").trim();
+  const token = readFacebookPageAccessToken(env).token;
   const pageId = (env.FACEBOOK_PAGE_ID || "").trim();
   const cached = lastGood(cacheFile);
 
@@ -375,13 +380,16 @@ export async function fetchFacebookReviews(): Promise<Review[]> {
 export async function checkFacebookConnection(options: FacebookRequestOptions = {}): Promise<FacebookConnectionStatus> {
   const env = options.env ?? process.env;
   const fetchImpl = options.fetchImpl ?? fetch;
-  const token = (env.FACEBOOK_PAGE_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || "").trim();
+  const access = readFacebookPageAccessToken(env);
+  const token = access.token;
+  const diagnostics = facebookTokenDiagnostics(access);
   const pageId = (env.FACEBOOK_PAGE_ID || "").trim();
 
   if (!token || !pageId) {
     return {
       connected: false,
       message: "Facebook credentials not configured. Set FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_PAGE_ID in the DigitalOcean environment.",
+      ...diagnostics,
     };
   }
 
@@ -396,19 +404,19 @@ export async function checkFacebookConnection(options: FacebookRequestOptions = 
     if (graphError) {
       const info = facebookErrorInfo(graphError, token);
       logFacebookApiError("status", info);
-      return { connected: false, message: info.message, code: info.code, fbtraceId: info.fbtraceId };
+      return { connected: false, message: info.message, code: info.code, fbtraceId: info.fbtraceId, ...diagnostics };
     }
     const record = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
     const pageName = typeof record?.name === "string" ? record.name : undefined;
     if (!pageName) {
-      return { connected: false, message: "Facebook returned no page name" };
+      return { connected: false, message: "Facebook returned no page name", ...diagnostics };
     }
-    return { connected: true, pageName, pageId };
+    return { connected: true, pageName, pageId, ...diagnostics };
   } catch (error) {
     const raw = error instanceof Error ? error.message : "Error checking Facebook status";
     const message = redactFacebookSecrets(raw, token);
     console.error(`Facebook status check error: ${message}`);
-    return { connected: false, message };
+    return { connected: false, message, ...diagnostics };
   }
 }
 

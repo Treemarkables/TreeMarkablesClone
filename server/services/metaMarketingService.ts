@@ -3,7 +3,7 @@
  * Handles ad creation, post publishing, and campaign tracking
  */
 
-import { facebookGraphUrl, redactFacebookSecrets } from "../config/facebookGraph";
+import { facebookGraphUrl, readFacebookPageAccessToken, redactFacebookSecrets } from "../config/facebookGraph";
 
 interface MetaAdCreative {
   headline: string;
@@ -48,7 +48,7 @@ export class MetaMarketingService {
   private adAccountId: string;
 
   constructor() {
-    this.pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN || '';
+    this.pageAccessToken = readFacebookPageAccessToken().token;
     this.pageId = process.env.FACEBOOK_PAGE_ID || '';
     this.adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID || '';
   }
