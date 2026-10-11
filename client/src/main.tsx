@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/react";
 import App from "./App";
 import "./index.css";
 import { isReloadUnsafe } from "./lib/foregroundReloadGuard";
+import { isVoiceCallActive } from "./lib/voiceCallReloadGuard";
 import { isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
 import { noteBootError, startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -66,6 +67,10 @@ window.addEventListener('error', (event) => {
   );
 
   if (isChunkError) {
+    if (isVoiceCallActive()) {
+      console.warn('⚠️ Stale JS bundle during a live call — not reloading');
+      return;
+    }
     console.warn('⚠️ Stale JS bundle detected — reloading to get fresh version');
     requestStaleBundleReload();
     return;
@@ -80,6 +85,11 @@ window.addEventListener('unhandledrejection', (event) => {
   const msg = reason?.message || String(reason) || '';
 
   if (isChunkLoadErrorMessage(msg)) {
+    if (isVoiceCallActive()) {
+      console.warn('⚠️ Stale JS chunk during a live call — not reloading');
+      event.preventDefault();
+      return;
+    }
     console.warn('⚠️ Stale JS chunk import failed — reloading to get fresh version');
     event.preventDefault();
     requestStaleBundleReload();

@@ -7,6 +7,7 @@ import {
   canAttemptReload,
   requestStaleBundleReload,
 } from '@/lib/staleChunkReload';
+import { isVoiceCallActive } from '@/lib/voiceCallReloadGuard';
 import { markAppBooted } from '@/lib/nativeBootRecovery';
 
 interface Props {
@@ -35,7 +36,9 @@ export class ErrorBoundary extends Component<Props, State> {
     return {
       hasError: true,
       error,
-      recovering: isChunkLoadError(error) && canAttemptReload(),
+      // A live call must stay on screen. "Updating…" would unmount the call
+      // controls and the reload would drop the Twilio connection.
+      recovering: isChunkLoadError(error) && canAttemptReload() && !isVoiceCallActive(),
     };
   }
 
@@ -52,6 +55,10 @@ export class ErrorBoundary extends Component<Props, State> {
     // it's a deploy artifact, not a code bug. If the retry ladder is
     // exhausted ('gave-up'), fall through and report — a chunk that's still
     // missing after several spaced reloads is a real problem worth logging.
+    if (isChunkLoadError(error) && isVoiceCallActive()) {
+      console.warn('⚠️ Chunk error during a live call — not reloading');
+      return;
+    }
     if (isChunkLoadError(error) && requestStaleBundleReload() === 'reloading') {
       return;
     }

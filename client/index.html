@@ -211,6 +211,7 @@
         // The marketing snapshot still has text, so the boot watchdog used to
         // treat that as a painted page and leave visitors on the unstyled HTML.
         function reloadAssetMismatch(force) {
+          if (window.__INFLOW_CALL_ACTIVE) return;
           if (assetReloadScheduled) return;
           if (window.__ENTRY_STARTED && !force) return;
           var n = assetAttempts();
@@ -335,6 +336,7 @@
           location.replace(url.toString());
         }
         function reloadOnce() {
+          if (window.__INFLOW_CALL_ACTIVE) return;
           if (realScreen()) {
             hideBoot();
             return;
