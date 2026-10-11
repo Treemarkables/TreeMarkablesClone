@@ -51,6 +51,12 @@ import {
 } from "@/lib/notificationFilter";
 import { resolveBellNotificationPath } from "@shared/notificationDeepLink";
 import {
+  isAwaitingApprovalMessageNotification,
+  matchPendingMessageForNotification,
+} from "@shared/holdingMessageApproval";
+import type { PendingOutboundMessage } from "@shared/schema";
+import { HoldingMessageNotificationActions } from "@/components/HoldingMessageNotificationActions";
+import {
   clearNotificationNav,
   persistNotificationNav,
 } from "@/lib/notificationNav";
@@ -421,6 +427,23 @@ export function NotificationBell() {
 
   const visibleUnread = notifications.filter((n) => !n.isRead).length;
   const visibleTotal = notifications.length;
+  const hasApprovalNotification = notifications.some(
+    isAwaitingApprovalMessageNotification,
+  );
+  const { data: pendingForBell, isLoading: pendingForBellLoading } = useQuery<{
+    data?: PendingOutboundMessage[];
+  }>({
+    queryKey: ["/api/pending-messages", "notification-bell"],
+    enabled: isOpen && hasApprovalNotification,
+    queryFn: async () => {
+      const res = await fetch("/api/pending-messages?status=pending", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load messages awaiting approval");
+      return res.json();
+    },
+  });
+  const pendingDrafts = pendingForBell?.data ?? [];
 
   const handleNotificationClick = (notification: NotificationWithDetails) => {
     const url = resolveBellNotificationPath(notification);
@@ -566,8 +589,9 @@ export function NotificationBell() {
         // animation's animationend fires, and intermittently misses it — the
         // panel then sticks around with body pointer-events:none (modal),
         // freezing the app. Closing must unmount immediately.
-        className="relative z-[120] w-96 p-0 data-[state=closed]:!animate-none"
+        className="relative z-[120] w-[min(24rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] p-0 data-[state=closed]:!animate-none"
         align="end"
+        collisionPadding={8}
         // The backdrop above is the sole outside-close path. Left to its own
         // devices Radix dismisses on pointerdown-outside, which unmounts the
         // backdrop before the tap's click fires — recreating the click-through.
@@ -643,7 +667,7 @@ export function NotificationBell() {
             )}
           </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="h-96">
+            <ScrollArea className="h-[min(24rem,calc(100dvh-8rem))]">
               {isLoadingNotifications ? (
                 <div className="p-4 text-center text-muted-foreground">
                   Loading notifications...
@@ -700,6 +724,31 @@ export function NotificationBell() {
                                 >
                                   {getEntityName(notification)}
                                 </p>
+                              )}
+                              {isAwaitingApprovalMessageNotification(notification) && (
+                                <HoldingMessageNotificationActions
+                                  notificationId={notification.id}
+                                  pending={matchPendingMessageForNotification(
+                                    notification,
+                                    pendingDrafts,
+                                  )}
+                                  isLoading={pendingForBellLoading}
+                                  onOpenJob={() => handleNotificationClick(notification)}
+                                  onDismiss={() =>
+                                    deleteNotificationMutation.mutate(notification.id)
+                                  }
+                                  onFinished={() => {
+                                    if (!notification.isRead) {
+                                      markAsReadMutation.mutate(notification.id);
+                                    }
+                                    queryClient.invalidateQueries({
+                                      queryKey: ["/api/pending-messages"],
+                                    });
+                                    queryClient.invalidateQueries({
+                                      queryKey: ["/api/jobs", notification.jobId, "diary-timeline"],
+                                    });
+                                  }}
+                                />
                               )}
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
