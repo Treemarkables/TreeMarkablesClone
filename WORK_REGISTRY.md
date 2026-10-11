@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Facebook Graph version — branch `cursor/facebook-graph-version-5ac1` — 2026-10-11 — one Graph version (default v23.0, `FACEBOOK_GRAPH_VERSION`), single `/api/reviews/facebook`, Facebook's own error except code 190, last-good reviews cache. No TestFlight.
 - Marketing asset rollout — branch `cursor/prerender-asset-rollout-c331` — 2026-10-10 — prerender HTML and hashed /assets stay on the same Vite build; HTML is no-cache; previous hashes are kept across a deploy; a missing bundle is not an HTML 404. No TestFlight. Draft only. [PR #623]
 - Staff schedule day restore — branch `cursor/staff-schedule-restore-day-a049` — 2026-10-10 — Live Roster stays on the day a job was opened from (`?date=` plus swipes on the job card no longer change the day). Square job blocks on phones. No TestFlight. [PR #622]
 - Dispatch Unscheduled recent activity — branch `cursor/dispatch-unscheduled-recent-activity-b138` — 2026-10-10 — Unscheduled rail sorts by latest of updated_at, diary, proposal sent/accepted, last_activity_at, created_at (one grouped SQL pass). Work Order chip stays FIFO. No TestFlight. Draft only. [PR #621]

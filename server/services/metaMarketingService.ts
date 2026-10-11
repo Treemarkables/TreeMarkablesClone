@@ -3,6 +3,8 @@
  * Handles ad creation, post publishing, and campaign tracking
  */
 
+import { facebookGraphUrl, redactFacebookSecrets } from "../config/facebookGraph";
+
 interface MetaAdCreative {
   headline: string;
   text: string;
@@ -63,7 +65,7 @@ export class MetaMarketingService {
     platform: 'facebook' | 'instagram' | 'both'
   ): Promise<MetaAdCampaign> {
     if (!this.pageAccessToken || !this.adAccountId) {
-      throw new Error('Meta Marketing API credentials not configured. Please add FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_AD_ACCOUNT_ID to your secrets.');
+      throw new Error('Meta Marketing API credentials not configured. Add FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_AD_ACCOUNT_ID to the DigitalOcean environment.');
     }
 
     try {
@@ -76,7 +78,7 @@ export class MetaMarketingService {
       });
 
       const campaignResponse = await fetch(
-        `https://graph.facebook.com/v18.0/act_${this.adAccountId}/campaigns`,
+        facebookGraphUrl(`act_${this.adAccountId}/campaigns`),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -86,7 +88,7 @@ export class MetaMarketingService {
 
       if (!campaignResponse.ok) {
         const error = await campaignResponse.json();
-        throw new Error(`Failed to create campaign: ${JSON.stringify(error)}`);
+        throw new Error(`Failed to create campaign: ${redactFacebookSecrets(JSON.stringify(error))}`);
       }
 
       const { id: campaignId } = await campaignResponse.json();
@@ -104,7 +106,7 @@ export class MetaMarketingService {
       });
 
       const adSetResponse = await fetch(
-        `https://graph.facebook.com/v18.0/act_${this.adAccountId}/adsets`,
+        facebookGraphUrl(`act_${this.adAccountId}/adsets`),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -114,7 +116,7 @@ export class MetaMarketingService {
 
       if (!adSetResponse.ok) {
         const error = await adSetResponse.json();
-        throw new Error(`Failed to create ad set: ${JSON.stringify(error)}`);
+        throw new Error(`Failed to create ad set: ${redactFacebookSecrets(JSON.stringify(error))}`);
       }
 
       const { id: adSetId } = await adSetResponse.json();
@@ -139,7 +141,7 @@ export class MetaMarketingService {
       });
 
       const creativeResponse = await fetch(
-        `https://graph.facebook.com/v18.0/act_${this.adAccountId}/adcreatives`,
+        facebookGraphUrl(`act_${this.adAccountId}/adcreatives`),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -149,7 +151,7 @@ export class MetaMarketingService {
 
       if (!creativeResponse.ok) {
         const error = await creativeResponse.json();
-        throw new Error(`Failed to create ad creative: ${JSON.stringify(error)}`);
+        throw new Error(`Failed to create ad creative: ${redactFacebookSecrets(JSON.stringify(error))}`);
       }
 
       const { id: creativeId } = await creativeResponse.json();
@@ -164,7 +166,7 @@ export class MetaMarketingService {
       });
 
       const adResponse = await fetch(
-        `https://graph.facebook.com/v18.0/act_${this.adAccountId}/ads`,
+        facebookGraphUrl(`act_${this.adAccountId}/ads`),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -174,7 +176,7 @@ export class MetaMarketingService {
 
       if (!adResponse.ok) {
         const error = await adResponse.json();
-        throw new Error(`Failed to create ad: ${JSON.stringify(error)}`);
+        throw new Error(`Failed to create ad: ${redactFacebookSecrets(JSON.stringify(error))}`);
       }
 
       const { id: adId } = await adResponse.json();
@@ -186,8 +188,9 @@ export class MetaMarketingService {
         status: 'paused',
       };
     } catch (error) {
-      console.error('Error creating Meta ad campaign:', error);
-      throw error;
+      const message = redactFacebookSecrets(error instanceof Error ? error.message : String(error), this.pageAccessToken);
+      console.error('Error creating Meta ad campaign:', message);
+      throw new Error(message);
     }
   }
 
@@ -201,7 +204,7 @@ export class MetaMarketingService {
     reviewSource: string
   ): Promise<MetaPost> {
     if (!this.pageAccessToken || !this.pageId) {
-      throw new Error('Facebook API credentials not configured. Please add FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_PAGE_ID to your secrets.');
+      throw new Error('Facebook API credentials not configured. Add FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_PAGE_ID to the DigitalOcean environment.');
     }
 
     try {
@@ -214,7 +217,7 @@ export class MetaMarketingService {
       });
 
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${this.pageId}/feed`,
+        facebookGraphUrl(`${this.pageId}/feed`),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -224,14 +227,14 @@ export class MetaMarketingService {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(`Failed to post review: ${JSON.stringify(error)}`);
+        throw new Error(`Failed to post review: ${redactFacebookSecrets(JSON.stringify(error))}`);
       }
 
       const { id: postId } = await response.json();
 
       // Get post permalink
       const postResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${postId}?fields=permalink_url,created_time&access_token=${this.pageAccessToken}`
+        facebookGraphUrl(`${postId}?fields=permalink_url,created_time&access_token=${this.pageAccessToken}`)
       );
 
       const postDetails = await postResponse.json();
@@ -242,8 +245,9 @@ export class MetaMarketingService {
         createdTime: postDetails.created_time || new Date().toISOString(),
       };
     } catch (error) {
-      console.error('Error posting review to Facebook:', error);
-      throw error;
+      const message = redactFacebookSecrets(error instanceof Error ? error.message : String(error), this.pageAccessToken);
+      console.error('Error posting review to Facebook:', message);
+      throw new Error(message);
     }
   }
 
@@ -257,12 +261,12 @@ export class MetaMarketingService {
 
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${campaignId}/insights?fields=reach,impressions,clicks,actions,spend&access_token=${this.pageAccessToken}`
+        facebookGraphUrl(`${campaignId}/insights?fields=reach,impressions,clicks,actions,spend&access_token=${this.pageAccessToken}`)
       );
 
       if (!response.ok) {
         const error = await response.json();
-        console.error('Error fetching campaign stats:', error);
+        console.error('Error fetching campaign stats:', redactFacebookSecrets(JSON.stringify(error), this.pageAccessToken));
         return {
           reach: 0,
           impressions: 0,
@@ -285,7 +289,7 @@ export class MetaMarketingService {
         conversions: this.extractConversions(insights.actions || []),
       };
     } catch (error) {
-      console.error('Error getting campaign stats:', error);
+      console.error('Error getting campaign stats:', redactFacebookSecrets(error instanceof Error ? error.message : String(error), this.pageAccessToken));
       return {
         reach: 0,
         impressions: 0,
@@ -316,7 +320,7 @@ export class MetaMarketingService {
     });
 
     await fetch(
-      `https://graph.facebook.com/v18.0/${campaignId}`,
+      facebookGraphUrl(`${campaignId}`),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
