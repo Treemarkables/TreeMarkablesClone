@@ -17,8 +17,8 @@ import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
 import {
   createTreemarkablesDocumentBrandMiddleware,
-  requestIsTreemarkablesDocumentHost,
   applyTreemarkablesDocumentHead,
+  htmlForSpaRequest,
 } from "./treemarkablesDocumentBrand";
 import {
   applyHashedAssetCacheHeaders,
@@ -134,9 +134,10 @@ app.use(createTreemarkablesApexRedirectMiddleware());
 app.use(createTreemarkablesAppHostSeoMiddleware());
 
 // www.treemarkables.co.nz / treemarkables.co.nz: first HTML byte is Treemarkables
-// branded (title/meta/icons/og), and public marketing routes include a static
-// page snapshot plus LocalBusiness JSON-LD. Staff routes stay the Inflow shell.
-// No 301 of /login or /dispatch off www. No-op on Inflow hosts.
+// branded (title/meta/icons/og). Public marketing routes also include a static
+// page snapshot plus LocalBusiness JSON-LD. /login, /dashboard, /dispatch and
+// the other staff routes keep the Inflow boot shell. No 301 of those off www.
+// App hosts (app.inflowapp.co.nz, app.treemarkables.co.nz) never get the snapshot.
 app.use(createTreemarkablesDocumentBrandMiddleware());
 
 // Legacy-domain redirect. Customer document links already sent out (invoices,
@@ -385,35 +386,24 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
 
     log(`Serving SPA fallback: ${req.originalUrl} -> index.html`, "static");
 
-    if (requestIsTreemarkablesDocumentHost(req)) {
-      try {
-        // Read from this image's disk every time. Asset hashes stay the ones
-        // Vite wrote for this build; the marketing snapshot is injected here.
-        // Do not cache the branded document in memory.
-        const html = fs.readFileSync(indexPath, "utf8");
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.send(applyTreemarkablesDocumentHead(html, req.path || "/"));
-        return;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        log(`Error serving branded index.html: ${message}`, "error");
+    try {
+      // Read from this image's disk every time. Asset hashes stay the ones
+      // Vite wrote for this build. Do not cache the document in memory.
+      // req.path is "/" inside this "*" mount — htmlForSpaRequest uses
+      // originalUrl so /login does not receive the homepage snapshot.
+      const html = fs.readFileSync(indexPath, "utf8");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(htmlForSpaRequest(html, req));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log(`Error serving index.html: ${message}`, "error");
+      if (!res.headersSent) {
         res.status(500).json({
           error: "Failed to serve application",
           details: message
         });
-        return;
       }
     }
-
-    res.sendFile(indexPath, { cacheControl: false }, (err) => {
-      if (err) {
-        log(`Error serving index.html: ${err.message}`, "error");
-        res.status(500).json({
-          error: "Failed to serve application",
-          details: err.message
-        });
-      }
-    });
   });
 
   log(`Static file serving setup completed successfully`, "static");

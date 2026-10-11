@@ -5,9 +5,11 @@
  * what a crawler (and a browser before JavaScript) receives: a real H1, the
  * page copy, phone, yard address, internal links and a quote CTA. It sits
  * outside #root so React does not wipe it during the auth check, and it is
- * removed once the real page paints. Injected only on www / the apex, and
- * only for marketing paths — /dispatch, /login and the staff app keep the
- * Inflow shell.
+ * removed once the real page paints. Injected only for marketing paths.
+ * /dispatch, /login, /dashboard and the staff app keep the Inflow shell.
+ * A second pass for a different path replaces the block; a staff path
+ * removes it. The homepage snapshot must not stick on /tree-removal just
+ * because an earlier pass used "/".
  *
  * aggregateRating is intentionally absent. The site shows reviews, but
  * self-serving rating markup can be penalised. Follow-up, not this change.
@@ -267,9 +269,17 @@ function navHtml(): string {
   return `<nav aria-label="Services">${links} <a href="tel:${PHONE_TEL}">${PHONE_DISPLAY}</a></nav>`;
 }
 
+function escapeAttr(value: string): string {
+  return escapeHtml(value).replace(/"/g, "&quot;");
+}
+
+const PRERENDER_START = "<!-- tm-prerender-start -->";
+const PRERENDER_END = "<!-- tm-prerender-end -->";
+
 function pageHtml(pathname: string): string {
-  const copy = pageCopy(pathname);
-  return `<style>
+  const path = normalisePublicPath(pathname);
+  const copy = pageCopy(path);
+  return `${PRERENDER_START}<style>
     body:has(#tm-prerender){background:#f6f5f0;color:#161616}
     #tm-prerender{box-sizing:border-box;background:#f6f5f0;color:#161616;font-family:Georgia,"Iowan Old Style",serif;line-height:1.55;padding:1.25rem 1.25rem 3rem;max-width:46rem;margin:0 auto}
     #tm-prerender a{color:#0f5c32}
@@ -279,7 +289,7 @@ function pageHtml(pathname: string): string {
     #tm-prerender .tm-cta{display:inline-block;margin-right:0.75rem;font-weight:700}
     body:has(#root > *) #tm-prerender{display:none !important}
   </style>
-  <div id="tm-prerender">
+  <div id="tm-prerender" data-tm-path="${escapeAttr(path)}">
     <header>
       <p><a href="/">Treemarkables</a> — arborists, Gisborne</p>
       ${navHtml()}
@@ -305,7 +315,15 @@ function pageHtml(pathname: string): string {
       var el = document.getElementById("tm-prerender");
       if (el) el.remove();
     });
-  </script>`;
+  </script>${PRERENDER_END}`;
+}
+
+/** Drop a previously injected snapshot. No-op when the page has none. */
+export function removeTreemarkablesPublicHtml(html: string): string {
+  const start = html.indexOf(PRERENDER_START);
+  const end = html.indexOf(PRERENDER_END);
+  if (start === -1 || end === -1 || end < start) return html;
+  return html.slice(0, start) + html.slice(end + PRERENDER_END.length);
 }
 
 interface BlogMeta {
@@ -428,8 +446,6 @@ export function treemarkablesJsonLd(pathname: string): string {
   return blocks.map(scriptTag).join("\n    ");
 }
 
-const PUBLIC_MARKER = "tm-prerender";
-
 function stripInflowBoot(html: string): string {
   const start = html.indexOf('<div id="inflow-boot"');
   const rootAt = html.indexOf('<div id="root"');
@@ -437,16 +453,25 @@ function stripInflowBoot(html: string): string {
   return html.slice(0, start) + html.slice(rootAt);
 }
 
+function stripAppShellClass(html: string): string {
+  return html.replace(/<html class="inflow-app"/gi, "<html");
+}
+
 /**
  * Insert the static page just before #root and drop the Inflow boot loader.
- * Idempotent. No-op for staff routes and for documents that have no #root.
+ * Idempotent for the same path. A staff/app path removes any snapshot already
+ * in the document. A different marketing path replaces it, so a first pass
+ * that used "/" cannot leave the homepage copy on /tree-removal.
  */
 export function injectTreemarkablesPublicHtml(html: string, pathname: string): string {
-  if (!isTreemarkablesPublicPath(pathname)) return html;
-  if (html.includes(`id="${PUBLIC_MARKER}"`)) return html;
-  const withoutBoot = stripInflowBoot(html);
+  const path = normalisePublicPath(pathname);
+  if (!isTreemarkablesPublicPath(path)) return removeTreemarkablesPublicHtml(html);
+  const marked = `data-tm-path="${escapeAttr(path)}"`;
+  const unclassed = stripAppShellClass(html);
+  if (unclassed.includes(PRERENDER_START) && unclassed.includes(marked)) return unclassed;
+  const withoutBoot = stripInflowBoot(removeTreemarkablesPublicHtml(unclassed));
   const rootTag = '<div id="root">';
   const at = withoutBoot.indexOf(rootTag);
   if (at === -1) return withoutBoot;
-  return withoutBoot.slice(0, at) + pageHtml(pathname) + withoutBoot.slice(at);
+  return withoutBoot.slice(0, at) + pageHtml(path) + withoutBoot.slice(at);
 }

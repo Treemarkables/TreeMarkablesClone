@@ -15,6 +15,7 @@ import {
   HTML_CACHE_CONTROL,
   isMissingStaticAsset,
   missingAssetBody,
+  stylesheetPrecedesEntryScript,
   writeMissingAsset,
 } from "./staticAssetPolicy.ts";
 import { retainedAssetAllowed, retainPreviousBuildAssets } from "../scripts/retainPreviousBuildAssets.ts";
@@ -86,8 +87,20 @@ describe("static asset rollout policy", () => {
     };
     const aligned = alignIndexHtmlWithManifest(SHELL, manifest);
     assert.equal(hasStylesheetLink(aligned), true);
+    assert.equal(stylesheetPrecedesEntryScript(aligned), true);
     assert.match(aligned, /href="\/assets\/index-NEW111\.css"/);
     assert.match(aligned, /src="\/assets\/index-NEW111\.js"/);
+    assert.ok(
+      aligned.indexOf('href="/assets/index-NEW111.css"') < aligned.indexOf('src="/assets/index-NEW111.js"'),
+    );
+
+    const lateCss = SHELL.replace(
+      "</head>",
+      '    <link rel="stylesheet" crossorigin href="/assets/index-NEW111.css">\n  </head>',
+    );
+    const moved = alignIndexHtmlWithManifest(lateCss, manifest);
+    assert.equal(stylesheetPrecedesEntryScript(moved), true);
+    assert.equal(moved.match(/index-NEW111\.css/g)?.length, 1);
 
     const names = new Set(["index-NEW111.js", "index-NEW111.css"]);
     assert.doesNotThrow(() => assertPrerenderHtmlAssets(aligned, names));
