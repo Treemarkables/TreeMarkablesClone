@@ -58,9 +58,12 @@ pool.on("error", (err) => {
 // ── Owner client (neon-http, BYPASSRLS) ─────────────────────────────────────
 // Stateless one-request-per-query HTTP. Used for login, signup, crons, platform-admin,
 // and ALL queries when RLS is disabled. The pooler endpoint is fine here (no SET state).
-export const ownerDb = USE_NODE_POSTGRES
-  ? drizzlePg(pool, { schema })
-  : drizzleHttp(neon(process.env.DATABASE_URL), { schema });
+// DATABASE_DRIVER=pg swaps in node-postgres for a local database. The public type
+// stays the Neon client so the rest of the app does not see a union.
+const neonOwnerDb = drizzleHttp(neon(process.env.DATABASE_URL), { schema });
+export const ownerDb: typeof neonOwnerDb = USE_NODE_POSTGRES
+  ? (drizzlePg(pool, { schema }) as unknown as typeof neonOwnerDb)
+  : neonOwnerDb;
 
 // ── Tenant pool (node-postgres, DIRECT endpoint) ────────────────────────────
 // Only created when RLS is enabled. Hands out per-request connections that run as the
