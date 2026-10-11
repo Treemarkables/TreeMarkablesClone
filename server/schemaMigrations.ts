@@ -1139,6 +1139,22 @@ const MIGRATIONS: Migration[] = [
       await refreshUntouchedQuoteFollowUpDrafts(client);
     },
   },
+  {
+    // Push failures record sync_status on the connection (the table already
+    // has last_error). Additive so a deploy can persist "Calendar sync broken"
+    // without a manual Neon step.
+    name: "google-calendar-connection-sync-status",
+    statements: [
+      `DO $$ BEGIN
+         IF EXISTS (
+           SELECT 1 FROM information_schema.tables
+           WHERE table_schema = 'public' AND table_name = 'google_calendar_connections'
+         ) THEN
+           ALTER TABLE google_calendar_connections ADD COLUMN IF NOT EXISTS sync_status text NOT NULL DEFAULT 'synced';
+         END IF;
+       END $$`,
+    ],
+  },
 ];
 
 function textOrNull(value: unknown): string | null {

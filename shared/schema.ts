@@ -3383,6 +3383,7 @@ export const googleCalendarConnections = pgTable("google_calendar_connections", 
   syncToken: text("sync_token"), // incremental events.list cursor (pull side)
   isActive: boolean("is_active").default(true),
   lastSyncedAt: timestamp("last_synced_at"),
+  syncStatus: text("sync_status").notNull().default("synced"), // synced | error
   lastError: text("last_error"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
