@@ -34,9 +34,9 @@ Your review widgets are already integrated on all your pages! They just need to 
    - Click "Create Credentials" → "API Key"
    - Copy the API key
 
-#### C. Add to Replit Secrets
-1. In your Replit project, click the **Secrets** tool (🔒 in left sidebar)
-2. Add these two secrets:
+#### C. Add DigitalOcean environment variables
+1. Open the DigitalOcean app (`plankton-app`) → Settings → App-Level Environment Variables
+2. Add these two variables:
    ```
    GOOGLE_PLACES_API_KEY = [your API key]
    GOOGLE_PLACE_ID = [your Place ID]
@@ -70,20 +70,22 @@ Your review widgets are already integrated on all your pages! They just need to 
 3. Click "Extend Access Token"
 4. Copy the **new extended token**
 
-#### C. Add to Replit Secrets
-1. In your Replit project, open **Secrets** tool (🔒)
-2. Add these two secrets:
+#### C. Add DigitalOcean environment variables
+1. Open the DigitalOcean app (`plankton-app`) → Settings → App-Level Environment Variables
+2. Add these variables:
    ```
    FACEBOOK_PAGE_ACCESS_TOKEN = [your extended token]
    FACEBOOK_PAGE_ID = [your Page ID]
+   FACEBOOK_GRAPH_VERSION = v23.0
    ```
+   `FACEBOOK_GRAPH_VERSION` is optional. When it is unset, the server uses v23.0. Do not set v18.0 — Facebook has retired that Graph version.
 
 ---
 
 ## ✅ Verification
 
-After adding all 4 secrets:
-1. **Restart your Replit app** (it will auto-restart)
+After adding the variables:
+1. Redeploy the DigitalOcean app so the process picks up the new environment
 2. Visit any of your pages:
    - Home page (`/`)
    - Tree Removal (`/tree-removal`)
@@ -98,7 +100,7 @@ If you see warnings like:
 - `⚠️ Google Reviews: Missing API key or Place ID`
 - `⚠️ Facebook Reviews: Missing access token or Page ID`
 
-Double-check that the secret names match exactly (case-sensitive).
+Double-check that the variable names match exactly (case-sensitive).
 
 ---
 
@@ -119,15 +121,15 @@ Double-check that the secret names match exactly (case-sensitive).
 ### Reviews Still Show Placeholders
 - ✅ Hard refresh browser (Ctrl+Shift+R or Cmd+Shift+R)
 - ✅ Check browser console for error messages
-- ✅ Verify all 4 secrets are added correctly
+- ✅ Verify the DigitalOcean environment variable names are exact
 
 ---
 
 ## 📝 Notes
 
 - **Google reviews update** every 10 minutes (cached)
-- **Facebook reviews update** every 10 minutes (cached)
-- **Fallback reviews** are shown if API connection fails
+- **Facebook reviews update** every 10 minutes. The last successful response is kept in memory and in `.cache/facebook-reviews.json` on that instance, and is served if Facebook later fails, so the section does not go empty. A brand-new instance has no copy until one fetch succeeds.
+- **Fallback testimonials** are shown only when both Google and Facebook return nothing and there is no saved Facebook copy
 - Reviews are **automatically synced** - no manual updates needed
 - Both review sources are **combined** and displayed together
 
@@ -139,6 +141,6 @@ Once connected, your pages will:
 1. ✅ Fetch real reviews from Google and Facebook
 2. ✅ Display them in the review sections
 3. ✅ Auto-update every 10 minutes
-4. ✅ Show fallback testimonials if API fails
+4. ✅ Show fallback testimonials only when there is nothing saved to show
 
-No code changes needed - just add the 4 secrets and you're done! 🎉
+No code changes needed — set the variables on DigitalOcean and redeploy.

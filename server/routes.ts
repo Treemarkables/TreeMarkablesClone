@@ -32,6 +32,8 @@ import { loadEffectiveRiskLinksForJobs, loadRiskLinksForJobs, recordRiskAssessme
 import { checklistCompletionClearsRiskDue, doneIdsIncludingLinkedJha, jhaCompletionRequiresJob, normalizeJhaJobId, RISK_ASSESSMENT_CHECKLIST_ITEM_ID, type JobRiskAssessmentLink } from "@shared/jhaJobRisk";
 import { sanitizeJobEquipment } from "@shared/jobEquipmentCatalogue";
 import { APP_URL } from "./config/appUrl";
+import { facebookGraphUrl, redactFacebookSecrets } from "./config/facebookGraph";
+import { checkFacebookConnection, loadFacebookPageReviews } from "./services/reviewsService";
 import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
@@ -2775,115 +2777,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).send('# Error serving robots.txt');
     }
   });
-  // Facebook reviews endpoint
-  app.get('/api/reviews/facebook', async (req: Request, res: Response) => {
-    try {
-      // Use long-lived Page Access Token instead of user token
-      const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
-      const pageId = process.env.FACEBOOK_PAGE_ID;
-      
-      if (!pageAccessToken) {
-        return res.status(200).json({ 
-          success: true, 
-          reviews: [],
-          message: 'Facebook Page Access Token not configured. Please set FACEBOOK_PAGE_ACCESS_TOKEN with a long-lived page token.' 
-        });
-      }
-
-      if (!pageId) {
-        return res.status(200).json({ 
-          success: true, 
-          reviews: [],
-          message: 'Facebook Page ID not configured' 
-        });
-      }
-
-      // Use ratings endpoint with page access token
-      const url = `https://graph.facebook.com/v18.0/${pageId}/ratings?access_token=${pageAccessToken}&fields=reviewer{name},rating,review_text,created_time&limit=10`;
-      
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Handle authentication errors gracefully instead of throwing 500
-        if (data.error?.code === 190 || data.error?.type === 'OAuthException') {
-          console.error('Facebook authentication error - token may be expired:', data.error?.message);
-          return res.status(200).json({ 
-            success: true, 
-            reviews: [],
-            message: 'Facebook token expired or invalid. Please refresh your long-lived Page Access Token.' 
-          });
-        }
-        
-        console.error('Facebook API error:', data);
-        return res.status(200).json({ 
-          success: true, 
-          reviews: [],
-          message: 'Unable to fetch Facebook reviews at this time' 
-        });
-      }
-
-      // Transform Facebook data to match our review interface
-      const reviews = data.data?.map((review: any, index: number) => ({
-        id: `fb-${index}`,
-        name: review.reviewer?.name || 'Facebook User',
-        location: 'Facebook',
-        rating: review.rating || 5,
-        comment: review.review_text || '',
-        service: 'Service',
-        source: 'facebook',
-        date: review.created_time
-      })) || [];
-
-      res.json({ success: true, reviews });
-
-    } catch (error) {
-      console.error('Facebook reviews error:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Error fetching Facebook reviews' 
-      });
-    }
+  // Facebook reviews — the only registration of this path. A later duplicate
+  // used to be registered further down; Express kept this first handler, and
+  // that handler treated every OAuthException as an expired token.
+  app.get('/api/reviews/facebook', async (_req: Request, res: Response) => {
+    const payload = await loadFacebookPageReviews();
+    res.status(200).json(payload);
   });
 
   // Facebook status endpoint
-  app.get('/api/facebook/status', async (req: Request, res: Response) => {
-    try {
-      const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
-      const pageId = process.env.FACEBOOK_PAGE_ID;
-      
-      if (!pageAccessToken || !pageId) {
-        return res.json({ 
-          connected: false,
-          message: 'Facebook credentials not configured'
-        });
-      }
-
-      // Quick test to verify token is valid by fetching page info
-      const url = `https://graph.facebook.com/v18.0/${pageId}?access_token=${pageAccessToken}&fields=name`;
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        return res.json({ 
-          connected: false,
-          message: 'Facebook token invalid or expired'
-        });
-      }
-
-      return res.json({ 
-        connected: true,
-        pageName: data.name,
-        pageId: pageId
-      });
-
-    } catch (error) {
-      console.error('Facebook status check error:', error);
-      return res.json({ 
-        connected: false,
-        message: 'Error checking Facebook status'
-      });
-    }
+  app.get('/api/facebook/status', async (_req: Request, res: Response) => {
+    const payload = await checkFacebookConnection();
+    res.json(payload);
   });
 
   // Gmail status endpoint
@@ -25582,7 +25487,7 @@ Transcription: ${transcriptText}`;
                 const PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
                 if (PAGE_ACCESS_TOKEN) {
                   const userInfoResponse = await fetch(
-                    `https://graph.facebook.com/v18.0/${senderId}?fields=name&access_token=${PAGE_ACCESS_TOKEN}`
+                    facebookGraphUrl(`${senderId}?fields=name&access_token=${PAGE_ACCESS_TOKEN}`)
                   );
                   if (userInfoResponse.ok) {
                     const userInfo = await userInfoResponse.json();
@@ -25592,7 +25497,8 @@ Transcription: ${transcriptText}`;
                   }
                 }
               } catch (error) {
-                console.error('Error fetching Facebook user info:', error);
+                const detail = error instanceof Error ? error.message : String(error);
+                console.error('Error fetching Facebook user info:', redactFacebookSecrets(detail, process.env.FACEBOOK_PAGE_ACCESS_TOKEN));
               }
               
               // Find existing conversation for this Facebook sender
@@ -25876,7 +25782,7 @@ Transcription: ${transcriptText}`;
           
           if (pageAccessToken) {
             const response = await fetch(
-              `https://graph.facebook.com/v18.0/me/messages?access_token=${pageAccessToken}`,
+              facebookGraphUrl(`me/messages?access_token=${pageAccessToken}`),
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -33241,18 +33147,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  // Reviews API - Facebook only here; Google is registered earlier in this file (cached).
-  const { fetchFacebookReviews } = await import("./services/reviewsService");
-
-  app.get("/api/reviews/facebook", async (req, res) => {
-    try {
-      const reviews = await fetchFacebookReviews();
-      res.json({ success: true, reviews });
-    } catch (error) {
-      console.error('Error fetching Facebook reviews:', error);
-      res.json({ success: false, reviews: [], message: error instanceof Error ? error.message : 'Failed to fetch Facebook reviews' });
-    }
-  });
+  // GET /api/reviews/facebook is registered once, with the other public routes.
 
   // Marketing Campaigns API
   const { metaMarketingService } = await import("./services/metaMarketingService");
@@ -34394,14 +34289,15 @@ Transcription: ${transcriptText}`;
           // Fetch sender's name from Graph API
           let senderName = '';
           try {
-            const profileUrl = `https://graph.facebook.com/v18.0/${senderId}?fields=name&access_token=${PAGE_TOKEN}`;
+            const profileUrl = facebookGraphUrl(`${senderId}?fields=name&access_token=${PAGE_TOKEN}`);
             const profileRes = await fetch(profileUrl);
             if (profileRes.ok) {
               const profile = await profileRes.json() as { name?: string };
               senderName = profile.name || '';
             }
           } catch (err) {
-            console.warn('Could not fetch Facebook sender profile:', err);
+            const detail = err instanceof Error ? err.message : String(err);
+            console.warn('Could not fetch Facebook sender profile:', redactFacebookSecrets(detail, PAGE_TOKEN));
           }
 
           // Use AI to extract job details from the message
@@ -34450,7 +34346,7 @@ Transcription: ${transcriptText}`;
 
               // Auto-reply to the sender
               try {
-                const replyUrl = `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_TOKEN}`;
+                const replyUrl = facebookGraphUrl(`me/messages?access_token=${PAGE_TOKEN}`);
                 await fetch(replyUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
