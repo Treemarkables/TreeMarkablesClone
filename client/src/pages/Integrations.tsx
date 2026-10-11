@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link as RouterLink, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { CALENDAR_SYNC_BROKEN_NOTICE, calendarSyncIsBroken, readGoogleCalendarStatus } from "@shared/googleCalendarConnect";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -356,6 +357,7 @@ export default function Integrations() {
       selectedCategory === "all" || integration.category === selectedCategory,
   );
 
+  const gcal = readGoogleCalendarStatus(googleCalendarStatus);
   const connectedCount = integrations.filter(
     (i) => i.status === "connected",
   ).length;
@@ -702,6 +704,17 @@ export default function Integrations() {
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     {integration.description}
                   </p>
+
+                  {integration.id === "google-calendar" && calendarSyncIsBroken(gcal) && (
+                    <div data-testid="notice-calendar-sync-broken">
+                      <p className="text-sm font-medium text-red-600">
+                        {CALENDAR_SYNC_BROKEN_NOTICE}
+                      </p>
+                      {gcal.lastError ? (
+                        <p className="text-xs text-red-600 mt-1">{gcal.lastError}</p>
+                      ) : null}
+                    </div>
+                  )}
 
                   {/* Features */}
                   <div>

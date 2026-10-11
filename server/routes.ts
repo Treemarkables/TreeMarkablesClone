@@ -219,8 +219,10 @@ import {
 } from "./photoAnnotationStore";
 import { renderSiteMapSnapshot, renderImageSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
+import { google } from "googleapis";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
-import { queueJobPush, removeJobEvents, getConnectionForUser } from "./services/googleCalendarSync";
+import { queueJobPush, removeJobEvents, getConnectionForUser, backfillFutureScheduledWorkOrders } from "./services/googleCalendarSync";
+import { googleCalendarBrowserOrigin, googleCalendarRedirectUri } from "@shared/googleCalendarConnect";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
 
@@ -2821,6 +2823,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Google Calendar — per-user OAuth + two-way sync (unified calendar Phase C)
   // ─────────────────────────────────────────────────────────────────────────────
 
+  const googleCalendarOAuthTarget = (req: Request) => {
+    const requestOrigin = `${req.protocol}://${req.get('host')}`;
+    const redirectUri = googleCalendarRedirectUri(
+      {
+        NODE_ENV: process.env.NODE_ENV,
+        GOOGLE_CALENDAR_REDIRECT_URI: process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+      },
+      requestOrigin,
+    );
+    return {
+      redirectUri,
+      appOrigin: googleCalendarBrowserOrigin(redirectUri, requestOrigin, process.env.NODE_ENV),
+    };
+  };
+
   // Status: returns connection info for the logged-in user.
   app.get('/api/google-calendar/status', async (req: Request, res: Response) => {
     try {
@@ -2833,6 +2850,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         calendarId: conn.calendarId,
         lastSynced: conn.lastSyncedAt,
         lastError: conn.lastError,
+        syncStatus: conn.syncStatus,
       });
     } catch (error) {
       console.error('Google Calendar status error:', error);
@@ -2847,11 +2865,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     if (!clientId || !clientSecret) {
       return res.status(503).json({ success: false, message: 'Google Calendar OAuth not configured' });
     }
-    const { google } = require('googleapis');
-    const origin = process.env.NODE_ENV === 'production'
-      ? 'https://app.treemarkables.co.nz'
-      : `${req.protocol}://${req.get('host')}`;
-    const redirectUri = `${origin}/api/google-calendar/callback`;
+    const { redirectUri } = googleCalendarOAuthTarget(req);
     const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     // State encodes the current session identifiers so the callback can associate
     // the connection with the right employee without trusting POST body.
@@ -2874,30 +2888,26 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   // OAuth callback: exchange code, upsert connection, redirect to /integrations.
   app.get('/api/google-calendar/callback', async (req: Request, res: Response) => {
-    const origin = process.env.NODE_ENV === 'production'
-      ? 'https://app.treemarkables.co.nz'
-      : `${req.protocol}://${req.get('host')}`;
+    const { redirectUri, appOrigin } = googleCalendarOAuthTarget(req);
     try {
       const code = typeof req.query.code === 'string' ? req.query.code : '';
       const stateRaw = typeof req.query.state === 'string' ? req.query.state : '';
       if (!code || !stateRaw) {
-        return res.redirect(`${origin}/integrations?gcal_error=missing_code`);
+        return res.redirect(`${appOrigin}/integrations?gcal_error=missing_code`);
       }
       let stateParsed: { businessId?: string; employeeId?: string } = {};
       try {
         stateParsed = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8'));
       } catch {
-        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+        return res.redirect(`${appOrigin}/integrations?gcal_error=bad_state`);
       }
       const { businessId, employeeId } = stateParsed;
       if (!businessId || !employeeId) {
-        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+        return res.redirect(`${appOrigin}/integrations?gcal_error=bad_state`);
       }
 
       const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID!;
       const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET!;
-      const redirectUri = `${origin}/api/google-calendar/callback`;
-      const { google } = require('googleapis');
       const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
       const { tokens } = await oauth2.getToken(code);
       oauth2.setCredentials(tokens);
@@ -2932,24 +2942,32 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 50 * 60 * 1000),
         scope: tokens.scope ?? null,
         isActive: true,
+        syncStatus: 'synced',
         lastError: null,
         updatedAt: new Date(),
       };
 
+      let connectionId: string | undefined;
       if (existing.length > 0) {
+        connectionId = existing[0].id;
         await db
           .update(googleCalendarConnections)
           .set(connData)
           .where(eq(googleCalendarConnections.id, existing[0].id));
       } else {
-        await db.insert(googleCalendarConnections).values(connData);
+        const inserted = await db.insert(googleCalendarConnections).values(connData).returning({ id: googleCalendarConnections.id });
+        connectionId = inserted[0]?.id;
+      }
+
+      if (connectionId) {
+        await backfillFutureScheduledWorkOrders(connectionId);
       }
 
       console.log(`✅ Google Calendar connected for employee ${employeeId} (${googleEmail})`);
-      res.redirect(`${origin}/integrations?gcal_connected=true`);
+      res.redirect(`${appOrigin}/integrations?gcal_connected=true`);
     } catch (error) {
       console.error('Google Calendar OAuth callback error:', error);
-      res.redirect(`${origin}/integrations?gcal_error=oauth_failed`);
+      res.redirect(`${appOrigin}/integrations?gcal_error=oauth_failed`);
     }
   });
 
@@ -2965,7 +2983,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
         const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
         if (clientId && clientSecret) {
-          const { google } = require('googleapis');
           const auth = new google.auth.OAuth2(clientId, clientSecret);
           auth.setCredentials({ refresh_token: conn.refreshToken });
           await auth.revokeCredentials();
@@ -12177,7 +12194,7 @@ Return only the rewritten description, nothing else.`,
           if (job?.id && job?.customerId) {
             let reviewReq = await storage.getLatestReviewRequestForJob(job.id);
             if (!reviewReq) {
-              const reviewToken = require('crypto').randomBytes(32).toString('hex');
+              const reviewToken = randomBytes(32).toString('hex');
               reviewReq = await storage.createReviewRequest({
                 jobId: job.id,
                 customerId: job.customerId,
@@ -18069,7 +18086,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       let link = await storage.getTimelineLinkForJob(job.id);
       if (!link) {
-        const token = require('crypto').randomBytes(32).toString('hex');
+        const token = randomBytes(32).toString('hex');
         link = await storage.createTimelineLink(job.id, token);
       }
       res.json({
@@ -31225,7 +31242,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       }
 
       // Generate unique token
-      const token = require('crypto').randomBytes(32).toString('hex');
+      const token = randomBytes(32).toString('hex');
       
       // Create review request
       const reviewRequest = await storage.createReviewRequest({

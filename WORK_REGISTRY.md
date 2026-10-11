@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Google Calendar connect — branch `cursor/google-calendar-esm-connect-ef37` — 2026-10-11 — ESM imports replace require() in the server bundle (auth 500), GOOGLE_CALENDAR_REDIRECT_URI override, push failures persist on the connection and show "Calendar sync broken" on /integrations, connect backfills future work orders, startup warning if calendar tables are missing. Draft only. [PR #627]
 - Facebook Graph version — branch `cursor/facebook-graph-version-5ac1` — 2026-10-11 — one Graph version (default v23.0, `FACEBOOK_GRAPH_VERSION`), single `/api/reviews/facebook`, Facebook's own error except code 190, last-good reviews cache. No TestFlight. [PR #625]
 - Notification inline send — branch `cursor/notification-inline-send-e731` — 2026-10-10 — holding-message (and any other awaiting-approval message) notifications can preview, edit, and Send from the bell via the existing pending-message approve route. Body tap still opens the job. Draft only. [PR #624]
 - Marketing asset rollout — branch `cursor/prerender-asset-rollout-c331` — 2026-10-10 — prerender HTML and hashed /assets stay on the same Vite build; HTML is no-cache; previous hashes are kept across a deploy; a missing bundle is not an HTML 404. No TestFlight. Draft only. [PR #623]
