@@ -39,6 +39,16 @@ import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
 import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { businessIdFromVoiceClient, isBusinessId, voiceIdentityForEmployee, inboundVoiceIdentity } from "./tenancy/voiceIdentity";
+import { VOICE_TOKEN_TTL_SECONDS } from "@shared/voiceToken";
+import {
+  HANGUP_TWIML,
+  decideInboundDialFollowup,
+  parseDialCallDuration,
+  parseDialLeg,
+  planInboundRing,
+  recoveryPhoneDialTwiml,
+} from "./services/inboundCallPlan";
+import { readVoiceClientPresence, recordVoiceClientPresence } from "./services/voiceClientPresence";
 import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
@@ -12999,7 +13009,7 @@ Return only the rewritten description, nothing else.`,
       });
       const accessToken = new AccessToken(accountSid, apiKey, apiSecret, {
         identity: clientIdentity,
-        ttl: 3600,
+        ttl: VOICE_TOKEN_TTL_SECONDS,
       });
       accessToken.addGrant(voiceGrant);
       if (!twimlAppSid) {
@@ -13009,11 +13019,43 @@ Return only the rewritten description, nothing else.`,
         const credEnv = platform === 'android' ? 'TWILIO_PUSH_CREDENTIAL_SID_ANDROID' : 'TWILIO_PUSH_CREDENTIAL_SID';
         console.warn(`⚠️  ${credEnv} not set — incoming call push notifications to the ${platform} app will not work. Create a Push Credential at Twilio Console → Voice → Push Credentials (${platform === 'android' ? 'FCM' : 'APNs'}) and set this secret.`);
       }
-      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (platform: ${platform}, outgoing: ${twimlAppSid ? 'enabled' : 'disabled'}, push: ${pushCredentialSid ? 'enabled' : 'disabled'})`);
-      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity, platform, outgoingEnabled: !!twimlAppSid, pushEnabled: !!pushCredentialSid });
+      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (platform: ${platform}, outgoing: ${twimlAppSid ? 'enabled' : 'disabled'}, push: ${pushCredentialSid ? 'enabled' : 'disabled'}, ttl: ${VOICE_TOKEN_TTL_SECONDS}s)`);
+      return res.json({
+        success: true,
+        token: accessToken.toJwt(),
+        identity: clientIdentity,
+        platform,
+        ttl: VOICE_TOKEN_TTL_SECONDS,
+        outgoingEnabled: !!twimlAppSid,
+        pushEnabled: !!pushCredentialSid,
+      });
     } catch (error: any) {
       console.error('❌ Error generating Twilio token:', error);
       return res.status(500).json({ success: false, message: 'Failed to generate token' });
+    }
+  });
+
+  // The iOS app calls this after TwilioVoiceSDK.register succeeds, and again
+  // each time it refreshes the access token. The answer webhook reads the row
+  // to decide whether <Client> is worth dialling.
+  app.post('/api/twilio/presence', async (req: Request, res: Response) => {
+    try {
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const requestingEmployee = await storage.getEmployee(employeeId);
+      const businessId = requestingEmployee?.businessId || req.session.businessId;
+      if (!businessId) {
+        return res.status(403).json({ success: false, message: 'No business on this account' });
+      }
+      const isAdmin = requestingEmployee?.role === 'admin';
+      const identity = voiceIdentityForEmployee(businessId, employeeId, isAdmin);
+      await recordVoiceClientPresence(identity, VOICE_TOKEN_TTL_SECONDS);
+      return res.json({ success: true, identity, ttl: VOICE_TOKEN_TTL_SECONDS });
+    } catch (error: any) {
+      console.error('❌ Error recording voice presence:', error);
+      return res.status(500).json({ success: false, message: 'Failed to record voice presence' });
     }
   });
 
@@ -13026,12 +13068,10 @@ Return only the rewritten description, nothing else.`,
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
 
-  // Builds the inner TwiML verbs (everything between <Response> and </Response>)
-  // for the original "ring the iOS app + owner's phone simultaneously, record,
-  // voicemail on no-answer" flow. Extracted verbatim from the answer webhook so
-  // the IVR menu can fall through to the exact same behaviour on timeout /
-  // press-2, and so the voice-agent failure fallback (?mode=dial) reproduces
-  // today's flow byte-for-byte.
+  // Rings the iOS app and the owner's phone together when the app has checked
+  // in with a live access token. An unregistered app is left out of the Dial
+  // so a dead <Client> cannot cancel the mobile. The action URL falls through
+  // to voicemail, or to the mobile alone if the app leg dies immediately.
   const buildDialJulesTwimlBody = async (req: Request): Promise<string> => {
     const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER;
     // Dial the business that owns the line, not a shared identity every
@@ -13050,18 +13090,26 @@ Return only the rewritten description, nothing else.`,
     const clientIdentity = dialBusinessId
       ? inboundVoiceIdentity(dialBusinessId)
       : (process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner');
-    const hasClient = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
-
-    // Must have at least one destination — Client app OR phone number
-    if (!hasClient && !ownerPhone) {
-      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or OWNER_PHONE_NUMBER)');
-      return `  <Say voice="alice">Sorry, we are unable to take your call right now. Please try again later.</Say>
-`;
-    }
+    const clientConfigured = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
+    const presence = clientConfigured
+      ? await readVoiceClientPresence(clientIdentity)
+      : "unregistered";
+    const ring = planInboundRing({
+      clientConfigured,
+      presence,
+      hasOwnerPhone: !!ownerPhone,
+    });
 
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
+
+    // Nothing to ring — the no-answer route plays the saved voicemail greeting.
+    if (ring.leg === "none") {
+      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or OWNER_PHONE_NUMBER)');
+      return `  <Redirect method="POST">${escapeTwimlXml(`${baseUrl}/api/webhooks/twilio-no-answer?leg=none`)}</Redirect>
+`;
+    }
 
     // Twilio's recording-status callback (fired when the call's recording
     // completes) does NOT include From / ForwardedFrom / To — only the initial
@@ -13152,12 +13200,12 @@ Return only the rewritten description, nothing else.`,
 
     // Build the list of Dial targets. When we have a caller name, the <Client>
     // must use the <Identity> noun form so we can attach a <Parameter>.
-    const clientTarget = hasClient
+    const clientTarget = ring.dialClient
       ? callerName
         ? `    <Client>\n      <Identity>${clientIdentity}</Identity>\n      <Parameter name="callerName" value="${escapeXml(callerName)}"/>\n    </Client>`
         : `    <Client>${clientIdentity}</Client>`
       : '';
-    const phoneTarget = ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
+    const phoneTarget = ring.dialPhone && ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
 
     // Optional recorded-call disclosure played to the CALLER before we ring
     // through. OFF by default — playing any audio before the agent picks up
@@ -13197,7 +13245,7 @@ Return only the rewritten description, nothing else.`,
       connectingTwiml = `  <Say voice="alice">${escapeXml(connectingPromptRaw)}</Say>\n`;
     }
 
-    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, connecting=${connectingTwiml ? 'on' : 'off'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
+    console.log(`📞 Twilio answer webhook — client=${ring.dialClient ? clientIdentity : 'off'} (presence=${presence}), phone=${ring.dialPhone ? ownerPhone : 'off'}, leg=${ring.leg}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, connecting=${connectingTwiml ? 'on' : 'off'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
 
     return `${connectingTwiml}${disclosureTwiml}  <Dial
     record="record-from-answer"
@@ -13205,7 +13253,7 @@ Return only the rewritten description, nothing else.`,
     recordingStatusCallback="${recordingCallbackUrl}"
     recordingStatusCallbackEvent="completed"
     timeout="20"
-    action="${baseUrl}/api/webhooks/twilio-no-answer"
+    action="${escapeTwimlXml(`${baseUrl}/api/webhooks/twilio-no-answer?leg=${ring.leg}`)}"
   >
 ${clientTarget}
 ${phoneTarget}
@@ -13602,6 +13650,28 @@ ${dialBody}</Response>`);
     }
   });
 
+  // Which party the <Dial> actually bridged. A 1-second "completed" call is
+  // the app dropping (31005) when `to` is client:, and a real hang-up when
+  // `to` is the owner's mobile. Failures return null and the follow-up
+  // treats that as "don't lose the caller".
+  const lookupDialedParty = async (dialCallSid: string): Promise<string | null> => {
+    if (!/^CA[0-9a-f]{32}$/i.test(dialCallSid)) return null;
+    try {
+      const client = await getTwilioClient();
+      const fetched = client.calls(dialCallSid).fetch().then(
+        (call) => (typeof call.to === "string" ? call.to : null),
+        () => null,
+      );
+      return await Promise.race([
+        fetched,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+      ]);
+    } catch (err) {
+      console.error("📞 dial leg lookup failed:", err);
+      return null;
+    }
+  };
+
   // TwiML: owner didn't answer → take a voicemail (still records and processes)
   app.post('/api/webhooks/twilio-no-answer', async (req: Request, res: Response) => {
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
@@ -13609,18 +13679,45 @@ ${dialBody}</Response>`);
     const baseUrl = `${protocol}://${host}`;
 
     // Twilio's <Dial action> fires when the Dial verb finishes for ANY reason —
-    // including a successfully connected call where one side hung up. We only
-    // want to fall through to voicemail when the dial actually failed to
-    // connect, not after a normal completed conversation. DialCallStatus is
-    // one of: completed, answered, busy, no-answer, failed, canceled.
+    // including a successfully connected call where one side hung up. A normal
+    // conversation hangs up. A few-second app-leg drop, or a <Dial> that
+    // failed before the mobile could ring, is forwarded to the mobile and
+    // then to voicemail. DialCallStatus is one of: completed, answered, busy,
+    // no-answer, failed, canceled.
     const dialStatus = String(req.body?.DialCallStatus || '').toLowerCase();
-    if (dialStatus === 'completed' || dialStatus === 'answered') {
-      console.log(`📞 Dial completed (status=${dialStatus}) — call ended naturally, skipping voicemail`);
+    const leg = parseDialLeg(req.query.leg);
+    const dialCallDuration = parseDialCallDuration(req.body?.DialCallDuration);
+    const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER || '';
+    const followupInput = {
+      leg,
+      dialStatus,
+      dialCallDuration,
+      hasOwnerPhone: !!ownerPhone,
+    };
+    let decision = decideInboundDialFollowup(followupInput);
+    if (decision.action === 'lookup') {
+      const answeredTo = await lookupDialedParty(String(req.body?.DialCallSid || ''));
+      decision = decideInboundDialFollowup({ ...followupInput, answeredTo });
+    }
+    if (decision.action === 'hangup') {
+      console.log(`📞 Dial completed (status=${dialStatus}, duration=${dialCallDuration ?? '?'}, leg=${leg}) — call ended naturally, skipping voicemail`);
       res.type('text/xml');
-      return res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>');
+      return res.send(HANGUP_TWIML);
+    }
+    if (decision.action === 'dial-phone' && ownerPhone) {
+      const inboundFrom = String(req.body?.From || req.body?.ForwardedFrom || '');
+      const inboundTo = String(req.body?.To || '');
+      console.log(`📞 In-app call unavailable (status=${dialStatus}, duration=${dialCallDuration ?? '?'}, leg=${leg}) — forwarding to ${ownerPhone}`);
+      res.type('text/xml');
+      return res.send(recoveryPhoneDialTwiml({
+        ownerPhone,
+        actionUrl: `${baseUrl}/api/webhooks/twilio-no-answer?leg=phone`,
+        recordingCallbackUrl:
+          `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&calledTo=${encodeURIComponent(inboundTo)}`,
+      }));
     }
 
-    console.log(`📞 Twilio no-answer (DialCallStatus=${dialStatus || 'unknown'}) — switching to voicemail`);
+    console.log(`📞 Twilio no-answer (DialCallStatus=${dialStatus || 'unknown'}, leg=${leg}) — switching to voicemail`);
 
     // Voicemail recording's status callback also needs callerFrom in the URL
     // (same reason as the answer webhook — recording callbacks don't include
