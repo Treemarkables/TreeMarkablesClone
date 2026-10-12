@@ -24,6 +24,61 @@ export function facebookGraphUrl(pathAndQuery: string, env?: NodeJS.ProcessEnv):
   return `https://graph.facebook.com/${facebookGraphVersion(env)}${suffix}`;
 }
 
+export interface FacebookPageAccessToken {
+  /** Sanitized token for Graph calls. Never return this to a client. */
+  token: string;
+  length: number;
+  startsWithEaa: boolean;
+  hadQuotesOrWhitespace: boolean;
+}
+
+/** Non-secret fields for /api/facebook/status. The token itself is not included. */
+export interface FacebookTokenDiagnostics {
+  tokenLength: number;
+  tokenStartsWithEaa: boolean;
+  tokenHadQuotesOrWhitespace: boolean;
+}
+
+/**
+ * Trim ends (including newlines) and remove up to two matching pairs of
+ * surrounding quotes. A pasted DigitalOcean value like `"EAAxxxx"\n` otherwise makes
+ * Graph return code 190 "Cannot parse access token".
+ */
+export function sanitizeFacebookAccessToken(raw: string): string {
+  let token = raw.trim();
+  for (let i = 0; i < 2; i += 1) {
+    const doubleWrapped = token.length >= 2 && token.startsWith('"') && token.endsWith('"');
+    const singleWrapped = token.length >= 2 && token.startsWith("'") && token.endsWith("'");
+    if (!doubleWrapped && !singleWrapped) break;
+    token = token.slice(1, -1).trim();
+  }
+  return token;
+}
+
+/**
+ * Page token, falling back to FACEBOOK_ACCESS_TOKEN when the page var is unset.
+ * A non-empty page value wins even if sanitizing it leaves nothing.
+ */
+export function readFacebookPageAccessToken(env: NodeJS.ProcessEnv = process.env): FacebookPageAccessToken {
+  const page = env.FACEBOOK_PAGE_ACCESS_TOKEN;
+  const raw = page != null && page !== "" ? page : (env.FACEBOOK_ACCESS_TOKEN ?? "");
+  const token = sanitizeFacebookAccessToken(raw);
+  return {
+    token,
+    length: token.length,
+    startsWithEaa: token.startsWith("EAA"),
+    hadQuotesOrWhitespace: raw !== token,
+  };
+}
+
+export function facebookTokenDiagnostics(access: FacebookPageAccessToken): FacebookTokenDiagnostics {
+  return {
+    tokenLength: access.length,
+    tokenStartsWithEaa: access.startsWithEaa,
+    tokenHadQuotesOrWhitespace: access.hadQuotesOrWhitespace,
+  };
+}
+
 const ACCESS_TOKEN_QUERY = /([?&#]access_token=)[^&#\s]+/gi;
 const FACEBOOK_USER_TOKEN = /\bEAA[A-Za-z0-9_-]{8,}\b/g;
 

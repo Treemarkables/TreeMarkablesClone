@@ -32,7 +32,7 @@ import { loadEffectiveRiskLinksForJobs, loadRiskLinksForJobs, recordRiskAssessme
 import { checklistCompletionClearsRiskDue, doneIdsIncludingLinkedJha, jhaCompletionRequiresJob, normalizeJhaJobId, RISK_ASSESSMENT_CHECKLIST_ITEM_ID, type JobRiskAssessmentLink } from "@shared/jhaJobRisk";
 import { sanitizeJobEquipment } from "@shared/jobEquipmentCatalogue";
 import { APP_URL } from "./config/appUrl";
-import { facebookGraphUrl, redactFacebookSecrets } from "./config/facebookGraph";
+import { facebookGraphUrl, readFacebookPageAccessToken, redactFacebookSecrets } from "./config/facebookGraph";
 import { checkFacebookConnection, loadFacebookPageReviews } from "./services/reviewsService";
 import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
@@ -25597,11 +25597,11 @@ Transcription: ${transcriptText}`;
               
               // Fetch sender's name from Facebook Graph API
               let senderName = 'Facebook Messenger Enquiry';
+              const pageAccessToken = readFacebookPageAccessToken().token;
               try {
-                const PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
-                if (PAGE_ACCESS_TOKEN) {
+                if (pageAccessToken) {
                   const userInfoResponse = await fetch(
-                    facebookGraphUrl(`${senderId}?fields=name&access_token=${PAGE_ACCESS_TOKEN}`)
+                    facebookGraphUrl(`${senderId}?fields=name&access_token=${pageAccessToken}`)
                   );
                   if (userInfoResponse.ok) {
                     const userInfo = await userInfoResponse.json();
@@ -25612,7 +25612,7 @@ Transcription: ${transcriptText}`;
                 }
               } catch (error) {
                 const detail = error instanceof Error ? error.message : String(error);
-                console.error('Error fetching Facebook user info:', redactFacebookSecrets(detail, process.env.FACEBOOK_PAGE_ACCESS_TOKEN));
+                console.error('Error fetching Facebook user info:', redactFacebookSecrets(detail, pageAccessToken));
               }
               
               // Find existing conversation for this Facebook sender
@@ -25892,7 +25892,7 @@ Transcription: ${transcriptText}`;
       } else if (messagePlatform === 'facebook_messenger') {
         // Send Facebook message
         try {
-          const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+          const pageAccessToken = readFacebookPageAccessToken().token;
           
           if (pageAccessToken) {
             const response = await fetch(
@@ -34382,7 +34382,7 @@ Transcription: ${transcriptText}`;
       const body = req.body;
       if (body.object !== 'page') return;
 
-      const PAGE_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+      const PAGE_TOKEN = readFacebookPageAccessToken().token;
       if (!PAGE_TOKEN) {
         console.warn('⚠️ FACEBOOK_PAGE_ACCESS_TOKEN not set — cannot process Messenger webhook');
         return;

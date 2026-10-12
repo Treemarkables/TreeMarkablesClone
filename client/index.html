@@ -76,6 +76,8 @@
         font-size: 0.95rem;
       }
       #inflow-boot[data-stuck="1"] .boot-retry { display: inline-block; }
+      /* App hosts set class="inflow-app". A leaked marketing snapshot stays hidden. */
+      html.inflow-app #tm-prerender { display: none !important; }
     </style>
     <!-- Event snippet for Click to call conversion page -->
     <script>

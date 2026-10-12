@@ -6,10 +6,11 @@
  * This middleware rewrites that first HTML byte — and the web manifest /
  * Inflow icon URLs — on Treemarkables hosts only.
  *
- * Public marketing routes also get a static HTML snapshot inside #root
+ * Public marketing routes also get a static HTML snapshot in front of #root
  * (real H1, copy, phone, address, links) plus JSON-LD, and the Inflow boot
  * loader is removed for those routes only. The React app still mounts into
- * #root and replaces that snapshot. Staff routes keep the Inflow shell.
+ * #root and replaces that snapshot. Staff routes (/login, /dashboard,
+ * /dispatch, …) keep the Inflow boot shell. App hosts never get the snapshot.
  *
  * Intentionally NOT the PR #516 cutover:
  *   - same SPA, not a separate treemarkables-site/
@@ -21,7 +22,7 @@
 import type { IncomingHttpHeaders } from "http";
 import type { Request, RequestHandler, Response } from "express";
 import fs from "fs";
-import { injectTreemarkablesPublicHtml, treemarkablesJsonLd } from "./treemarkablesPublicHtml";
+import { injectTreemarkablesPublicHtml, removeTreemarkablesPublicHtml, treemarkablesJsonLd } from "./treemarkablesPublicHtml";
 import { applyHtmlCacheHeaders } from "./staticAssetPolicy";
 import {
   EAST_COAST_PAGE,
@@ -38,6 +39,17 @@ import {
 export const TREEMARKABLES_DOCUMENT_HOSTS = new Set([
   "www.treemarkables.co.nz",
   "treemarkables.co.nz",
+]);
+
+/**
+ * Hosts that serve the Inflow app, including the iOS webview start URL.
+ * A request whose Host is one of these is never a marketing document, even
+ * when X-Forwarded-Host names www.
+ */
+export const INFLOW_APP_DOCUMENT_HOSTS = new Set([
+  "app.inflowapp.co.nz",
+  "www.inflowapp.co.nz",
+  "app.treemarkables.co.nz",
 ]);
 
 export const TREEMARKABLES_CANONICAL_ORIGIN = "https://www.treemarkables.co.nz";
@@ -217,11 +229,40 @@ export function normalizeHostname(hostHeader: string | undefined): string {
   return hostHeader.split(":")[0].trim().toLowerCase().replace(/\.$/, "");
 }
 
+function firstHostname(value: string | string[] | undefined): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return "";
+  return normalizeHostname(raw.split(",")[0]);
+}
+
+/**
+ * Public host for this request.
+ *
+ * DigitalOcean often presents its own hostname in Host and the custom domain
+ * in X-Forwarded-Host. That forwarded value wins for platform hosts.
+ * When Host is already an app host or www, it wins: a forwarded www must not
+ * turn app.inflowapp.co.nz into a marketing document.
+ */
 export function hostFromHeaders(headers: IncomingHttpHeaders, fallbackHost?: string): string {
-  const forwarded = headers["x-forwarded-host"];
-  const forwardedHost = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  const raw = forwardedHost || headers.host || fallbackHost || "";
-  return normalizeHostname(typeof raw === "string" ? raw : "");
+  const forwarded = firstHostname(headers["x-forwarded-host"]);
+  const direct = firstHostname(headers.host) || normalizeHostname(fallbackHost);
+  if (INFLOW_APP_DOCUMENT_HOSTS.has(direct) || TREEMARKABLES_DOCUMENT_HOSTS.has(direct)) {
+    return direct;
+  }
+  return forwarded || direct;
+}
+
+/**
+ * Path of the document being served. `app.use("*")` trims `req.path` down to
+ * "/" (the mount consumes the URL), which made every www response inject the
+ * homepage snapshot. `originalUrl` is the path the browser asked for.
+ */
+export function requestDocumentPath(req: { originalUrl?: string; path?: string }): string {
+  const raw = req.originalUrl || req.path || "/";
+  const pathOnly = (raw.split("#")[0] || "/").split("?")[0] || "/";
+  if (!pathOnly.startsWith("/") || pathOnly.startsWith("//")) return "/";
+  if (pathOnly.length > 1 && pathOnly.endsWith("/")) return pathOnly.slice(0, -1);
+  return pathOnly;
 }
 
 export function isTreemarkablesDocumentHost(hostHeader: string | undefined): boolean {
@@ -359,6 +400,29 @@ export function applyTreemarkablesDocumentHead(html: string, pathname: string = 
   return injectTreemarkablesPublicHtml(next, pathname);
 }
 
+/**
+ * App-host shell. No marketing snapshot, and a class that hides one if a
+ * later pass inserts it. The Inflow boot splash in index.html stays.
+ */
+export function applyInflowAppShell(html: string): string {
+  const withoutSnapshot = removeTreemarkablesPublicHtml(html);
+  if (/<html\b[^>]*\binflow-app\b/i.test(withoutSnapshot)) return withoutSnapshot;
+  return withoutSnapshot.replace(/<html\b/i, '<html class="inflow-app"');
+}
+
+/**
+ * HTML for one SPA navigation. Marketing hosts get the snapshot only when
+ * `requestDocumentPath` is a public Treemarkables route. Every other host,
+ * including the iOS start URL, gets the app shell.
+ */
+export function htmlForSpaRequest(
+  html: string,
+  req: Pick<Request, "headers" | "hostname" | "originalUrl" | "path">,
+): string {
+  if (!requestIsTreemarkablesDocumentHost(req)) return applyInflowAppShell(html);
+  return applyTreemarkablesDocumentHead(html, requestDocumentPath(req));
+}
+
 function invokeSendFileCallback(optionsOrCb: unknown, maybeCb: unknown, err?: Error): void {
   const cb = typeof maybeCb === "function" ? maybeCb : typeof optionsOrCb === "function" ? optionsOrCb : undefined;
   if (typeof cb === "function") {
@@ -433,7 +497,7 @@ export function createTreemarkablesDocumentBrandMiddleware(): RequestHandler {
       return next();
     }
 
-    const pathname = (req.path || "/").split("?")[0] || "/";
+    const pathname = requestDocumentPath(req);
 
     if (isWebManifestPath(pathname)) {
       res.status(200);

@@ -11,7 +11,9 @@ import {
   facebookErrorInfo,
   facebookGraphUrl,
   facebookGraphVersion,
+  readFacebookPageAccessToken,
   redactFacebookSecrets,
+  sanitizeFacebookAccessToken,
 } from "../config/facebookGraph.ts";
 import {
   checkFacebookConnection,
@@ -121,6 +123,54 @@ describe("Facebook Graph version", { concurrency: false }, () => {
       fs.readFileSync(path.join(process.cwd(), "server/services/metaMarketingService.ts"), "utf8"),
       /facebookGraphUrl\(/,
     );
+  });
+
+  it("reads page and user tokens only through the sanitizing helper", () => {
+    const files = [
+      "server/routes.ts",
+      "server/services/reviewsService.ts",
+      "server/services/metaMarketingService.ts",
+    ];
+    for (const file of files) {
+      const text = fs.readFileSync(path.join(process.cwd(), file), "utf8");
+      assert.equal(text.includes("process.env.FACEBOOK_PAGE_ACCESS_TOKEN"), false, file);
+      assert.equal(text.includes("process.env.FACEBOOK_ACCESS_TOKEN"), false, file);
+      assert.match(text, /readFacebookPageAccessToken\(/);
+    }
+  });
+});
+
+describe("Facebook access token sanitizing", { concurrency: false }, () => {
+  it("trims whitespace and strips one or two surrounding quote pairs", () => {
+    assert.equal(sanitizeFacebookAccessToken('  "EAAreal-token"\n'), "EAAreal-token");
+    assert.equal(sanitizeFacebookAccessToken("  'EAAreal-token'  "), "EAAreal-token");
+    assert.equal(sanitizeFacebookAccessToken(`'"EAAreal-token"'`), "EAAreal-token");
+    assert.equal(sanitizeFacebookAccessToken("EAAreal-token"), "EAAreal-token");
+    assert.equal(sanitizeFacebookAccessToken(`"token'`), `"token'`);
+    assert.equal(sanitizeFacebookAccessToken("  token with space  "), "token with space");
+  });
+
+  it("prefers a set page token and falls back to FACEBOOK_ACCESS_TOKEN", () => {
+    const page = readFacebookPageAccessToken({
+      FACEBOOK_PAGE_ACCESS_TOKEN: '  "EAAfrom-page"\n',
+      FACEBOOK_ACCESS_TOKEN: "EAAfrom-user",
+    });
+    assert.equal(page.token, "EAAfrom-page");
+    assert.equal(page.length, "EAAfrom-page".length);
+    assert.equal(page.startsWithEaa, true);
+    assert.equal(page.hadQuotesOrWhitespace, true);
+
+    const fallback = readFacebookPageAccessToken({ FACEBOOK_ACCESS_TOKEN: "  'user-token' " });
+    assert.equal(fallback.token, "user-token");
+    assert.equal(fallback.startsWithEaa, false);
+    assert.equal(fallback.hadQuotesOrWhitespace, true);
+
+    const blankPage = readFacebookPageAccessToken({
+      FACEBOOK_PAGE_ACCESS_TOKEN: "   ",
+      FACEBOOK_ACCESS_TOKEN: "EAAfrom-user",
+    });
+    assert.equal(blankPage.token, "");
+    assert.equal(blankPage.hadQuotesOrWhitespace, true);
   });
 });
 
@@ -311,6 +361,10 @@ describe("Facebook connection status", { concurrency: false }, () => {
     assert.equal(retired.code, 2500);
     assert.equal((retired.message ?? "").toLowerCase().includes("token expired"), false);
     assert.equal(JSON.stringify(retired).includes(TOKEN), false);
+    assert.equal(retired.tokenLength, TOKEN.length);
+    assert.equal(retired.tokenStartsWithEaa, false);
+    assert.equal(retired.tokenHadQuotesOrWhitespace, false);
+    assert.equal("token" in retired, false);
 
     const expired = await checkFacebookConnection({
       env: env(),
@@ -329,6 +383,50 @@ describe("Facebook connection status", { concurrency: false }, () => {
         return jsonResponse({ name: "Treemarkables", id: PAGE_ID });
       },
     });
-    assert.deepEqual(ok, { connected: true, pageName: "Treemarkables", pageId: PAGE_ID });
+    assert.deepEqual(ok, {
+      connected: true,
+      pageName: "Treemarkables",
+      pageId: PAGE_ID,
+      tokenLength: TOKEN.length,
+      tokenStartsWithEaa: false,
+      tokenHadQuotesOrWhitespace: false,
+    });
+    assert.equal("token" in ok, false);
+  });
+
+  it("sends the cleaned token to Graph and returns only non-secret diagnostics", async () => {
+    const dirty = '  "EAAreal-token"\n';
+    const clean = "EAAreal-token";
+    let seen = "";
+    const status = await checkFacebookConnection({
+      env: { FACEBOOK_PAGE_ACCESS_TOKEN: dirty, FACEBOOK_PAGE_ID: PAGE_ID },
+      fetchImpl: async (input) => {
+        seen = String(input);
+        return jsonResponse({ name: "Treemarkables", id: PAGE_ID });
+      },
+    });
+    const tokenQuery = new URL(seen).searchParams.get("access_token");
+    assert.equal(tokenQuery, clean);
+    assert.equal(seen.includes("%22"), false);
+    assert.equal(seen.includes("%0A"), false);
+    assert.equal(status.tokenLength, clean.length);
+    assert.equal(status.tokenStartsWithEaa, true);
+    assert.equal(status.tokenHadQuotesOrWhitespace, true);
+    assert.equal("token" in status, false);
+    assert.equal(JSON.stringify(status).includes(clean), false);
+
+    let reviewUrl = "";
+    await loadFacebookPageReviews({
+      env: { FACEBOOK_PAGE_ACCESS_TOKEN: " 'EAAreview-token' \n", FACEBOOK_PAGE_ID: PAGE_ID },
+      cacheFile: cacheFile(),
+      now: 1,
+      fetchImpl: async (input) => {
+        reviewUrl = String(input);
+        return jsonResponse({ data: [sampleReview] });
+      },
+    });
+    assert.equal(new URL(reviewUrl).searchParams.get("access_token"), "EAAreview-token");
+    assert.equal(reviewUrl.includes("%27"), false);
+    assert.equal(reviewUrl.includes("%0A"), false);
   });
 });

@@ -153,10 +153,41 @@ function htmlReferences(html: string, href: string): boolean {
   return html.includes(href) || html.includes(href.replace(/^\//, ""));
 }
 
+const MODULE_SCRIPT = /<script\b[^>]*type=["']module["'][^>]*>/i;
+const ASSET_STYLESHEET = /<link\b[^>]*rel=["']stylesheet["'][^>]*href=["']\/assets\/[^"']+\.css["'][^>]*>|<link\b[^>]*href=["']\/assets\/[^"']+\.css["'][^>]*rel=["']stylesheet["'][^>]*>/i;
+
+/** True when the built stylesheet is in the document before the entry module. */
+export function stylesheetPrecedesEntryScript(html: string): boolean {
+  const linkAt = html.search(ASSET_STYLESHEET);
+  if (linkAt === -1) return false;
+  const scriptAt = html.search(MODULE_SCRIPT);
+  if (scriptAt === -1) return true;
+  return linkAt < scriptAt;
+}
+
+/**
+ * Put this build's stylesheet before the deferred entry module. A link after
+ * that script is discovered late, and the first paint can be unstyled HTML.
+ */
+export function placeAssetStylesheet(html: string, href: string): string {
+  const escaped = href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const existing = new RegExp(`\\n?\\s*<link\\b[^>]*href=["']${escaped}["'][^>]*>\\s*`, "gi");
+  const without = html.replace(existing, "\n");
+  const link = `    <link rel="stylesheet" crossorigin href="${href}">`;
+  if (MODULE_SCRIPT.test(without)) {
+    return without.replace(MODULE_SCRIPT, `${link}\n    $&`);
+  }
+  if (!/<\/head>/i.test(without)) {
+    throw new Error("index.html has no </head>, so the stylesheet link cannot be added.");
+  }
+  return without.replace(/<\/head>/i, `${link}\n  </head>`);
+}
+
 /**
  * Make index.html name the same JS and CSS files as the Vite manifest from
  * this build. Inserts a stylesheet link when Vite emitted CSS but the HTML
- * has no tag for it. Refuses a shell whose entry script is a different file.
+ * has no tag for it, and moves that link ahead of the entry module. Refuses
+ * a shell whose entry script is a different file.
  */
 export function alignIndexHtmlWithManifest(html: string, manifest: Record<string, ManifestChunk>): string {
   const { js, css } = collectEntryAssetHrefs(manifest);
@@ -173,19 +204,17 @@ export function alignIndexHtmlWithManifest(html: string, manifest: Record<string
   }
   let next = html;
   for (const href of css) {
-    if (htmlReferences(next, href)) continue;
-    if (!/<\/head>/i.test(next)) {
-      throw new Error("index.html has no </head>, so the stylesheet link cannot be added.");
-    }
-    next = next.replace(
-      /<\/head>/i,
-      `    <link rel="stylesheet" crossorigin href="${href}">\n  </head>`,
-    );
+    next = placeAssetStylesheet(next, href);
   }
   if (!hasStylesheetLink(next)) {
     const listed = css.length ? css.join(", ") : "(none listed on the entry)";
     throw new Error(
       `Prerendered index.html has no /assets stylesheet link (manifest CSS: ${listed}). The page would be unstyled until JavaScript runs.`,
+    );
+  }
+  if (MODULE_SCRIPT.test(next) && !stylesheetPrecedesEntryScript(next)) {
+    throw new Error(
+      "Prerendered index.html loads the entry script before the /assets stylesheet. The first paint would be unstyled.",
     );
   }
   if (js.length === 0) {
