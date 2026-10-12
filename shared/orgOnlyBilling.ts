@@ -16,12 +16,17 @@ type OrgBillingInput = {
 
 const GDC_NAME_RE = /\b(gisborne\s+(district\s+)?council|gdc)\b/i;
 const GDC_EMAIL_RE = /@gdc\.govt\.nz\s*$/i;
+// Council departments that invoice under their own name (Jullian's call).
+const OWN_NAME_DEPARTMENT_RE = /\b(pools?|recovery|emergency|management)\b/i;
 
 /** Returns the forced organisation billing name for this customer/job, or null. */
 export function orgOnlyBillingName(...sources: OrgBillingInput[]): string | null {
   for (const s of sources) {
     if (!s) continue;
     if (s.name && GDC_NAME_RE.test(s.name)) return GDC_BILLING_NAME;
+    // Person-named GDC records (e.g. "Aaron Whiteman") only carry the email clue.
+    // Departments like Kiwa Pools keep their own name.
+    if (s.name && OWN_NAME_DEPARTMENT_RE.test(s.name)) continue;
     for (const e of [s.email, s.invoiceCcEmail, s.billingContactEmail, s.jobContactEmail]) {
       if (e && GDC_EMAIL_RE.test(e)) return GDC_BILLING_NAME;
     }

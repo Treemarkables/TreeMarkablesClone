@@ -14,6 +14,10 @@ describe("orgOnlyBillingName", () => {
     assert.equal(orgOnlyBillingName({ name: "Aaron Whiteman", email: "aaron.whiteman@gdc.govt.nz" }), GDC_BILLING_NAME);
     assert.equal(orgOnlyBillingName(null, { name: "x", jobContactEmail: "Daniel.Thompson@GDC.govt.nz" }), GDC_BILLING_NAME);
   });
+  it("keeps council departments on their own name", () => {
+    assert.equal(orgOnlyBillingName({ name: "Kiwa pools", email: "Campbell.Macgregor@gdc.govt.nz" }), null);
+    assert.equal(orgOnlyBillingName({ name: "Recovery emergency management", email: "dannielle.koia@gdc.govt.nz" }), null);
+  });
   it("leaves other customers alone", () => {
     assert.equal(orgOnlyBillingName({ name: "Jane Smith", email: "jane@gmail.com" }), null);
     assert.equal(resolveBillingName("Jane Smith", { name: "Jane Smith" }), "Jane Smith");
