@@ -100,7 +100,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   // so per-invoice "Billing Name" edits surface as the primary Bill To line instead of "c/o ...".
   // Org-only customers (e.g. Gisborne District Council): Bill To is always the
   // organisation and no "c/o <person>" line is shown.
-  const forcedOrgName = orgOnlyBillingName(customer as any, { name: billingName }, { name: displayContactName });
+  const forcedOrgName = orgOnlyBillingName(customer, { name: billingName }, { name: displayContactName });
   const effectiveBillingName = forcedOrgName || billingName
     || (displayContactName && displayContactName !== customer?.name ? displayContactName : '');
   const [isLoading, setIsLoading] = useState(false);
@@ -166,7 +166,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     issueDate,
     dueDate,
     billingName: effectiveBillingName || customer?.name || 'Customer',
-    displayContactName: displayContactName || undefined,
+    displayContactName: forcedOrgName ? undefined : (displayContactName || undefined),
     jobAddress: jobAddress || undefined,
     customerAddress: customer?.address || undefined,
     customerEmail: contactEmail || customer?.email || undefined,

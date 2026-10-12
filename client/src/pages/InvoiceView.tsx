@@ -244,7 +244,7 @@ export default function InvoiceView() {
   // name override on the job wins over the invoice contact name and the linked
   // customer's name.
   const billingName =
-    resolveBillingName(job?.billingNameOverride || invoice.contactName || customer?.name || null, customer as any);
+    resolveBillingName(job?.billingNameOverride || invoice.contactName || customer?.name || null, customer);
 
   const lineItems: any[] = Array.isArray(invoice.items) ? invoice.items : [];
   const lineItemTotal = lineItems.reduce((sum, item) => {
