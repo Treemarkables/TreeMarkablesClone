@@ -11,6 +11,8 @@ import { Capacitor } from "@capacitor/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { Mic, MicOff, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { formatTwilioError } from "@/lib/twilioCallError";
+import { setVoiceCallActive } from "@/lib/voiceCallReloadGuard";
 import {
   loadTwilioVoiceSdk,
   TwilioWebCall,
@@ -150,10 +152,13 @@ export function WebCallProvider({ children }: { children: ReactNode }) {
         call.on("reject", endCall);
         call.on("error", (err) => {
           console.error("[WebCall] call error:", err);
+          const coded = err as { message?: string; code?: number | string };
           toast({
             variant: "destructive",
             title: "Call failed",
-            description: err?.message || "The call could not be completed.",
+            description:
+              formatTwilioError(coded?.message, coded?.code) ||
+              "The call could not be completed.",
           });
           endCall();
         });
@@ -174,6 +179,12 @@ export function WebCallProvider({ children }: { children: ReactNode }) {
     callRef.current?.disconnect();
     endCall();
   }, [endCall]);
+
+  useEffect(() => {
+    const live = callState === "ringing" || callState === "active" || callState === "preparing";
+    setVoiceCallActive(live);
+    return () => setVoiceCallActive(false);
+  }, [callState]);
 
   const onToggleMute = useCallback(() => {
     setIsMuted((m) => {

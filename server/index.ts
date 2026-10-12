@@ -38,6 +38,7 @@ import { clearLegacyDomainSessionCookie } from "./security/authSession";
 import { preferEmployeeSessionCookie, SESSION_COOKIE_NAME, SESSION_COOKIE_SAMESITE } from "./security/sessionCookie";
 import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
+import { warnIfGoogleCalendarTablesMissing } from "./services/googleCalendarTables";
 import { sweepStaleInboundDocuments } from "./services/supplierInvoiceIngest";
 import { attachVoiceAgentWss } from "./services/voiceAgent";
 
@@ -614,6 +615,13 @@ function startNotificationQueueWorker() {
       log("✅ Schema up to date", "startup");
     } catch (e) {
       console.error("[schema] boot migrations failed (continuing):", e);
+    }
+
+    try {
+      const calendarTablesWarning = await warnIfGoogleCalendarTablesMissing();
+      if (calendarTablesWarning) log(calendarTablesWarning, "startup");
+    } catch (e) {
+      log(`⚠️ Google Calendar table check failed: ${(e as Error).message}`, "startup");
     }
 
     // Tenant-isolation backstop: any business_id table without an RLS policy is

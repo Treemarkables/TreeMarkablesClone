@@ -17,6 +17,8 @@
 // lives in sessionStorage so it survives the reloads it causes, and expires
 // after ATTEMPT_WINDOW_MS so the next genuine deploy gets a fresh ladder.
 
+import { isVoiceCallActive } from "./voiceCallReloadGuard";
+
 const STATE_KEY = 'chunkReloadState';
 const ATTEMPT_WINDOW_MS = 3 * 60 * 1000;
 const MAX_ATTEMPTS = 4;
@@ -80,6 +82,12 @@ export type ReloadOutcome = 'reloading' | 'gave-up';
 // error reporting) or 'gave-up' when the attempt ladder is exhausted (caller
 // should surface its real error UI).
 export function requestStaleBundleReload(): ReloadOutcome {
+  // Reloading the WKWebView mid-call kills the Twilio connection (31005).
+  // The next chunk error, after the call ends, runs the normal ladder.
+  if (isVoiceCallActive()) {
+    console.warn('⚠️ Chunk error during a live call — reload deferred');
+    return 'gave-up';
+  }
   if (reloadPending) return 'reloading';
 
   const state = readState();
