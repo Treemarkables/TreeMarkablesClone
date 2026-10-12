@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { resolveBillingName } from "@shared/orgOnlyBilling";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -181,7 +182,7 @@ export function CompleteAndInvoiceDialog({
       ? `${job.jobContactFirstName} ${job.jobContactLastName}`
       : job?.jobContactFirstName || job?.jobContactLastName || "";
   const contactName: string =
-    job?.billingNameOverride || jobContactName || customer?.name || "";
+    resolveBillingName(job?.billingNameOverride || jobContactName || customer?.name || "", customer, job);
 
   const invoiceNumber: string =
     existingInvoice?.invoiceNumber || (job?.jobNumber ? String(job.jobNumber) : "");

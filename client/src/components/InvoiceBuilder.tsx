@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { resolveBillingName } from "@shared/orgOnlyBilling";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -373,11 +374,15 @@ export function InvoiceBuilder({
     const existingInvoiceContactName =
       existingInvoices.length > 0 ? existingInvoices[0]?.contactName : null;
     setEditableContactName(
-      job.billingNameOverride ||
-      jobContactName ||
-      existingInvoiceContactName ||
-      customer.name ||
-      "",
+      resolveBillingName(
+        job.billingNameOverride ||
+        jobContactName ||
+        existingInvoiceContactName ||
+        customer.name ||
+        "",
+        customer,
+        job,
+      ),
     );
     // Email: same ordering rationale — billing override, then the job's
     // current contact email, then the existing invoice's, then the customer's.

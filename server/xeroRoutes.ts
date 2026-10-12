@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { XeroClient, PayrollNzApi, Configuration, Invoice, Payment } from 'xero-node';
 import type { IStorage } from './storage';
+import { resolveBillingName } from '@shared/orgOnlyBilling';
 import { TimeTrackingService } from './timeTrackingService';
 
 const router = Router();
@@ -373,8 +374,10 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       let xeroContactId: string;
       
       try {
+        // Org-only customers (e.g. GDC staff records) bill to the organisation contact in Xero.
+        const xeroContactName = resolveBillingName(customer.name, customer);
         // Search for existing contact by name - escape special characters
-        const escapedName = customer.name.replace(/"/g, '\\"');
+        const escapedName = xeroContactName.replace(/"/g, '\\"');
         console.log(`🔍 Searching for Xero contact: "${escapedName}"`);
         
         let contactsResponse;
@@ -389,7 +392,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           console.log(`⚠️ Xero contact search failed, trying fallback approach...`);
           const allContactsResponse = await client.accountingApi.getContacts(tenantId);
           const matchingContact = allContactsResponse.body.contacts?.find(
-            c => c.name?.toLowerCase() === customer.name.toLowerCase()
+            c => c.name?.toLowerCase() === xeroContactName.toLowerCase()
           );
           contactsResponse = { 
             body: { 
@@ -403,9 +406,9 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           console.log(`✅ Found existing Xero contact: ${xeroContactId}`);
         } else {
           // Create new contact
-          console.log(`📝 Creating new Xero contact for: ${customer.name}`);
+          console.log(`📝 Creating new Xero contact for: ${xeroContactName}`);
           const newContact = {
-            name: customer.name,
+            name: xeroContactName,
             emailAddress: customer.email || undefined,
             phones: customer.phone ? [{
               phoneType: 'DEFAULT' as any,

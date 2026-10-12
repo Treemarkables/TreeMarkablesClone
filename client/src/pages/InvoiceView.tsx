@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { resolveBillingName } from "@shared/orgOnlyBilling";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -243,7 +244,7 @@ export default function InvoiceView() {
   // name override on the job wins over the invoice contact name and the linked
   // customer's name.
   const billingName =
-    job?.billingNameOverride || invoice.contactName || customer?.name || null;
+    resolveBillingName(job?.billingNameOverride || invoice.contactName || customer?.name || null, customer as any);
 
   const lineItems: any[] = Array.isArray(invoice.items) ? invoice.items : [];
   const lineItemTotal = lineItems.reduce((sum, item) => {

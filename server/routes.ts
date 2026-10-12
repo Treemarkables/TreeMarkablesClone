@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { resolveBillingName } from "@shared/orgOnlyBilling";
 import express from "express";
 import { Webhook as SvixWebhook } from 'svix';
 import { addClient, removeClient, broadcast } from "./sseManager";
@@ -1841,7 +1842,7 @@ async function generateInvoicePDFBuffer(
 
     // Per-invoice billing-name override (saved on the invoice) takes priority over the
     // job-level billingNameOverride so "edit for this invoice only" actually sticks on render.
-    const billingName = invoiceData?.contactName || job?.billingNameOverride || customer?.name || 'Customer';
+    const billingName = resolveBillingName(invoiceData?.contactName || job?.billingNameOverride || customer?.name || 'Customer', customer, job);
     const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
     const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
 
@@ -12194,7 +12195,8 @@ Return only the rewritten description, nothing else.`,
 
         // Per-invoice billing-name override (saved on the invoice) beats the job-level
         // billingNameOverride so "edit for this invoice only" sticks in the email too.
-        const invCustomerName = invoiceDetails?.contactName || job?.billingNameOverride || customer?.name || 'there';
+        // Org-only customers (e.g. Gisborne District Council) are never greeted by a person's name.
+        const invCustomerName = resolveBillingName(invoiceDetails?.contactName || job?.billingNameOverride || customer?.name || 'there', customer, job);
 
         // Review ask riding along with the invoice. Reuses the job's existing
         // review-request token (re-sent invoices don't mint new ones); otherwise

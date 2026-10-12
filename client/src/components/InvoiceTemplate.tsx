@@ -1,4 +1,5 @@
 import { useState, forwardRef } from 'react';
+import { orgOnlyBillingName } from "@shared/orgOnlyBilling";
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -97,7 +98,10 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   const displayContactName = contactName || invoice.contactName || '';
   // Treat the contact-name override as the billing name when no separate billing name is set,
   // so per-invoice "Billing Name" edits surface as the primary Bill To line instead of "c/o ...".
-  const effectiveBillingName = billingName
+  // Org-only customers (e.g. Gisborne District Council): Bill To is always the
+  // organisation and no "c/o <person>" line is shown.
+  const forcedOrgName = orgOnlyBillingName(customer as any, { name: billingName }, { name: displayContactName });
+  const effectiveBillingName = forcedOrgName || billingName
     || (displayContactName && displayContactName !== customer?.name ? displayContactName : '');
   const [isLoading, setIsLoading] = useState(false);
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { orgOnlyBillingName } from "@shared/orgOnlyBilling";
 import DOMPurify from "dompurify";
 import {
   Dialog,
@@ -425,6 +426,13 @@ export function EmailComposerModal({
       } else if (customer.name) {
         customerName = customer.name;
       }
+      // Org-only customers (e.g. Gisborne District Council): greet and address
+      // the organisation, never the staff contact.
+      const forcedOrg = orgOnlyBillingName(customer, job);
+      if (forcedOrg) {
+        firstName = forcedOrg;
+        customerName = forcedOrg;
+      }
 
       // Apply appropriate template based on context
       const template = getDefaultTemplate();
@@ -821,6 +829,12 @@ export function EmailComposerModal({
       customerName = customer.firstName;
     } else if (customer?.name) {
       customerName = customer.name;
+    }
+    // Org-only customers (e.g. Gisborne District Council): never a person's name.
+    const forcedOrg = orgOnlyBillingName(customer, job);
+    if (forcedOrg) {
+      firstName = forcedOrg;
+      customerName = forcedOrg;
     }
 
     // Use current domain for links (works in both dev and production)
@@ -1476,7 +1490,7 @@ export function EmailComposerModal({
                   onClick={() => {
                     setRecipientMode("job");
                     setEmailData((prev) => ({ ...prev, to: jobContactEmailCandidate }));
-                    if (jobContactFirstNameCandidate) {
+                    if (jobContactFirstNameCandidate && !orgOnlyBillingName(customer, job)) {
                       swapGreetingName(jobContactFirstNameCandidate);
                     }
                   }}
