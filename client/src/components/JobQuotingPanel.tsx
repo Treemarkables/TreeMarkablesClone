@@ -26,6 +26,7 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { compressImage } from "@/lib/imageCompression";
 import { formatNZTime } from "@shared/dateUtils";
+import { JobPhotoViewer } from "@/components/JobPhotoViewer";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -250,6 +251,7 @@ function QuotingStepRow({
   const [noteDraft, setNoteDraft] = useState(completion?.note ?? "");
   const lastSavedNote = useRef(completion?.note ?? "");
   const [uploading, setUploading] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -464,22 +466,22 @@ function QuotingStepRow({
               />
             </div>
             {photos.length > 0 ? (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {photos.map((url) => (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 min-w-0">
+                {photos.map((url, photoIndex) => (
                   <div
                     key={url}
-                    className="relative group rounded-md overflow-hidden border border-border"
+                    className="relative group h-20 min-w-0 rounded-md overflow-hidden border border-border"
                   >
                     <img
                       src={url}
                       alt="Quoting step"
-                      className="w-full h-20 object-cover"
-                      onClick={() => window.open(url, "_blank")}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      onClick={() => setViewingPhoto(photoIndex)}
                     />
                     <button
                       type="button"
                       onClick={() => handleRemovePhoto(url)}
-                      className="absolute top-1 right-1 p-0.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-1 right-1 p-0.5 rounded-full bg-black/60 text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                       aria-label="Remove photo"
                     >
                       <X className="w-3 h-3" />
@@ -487,6 +489,15 @@ function QuotingStepRow({
                   </div>
                 ))}
               </div>
+              <JobPhotoViewer
+                open={viewingPhoto !== null}
+                photos={photos}
+                index={viewingPhoto ?? 0}
+                src={viewingPhoto !== null ? photos[viewingPhoto] : null}
+                title="Quoting photo"
+                onIndexChange={setViewingPhoto}
+                onClose={() => setViewingPhoto(null)}
+              />
             ) : (
               <div className="text-xs text-muted-foreground italic">
                 No photos yet.

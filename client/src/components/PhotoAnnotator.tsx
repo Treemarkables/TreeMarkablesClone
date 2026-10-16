@@ -7,6 +7,7 @@
 // consistent without aspect-ratio surprises.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useOverlayHistory } from "@/hooks/useOverlayHistory";
 import {
   Stage,
   Layer,
@@ -160,6 +161,7 @@ export default function PhotoAnnotator({
   initialAnnotations,
   onSave,
 }: PhotoAnnotatorProps) {
+  useOverlayHistory(open, onClose);
   // Load the image via fetch → Blob → object URL instead of useImage with
   // crossOrigin="anonymous". Two reasons:
   //   1. iOS Safari refuses to load same-origin images that declare a CORS
