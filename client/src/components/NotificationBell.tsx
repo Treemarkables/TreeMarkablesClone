@@ -544,10 +544,9 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          // Mobile: 40px circle shrinkable to 36px so the header action row
-          // fits a phone (matches MOBILE_HEADER_ICON in App.tsx); desktop keeps
-          // the default 36px.
-          className="relative h-10 w-10 min-w-9 md:h-9 md:w-9 [&_svg]:!size-7 md:[&_svg]:!size-8"
+          // 44px on a phone so the bell matches the rest of the header and
+          // stays a real tap target. The header wraps rather than shrinking it.
+          className="relative h-11 w-11 min-w-11 shrink-0 md:h-9 md:w-9 [&_svg]:!size-7 md:[&_svg]:!size-8"
           data-testid="button-notifications"
           aria-label="Notifications"
         >

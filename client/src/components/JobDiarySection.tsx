@@ -36,6 +36,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/contexts/AuthContext";
+import { JobPhotoViewer } from "@/components/JobPhotoViewer";
 import {
   assembleDiaryEntries,
   cleanDiaryContent,
@@ -72,8 +73,6 @@ import {
   X,
   Camera,
   Image as ImageIcon,
-  ChevronLeft,
-  ChevronRight,
   RefreshCw,
   Receipt,
   Trash2,
@@ -1049,10 +1048,6 @@ export function JobDiarySection({
     },
     [confirmationCardDismissedKey],
   );
-
-  // Touch swipe state for photo gallery
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   const extractTimeFromText = (text: string): string => {
     // Normalise dotted abbreviations: "a.m." → "am", "p.m." → "pm"
@@ -2045,34 +2040,49 @@ export function JobDiarySection({
     return phone;
   };
 
-  // Swipe handlers for photo gallery navigation
-  const minSwipeDistance = 50;
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-
-    if (viewingPhotoIndex !== null) {
-      if (isLeftSwipe && viewingPhotoIndex < allPhotos.length - 1) {
-        // Swipe left - show next photo
-        setViewingPhotoIndex(viewingPhotoIndex + 1);
+  const downloadViewingPhoto = async () => {
+    if (viewingPhotoIndex === null || !allPhotos[viewingPhotoIndex]) return;
+    const url = currentDisplayUrl ?? allPhotos[viewingPhotoIndex];
+    const filename = `job-photo-${viewingPhotoIndex + 1}-${Date.now()}.jpg`;
+    try {
+      const response = await fetch(url, { credentials: "include" });
+      const rawBlob = await response.blob();
+      const blob =
+        rawBlob.type && rawBlob.type.startsWith("image/")
+          ? rawBlob
+          : new Blob([rawBlob], { type: "image/jpeg" });
+      const file = new File([blob], filename, { type: blob.type });
+      if (
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] })
+      ) {
+        try {
+          await navigator.share({ files: [file] });
+          return;
+        } catch (shareErr: unknown) {
+          if (
+            shareErr instanceof DOMException &&
+            shareErr.name === "AbortError"
+          ) {
+            return;
+          }
+        }
       }
-      if (isRightSwipe && viewingPhotoIndex > 0) {
-        // Swipe right - show previous photo
-        setViewingPhotoIndex(viewingPhotoIndex - 1);
-      }
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -2289,7 +2299,7 @@ export function JobDiarySection({
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 p-2 pr-4">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 p-2 pr-4 min-w-0">
                 {/* Live marked-up site map — server renders the current markers
                     over the uploaded site photo (or satellite tiles), so this
                     tile always matches what the proposal would show. */}
@@ -2297,14 +2307,14 @@ export function JobDiarySection({
                   <button
                     type="button"
                     onClick={() => setViewingSiteMap(true)}
-                    className="group relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover-elevate active-elevate-2"
+                    className="group relative aspect-square min-w-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover-elevate active-elevate-2"
                     data-testid="photo-tile-site-map"
                   >
                     <img
                       src={`/api/jobs/${jobId}/site-map.png`}
                       alt="Site photo with markers"
                       loading="lazy"
-                      className="w-full h-full object-cover"
+                      className="absolute inset-0 w-full h-full object-cover"
                       onError={(e) => (e.currentTarget.style.display = "none")}
                     />
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2 py-1">
@@ -2323,14 +2333,14 @@ export function JobDiarySection({
                       onClick={() =>
                         setViewingPhotoIndex(galleryIdx >= 0 ? galleryIdx : 0)
                       }
-                      className="group relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover-elevate active-elevate-2"
+                      className="group relative aspect-square min-w-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover-elevate active-elevate-2"
                       data-testid={`photo-tile-${photo.id ?? idx}`}
                     >
                       <img
                         src={resolveDisplayUrl(photo.url)}
                         alt={`Diary photo ${idx + 1}`}
                         loading="lazy"
-                        className="w-full h-full object-cover"
+                        className="absolute inset-0 w-full h-full object-cover"
                         onError={(e) =>
                           (e.currentTarget.style.display = "none")
                         }
@@ -2348,34 +2358,14 @@ export function JobDiarySection({
           </TabScrollContainer>
         )}
 
-        {/* Fullscreen viewer for the live marked-up site map */}
-        {viewingSiteMap && (
-          <div
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95"
-            onClick={() => setViewingSiteMap(false)}
-          >
-            <button
-              type="button"
-              onClick={() => setViewingSiteMap(false)}
-              aria-label="Close site photo"
-              className="text-white w-11 h-11 flex items-center justify-center bg-black/40 rounded-full"
-              style={{
-                position: "fixed",
-                right: "1rem",
-                top: "max(1rem, env(safe-area-inset-top))",
-                zIndex: 201,
-              }}
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <img
-              src={`/api/jobs/${jobId}/site-map.png`}
-              alt="Site photo with markers"
-              className="max-w-[95vw] max-h-[90vh] object-contain rounded"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        )}
+        <JobPhotoViewer
+          open={viewingSiteMap}
+          photos={[`/api/jobs/${jobId}/site-map.png`]}
+          index={0}
+          src={viewingSiteMap ? `/api/jobs/${jobId}/site-map.png` : null}
+          title="Site photo"
+          onClose={() => setViewingSiteMap(false)}
+        />
 
         {/* Timeline */}
         {diaryTab === "timeline" && (
@@ -2859,9 +2849,9 @@ export function JobDiarySection({
                           {photos.map((photo, photoIndex) => (
                             <div
                               key={photo.id}
-                              className={`relative rounded-lg overflow-hidden cursor-pointer hover-elevate bg-gray-100 dark:bg-gray-800 ${
+                              className={`relative min-w-0 overflow-hidden rounded-lg cursor-pointer hover-elevate bg-gray-100 dark:bg-gray-800 ${
                                 photos.length === 1
-                                  ? ""
+                                  ? "max-w-[16rem]"
                                   : photos.length === 3 && photoIndex === 0
                                     ? "row-span-2 aspect-square"
                                     : "aspect-square"
@@ -2879,8 +2869,8 @@ export function JobDiarySection({
                                 loading="lazy"
                                 className={
                                   photos.length === 1
-                                    ? "w-full h-auto max-h-48 object-contain"
-                                    : "w-full h-full object-contain"
+                                    ? "block w-full h-auto max-h-48 object-contain"
+                                    : "absolute inset-0 w-full h-full object-cover"
                                 }
                                 onError={(e) =>
                                   (e.currentTarget.style.display = "none")
@@ -3463,7 +3453,7 @@ export function JobDiarySection({
                                       src={resolveDisplayUrl(url)}
                                       alt="Job photo"
                                       loading="lazy"
-                                      className="max-w-[64px] h-auto max-h-[64px] rounded-lg cursor-pointer hover-elevate object-contain"
+                                      className="w-16 h-16 rounded-lg cursor-pointer hover-elevate object-cover"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         const photoIndex = allPhotos.indexOf(url);
@@ -3491,12 +3481,12 @@ export function JobDiarySection({
                                   data-testid="img-diary-photos"
                                 >
                                   {entryPhotos.map((url, i) => (
+                                    <div key={`${entry.id}-${i}`} className="relative aspect-square min-w-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
                                     <img
-                                      key={`${entry.id}-${i}`}
                                       src={resolveDisplayUrl(url)}
                                       alt={`Job photo ${i + 1}`}
                                       loading="lazy"
-                                      className="w-full aspect-square object-contain rounded-lg cursor-pointer hover-elevate bg-gray-100 dark:bg-gray-800"
+                                      className="absolute inset-0 w-full h-full object-cover cursor-pointer hover-elevate"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         const idx = allPhotos.indexOf(url);
@@ -3506,6 +3496,7 @@ export function JobDiarySection({
                                         e.currentTarget.style.display = "none";
                                       }}
                                     />
+                                    </div>
                                   ))}
                                 </div>
                               );
@@ -4078,172 +4069,21 @@ export function JobDiarySection({
           />
         )}
 
-        {/* Photo Viewer Modal with Gallery Navigation */}
-        <Dialog
+        <JobPhotoViewer
           open={viewingPhotoIndex !== null}
-          onOpenChange={(open) => !open && setViewingPhotoIndex(null)}
-        >
-          <DialogContent className="max-w-6xl w-full p-0 h-[90vh] flex flex-col">
-            <DialogHeader className="p-4 border-b flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <div>
-                  <DialogTitle>Job Photos</DialogTitle>
-                  <DialogDescription>
-                    {viewingPhotoIndex !== null &&
-                      `Photo ${viewingPhotoIndex + 1} of ${allPhotos.length}`}
-                  </DialogDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setViewingPhotoIndex(null)}
-                  data-testid="button-close-photo"
-                >
-                  Close
-                </Button>
-              </div>
-            </DialogHeader>
-
-            {viewingPhotoIndex !== null && allPhotos[viewingPhotoIndex] && (
-              <div
-                className="flex-1 flex items-center justify-center p-4 relative overflow-hidden touch-pan-y"
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
-              >
-                {/* Previous Button */}
-                {allPhotos.length > 1 && viewingPhotoIndex > 0 && (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white"
-                    onClick={() => setViewingPhotoIndex(viewingPhotoIndex - 1)}
-                    data-testid="button-previous-photo"
-                    aria-label="Previous photo"
-                  >
-                    <ChevronLeft className="w-6 h-6" />
-                  </Button>
-                )}
-
-                {/* Photo — swap in annotated version if one exists for this URL */}
-                <img
-                  src={currentDisplayUrl ?? allPhotos[viewingPhotoIndex]}
-                  alt={`Job photo ${viewingPhotoIndex + 1}`}
-                  className="max-w-full max-h-full object-contain rounded-lg select-none"
-                  data-testid="img-photo-viewer"
-                  draggable="false"
-                />
-                {currentAnnotation?.annotatedUrl && (
-                  <div className="absolute top-3 left-3 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                    Annotated
-                  </div>
-                )}
-
-                {/* Next Button */}
-                {allPhotos.length > 1 &&
-                  viewingPhotoIndex < allPhotos.length - 1 && (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white"
-                      onClick={() =>
-                        setViewingPhotoIndex(viewingPhotoIndex + 1)
-                      }
-                      data-testid="button-next-photo"
-                      aria-label="Next photo"
-                    >
-                      <ChevronRight className="w-6 h-6" />
-                    </Button>
-                  )}
-              </div>
-            )}
-
-            <div className="p-4 border-t flex-shrink-0 flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (currentSourceUrl) setAnnotatorOpen(true);
-                }}
-                disabled={!currentSourceUrl}
-                data-testid="button-annotate-photo"
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Annotate
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={async () => {
-                  if (
-                    viewingPhotoIndex === null ||
-                    !allPhotos[viewingPhotoIndex]
-                  ) {
-                    return;
-                  }
-                  // Download the annotated version when one exists, so the
-                  // user gets what they see in the viewer.
-                  const url = currentDisplayUrl ?? allPhotos[viewingPhotoIndex];
-                  const filename = `job-photo-${viewingPhotoIndex + 1}-${Date.now()}.jpg`;
-                  try {
-                    const response = await fetch(url, { credentials: "include" });
-                    const rawBlob = await response.blob();
-                    const blob =
-                      rawBlob.type && rawBlob.type.startsWith("image/")
-                        ? rawBlob
-                        : new Blob([rawBlob], { type: "image/jpeg" });
-                    const file = new File([blob], filename, { type: blob.type });
-                    if (
-                      typeof navigator.canShare === "function" &&
-                      navigator.canShare({ files: [file] })
-                    ) {
-                      try {
-                        await navigator.share({ files: [file] });
-                        return;
-                      } catch (shareErr: any) {
-                        if (shareErr?.name === "AbortError") return;
-                      }
-                    }
-                    const blobUrl = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.href = blobUrl;
-                    link.download = filename;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-                  } catch {
-                    const link = document.createElement("a");
-                    link.href = url;
-                    link.download = filename;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  }
-                }}
-                data-testid="button-download-photo"
-              >
-                Download Photo
-              </Button>
-
-              {/* Photo Counter and Navigation Dots */}
-              {allPhotos.length > 1 && (
-                <div className="flex items-center gap-2 px-4">
-                  {allPhotos.map((_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setViewingPhotoIndex(index)}
-                      className={`w-2 h-2 rounded-full transition-all ${
-                        index === viewingPhotoIndex
-                          ? "bg-primary w-6"
-                          : "bg-gray-300 hover:bg-gray-400"
-                      }`}
-                      data-testid={`button-photo-dot-${index}`}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+          photos={allPhotos}
+          index={viewingPhotoIndex ?? 0}
+          src={currentDisplayUrl}
+          title={currentAnnotation?.annotatedUrl ? "Annotated photo" : "Job photo"}
+          onIndexChange={setViewingPhotoIndex}
+          onClose={() => setViewingPhotoIndex(null)}
+          onAnnotate={() => {
+            if (currentSourceUrl) setAnnotatorOpen(true);
+          }}
+          onDownload={() => {
+            void downloadViewingPhoto();
+          }}
+        />
 
         {/* Photo Annotator — CompanyCam-style markup overlay. Opens from the
             Annotate button in the photo viewer modal above. */}
