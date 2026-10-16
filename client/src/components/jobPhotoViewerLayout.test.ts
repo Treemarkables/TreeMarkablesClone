@@ -46,7 +46,8 @@ function newViewerHtml(src = PHOTO): string {
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   </head><body style="margin:0;background:#000;">
     <div style="position:fixed;inset:0;height:100dvh;width:100%;display:flex;flex-direction:column;overflow:hidden;background:#000;">
-      <button id="close" style="position:fixed;z-index:5;top:max(12px, env(safe-area-inset-top));right:max(12px, env(safe-area-inset-right));width:44px;height:44px;border-radius:999px;border:0;background:rgba(0,0,0,.75);color:#fff;">X</button>
+      <div id="count" style="position:fixed;z-index:99;top:calc(env(safe-area-inset-top) + 34px);left:calc(env(safe-area-inset-left) + 16px);width:max-content;max-width:calc(100% - 6.5rem);color:#fff;font:14px sans-serif;pointer-events:none;">3 of 83</div>
+      <button id="close" style="position:fixed;z-index:100;top:calc(env(safe-area-inset-top) + 16px);right:calc(env(safe-area-inset-right) + 12px);width:56px;height:56px;min-width:56px;min-height:56px;border-radius:999px;border:2px solid #fff;background:#000;color:#fff;font:700 28px sans-serif;">X</button>
       <div id="stage" style="position:relative;flex:1;min-width:0;min-height:0;overflow:hidden;">
         <img id="photo" alt="" src="${src}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;">
       </div>
@@ -179,6 +180,8 @@ describe("Android photo viewer fit", { skip: CHROME ? false : "google-chrome is 
               const photo = photoEl.getBoundingClientRect();
               const stage = document.getElementById('stage');
               const stageBox = stage ? stage.getBoundingClientRect() : null;
+              const count = document.getElementById('count');
+              const countBox = count ? count.getBoundingClientRect() : null;
               const naturalW = photoEl.naturalWidth || photo.width;
               const naturalH = photoEl.naturalHeight || photo.height;
               const fit = Math.min(photo.width / naturalW, photo.height / naturalH);
@@ -188,6 +191,12 @@ describe("Android photo viewer fit", { skip: CHROME ? false : "google-chrome is 
                 closeBottom: close.bottom,
                 closeRight: close.right,
                 closeLeft: close.left,
+                closeW: close.width,
+                closeH: close.height,
+                countLeft: countBox ? countBox.left : null,
+                countRight: countBox ? countBox.right : null,
+                countTop: countBox ? countBox.top : null,
+                countBottom: countBox ? countBox.bottom : null,
                 photoW: photo.width,
                 photoH: photo.height,
                 photoTop: photo.top,
@@ -223,7 +232,32 @@ describe("Android photo viewer fit", { skip: CHROME ? false : "google-chrome is 
         `photo height ${after.photoH} stage ${after.stageH}`,
       );
       assert.ok((after.photoTop ?? -1) >= -1, `photo top ${after.photoTop}`);
+      assert.ok((after.closeW ?? 0) >= 56, `close width ${after.closeW}`);
+      assert.ok((after.closeH ?? 0) >= 56, `close height ${after.closeH}`);
+      assert.ok((after.closeTop ?? 0) >= 12, `close should clear the status bar, top=${after.closeTop}`);
+      assert.ok(
+        (after.countRight ?? 9999) <= (after.closeLeft ?? 0),
+        `counter right ${after.countRight} overlaps close left ${after.closeLeft}`,
+      );
 
+      await cdp.send(
+        "Emulation.setDeviceMetricsOverride",
+        { width: 360, height: 800, deviceScaleFactor: 2, mobile: true },
+        sessionId,
+      );
+      const narrow = await measure(newViewerHtml(), "photo-viewer-360");
+      assert.ok((narrow.closeW ?? 0) >= 56, `narrow close width ${narrow.closeW}`);
+      assert.ok((narrow.closeRight ?? 9999) <= (narrow.innerW ?? 0) + 1, `narrow close right ${narrow.closeRight}`);
+      assert.ok(
+        (narrow.countRight ?? 9999) <= (narrow.closeLeft ?? 0),
+        `narrow counter right ${narrow.countRight} overlaps close left ${narrow.closeLeft}`,
+      );
+
+      await cdp.send(
+        "Emulation.setDeviceMetricsOverride",
+        { width: 412, height: 915, deviceScaleFactor: 2.625, mobile: true },
+        sessionId,
+      );
       const compositeBefore = await measure(rawCompositeHtml(), "library-before-after-before");
       assert.ok(
         (compositeBefore.drawnW ?? 0) > (compositeBefore.innerW ?? 0),

@@ -4,8 +4,12 @@ import { Button } from "@/components/ui/button";
 import { useOverlayHistory } from "@/hooks/useOverlayHistory";
 import {
   clampPan,
+  dismissBackdropOpacity,
+  dismissOffset,
+  isDismissDrag,
   pinchScale,
   pointerDistance,
+  shouldDismissSwipe,
   swipeDirection,
   PHOTO_VIEWER_MAX_SCALE,
 } from "@/components/jobPhotoViewer";
@@ -23,9 +27,11 @@ import {
  *
  * This viewer gives the image a definite box (absolute, 100% × 100%,
  * object-fit: contain) so it cannot change layout size. Pinch scales that
- * box with a transform. Close is position:fixed, outside the transformed
- * image, with a safe-area offset, so it stays on screen while zoomed.
- * Opening pushes a history entry so Android back closes the viewer.
+ * box with a transform. Close is a 56px circle, position:fixed, top-right,
+ * below the status bar (safe-area plus padding), and above the counter.
+ * A downward drag on a fitted photo follows the finger and dismisses; a
+ * zoomed photo still pans. Opening pushes a history entry so Android back
+ * closes the viewer.
  */
 export function JobPhotoViewer({
   open,
@@ -61,14 +67,18 @@ export function JobPhotoViewer({
   const stageRef = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{
-    mode: "pan" | "pinch" | "swipe";
+    mode: "pan" | "pinch" | "swipe" | "dismiss";
     startScale: number;
     startDistance: number;
     startPan: { x: number; y: number };
     originX: number;
     originY: number;
+    startedAt: number;
   } | null>(null);
   const lastTap = useRef(0);
+  const closingRef = useRef(false);
+  const [dismissY, setDismissY] = useState(0);
+  const [dismissDragging, setDismissDragging] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -84,6 +94,9 @@ export function JobPhotoViewer({
     panRef.current = { x: 0, y: 0 };
     setScale(1);
     setPan({ x: 0, y: 0 });
+    closingRef.current = false;
+    setDismissY(0);
+    setDismissDragging(false);
   }, [index, src, open]);
 
   useEffect(() => {
@@ -124,6 +137,7 @@ export function JobPhotoViewer({
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (closingRef.current) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.current.size >= 2) {
@@ -135,6 +149,7 @@ export function JobPhotoViewer({
         startPan: { ...panRef.current },
         originX: event.clientX,
         originY: event.clientY,
+        startedAt: Date.now(),
       };
       return;
     }
@@ -154,7 +169,16 @@ export function JobPhotoViewer({
       startPan: { ...panRef.current },
       originX: event.clientX,
       originY: event.clientY,
+      startedAt: Date.now(),
     };
+  };
+
+  const finishDismiss = (dy: number) => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setDismissDragging(false);
+    setDismissY(Math.max(dy, 360));
+    window.setTimeout(() => onCloseRef.current(), 180);
   };
 
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
@@ -172,13 +196,29 @@ export function JobPhotoViewer({
         x: current.startPan.x + (event.clientX - current.originX),
         y: current.startPan.y + (event.clientY - current.originY),
       });
+      return;
+    }
+    const dx = event.clientX - current.originX;
+    const dy = event.clientY - current.originY;
+    if (current.mode === "dismiss" || isDismissDrag(dx, dy, scaleRef.current)) {
+      gesture.current = { ...current, mode: "dismiss" };
+      setDismissDragging(true);
+      setDismissY(dismissOffset(dy, scaleRef.current));
     }
   };
 
   const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
     const current = gesture.current;
     pointers.current.delete(event.pointerId);
-    if (pointers.current.size === 0 && current?.mode === "swipe") {
+    if (pointers.current.size === 0 && current?.mode === "dismiss") {
+      const dy = event.clientY - current.originY;
+      if (shouldDismissSwipe(dy, Date.now() - current.startedAt, scaleRef.current)) {
+        finishDismiss(dy);
+      } else {
+        setDismissDragging(false);
+        setDismissY(0);
+      }
+    } else if (pointers.current.size === 0 && current?.mode === "swipe") {
       const direction = swipeDirection(
         event.clientX - current.originX,
         event.clientY - current.originY,
@@ -197,33 +237,23 @@ export function JobPhotoViewer({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-black text-white"
+      className="fixed inset-0 z-[90] flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden text-white"
       data-testid="job-photo-viewer"
       role="dialog"
       aria-modal="true"
       aria-label={title}
+      style={{
+        backgroundColor: `rgba(0,0,0,${dismissBackdropOpacity(dismissY)})`,
+        transition: dismissDragging ? "none" : "background-color 180ms ease-out",
+      }}
     >
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        onClick={onClose}
-        aria-label="Close photo"
-        data-testid="button-close-photo"
-        className="fixed z-[91] h-11 w-11 rounded-full border-white/40 bg-black/75 text-white"
-        style={{
-          top: "max(0.75rem, env(safe-area-inset-top))",
-          right: "max(0.75rem, env(safe-area-inset-right))",
-        }}
-      >
-        <X className="h-6 w-6" />
-      </Button>
-
       <div
-        className="pointer-events-none fixed z-[91] text-sm text-white/90"
+        className="pointer-events-none fixed z-[99] w-max max-w-[calc(100%-6.5rem)] truncate text-sm text-white"
         style={{
-          top: "max(1.15rem, calc(env(safe-area-inset-top) + 0.4rem))",
-          left: "max(0.75rem, env(safe-area-inset-left))",
+          position: "fixed",
+          top: "calc(env(safe-area-inset-top) + 34px)",
+          left: "calc(env(safe-area-inset-left) + 16px)",
+          width: "max-content",
         }}
         data-testid="text-photo-count"
       >
@@ -241,18 +271,27 @@ export function JobPhotoViewer({
         onContextMenu={(event) => event.preventDefault()}
       >
         {/* Definite 100% box. object-fit contain letterboxes the bitmap.
-            Transform zoom does not change layout, so Close stays put. */}
-        <img
-          src={src}
-          alt={`${title} ${index + 1}`}
-          draggable={false}
-          data-testid="img-photo-viewer"
-          className="absolute inset-0 h-full w-full select-none object-contain"
+            Pinch zoom does not change layout. A dismiss drag translates this
+            wrapper only, so the fitted photo follows the finger. */}
+        <div
+          className="absolute inset-0"
           style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-            transformOrigin: "center center",
+            transform: `translateY(${dismissY}px)`,
+            transition: dismissDragging ? "none" : "transform 180ms ease-out",
           }}
-        />
+        >
+          <img
+            src={src}
+            alt={`${title} ${index + 1}`}
+            draggable={false}
+            data-testid="img-photo-viewer"
+            className="absolute inset-0 h-full w-full select-none object-contain"
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+              transformOrigin: "center center",
+            }}
+          />
+        </div>
 
         {photos.length > 1 && index > 0 && !zoomed && (
           <Button
@@ -325,6 +364,34 @@ export function JobPhotoViewer({
           )}
         </div>
       )}
+
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={onClose}
+        aria-label="Close photo"
+        data-testid="button-close-photo"
+        className="fixed z-[100] h-14 w-14 min-h-14 min-w-14 shrink-0 rounded-full border-2 border-white bg-black text-white shadow-lg [&_svg]:size-7"
+        style={{
+          position: "fixed",
+          top: "calc(env(safe-area-inset-top) + 16px)",
+          right: "calc(env(safe-area-inset-right) + 12px)",
+          width: 56,
+          height: 56,
+          minWidth: 56,
+          minHeight: 56,
+          zIndex: 100,
+          backgroundColor: "#000",
+          color: "#fff",
+          border: "2px solid #fff",
+          borderRadius: 9999,
+          touchAction: "manipulation",
+        }}
+      >
+        <X style={{ width: 28, height: 28 }} strokeWidth={2.5} />
+      </Button>
     </div>
   );
 }
