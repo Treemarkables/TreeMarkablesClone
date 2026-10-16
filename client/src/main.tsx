@@ -7,6 +7,7 @@ import { isReloadUnsafe } from "./lib/foregroundReloadGuard";
 import { isVoiceCallActive } from "./lib/voiceCallReloadGuard";
 import { isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
 import { noteBootError, startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
+import { installMobileKeyboardScroll } from "./lib/mobileKeyboardScroll";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 declare global {
@@ -168,6 +169,10 @@ if ('serviceWorker' in navigator) {
     registrations.forEach(registration => registration.unregister());
   });
 }
+
+// Phone keyboards cover inputs in the Android WebView. Scroll the focused
+// field into view after the keyboard animation. Desktop widths are skipped.
+installMobileKeyboardScroll();
 
 // Boot / frozen-resume recovery for the TestFlight Capacitor shell (and PWA).
 // Native WebViewBootRecovery.swift is the backstop when this JS never runs.

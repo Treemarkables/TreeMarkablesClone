@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, AlertCircle, CheckCircle2, CreditCard, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useToast } from "@/hooks/use-toast";
 import { SupplierInvoiceManager } from "@/components/SupplierInvoiceManager";
 
@@ -159,7 +160,7 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
     onSuccess: (data: any) => {
       const url = data?.data?.url;
       if (url) {
-        window.open(url, "_blank");
+        openExternalUrl(url);
         return;
       }
       toast({

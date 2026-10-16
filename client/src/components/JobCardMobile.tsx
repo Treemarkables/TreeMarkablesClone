@@ -13,6 +13,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useOverlayHistory } from "@/hooks/useOverlayHistory";
 import { useJobActions } from "@/hooks/useJobActions";
 import { useToast } from "@/hooks/use-toast";
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
@@ -347,6 +348,10 @@ export function JobCardMobile({
     onQueueMenuClick: onQueueTile,
     handleClose,
   } = jobActions;
+
+  // Android hardware back closes the card (history entry) instead of leaving
+  // the app. The X button still goes through the empty-draft prompt.
+  useOverlayHistory(true, handleClose);
 
   // Mobile-only: tap "Open Full Dispatch" in the More sheet to bail out of
   // the modal and land on the full dispatch board. No desktop equivalent.
