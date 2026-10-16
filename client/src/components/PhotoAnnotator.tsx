@@ -39,8 +39,8 @@ import {
   textBoxCoveringContent,
   type TextBoxHandle,
   type TextBoxNorm,
-} from "@/components/photoAnnotatorTextBox";
-import { PhotoAnnotatorTextBox } from "@/components/PhotoAnnotatorTextBox";
+} from "@/components/photoAnnotatorTextBox.ts";
+import { PhotoAnnotatorTextBox } from "@/components/PhotoAnnotatorTextBox.tsx";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {

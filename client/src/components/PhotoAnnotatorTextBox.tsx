@@ -3,7 +3,7 @@
 // Font size is not edited here.
 
 import type { PointerEvent as ReactPointerEvent } from "react";
-import type { TextBoxHandle } from "@/components/photoAnnotatorTextBox";
+import type { TextBoxHandle } from "@/components/photoAnnotatorTextBox.ts";
 
 const HIT = 44;
 const DOT = 16;
