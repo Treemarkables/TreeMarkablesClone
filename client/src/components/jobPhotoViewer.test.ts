@@ -6,7 +6,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   clampPan,
+  dismissBackdropOpacity,
+  dismissOffset,
+  isDismissDrag,
   pinchScale,
+  shouldDismissSwipe,
   swipeDirection,
 } from "./jobPhotoViewer.ts";
 
@@ -29,6 +33,22 @@ describe("job photo pinch zoom", () => {
     assert.equal(swipeDirection(-20, 10, 1), null);
     assert.equal(swipeDirection(-40, 80, 1), null);
   });
+
+  it("dismisses a fitted photo on a firm downward swipe and pans when zoomed", () => {
+    assert.equal(isDismissDrag(10, 80, 1), true);
+    assert.equal(isDismissDrag(-80, 10, 1), false);
+    assert.equal(isDismissDrag(0, 80, 2), false);
+    assert.equal(dismissOffset(90, 1), 90);
+    assert.equal(dismissOffset(-20, 1), 0);
+    assert.equal(dismissOffset(90, 2), 0);
+    assert.equal(shouldDismissSwipe(120, 800, 1), true);
+    assert.equal(shouldDismissSwipe(70, 50, 1), true);
+    assert.equal(shouldDismissSwipe(70, 400, 1), false);
+    assert.equal(shouldDismissSwipe(140, 900, 2), false);
+    assert.ok(dismissBackdropOpacity(0) === 1);
+    assert.ok(dismissBackdropOpacity(180) < 1);
+    assert.ok(dismissBackdropOpacity(180) > dismissBackdropOpacity(300));
+  });
 });
 
 describe("job photo viewer layout contract", () => {
@@ -41,6 +61,13 @@ describe("job photo viewer layout contract", () => {
     assert.match(viewer, /absolute inset-0 h-full w-full/);
     assert.match(viewer, /position:\s*"fixed"|className="[^"]*fixed/);
     assert.match(viewer, /button-close-photo/);
+    assert.match(viewer, /minWidth:\s*56/);
+    assert.match(viewer, /minHeight:\s*56/);
+    assert.match(viewer, /zIndex:\s*100/);
+    assert.match(viewer, /text-photo-count/);
+    assert.match(viewer, /safe-area-inset-left/);
+    assert.match(viewer, /shouldDismissSwipe/);
+    assert.match(viewer, /translateY/);
     assert.match(viewer, /env\(safe-area-inset-top\)/);
     assert.match(viewer, /env\(safe-area-inset-right\)/);
     assert.match(viewer, /useOverlayHistory/);
