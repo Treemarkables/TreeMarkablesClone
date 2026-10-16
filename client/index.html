@@ -76,6 +76,12 @@
         font-size: 0.95rem;
       }
       #inflow-boot[data-stuck="1"] .boot-retry { display: inline-block; }
+      /* Tailwind's paper --background must not show through before the app
+         has painted. An opaque WKWebView with that body and an empty #root
+         is the cold-start white screen. */
+      html.inflow-app:not([data-inflow-booted]) body {
+        background: #1a1a1a !important;
+      }
       /* App hosts set class="inflow-app". A leaked marketing snapshot stays hidden. */
       html.inflow-app #tm-prerender { display: none !important; }
     </style>
@@ -235,6 +241,31 @@
           if (tag === 'SCRIPT') reloadAssetMismatch(false);
           else if (css) reloadAssetMismatch(true);
         }, true);
+        try {
+          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'inflow-client-ready' });
+          }
+          if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+            navigator.serviceWorker.ready.then(function (reg) {
+              if (reg && reg.active) reg.active.postMessage({ type: 'inflow-client-ready' });
+            }).catch(function () {});
+          }
+        } catch (e) {}
+        // A controlling service worker can keep serving a cached shell whose
+        // hashed chunks 404. Unregister it from this HTML (the bundle may
+        // never run). Do not reload here: web-push users would reload on
+        // every cold start. A stale worker that served old HTML never runs
+        // this script; sw.js reloads that client once it activates.
+        if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all((regs || []).map(function (reg) { return reg.unregister(); }));
+          }).then(function () {
+            if (!window.caches || !caches.keys) return;
+            return caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+            });
+          }).catch(function () {});
+        }
         var overlay = document.getElementById('inflow-boot');
         var retry = document.getElementById('inflow-boot-retry');
         var title = overlay ? overlay.querySelector('.boot-title') : null;
@@ -352,11 +383,30 @@
           cacheBust();
         }
         if (retry) retry.addEventListener('click', function () { cacheBust(); });
+        function bootCoverShowing() {
+          if (!overlay) return false;
+          if (overlay.getAttribute('data-booted') === '1') return false;
+          try {
+            var style = window.getComputedStyle(overlay);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+          } catch (e) {}
+          return true;
+        }
         function heartbeatAge() {
           var hb = window.__INFLOW_HEARTBEAT_MS || 0;
           if (!hb) return 999999;
           return Date.now() - hb;
         }
+        // Cover already gone and nothing real on screen: paper-white body.
+        // A live heartbeat must not skip this — that was the force-quit loop.
+        // A cover that is still up is a slow chunk and is left to the timers
+        // below.
+        setTimeout(function () {
+          if (window.__INFLOW_CALL_ACTIVE) return;
+          if (realScreen()) return;
+          if (bootCoverShowing()) return;
+          reloadOnce();
+        }, 8000);
         // 12s with a stale heartbeat means the entry bundle never started
         // (stale index, missing chunk). A fresh heartbeat means JS is alive
         // and a slow route must not be cancelled.

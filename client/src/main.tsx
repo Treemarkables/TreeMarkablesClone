@@ -5,7 +5,7 @@ import App from "./App";
 import "./index.css";
 import { isReloadUnsafe } from "./lib/foregroundReloadGuard";
 import { isVoiceCallActive } from "./lib/voiceCallReloadGuard";
-import { isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
+import { isAssetScriptFailure, isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
 import { noteBootError, startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
 import { installMobileKeyboardScroll } from "./lib/mobileKeyboardScroll";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -62,10 +62,7 @@ if (SENTRY_DSN) {
 // can't cause an endless reload loop.
 window.addEventListener('error', (event) => {
   const msg = event.message || '';
-  const isChunkError = (
-    isChunkLoadErrorMessage(msg) ||
-    (event.filename && event.filename.includes('/assets/') && msg.includes('SyntaxError'))
-  );
+  const isChunkError = isAssetScriptFailure(msg, event.filename);
 
   if (isChunkError) {
     if (isVoiceCallActive()) {

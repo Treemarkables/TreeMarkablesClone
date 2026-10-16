@@ -1,3 +1,9 @@
+declare global {
+  interface Window {
+    __INFLOW_CALL_ACTIVE?: boolean;
+  }
+}
+
 // Capacitor iOS / PWA boot + resume recovery.
 //
 // The TestFlight app is a WKWebView pointed at https://app.inflowapp.co.nz
@@ -31,6 +37,11 @@ export const LIVE_BOOT_HARD_TIMEOUT_MS = 45_000;
 // Show the boot error / Retry UI even if a premature booted flag or a
 // text-less white card convinced an earlier check that startup finished.
 export const BOOT_FAILURE_REVEAL_MS = 20_000;
+// Cover already dismissed, #root still empty. A live heartbeat used to
+// suppress this (the bundle had started), which left the paper-white body
+// on screen until the user force-quit. The cover-still-up case is a slow
+// chunk and stays on the longer boot timeout.
+export const EMPTY_ROOT_RELOAD_MS = 8_000;
 export const NATIVE_READY_TIMEOUT_MS = 12_000;
 // about:blank that is not loading failed (radio not up). Retry quickly.
 export const BLANK_IDLE_RELOAD_MS = 2_000;
@@ -506,8 +517,22 @@ export function reportBootClientError(message: string, stack?: string, context =
   }).catch(() => {});
 }
 
+function bootCoverIsVisible(): boolean {
+  const overlay = document.getElementById("inflow-boot");
+  if (!overlay || overlay.getAttribute("data-booted") === "1") return false;
+  return !isVisuallyHidden(overlay);
+}
+
+/** Marketing snapshot outside #root. Hidden snapshots (app shell) do not count. */
+function visiblePrerenderText(): boolean {
+  const el = document.getElementById("tm-prerender");
+  if (!el || isVisuallyHidden(el)) return false;
+  return normalizeShellText(el.innerText || "").length > 0;
+}
+
 export function readRealScreenVisible(): boolean {
   if (typeof document === "undefined") return false;
+  if (visiblePrerenderText()) return true;
   const root = document.getElementById("root");
   const main = root?.querySelector("main") ?? null;
   return shellSignalsRealPage({
@@ -525,6 +550,24 @@ export function shouldRevealBootFailure(opts: {
 }): boolean {
   if (opts.realScreenVisible) return false;
   return opts.elapsedMs >= (opts.revealAfterMs ?? BOOT_FAILURE_REVEAL_MS);
+}
+
+/**
+ * Reload a cold start whose splash has already come down and nothing has
+ * painted. `bootCoverVisible` means #inflow-boot is still on screen — that
+ * is a slow route chunk, not a white web view, and must not be cancelled.
+ */
+export function shouldRecoverBlankRoot(opts: {
+  elapsedMs: number;
+  realScreenVisible: boolean;
+  bootCoverVisible: boolean;
+  callActive?: boolean;
+  emptyAfterMs?: number;
+}): boolean {
+  if (opts.callActive) return false;
+  if (opts.realScreenVisible) return false;
+  if (opts.bootCoverVisible) return false;
+  return opts.elapsedMs >= (opts.emptyAfterMs ?? EMPTY_ROOT_RELOAD_MS);
 }
 
 const BOOT_FAILURE_TITLE = "Inflow didn't open";
@@ -596,6 +639,13 @@ export function isAppBooted(): boolean {
 }
 
 export function requestBootReload(reason: string): boolean {
+  // Same rule as chunk recovery: a reload mid-call drops Twilio (PR 628).
+  // The flag is set by voiceCallReloadGuard. Read it off window so this
+  // module stays free of local imports (the Node boot tests load it directly).
+  if (typeof window !== "undefined" && window.__INFLOW_CALL_ACTIVE === true) {
+    console.warn(`[boot-recovery] not reloading during a call (${reason})`);
+    return false;
+  }
   const now = Date.now();
   let raw: string | null = null;
   try {
@@ -615,7 +665,9 @@ export function requestBootReload(reason: string): boolean {
     /* private mode / webview — browser loop protection is the backstop */
   }
   console.warn(`[boot-recovery] reloading (${reason}) attempt ${next.count}/${MAX_BOOT_RELOADS}`);
-  window.location.reload();
+  // The inline boot script has already dropped a controlling service worker.
+  // cacheBustingReload still bypasses a cached HTML document.
+  cacheBustingReload();
   return true;
 }
 
@@ -679,6 +731,23 @@ export function startNativeBootWatchdogs(): void {
   };
   armBootTimeout(BOOT_TIMEOUT_MS);
   armBootTimeout(LIVE_BOOT_HARD_TIMEOUT_MS);
+
+  // Splash already gone, root still empty: the paper-white body. A fresh
+  // heartbeat means the entry bundle started, which used to block this
+  // reload until force-quit. The cover-still-up path is left to the
+  // timeouts above so a slow Dispatch chunk is not cancelled.
+  window.setTimeout(() => {
+    if (
+      shouldRecoverBlankRoot({
+        elapsedMs: Date.now() - startedAt,
+        realScreenVisible: readRealScreenVisible(),
+        bootCoverVisible: bootCoverIsVisible(),
+        callActive: typeof window !== "undefined" && window.__INFLOW_CALL_ACTIVE === true,
+      })
+    ) {
+      requestBootReload("empty-root");
+    }
+  }, EMPTY_ROOT_RELOAD_MS);
 
   // Guaranteed stop. A booted flag or a live heartbeat must not leave the
   // cover up, or a text-less white card on screen, forever.

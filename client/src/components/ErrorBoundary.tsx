@@ -8,7 +8,7 @@ import {
   requestStaleBundleReload,
 } from '@/lib/staleChunkReload';
 import { isVoiceCallActive } from '@/lib/voiceCallReloadGuard';
-import { markAppBooted } from '@/lib/nativeBootRecovery';
+import { isAppBooted, markAppBooted, readRealScreenVisible, revealBootFailure } from '@/lib/nativeBootRecovery';
 
 interface Props {
   children: ReactNode;
@@ -63,9 +63,16 @@ export class ErrorBoundary extends Component<Props, State> {
       return;
     }
 
-    // The cover sits above #root. A crash used to leave "Opening Inflow" on
-    // top of this card, or a white card underneath a cover that never lifted.
-    markAppBooted();
+    // Still booting: keep the dark cover and tell the native shell this is a
+    // failure. markAppBooted() here used to send appReady, which hid the
+    // splash and left the paper-white body (the error card's CSS had not
+    // applied, or the root was empty). After a real screen exists, lift the
+    // cover so this card is what the user sees.
+    if (!isAppBooted() && !readRealScreenVisible()) {
+      revealBootFailure(error.message);
+    } else {
+      markAppBooted();
+    }
 
     // Report to Sentry with the React component stack as extra context.
     // No-op when VITE_SENTRY_DSN is unset (Sentry.init was skipped).
@@ -130,10 +137,13 @@ export class ErrorBoundary extends Component<Props, State> {
       // flashing the scary error card on a routine post-deploy chunk miss.
       if (this.state.recovering) {
         return (
-          <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <div
+            className="min-h-screen flex items-center justify-center p-4"
+            style={{ background: "#1a1a1a", color: "#f5f5f0" }}
+          >
             <div className="text-center">
-              <RefreshCw className="w-8 h-8 text-orange-600 mx-auto mb-3 animate-spin" />
-              <p className="text-gray-600">Updating to the latest version…</p>
+              <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin" />
+              <p>Updating to the latest version…</p>
             </div>
           </div>
         );
