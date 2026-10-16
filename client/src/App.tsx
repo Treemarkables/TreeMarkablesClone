@@ -347,7 +347,7 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 // Inner component that uses useSidebar hook
 // Mobile header icon-button size: a 40px circle that may shrink to 36px so
 // the /dispatch action row fits a 375pt phone (see the header comment below).
-const MOBILE_HEADER_ICON = "h-10 w-10 min-w-9";
+const MOBILE_HEADER_ICON = "h-11 w-11 min-w-11 shrink-0";
 
 function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const { isCrew, isAdmin, logout, currentUser } = useAuth();
@@ -504,17 +504,15 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
       <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden md:p-2 md:gap-2">
           {/* Mobile header - sidebar toggle, logo, and actions */}
-          {/* Sizing budget: on /dispatch an admin sees nine controls in this
-              row (logo, bug, bell, +, paste, filter, lanes, search, account).
-              Every control is a 40px circle that may shrink to 36px (min-w-9)
-              with 4px gaps and 8px side padding, so the row fits a 375pt phone
-              instead of pushing search/account off the right edge. Keep new
-              controls on that budget or fold them into a menu. */}
+          {/* On /dispatch an admin sees nine 44px controls (logo, bug, bell,
+              +, paste, filter, lanes, search, account). They wrap onto a
+              second row on a 360px phone instead of shrinking under 44px or
+              sliding off the right edge. */}
           <header
-            className="md:hidden flex items-center gap-1 px-2 py-3 border-b bg-background"
+            className="md:hidden flex w-full min-w-0 flex-wrap items-center gap-1 px-2 py-2 border-b bg-background"
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 0.5rem)" }}
           >
-            <LogoSidebarTrigger size={40} />
+            <LogoSidebarTrigger size={44} />
             {/* Business name is hidden on /dispatch — the action row needs the width */}
             {businessName && !isDispatchPage && (
               <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight px-1" data-testid="header-business-name-mobile">

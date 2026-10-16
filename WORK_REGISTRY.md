@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Android phone layout audit — branch `cursor/android-phone-layout-3831` — 2026-10-16 — phone widths 360 and 412: dispatch header wraps at 44px targets, crowded tab rows scroll, wide tables scroll, sheets and dialogs stay on screen, login scrolls. Web-side. Draft only.
 - Inflow account deletion URL — branch `cursor/delete-account-page-fdae` — 2026-10-16 — public no-login /delete-account page on the Inflow marketing site (app Inflow, developer INFLOW LIMITED) for Google Play Data safety. Prerendered HTML, sitemap, privacy link. No TestFlight.
 - GDC org-only billing — branch `gdc-invoice-org-name` — 2026-10-13 — Gisborne District Council invoices, emails, PDF Bill To, and Xero contacts always use the organisation name, never a staff contact. Departments whose name includes pools, recovery, emergency, or management (Kiwa Pools, Recovery Emergency Management) keep their own name. Draft only. [PR #629]
 - In-app call drop — branch `cursor/voice-call-drop-fallback-a8b5` — 2026-10-12 — refresh the one-hour Twilio Voice token before it expires, show the Twilio error code on Call dropped, and if the app isn't registered or the app leg dies in a few seconds forward to the mobile then voicemail. Don't reload the webview mid-call. No TestFlight required for the server/web half; the error code needs the next native build. Draft only.
