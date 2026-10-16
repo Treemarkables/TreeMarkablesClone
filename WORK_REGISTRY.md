@@ -18,7 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
-- Photo viewer close and swipe-down — branch `cursor/photo-viewer-close-3831` — 2026-10-16 — 56px top-right close clear of the photo counter and status bar; downward swipe dismisses a fitted photo and pans when zoomed. Shared JobPhotoViewer. Ready for review, not merged.
+- Photo viewer close and swipe-down — branch `cursor/photo-viewer-close-3831` — 2026-10-16 — 56px top-right close clear of the photo counter and status bar; downward swipe dismisses a fitted photo and pans when zoomed. Shared JobPhotoViewer. Ready for review, not merged. [PR #636]
 - Production build after #632 — branch `cursor/fix-prod-build-3831` — 2026-10-16 — quoting step photo viewer sits beside the photo grid so the Vite production build parses JobQuotingPanel. Draft only.
 - Android job photo viewer — branch `cursor/android-photo-viewer-3831` — 2026-10-16 — job photos and Library before/after composites fit the screen (object-fit contain) with a fixed close button and pinch zoom; hardware back closes the viewer then the job card. Maps and Stripe Checkout open from the Android WebView. Web-side; companion native shell changes are a separate branch. Draft only.
 - Android phone layout audit — branch `cursor/android-phone-layout-3831` — 2026-10-16 — phone widths 360 and 412: dispatch header wraps at 44px targets, crowded tab rows scroll, wide tables scroll, sheets and dialogs stay on screen, login scrolls. Web-side. Draft only.
