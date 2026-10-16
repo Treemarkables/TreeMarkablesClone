@@ -13,8 +13,13 @@ import android.os.Looper
 import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.URLUtil
+import androidx.activity.OnBackPressedCallback
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import kotlin.math.max
 import co.nz.inflowapp.voice.IncomingCallNotifier
 import co.nz.inflowapp.voice.TwilioCallListener
 import co.nz.inflowapp.voice.TwilioVoicePlugin
@@ -44,6 +49,7 @@ class MainActivity : BridgeActivity() {
         VoiceConnectionService.registerPhoneAccount(this)
         requestRuntimePermissions()
         attachDownloadListener()
+        configureWebViewChrome()
 
         // Bridge the token the moment FCM issues it. On a cold start the token arrives
         // seconds AFTER onResume, so resume-only bridging missed it until the next
@@ -147,6 +153,46 @@ class MainActivity : BridgeActivity() {
                 Log.e("MainActivity", "WebView download failed for $url", e)
             }
         }
+    }
+
+    /**
+     * Page pinch-zoom stays off (Capacitor default). Photo pinch is an in-page
+     * transform, so enabling WebView zoom would let a pinch hide Close again.
+     *
+     * Hardware back must call WebView.goBack(). The photo viewer and the job
+     * card push history entries; without this, back finishes the activity.
+     * targetSdk 36 draws edge to edge and the WebView reports
+     * env(safe-area-inset-*) as 0, so the WebView itself is padded by the
+     * status bar, cutout, and keyboard. iOS still uses CSS env().
+     */
+    private fun configureWebViewChrome() {
+        val webView = bridge?.webView ?: return
+        webView.settings.useWideViewPort = true
+        webView.settings.loadWithOverviewMode = true
+
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+            )
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            view.setPadding(bars.left, bars.top, bars.right, max(bars.bottom, ime.bottom))
+            WindowInsetsCompat.CONSUMED
+        }
+        ViewCompat.requestApplyInsets(webView)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val view = bridge?.webView
+                if (view != null && view.canGoBack()) {
+                    view.goBack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
     }
 
     private fun requestRuntimePermissions() {
