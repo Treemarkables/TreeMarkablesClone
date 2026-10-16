@@ -489,20 +489,20 @@ function QuotingStepRow({
                   </div>
                 ))}
               </div>
-              <JobPhotoViewer
-                open={viewingPhoto !== null}
-                photos={photos}
-                index={viewingPhoto ?? 0}
-                src={viewingPhoto !== null ? photos[viewingPhoto] : null}
-                title="Quoting photo"
-                onIndexChange={setViewingPhoto}
-                onClose={() => setViewingPhoto(null)}
-              />
             ) : (
               <div className="text-xs text-muted-foreground italic">
                 No photos yet.
               </div>
             )}
+            <JobPhotoViewer
+              open={viewingPhoto !== null}
+              photos={photos}
+              index={viewingPhoto ?? 0}
+              src={viewingPhoto !== null ? photos[viewingPhoto] : null}
+              title="Quoting photo"
+              onIndexChange={setViewingPhoto}
+              onClose={() => setViewingPhoto(null)}
+            />
           </div>
         </div>
       )}
