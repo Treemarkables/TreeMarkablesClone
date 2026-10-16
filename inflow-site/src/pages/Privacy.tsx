@@ -6,7 +6,7 @@ export default function Privacy() {
     <LegalPage
       eyebrow="Legal"
       title="Privacy Policy"
-      updated="June 2026"
+      updated="October 2026"
       intro={
         <>
           {BRAND.name} is a job-management platform for trades and field-service businesses. This
@@ -77,6 +77,17 @@ export default function Privacy() {
           business can never see another's data, and audit logging. No system is perfectly secure, but
           we take protection seriously and will notify you and the Privacy Commissioner of any breach
           that is likely to cause serious harm, as required by law.</p>
+      </LegalSection>
+
+      <LegalSection title="Delete your account">
+        <p>
+          You can ask us to delete your Inflow account and the data associated with it without
+          signing in. The steps, what we delete, what we keep, and how long it takes are on the{" "}
+          <a className="underline decoration-lime-deep" href="/delete-account">
+            Delete your Inflow account
+          </a>{" "}
+          page.
+        </p>
       </LegalSection>
 
       <LegalSection title="Your rights">
