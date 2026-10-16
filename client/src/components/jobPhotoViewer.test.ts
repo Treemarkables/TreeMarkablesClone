@@ -34,6 +34,7 @@ describe("job photo pinch zoom", () => {
 describe("job photo viewer layout contract", () => {
   const viewer = readFileSync(new URL("./JobPhotoViewer.tsx", import.meta.url), "utf8");
   const diary = readFileSync(new URL("./JobDiarySection.tsx", import.meta.url), "utf8");
+  const library = readFileSync(new URL("../pages/Library.tsx", import.meta.url), "utf8");
 
   it("fits the bitmap in a definite box and pins Close above the zoom", () => {
     assert.match(viewer, /object-contain/);
@@ -51,5 +52,13 @@ describe("job photo viewer layout contract", () => {
     assert.match(diary, /<JobPhotoViewer/);
     assert.doesNotMatch(diary, /DialogTitle>Job Photos/);
     assert.match(diary, /absolute inset-0 w-full h-full object-cover/);
+  });
+
+  it("library before/after shots open this viewer instead of the raw image", () => {
+    assert.match(library, /<JobPhotoViewer/);
+    assert.match(library, /Before \/ After/);
+    assert.match(library, /absolute inset-0 h-full w-full object-cover/);
+    assert.doesNotMatch(library, /target="_blank"/);
+    assert.doesNotMatch(library, /href=\{item\.url\}/);
   });
 });

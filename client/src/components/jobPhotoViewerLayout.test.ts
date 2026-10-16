@@ -41,15 +41,41 @@ function oldViewerHtml(): string {
   </body></html>`;
 }
 
-function newViewerHtml(): string {
+function newViewerHtml(src = PHOTO): string {
   return `<!doctype html><html><head>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   </head><body style="margin:0;background:#000;">
     <div style="position:fixed;inset:0;height:100dvh;width:100%;display:flex;flex-direction:column;overflow:hidden;background:#000;">
       <button id="close" style="position:fixed;z-index:5;top:max(12px, env(safe-area-inset-top));right:max(12px, env(safe-area-inset-right));width:44px;height:44px;border-radius:999px;border:0;background:rgba(0,0,0,.75);color:#fff;">X</button>
       <div id="stage" style="position:relative;flex:1;min-width:0;min-height:0;overflow:hidden;">
-        <img id="photo" alt="" src="${PHOTO}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;">
+        <img id="photo" alt="" src="${src}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;">
       </div>
+    </div>
+  </body></html>`;
+}
+
+// Library before/after shots are one side-by-side JPEG, wider than a phone.
+const COMPOSITE =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="7200" height="2400">
+      <rect width="3600" height="2400" fill="#1e3a8a"/>
+      <rect x="3600" width="3600" height="2400" fill="#14532d"/>
+      <text x="1800" y="1280" font-size="280" font-family="sans-serif" fill="#fff" text-anchor="middle">BEFORE</text>
+      <text x="5400" y="1280" font-size="280" font-family="sans-serif" fill="#fff" text-anchor="middle">AFTER</text>
+    </svg>`,
+  );
+
+function rawCompositeHtml(): string {
+  // Opening the library composite with target=_blank loads this bitmap as the
+  // page. Android shows it at intrinsic size, so Close (if any) is off to the
+  // right and there is no way back except leaving the WebView.
+  return `<!doctype html><html><head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head><body style="margin:0;background:#111;">
+    <div style="position:relative;width:7200px;height:2400px;">
+      <img id="photo" alt="" width="7200" height="2400" src="${COMPOSITE}" style="width:7200px;height:2400px;max-width:none;display:block;">
+      <div id="close" style="position:absolute;top:12px;right:12px;width:44px;height:44px;background:#000;color:#fff;">X</div>
     </div>
   </body></html>`;
 }
@@ -149,17 +175,25 @@ describe("Android photo viewer fit", { skip: CHROME ? false : "google-chrome is 
           {
             expression: `(() => {
               const close = document.getElementById('close').getBoundingClientRect();
-              const photo = document.getElementById('photo').getBoundingClientRect();
+              const photoEl = document.getElementById('photo');
+              const photo = photoEl.getBoundingClientRect();
               const stage = document.getElementById('stage');
               const stageBox = stage ? stage.getBoundingClientRect() : null;
+              const naturalW = photoEl.naturalWidth || photo.width;
+              const naturalH = photoEl.naturalHeight || photo.height;
+              const fit = Math.min(photo.width / naturalW, photo.height / naturalH);
+              const contained = getComputedStyle(photoEl).objectFit === 'contain';
               return {
                 closeTop: close.top,
                 closeBottom: close.bottom,
                 closeRight: close.right,
+                closeLeft: close.left,
                 photoW: photo.width,
                 photoH: photo.height,
                 photoTop: photo.top,
                 photoLeft: photo.left,
+                drawnW: contained ? naturalW * fit : photo.width,
+                drawnH: contained ? naturalH * fit : photo.height,
                 stageH: stageBox ? stageBox.height : null,
                 innerW: window.innerWidth,
                 innerH: window.innerHeight,
@@ -189,6 +223,36 @@ describe("Android photo viewer fit", { skip: CHROME ? false : "google-chrome is 
         `photo height ${after.photoH} stage ${after.stageH}`,
       );
       assert.ok((after.photoTop ?? -1) >= -1, `photo top ${after.photoTop}`);
+
+      const compositeBefore = await measure(rawCompositeHtml(), "library-before-after-before");
+      assert.ok(
+        (compositeBefore.drawnW ?? 0) > (compositeBefore.innerW ?? 0),
+        `raw composite should be wider than the phone, drawn=${compositeBefore.drawnW}`,
+      );
+      assert.ok(
+        (compositeBefore.closeRight ?? 0) > (compositeBefore.innerW ?? 0),
+        `raw composite close should be off the right edge, right=${compositeBefore.closeRight}`,
+      );
+
+      const compositeAfter = await measure(newViewerHtml(COMPOSITE), "library-before-after-after");
+      assert.ok((compositeAfter.closeTop ?? -1) >= 0, `composite close top ${compositeAfter.closeTop}`);
+      assert.ok(
+        (compositeAfter.closeRight ?? 9999) <= (compositeAfter.innerW ?? 0) + 1,
+        `composite close right ${compositeAfter.closeRight}`,
+      );
+      assert.ok(
+        (compositeAfter.closeLeft ?? -1) >= 0,
+        `composite close left ${compositeAfter.closeLeft}`,
+      );
+      assert.ok(
+        (compositeAfter.drawnW ?? 9999) <= (compositeAfter.innerW ?? 0) + 1,
+        `fitted composite width ${compositeAfter.drawnW}`,
+      );
+      assert.ok(
+        (compositeAfter.drawnH ?? 9999) <= (compositeAfter.stageH ?? 0) + 1,
+        `fitted composite height ${compositeAfter.drawnH}`,
+      );
+      assert.ok((compositeAfter.drawnW ?? 0) > 100, "composite should still be visible");
     } finally {
       if (chrome && chrome.exitCode == null) {
         chrome.kill("SIGKILL");
