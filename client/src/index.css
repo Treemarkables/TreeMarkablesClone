@@ -572,3 +572,28 @@ svg.lucide-loader-circle {
   0%   { transform: scale(0.75); opacity: 0.9; }
   100% { transform: scale(1.7);  opacity: 0; }
 }
+
+/* Android phone widths (360–412). Four or more tabs in a grid clip their
+   labels. Scroll the row instead, and keep each tab a 44px target.
+   A table inside an overflow-hidden card is clipped with no way to reach
+   the right-hand columns; let that card scroll sideways. */
+@media (max-width: 767px) {
+  [role="tablist"].grid:has(> :nth-child(4)) {
+    display: flex;
+    height: auto;
+    max-width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  [role="tablist"].grid:has(> :nth-child(4)) > [role="tab"] {
+    flex: 0 0 auto;
+    min-height: 44px;
+  }
+
+  .overflow-hidden:has(> table),
+  .overflow-hidden:has(> thead) {
+    overflow-x: auto;
+  }
+}
