@@ -1,0 +1,16 @@
+// ============================================================================
+// Merge into android/build.gradle (the PROJECT-level file) after `npx cap add android`.
+// scripts/android-setup.sh applies this automatically; this documents the result.
+// ============================================================================
+
+// In buildscript { dependencies { ... } } add the Google Services classpath:
+
+buildscript {
+    dependencies {
+        classpath 'com.google.gms:google-services:4.4.2'
+    }
+}
+
+// Firebase + Twilio Voice both resolve from Google's Maven + Maven Central, which the
+// Capacitor template already declares in settings.gradle / allprojects. No repo changes
+// are normally needed.

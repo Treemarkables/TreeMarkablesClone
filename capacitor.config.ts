@@ -30,6 +30,11 @@ const config: CapacitorConfig = {
     // an Xcode rebuild to take effect (ships in the copied capacitor.config.json).
     handleApplicationNotifications: false,
   },
+  android: {
+    backgroundColor: "#1a1a1a",
+    // The web app is served over HTTPS from the remote URL; never allow cleartext.
+    allowMixedContent: false,
+  },
 };
 
 export default config;

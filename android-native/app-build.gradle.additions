@@ -1,0 +1,42 @@
+// ============================================================================
+// Merge into android/app/build.gradle after `npx cap add android`.
+// scripts/android-setup.sh applies these automatically; this documents the result.
+// ============================================================================
+
+// 1) At the VERY TOP of the file, apply the Google Services plugin (after the
+//    existing `apply plugin: 'com.android.application'`):
+//
+//      apply plugin: 'com.google.gms.google-services'
+//
+//    (or, if the file uses the plugins {} block:  id 'com.google.gms.google-services')
+
+// 2) In android { defaultConfig { ... } } — Twilio Voice 6.x requires API 24+:
+//
+//      minSdkVersion 24
+//
+//    (No build-time secret needed: FCM tokens register per-user via the webview/session
+//    path — the web app POSTs the token with the signed-in employee's cookie.)
+
+// 3) Add these to the dependencies { } block:
+
+dependencies {
+    // Firebase (BoM pins compatible versions)
+    implementation platform('com.google.firebase:firebase-bom:33.1.2')
+    implementation 'com.google.firebase:firebase-messaging-ktx'
+
+    // Twilio Voice Android SDK (inbound calls)
+    implementation 'com.twilio:voice-android:6.6.3'
+
+    // AndroidX (notifications + telecom helpers); usually already present
+    implementation 'androidx.core:core-ktx:1.13.1'
+}
+
+// 4) REQUIRED: the native code is Kotlin but the Capacitor Android template is Java-only,
+//    so you MUST apply the Kotlin Android plugin or the .kt files silently never compile
+//    (the build "succeeds" but the app crashes at launch with ClassNotFoundException for
+//    MainActivity). android-setup.sh does this for you; manually it's:
+//
+//    Top of android/app/build.gradle:
+//      apply plugin: 'org.jetbrains.kotlin.android'
+//    In android/build.gradle buildscript.dependencies:
+//      classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'

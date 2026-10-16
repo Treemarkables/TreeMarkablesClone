@@ -1,0 +1,15 @@
+PLACEHOLDER — do NOT commit a real google-services.json secret here.
+
+Download the real file from the Firebase Console and place it at:
+
+    android/app/google-services.json
+
+How to get it:
+  1. Firebase Console → your project → Project Settings → Your apps
+  2. Add app → Android → package name: co.nz.inflowapp
+  3. Download google-services.json
+  4. Copy it to android/app/google-services.json
+     (scripts/android-setup.sh will look for it there and warn if missing)
+
+This is the SAME Firebase project the iOS app uses (GoogleService-Info.plist) — the
+server sends FCM through one project for both platforms.

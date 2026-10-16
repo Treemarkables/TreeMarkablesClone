@@ -1,0 +1,45 @@
+<!--
+  Merge these into android/app/src/main/AndroidManifest.xml after `npx cap add android`.
+  scripts/android-setup.sh applies them automatically; this file documents the result.
+-->
+
+<!-- ============================================================ -->
+<!-- 1) Permissions — add inside <manifest>, before <application>  -->
+<!-- ============================================================ -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+<uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<!-- Android 14 (API 34)+ requires a typed foreground-service permission -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+
+<!-- ============================================================ -->
+<!-- 2) Services — add inside <application>                        -->
+<!-- ============================================================ -->
+
+<!-- Firebase Cloud Messaging: regular push + Twilio call invites -->
+<service
+    android:name="co.nz.inflowapp.voice.VoiceFirebaseMessagingService"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+    </intent-filter>
+</service>
+
+<!-- Self-managed Telecom ConnectionService (native call UI — CallKit equivalent) -->
+<service
+    android:name="co.nz.inflowapp.voice.VoiceConnectionService"
+    android:exported="true"
+    android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+    <intent-filter>
+        <action android:name="android.telecom.ConnectionService" />
+    </intent-filter>
+</service>
+
+<!-- Optional: default notification icon/colour for FCM display messages -->
+<meta-data
+    android:name="com.google.firebase.messaging.default_notification_color"
+    android:resource="@color/colorPrimary" />
