@@ -61,6 +61,7 @@ export default function Footer() {
             <Link href="/terms" className="hover:text-paper">Terms</Link>
             <Link href="/security" className="hover:text-paper">Security</Link>
             <Link href="/support" className="hover:text-paper">Support</Link>
+            <Link href="/delete-account" className="hover:text-paper">Delete account</Link>
           </div>
         </div>
       </Container>
