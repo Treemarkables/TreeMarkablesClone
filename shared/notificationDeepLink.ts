@@ -285,3 +285,27 @@ export function serializeStoredNotificationNav(
 ): string {
   return JSON.stringify({ path, ts: now } satisfies StoredNotificationNav);
 }
+
+/**
+ * Where a foreground "new deploy" reload should go.
+ *
+ * Opening the app from a notification is a foreground. The reload that picks
+ * up a new bundle used to call location.reload() on whatever page was already
+ * showing, which drops /dispatch?job=&tab=diary and leaves the despatch board.
+ * Returns the pending in-app path when it differs from the current URL, or
+ * null when a reload of the current URL is enough (or there is nothing pending).
+ */
+export function foregroundDeployReloadUrl(
+  currentHref: string,
+  pendingPath: string | null | undefined,
+): string | null {
+  if (!pendingPath || !pendingPath.startsWith("/")) return null;
+  try {
+    const current = new URL(currentHref);
+    const here = `${current.pathname}${current.search}`;
+    if (here === pendingPath) return null;
+  } catch {
+    return pendingPath;
+  }
+  return pendingPath;
+}
