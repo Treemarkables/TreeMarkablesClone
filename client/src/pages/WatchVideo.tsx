@@ -68,27 +68,56 @@ export default function WatchVideo() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Brand header */}
-      <header className="bg-black h-20 flex items-center justify-between px-4 sm:px-6 shrink-0">
-        <img
-          src="/treemarkables-logo.png"
-          alt="Treemarkables"
-          className="h-12 w-auto"
-        />
-        {cameFromApp && (
-          <Button
-            type="button"
-            variant="ghost"
-            className="text-white"
-            onClick={() => window.history.back()}
-            data-testid="button-watch-back"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back
-          </Button>
-        )}
+      {/* Brand header. This route is outside the app shell, so nothing else
+          applies the iPhone status-bar inset. A fixed h-20 row starts at y=0
+          and centres Back inside the status bar (it overlaps the battery and
+          iOS will not deliver the tap). The inset is padding on the black
+          bar; the 80px row, and the button, sit below it. */}
+      <header
+        className="sticky top-0 z-20 shrink-0 bg-black"
+        style={{
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingRight: "env(safe-area-inset-right, 0px)",
+        }}
+      >
+        <div className="flex h-20 items-center justify-between gap-3 px-4 sm:px-6">
+          <img
+            src="/treemarkables-logo.png"
+            alt="Treemarkables"
+            className="h-12 w-auto min-w-0 shrink object-contain object-left"
+          />
+          {cameFromApp && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => window.history.back()}
+              data-testid="button-watch-back"
+              aria-label="Back"
+              className="h-12 min-h-12 min-w-12 shrink-0 px-4 text-base font-semibold"
+              style={{
+                minHeight: 48,
+                minWidth: 48,
+                height: 48,
+                backgroundColor: "#fff",
+                color: "#111",
+                border: "2px solid #111",
+                touchAction: "manipulation",
+              }}
+            >
+              <ArrowLeft className="h-5 w-5" /> Back
+            </Button>
+          )}
+        </div>
       </header>
 
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
+      <main
+        className="flex-1 w-full max-w-4xl mx-auto py-8"
+        style={{
+          paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
+          paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
+        }}
+      >
         {isLoading ? (
           <div className="flex items-center justify-center py-24">
             <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -135,7 +164,14 @@ export default function WatchVideo() {
         )}
       </main>
 
-      <footer className="shrink-0 text-center text-xs text-muted-foreground py-6">
+      <footer
+        className="shrink-0 text-center text-xs text-muted-foreground pt-6"
+        style={{
+          paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px))",
+          paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
+          paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
+        }}
+      >
         Powered by Treemarkables
       </footer>
     </div>

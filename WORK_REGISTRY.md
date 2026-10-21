@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Watch video safe area — branch `cursor/watch-video-safe-area-576e` — 2026-10-21 — Library, job-video, and customer `/watch` Back sits under the iOS status bar. Header uses env(safe-area-inset-top); Back is a 48px white control. JobPhotoViewer already clears the inset (#636). Web only, no TestFlight.
 - Photo viewer close and swipe-down — branch `cursor/photo-viewer-close-3831` — 2026-10-16 — 56px top-right close clear of the photo counter and status bar; downward swipe dismisses a fitted photo and pans when zoomed. Shared JobPhotoViewer. Ready for review, not merged. [PR #636]
 - Production build after #632 — branch `cursor/fix-prod-build-3831` — 2026-10-16 — quoting step photo viewer sits beside the photo grid so the Vite production build parses JobQuotingPanel. Draft only.
 - Android job photo viewer — branch `cursor/android-photo-viewer-3831` — 2026-10-16 — job photos and Library before/after composites fit the screen (object-fit contain) with a fixed close button and pinch zoom; hardware back closes the viewer then the job card. Maps and Stripe Checkout open from the Android WebView. Web-side; companion native shell changes are a separate branch. Draft only.
