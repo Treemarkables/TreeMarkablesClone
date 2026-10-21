@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Watch video safe area — branch `cursor/watch-video-safe-area-576e` — 2026-10-21 — Library, job-video, and customer `/watch` Back sits under the iOS status bar. Header uses env(safe-area-inset-top); Back is a 48px white control. JobPhotoViewer already clears the inset (#636). Web only, no TestFlight. [PR #638]
 - Push tap lands on the wrong tab — branch `cursor/push-tap-diary-tab-19bd` — 2026-10-20 — email-reply tap while a job card is open stayed on the previous tab; a foreground deploy reload dropped the deep link and opened bare despatch. Web only. Draft only.
 - Photo viewer close and swipe-down — branch `cursor/photo-viewer-close-3831` — 2026-10-16 — 56px top-right close clear of the photo counter and status bar; downward swipe dismisses a fitted photo and pans when zoomed. Shared JobPhotoViewer. Ready for review, not merged. [PR #636]
 - Production build after #632 — branch `cursor/fix-prod-build-3831` — 2026-10-16 — quoting step photo viewer sits beside the photo grid so the Vite production build parses JobQuotingPanel. Draft only.
