@@ -4,6 +4,8 @@ import * as Sentry from "@sentry/react";
 import App from "./App";
 import "./index.css";
 import { isReloadUnsafe } from "./lib/foregroundReloadGuard";
+import { peekNotificationNav } from "./lib/notificationNav";
+import { foregroundDeployReloadUrl } from "@shared/notificationDeepLink";
 import { isVoiceCallActive } from "./lib/voiceCallReloadGuard";
 import { isAssetScriptFailure, isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
 import { noteBootError, startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
@@ -144,18 +146,35 @@ async function hasNewDeployShipped(): Promise<boolean> {
 // is mid-edit (e.g. an open job card), we skip this reload entirely and retry
 // on the next foreground, once the work is closed. Picking up fresh code can
 // always wait; eating an edit cannot.
+//
+// Wait long enough for a notification tap to persist its deep link before
+// deciding to reload. Checking immediately raced the native injection and
+// reloaded the page that was already open (bare despatch) instead of the job.
+let deployReloadTimer = 0;
 document.addEventListener('visibilitychange', () => {
+  window.clearTimeout(deployReloadTimer);
   if (document.visibilityState !== 'visible') return;
 
-  hasNewDeployShipped().then((isStale) => {
-    if (!isStale) return;
-    if (isReloadUnsafe()) {
-      console.warn('↻ New build shipped but in-progress work open — will reload once it closes.');
-      return;
-    }
-    console.warn('↻ New build detected on foreground — reloading to get fresh code');
-    window.location.reload();
-  });
+  deployReloadTimer = window.setTimeout(() => {
+    if (document.visibilityState !== 'visible') return;
+    hasNewDeployShipped().then((isStale) => {
+      if (!isStale) return;
+      if (document.visibilityState !== 'visible') return;
+      if (isReloadUnsafe()) {
+        console.warn('↻ New build shipped but in-progress work open — will reload once it closes.');
+        return;
+      }
+      const pending = peekNotificationNav();
+      const target = foregroundDeployReloadUrl(window.location.href, pending);
+      if (target) {
+        console.warn('↻ New build detected on foreground — reloading onto notification', target);
+        window.location.assign(target);
+        return;
+      }
+      console.warn('↻ New build detected on foreground — reloading to get fresh code');
+      window.location.reload();
+    });
+  }, 1500);
 });
 
 // Keep cache cleanup to remove any old service worker / cache that was left behind.

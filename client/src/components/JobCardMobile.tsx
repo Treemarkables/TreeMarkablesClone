@@ -197,6 +197,15 @@ export function JobCardMobile({
 }: JobCardMobileProps) {
   const [activeTab, setActiveTab] = useState<JobCardMobileTab>(initialTab);
 
+  // initialTab is only read by useState on the first mount. A later
+  // notification updates the prop (and DispatchBoard fires
+  // job-card-switch-tab) but this card stays mounted, so without this the
+  // phone stays on Details and the email never appears. A manual tab press
+  // does not change the prop.
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
   // When a notification arrives for the job that's already open, DispatchBoard
   // fires `job-card-switch-tab` so the card jumps to the right tab (e.g. diary)
   // without remounting. GlobalJobCard handles this for desktop; the mobile card

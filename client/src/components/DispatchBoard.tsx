@@ -1057,6 +1057,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           setShowGlobalJobCard(true);
           setGlobalJobCardMode("edit");
           setJobToEdit(jobData as JobAssignment);
+          // A card that is already open on a different job does not remount,
+          // so its tab state stays wherever the user left it (usually
+          // Details). The same-job branch above fires this event; this
+          // branch has to as well, or an email-reply tap changes the job
+          // and still shows the previous tab.
+          if (tabParam) {
+            window.dispatchEvent(
+              new CustomEvent("job-card-switch-tab", { detail: tabParam }),
+            );
+          }
           // Card is mounting fresh — park the highlight target so the diary
           // picks it up from the module bus the moment it mounts.
           if (entryId) requestDiaryHighlight(entryId);
