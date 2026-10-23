@@ -18,7 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
-- Sitemap XML 500 — branch `cursor/fix-sitemap-xml-dc39` — 2026-10-24 — `/sitemap.xml` is built in memory (static marketing URLs always; blog lookup isolated so a throw still returns XML). No sendFile on the cwd file. No TestFlight.
+- Sitemap XML 500 — branch `cursor/fix-sitemap-xml-dc39` — 2026-10-24 — `/sitemap.xml` is built in memory (static marketing URLs always; blog lookup isolated so a throw still returns XML). No sendFile on the cwd file. No TestFlight. Do not merge until review. [PR #639]
 - Watch video safe area — branch `cursor/watch-video-safe-area-576e` — 2026-10-21 — Library, job-video, and customer `/watch` Back sits under the iOS status bar. Header uses env(safe-area-inset-top); Back is a 48px white control. JobPhotoViewer already clears the inset (#636). Web only, no TestFlight. [PR #638]
 - Push tap lands on the wrong tab — branch `cursor/push-tap-diary-tab-19bd` — 2026-10-20 — email-reply tap while a job card is open stayed on the previous tab; a foreground deploy reload dropped the deep link and opened bare despatch. Web only. Draft only.
 - Photo viewer close and swipe-down — branch `cursor/photo-viewer-close-3831` — 2026-10-16 — 56px top-right close clear of the photo counter and status bar; downward swipe dismisses a fitted photo and pans when zoomed. Shared JobPhotoViewer. Ready for review, not merged. [PR #636]
