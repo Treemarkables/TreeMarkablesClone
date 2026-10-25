@@ -3,7 +3,10 @@
 // The iOS app and the owner's mobile normally ring together. Two cases must
 // not end the call there:
 //   1. No device is registered for the Voice identity. Dialling that <Client>
-//      can fail the whole <Dial> before the mobile rings.
+//      in the same <Dial> as the mobile can fail the whole verb before the
+//      mobile rings. Ring the app on its own first, then the mobile. Skipping
+//      the app entirely is what sent callers straight to voicemail on
+//      26 Oct 2026 once the one-hour presence row had expired.
 //   2. The app connects and then drops (Twilio 31005 "Connection error",
 //      seen 12 Oct 2026 on call CA19d6cefc551084fcf62ba33e7eb8dfb3: answered
 //      for 1 second, transcript "You"). Twilio reports that as DialCallStatus
@@ -19,12 +22,16 @@ export function planInboundRing(input: {
   presence: VoicePresence;
   hasOwnerPhone: boolean;
 }): { dialClient: boolean; dialPhone: boolean; leg: DialLeg } {
-  // Unknown presence fails open and still dials the app. A missing heartbeat
-  // (first boot, presence table unread) must not send every call to the mobile.
-  // A definite "unregistered" skips the client so a dead identity cannot
-  // cancel the mobile leg.
-  const dialClient = input.clientConfigured && input.presence !== "unregistered";
-  const dialPhone = input.hasOwnerPhone;
+  // Unknown presence fails open and still dials the app beside the mobile.
+  // A missing heartbeat (first boot, presence table unread) must not send
+  // every call to the mobile.
+  // A definite "unregistered" still dials the app — that is the only thing
+  // that can ring the iPhone — but not in the same <Dial> as the mobile, so a
+  // dead identity cannot cancel the mobile. The follow-up rings the mobile
+  // if the app leg does not connect. Leaving the app out, with no mobile
+  // configured, is an immediate redirect to voicemail.
+  const dialClient = input.clientConfigured;
+  const dialPhone = input.hasOwnerPhone && input.presence !== "unregistered";
   const leg: DialLeg = dialClient && dialPhone
     ? "both"
     : dialClient
@@ -111,7 +118,14 @@ export function decideInboundDialFollowup(input: {
     return input.hasOwnerPhone ? { action: "dial-phone" } : { action: "voicemail" };
   }
 
-  // no-answer / busy: every leg we included already had the timeout.
+  // The app was dialled on its own because we didn't trust it to share a
+  // <Dial> with the mobile. It never connected — give the mobile its own
+  // chance before voicemail. A simultaneous "both" no-answer already let the
+  // mobile ring for the timeout, so that still goes to voicemail.
+  if ((status === "no-answer" || status === "busy") && input.leg === "client") {
+    return input.hasOwnerPhone ? { action: "dial-phone" } : { action: "voicemail" };
+  }
+
   return { action: "voicemail" };
 }
 

@@ -2,8 +2,16 @@
 // Twilio's mobile best-practice is to re-register before the token expires;
 // an expired token still lets a push through, then the signaling connection
 // dies with error 31005 ("Connection error") and the caller is dropped.
+//
+// The refresh timer lives in the webview, and iOS suspends that as soon as
+// the phone is locked. A one-hour token therefore died every evening, the
+// presence row went "unregistered", and the answer webhook stopped dialling
+// the app — callers went straight to voicemail (26 Oct 2026). Twilio's
+// maximum is 24 hours. A day-long token stays registered overnight after the
+// app is opened once. The webview still refreshes ten minutes early whenever
+// it is actually running.
 
-export const VOICE_TOKEN_TTL_SECONDS = 3600;
+export const VOICE_TOKEN_TTL_SECONDS = 24 * 60 * 60 - 1;
 
 // Refresh this long before expiry. 30 seconds (Twilio's latest-safe point)
 // races a call that arrives on the boundary. Ten minutes leaves room for a
