@@ -30,18 +30,27 @@ describe("inbound ring plan", () => {
     assert.equal(plan.leg, "both");
   });
 
-  it("skips an unregistered app and rings the mobile", () => {
+  it("rings an expired app on its own, then the mobile from the follow-up", () => {
     const plan = planInboundRing({
       clientConfigured: true,
       presence: "unregistered",
       hasOwnerPhone: true,
     });
-    assert.deepEqual(plan, { dialClient: false, dialPhone: true, leg: "phone" });
+    assert.deepEqual(plan, { dialClient: true, dialPhone: false, leg: "client" });
+  });
+
+  it("still dials the app when registration has expired and there is no mobile", () => {
+    const plan = planInboundRing({
+      clientConfigured: true,
+      presence: "unregistered",
+      hasOwnerPhone: false,
+    });
+    assert.deepEqual(plan, { dialClient: true, dialPhone: false, leg: "client" });
   });
 
   it("goes straight to voicemail when nothing can ring", () => {
     const plan = planInboundRing({
-      clientConfigured: true,
+      clientConfigured: false,
       presence: "unregistered",
       hasOwnerPhone: false,
     });
@@ -110,6 +119,33 @@ describe("dial follow-up", () => {
       hasOwnerPhone: true,
     });
     assert.deepEqual(decision, { action: "dial-phone" });
+  });
+
+  it("rings the mobile after the app-only leg is not answered", () => {
+    const missed = decideInboundDialFollowup({
+      leg: "client",
+      dialStatus: "no-answer",
+      dialCallDuration: 0,
+      hasOwnerPhone: true,
+    });
+    assert.deepEqual(missed, { action: "dial-phone" });
+    const noMobile = decideInboundDialFollowup({
+      leg: "client",
+      dialStatus: "busy",
+      dialCallDuration: null,
+      hasOwnerPhone: false,
+    });
+    assert.deepEqual(noMobile, { action: "voicemail" });
+  });
+
+  it("takes voicemail when app and mobile already rang together", () => {
+    const missed = decideInboundDialFollowup({
+      leg: "both",
+      dialStatus: "no-answer",
+      dialCallDuration: null,
+      hasOwnerPhone: true,
+    });
+    assert.deepEqual(missed, { action: "voicemail" });
   });
 
   it("takes voicemail when the mobile-only leg is not answered", () => {

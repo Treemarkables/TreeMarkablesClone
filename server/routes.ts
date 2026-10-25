@@ -13063,10 +13063,11 @@ Return only the rewritten description, nothing else.`,
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
 
-  // Rings the iOS app and the owner's phone together when the app has checked
-  // in with a live access token. An unregistered app is left out of the Dial
-  // so a dead <Client> cannot cancel the mobile. The action URL falls through
-  // to voicemail, or to the mobile alone if the app leg dies immediately.
+  // Rings the iOS app. The owner's mobile is added to the same Dial only
+  // while the app has a live registration. An expired registration still
+  // dials the app on its own (skipping it sent callers straight to voicemail
+  // once the heartbeat lapsed). The action URL then rings the mobile, and
+  // only then takes voicemail.
   const buildDialJulesTwimlBody = async (req: Request): Promise<string> => {
     const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER;
     // Dial the business that owns the line, not a shared identity every
