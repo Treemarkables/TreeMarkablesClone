@@ -7,16 +7,18 @@ import {
 } from "./voiceToken.ts";
 
 describe("voice token refresh", () => {
-  it("refreshes ten minutes before the one-hour token expires", () => {
+  it("lasts a day, which is Twilio's maximum, and refreshes ten minutes early", () => {
+    assert.equal(VOICE_TOKEN_TTL_SECONDS, 24 * 60 * 60 - 1);
     const delay = voiceTokenRefreshDelayMs(VOICE_TOKEN_TTL_SECONDS);
-    assert.equal(delay, 50 * 60 * 1000);
+    assert.equal(delay, (VOICE_TOKEN_TTL_SECONDS - 10 * 60) * 1000);
   });
 
-  it("is not due at 49 minutes and is due at 50", () => {
+  it("is not due a minute before the refresh point and is due at it", () => {
     const issued = Date.parse("2026-10-11T20:11:20.000Z");
     const ttl = VOICE_TOKEN_TTL_SECONDS;
-    assert.equal(voiceTokenIsDue(issued, ttl, issued + 49 * 60 * 1000), false);
-    assert.equal(voiceTokenIsDue(issued, ttl, issued + 50 * 60 * 1000), true);
+    const refreshAt = voiceTokenRefreshDelayMs(ttl);
+    assert.equal(voiceTokenIsDue(issued, ttl, issued + refreshAt - 60_000), false);
+    assert.equal(voiceTokenIsDue(issued, ttl, issued + refreshAt), true);
   });
 
   it("treats a missing issue time as due, so a foreground wake re-registers", () => {
