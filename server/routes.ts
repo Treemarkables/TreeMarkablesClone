@@ -110,6 +110,7 @@ import { getTwilioClient } from "./services/twilioClient";
 import { mintStreamToken } from "./services/voiceAgent";
 import jwt from "jsonwebtoken";
 import path from "path";
+import { handleTreemarkablesSitemap, renderTreemarkablesSitemap } from "./treemarkablesSitemap";
 import bcrypt from "bcrypt";
 import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
@@ -2725,27 +2726,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   // ─────────────────────────────────────────────────────────────────────────
 
-  // SEO routes - serve sitemap.xml and robots.txt
-  app.get('/sitemap.xml', (req: Request, res: Response) => {
-    try {
-      const sitemapPath = path.join(process.cwd(), 'sitemap.xml');
-      
-      if (fs.existsSync(sitemapPath)) {
-        res.set('Content-Type', 'application/xml');
-        res.sendFile(sitemapPath);
-      } else {
-        res.status(404).json({ 
-          success: false, 
-          message: 'Sitemap not found. Please generate sitemap using the included Python script.' 
-        });
-      }
-    } catch (error) {
+  // SEO routes - serve sitemap.xml and robots.txt.
+  // Built in memory. sendFile() on cwd/sitemap.xml reported stream and missing-file
+  // errors via next(err), which the process handler turned into HTTP 500, and the
+  // esbuild bundle does not include that file. A failed blog lookup still returns
+  // the static marketing URLs.
+  app.get('/sitemap.xml', (_req: Request, res: Response) => {
+    handleTreemarkablesSitemap(res).catch((error) => {
       console.error('Error serving sitemap:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Error serving sitemap' 
-      });
-    }
+      if (res.headersSent) return;
+      res.status(200);
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.send(renderTreemarkablesSitemap([]));
+    });
   });
 
   // Public route: SaaS subscriber onboarding guide (no auth required)
