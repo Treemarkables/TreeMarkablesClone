@@ -153,6 +153,7 @@ const QuotingProcessSettings = lazy(() => import("@/pages/QuotingProcessSettings
 const DocumentBuilderPage = lazy(() => import("@/pages/DocumentBuilderPage"));
 const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
 const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
+const StripePayouts = lazy(() => import("@/pages/StripePayouts"));
 const SettingsAccount = lazy(() => import("@/pages/SettingsAccount"));
 const SettingsSecurity = lazy(() => import("@/pages/SettingsSecurity"));
 const SettingsChannels = lazy(() => import("@/pages/SettingsChannels"));
@@ -1790,6 +1791,16 @@ function Router() {
       <Route path="/settings/billing">
         <SidebarLayout>
           <SettingsBilling />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/payouts/:id">
+        <SidebarLayout>
+          <StripePayouts />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/payouts">
+        <SidebarLayout>
+          <StripePayouts />
         </SidebarLayout>
       </Route>
       <Route path="/settings/account">

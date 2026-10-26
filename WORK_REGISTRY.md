@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Stripe payouts and invoice paid amount — branch `cursor/stripe-payouts-283e` — 2026-10-26 — Pull Stripe payouts, match charges to jobs, optional Xero post from account 640, and fix invoice payments that left the job paid amount at zero. Backfill script is not run. Do not merge — main autodeploys.
 - Delete a proposal — branch `cursor/delete-proposal-eaf4` — 2026-10-26 — Job diary and proposal view can delete a draft, sent, viewed, or rejected proposal after confirm. Accepted (and any with a payment) stay. Job and quote stay. Customer link shows no longer available. Admin only, company-scoped. Web only, no TestFlight. Do not merge — main autodeploys. [PR #642]
 - iPhone job video upload — branch `cursor/iphone-video-upload-9253` — 2026-10-26 — Job Videos on the iPhone shell fail with "Network error during upload" because the whole .mov is posted through the DigitalOcean/Cloudflare edge. Upload goes to GCS in pieces (direct resumable, same-origin chunk fallback). Web only, no TestFlight. Do not merge — main autodeploys.
 - Inbound app ring — branch `cursor/inbound-app-ring-8800` — 2026-10-26 — expired one-hour Voice presence skipped the iPhone and sent landline forwards straight to voicemail. Day-long token, and an expired registration still dials the app before the mobile and voicemail. No TestFlight. Do not merge — main autodeploys. [PR #640]

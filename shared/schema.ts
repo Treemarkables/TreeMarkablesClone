@@ -3352,6 +3352,72 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 
+// Stripe payouts pulled from the business's own Stripe account. Lines are the
+// balance transactions inside one payout, matched to payments rows by charge
+// or payment-intent id. Xero ids on the row are what stop a second post.
+export const stripePayouts = pgTable("stripe_payouts", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stripePayoutId: text("stripe_payout_id").notNull(),
+  stripeAccountId: text("stripe_account_id"),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("NZD"),
+  status: text("status").notNull(),
+  arrivalDate: timestamp("arrival_date"),
+  createdStripe: timestamp("created_stripe"),
+  description: text("description"),
+  feeTotal: decimal("fee_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  chargeTotal: decimal("charge_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  refundTotal: decimal("refund_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  xeroFeeId: text("xero_fee_id"),
+  xeroFeeKind: text("xero_fee_kind"),
+  xeroFeeMessage: text("xero_fee_message"),
+  xeroPostedAt: timestamp("xero_posted_at"),
+  xeroPostingAt: timestamp("xero_posting_at"),
+  xeroSummary: jsonb("xero_summary"),
+  fetchedAt: timestamp("fetched_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  businessPayoutUniq: uniqueIndex("stripe_payouts_business_payout_uniq").on(table.businessId, table.stripePayoutId),
+  businessArrivalIdx: index("stripe_payouts_business_arrival_idx").on(table.businessId, table.arrivalDate),
+}));
+
+export const stripePayoutLines = pgTable("stripe_payout_lines", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  payoutId: varchar("payout_id").notNull().references(() => stripePayouts.id, { onDelete: "cascade" }),
+  balanceTransactionId: text("balance_transaction_id").notNull(),
+  stripeType: text("stripe_type"),
+  kind: text("kind").notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  fee: decimal("fee", { precision: 12, scale: 2 }).notNull().default("0"),
+  net: decimal("net", { precision: 12, scale: 2 }).notNull().default("0"),
+  currency: text("currency").notNull().default("NZD"),
+  description: text("description"),
+  stripeSourceId: text("stripe_source_id"),
+  stripeChargeId: text("stripe_charge_id"),
+  stripePaymentId: text("stripe_payment_id"),
+  matchStatus: text("match_status").notNull().default("unmatched"),
+  paymentId: varchar("payment_id"),
+  jobId: varchar("job_id"),
+  invoiceId: varchar("invoice_id"),
+  customerId: varchar("customer_id"),
+  xeroPaymentId: text("xero_payment_id"),
+  xeroCreditNoteId: text("xero_credit_note_id"),
+  xeroRefundPaymentId: text("xero_refund_payment_id"),
+  xeroStatus: text("xero_status"),
+  xeroMessage: text("xero_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  payoutBtUniq: uniqueIndex("stripe_payout_lines_payout_bt_uniq").on(table.payoutId, table.balanceTransactionId),
+  payoutIdx: index("stripe_payout_lines_payout_idx").on(table.payoutId),
+}));
+
+export type StripePayout = typeof stripePayouts.$inferSelect;
+export type StripePayoutLine = typeof stripePayoutLines.$inferSelect;
+
 // Xero OAuth2 Integration
 export const xeroConnections = pgTable("xero_connections", {
   businessId: varchar("business_id"),
@@ -3437,6 +3503,9 @@ export const xeroSettings = pgTable("xero_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   salesAccountCode: text("sales_account_code").notNull().default("200"), // Default sales account code
   taxType: text("tax_type").notNull().default("OUTPUT2"), // Default tax type (OUTPUT2 = 15% GST for NZ)
+  // Stripe payout posting. 640 is the clearing account the bank deposit is coded to.
+  stripeClearingAccountCode: text("stripe_clearing_account_code").notNull().default("640"),
+  stripeFeesAccountCode: text("stripe_fees_account_code"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
