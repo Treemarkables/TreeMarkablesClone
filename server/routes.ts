@@ -27,6 +27,7 @@ declare module 'express-session' {
 import { storage, invoiceRevenueExGst } from "./storage";
 import { clearProposalContent, withProposalContentLock } from "./proposalContentLock";
 import { beginProposalSend, releaseProposalSend } from "./proposalSendClaim";
+import { deleteProposalDocument } from "./services/deleteProposalDocument";
 import { clientSafeErrorText } from "./httpErrorText";
 import { buildTodayOverview, createTodayExtraInstruction, deleteTodayExtraInstruction, HttpError } from "./todayOverview";
 import { loadEffectiveRiskLinksForJobs, loadRiskLinksForJobs, recordRiskAssessmentChecklistDone } from "./jhaJobRisk";
@@ -27772,7 +27773,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       if (!proposal) {
         return res.status(404).json({
           success: false,
-          message: 'Proposal not found'
+          message: 'This proposal is no longer available'
         });
       }
       
@@ -29187,43 +29188,32 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Delete proposal
+  // Delete proposal. Admin only, and only a proposal that belongs to the
+  // signed-in company. Accepted proposals (and any that already took a
+  // payment) are refused. The job and its quote row are not touched.
   app.delete('/api/proposals/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
-      // Forensic snapshot. There is no soft-delete on proposals and the
-      // delete cascades to proposal_sections + proposal_line_items, so once
-      // the row is gone this log is the only trace. Logged at warn level so
-      // it surfaces in the DO production log retention.
-      const snapshot = await storage.getProposal(req.params.id).catch(() => null);
-      if (snapshot) {
-        let sectionCount = 0;
-        try {
-          const sections = await storage.getProposalSectionsByProposal(req.params.id);
-          sectionCount = sections?.length ?? 0;
-        } catch { /* best-effort, snapshot is still useful */ }
-        console.warn(
-          `🛑 PROPOSAL_DELETE_AUDIT id=${req.params.id} ts=${new Date().toISOString()} session=${req.session?.employeeId ?? 'anon'} ua=${req.headers['user-agent'] ?? 'n/a'} snapshot=${JSON.stringify({
-            jobId: snapshot.jobId,
-            customerId: snapshot.customerId,
-            proposalNumber: snapshot.proposalNumber,
-            status: snapshot.status,
-            title: snapshot.title,
-            totalAmount: snapshot.totalAmount,
-            sentDate: snapshot.sentDate,
-            viewedDate: snapshot.viewedDate,
-            responseDate: snapshot.responseDate,
-            createdAt: snapshot.createdAt,
-            updatedAt: snapshot.updatedAt,
-            sectionCount,
-          })}`
-        );
-      } else {
-        console.warn(`🛑 PROPOSAL_DELETE_AUDIT id=${req.params.id} ts=${new Date().toISOString()} (no snapshot — proposal already missing) session=${req.session?.employeeId ?? 'anon'}`);
+      const employeeId = req.session.employeeId;
+      const employee = employeeId ? await storage.getEmployee(employeeId) : undefined;
+      const actorBusinessId = employee?.businessId || req.session.businessId || null;
+      if (!actorBusinessId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account is not linked to a company.',
+        });
       }
-      await storage.deleteProposal(req.params.id);
+
+      const userAgent = req.headers['user-agent'];
+      const result = await deleteProposalDocument(req.params.id, actorBusinessId, {
+        employeeId: req.session.employeeId ?? null,
+        userAgent: typeof userAgent === 'string' ? userAgent : null,
+      });
+      if (!result.ok) {
+        return res.status(result.status).json({ success: false, message: result.message });
+      }
       res.json({
         success: true,
-        message: 'Proposal deleted successfully'
+        message: 'Proposal deleted successfully',
       });
     } catch (error) {
       console.error('Error deleting proposal:', error);

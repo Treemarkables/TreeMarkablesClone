@@ -102,6 +102,9 @@ describe("job diary shapes from a blank-description Apple Mail reply", () => {
     assert.equal(created.type, "proposal");
     assert.equal(created.title, "Proposal Created: PROP-1000000000001");
     assert.equal(created.content, "Sample Quote");
+    assert.equal(created.metadata?.proposalId, "proposal-1");
+    assert.equal(created.metadata?.status, "draft");
+    assert.equal(created.metadata?.isDeletable, false);
   });
 
   it("renders the HTML reply as text and the null-content send as its description", () => {

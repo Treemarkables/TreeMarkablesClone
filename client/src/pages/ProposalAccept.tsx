@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Check, AlertCircle, Download, Loader2, ArrowLeft, ShieldCheck } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { ApiError, apiRequest } from "@/lib/queryClient";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
 import type { DocumentBlock, DocumentTemplate } from "@shared/schema";
@@ -75,9 +75,14 @@ export default function ProposalAccept() {
     setSelectedOptionalItems(prev => ({ ...prev, [lineItemId]: selected }));
   };
 
-  const { data: proposalDataResponse, isLoading: proposalLoading, refetch: refetchProposal } = useQuery<any>({
+  const { data: proposalDataResponse, isLoading: proposalLoading, error: proposalError, refetch: refetchProposal } = useQuery<any>({
     queryKey: ["/api/proposals", proposalId, "public"],
     enabled: !!proposalId,
+    retry: (failureCount, error) => {
+      const status = error instanceof ApiError ? error.status : 0;
+      if (status === 404) return false;
+      return failureCount < 2;
+    },
   });
 
   // Accept mutation. May return requiresDeposit=true, in which case we open
@@ -185,14 +190,20 @@ export default function ProposalAccept() {
   }
 
   if (!proposal) {
+    const status = proposalError instanceof ApiError ? proposalError.status : 0;
+    const gone = !proposalError || status === 404;
     return (
       <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">{docLabel} Not Found</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              {gone ? `${docLabel} no longer available` : `${docLabel} couldn't be loaded`}
+            </h1>
             <p className="text-gray-600 mb-6">
-              The {docLower} you're looking for doesn't exist or may have been removed.
+              {gone
+                ? `This ${docLower} is no longer available. If you were expecting it, contact the business that sent it.`
+                : `This ${docLower} couldn't be loaded just now. Please try again in a moment.`}
             </p>
             <Link href="/">
               <Button variant="outline">

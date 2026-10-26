@@ -85,6 +85,7 @@ import {
   Bell,
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
+import { DeleteProposalDialog } from "@/components/DeleteProposalDialog";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import WelcomeVideoModal from "@/components/WelcomeVideoModal";
 import { BeforeAfterCaptureModal } from "@/components/BeforeAfterCaptureModal";
@@ -921,7 +922,7 @@ export function JobDiarySection({
 }: JobDiarySectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin } = useAuth();
   const [activeComposer, setActiveComposer] = useState<
     "note" | "sms" | "email" | null
   >(null);
@@ -936,6 +937,12 @@ export function JobDiarySection({
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
     null,
   );
+  const [proposalPendingDelete, setProposalPendingDelete] = useState<{
+    id: string;
+    number: string;
+    status: string;
+  } | null>(null);
+  const proposalDeleteLock = useRef(false);
   const [isBeforeAfterModalOpen, setIsBeforeAfterModalOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState<string>("");
@@ -1973,6 +1980,37 @@ export function JobDiarySection({
       toast({
         title: "Error",
         description: error.message || "Failed to update note",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteProposalMutation = useMutation({
+    mutationFn: async (proposalId: string) => {
+      const res = await apiRequest("DELETE", `/api/proposals/${proposalId}`);
+      return res.json();
+    },
+    onSuccess: (_data, proposalId) => {
+      proposalDeleteLock.current = false;
+      setProposalPendingDelete(null);
+      if (selectedProposalId === proposalId) {
+        setProposalDialogOpen(false);
+        setSelectedProposalId(null);
+      }
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "diary-timeline"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "diary"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/proposals", proposalId] });
+    },
+    onError: (error: Error) => {
+      proposalDeleteLock.current = false;
+      toast({
+        title: "Couldn't delete proposal",
+        description: error.message || "Failed to delete proposal",
         variant: "destructive",
       });
     },
@@ -3688,6 +3726,32 @@ export function JobDiarySection({
                                 <ExternalLink className="w-3 h-3 mr-1" />
                                 {isQuoteEntry ? "View Quote" : "View Proposal"}
                               </Button>
+                              {entry.type === "proposal" &&
+                                isAdmin &&
+                                typeof entry.metadata?.proposalId === "string" && (
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-11 w-11 sm:h-8 sm:w-8 text-destructive shrink-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const proposalId = entry.metadata?.proposalId;
+                                      if (typeof proposalId !== "string") return;
+                                      setProposalPendingDelete({
+                                        id: proposalId,
+                                        number: proposalNumber || "",
+                                        status: typeof entry.metadata?.status === "string"
+                                          ? entry.metadata.status
+                                          : "draft",
+                                      });
+                                    }}
+                                    data-testid="button-delete-proposal"
+                                    aria-label="Delete proposal"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
                             </div>
                           );
                         })()}
@@ -4053,6 +4117,21 @@ export function JobDiarySection({
             </Form>
           </DialogContent>
         </Dialog>
+
+        <DeleteProposalDialog
+          open={proposalPendingDelete !== null}
+          onOpenChange={(open) => {
+            if (!open) setProposalPendingDelete(null);
+          }}
+          proposalNumber={proposalPendingDelete?.number}
+          status={proposalPendingDelete?.status}
+          pending={deleteProposalMutation.isPending}
+          onConfirm={() => {
+            if (!proposalPendingDelete || proposalDeleteLock.current) return;
+            proposalDeleteLock.current = true;
+            deleteProposalMutation.mutate(proposalPendingDelete.id);
+          }}
+        />
 
         {/* Proposal Builder Dialog */}
         {selectedProposalId && (

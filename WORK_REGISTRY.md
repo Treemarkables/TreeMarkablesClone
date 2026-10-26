@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Delete a proposal — branch `cursor/delete-proposal-eaf4` — 2026-10-26 — Job diary and proposal view can delete a draft, sent, viewed, or rejected proposal after confirm. Accepted (and any with a payment) stay. Job and quote stay. Customer link shows no longer available. Admin only, company-scoped. Web only, no TestFlight. Do not merge — main autodeploys.
 - iPhone job video upload — branch `cursor/iphone-video-upload-9253` — 2026-10-26 — Job Videos on the iPhone shell fail with "Network error during upload" because the whole .mov is posted through the DigitalOcean/Cloudflare edge. Upload goes to GCS in pieces (direct resumable, same-origin chunk fallback). Web only, no TestFlight. Do not merge — main autodeploys.
 - Inbound app ring — branch `cursor/inbound-app-ring-8800` — 2026-10-26 — expired one-hour Voice presence skipped the iPhone and sent landline forwards straight to voicemail. Day-long token, and an expired registration still dials the app before the mobile and voicemail. No TestFlight. Do not merge — main autodeploys. [PR #640]
 - Sitemap XML 500 — branch `cursor/fix-sitemap-xml-dc39` — 2026-10-24 — `/sitemap.xml` is built in memory (static marketing URLs always; blog lookup isolated so a throw still returns XML). No sendFile on the cwd file. No TestFlight. Do not merge until review. [PR #639]

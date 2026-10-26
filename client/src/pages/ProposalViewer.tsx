@@ -215,11 +215,11 @@ export default function ProposalViewer({}: ProposalViewerProps) {
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
             <h1 className="text-xl font-semibold text-gray-900 mb-2">
-              Proposal Not Found
+              Proposal no longer available
             </h1>
             <p className="text-gray-600 mb-4">
-              The proposal you're looking for doesn't exist or may have been
-              removed.
+              This proposal is no longer available. If you were expecting it,
+              contact the business that sent it.
             </p>
             <Button
               variant="outline"
