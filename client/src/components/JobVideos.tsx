@@ -34,7 +34,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X, ChevronDown, Sparkles, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
+import { type UploadProgress } from "@/lib/uploadWithProgress";
+import { uploadJobVideo } from "@/lib/directVideoUpload";
 import { formatNZTime } from "@shared/dateUtils";
 import { videoHasCaptions } from "@/lib/videoCaptions";
 
@@ -79,13 +80,11 @@ export function JobVideos({ jobId }: JobVideosProps) {
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       setUploadProgress({ loaded: 0, total: file.size, percent: 0, phase: "uploading" });
-      // Text fields must precede the file part so the streaming upload parses them in time.
-      const fields: Record<string, string> = { showToCustomer: String(showToCustomer) };
-      if (title.trim()) fields.title = title.trim();
-      return uploadFileWithProgress<any>({
-        url: `/api/jobs/${jobId}/videos`,
+      return uploadJobVideo({
+        jobId,
         file,
-        fields,
+        title: title.trim() || undefined,
+        showToCustomer,
         onProgress: setUploadProgress,
       });
     },
@@ -376,7 +375,7 @@ export function JobVideos({ jobId }: JobVideosProps) {
               <p className="text-xs text-muted-foreground">
                 {uploadProgress?.phase === "processing"
                   ? "Finalizing on the server — almost done."
-                  : "Large videos can take a few minutes on mobile data. Keep this open."}
+                  : "Large iPhone videos upload in pieces so a slow connection can finish. Keep this open."}
               </p>
             </div>
           )}

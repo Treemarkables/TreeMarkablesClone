@@ -231,6 +231,8 @@ import {
 } from "./photoAnnotationStore";
 import { renderSiteMapSnapshot, renderImageSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
+import { describeVideoFile } from "@shared/videoUpload";
+import { registerDirectVideoUploadRoutes } from "./videoUploadRoutes";
 import { google } from "googleapis";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
 import { queueJobPush, removeJobEvents, getConnectionForUser, backfillFutureScheduledWorkOrders } from "./services/googleCalendarSync";
@@ -301,8 +303,14 @@ const videoUpload = multer({
     fileSize: 2 * 1024 * 1024 * 1024, // 2 GB
     files: 1,
   },
-  fileFilter: (req, file, cb) => {
-    cb(null, file.mimetype.startsWith('video/'));
+  fileFilter: (_req, file, cb) => {
+    // WebKit often sends an iPhone .mov as application/octet-stream or with an
+    // empty type. The extension is enough; a non-video is still rejected.
+    if (describeVideoFile(file.originalname || "", file.mimetype || "")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only video files can be uploaded"));
+    }
   }
 });
 
@@ -9152,7 +9160,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
   // getJob rides the owner connection (hence the ownership check) and the videos
   // insert needs runWithBusiness to stamp the tenant.
-  app.post('/api/jobs/:jobId/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
+  // Legacy single-request upload. New clients use the resumable session routes
+  // registered below — a whole iPhone .mov through this path is what the edge
+  // drops. Auth runs before multer so an anonymous body is not written to GCS.
+  app.post('/api/jobs/:jobId/videos', requireSession, videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
       if (!req.session.employeeId) {
@@ -9281,10 +9292,29 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   const isContentPublisher = (businessId: string | undefined): boolean =>
     !!businessId && CONTENT_PUBLISHER_BUSINESS_IDS.has(businessId);
 
+  registerDirectVideoUploadRoutes(app, {
+    getJob: (jobId) => storage.getJob(jobId),
+    createVideo: (businessId, data) => runWithBusiness(businessId, () => storage.createVideo(data)),
+    findByFilename: async (filename) => {
+      const [row] = await db.select().from(schema.videos).where(eq(schema.videos.filename, filename)).limit(1);
+      return row;
+    },
+    deleteObject: (objectPath) => videoStorage.deleteVideoObject(objectPath),
+    onReady: async (video, showToCustomer) => {
+      if (video.jobId && showToCustomer && video.kind !== "knowledge") {
+        await syncVideoLinkInJobDescription(video.jobId, video.id, true);
+      }
+      generateVideoThumbnail(video.id).catch(() => {});
+      generateVideoCaptions(video.id).catch(() => {});
+    },
+    canPublishKnowledge: (businessId) => isContentPublisher(businessId),
+    appUrl: APP_URL,
+  });
+
   // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
   // tenant identity comes from the session, reads ride the owner connection (hence
   // the job ownership check), and the insert is stamped via runWithBusiness.
-  app.post('/api/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
+  app.post('/api/videos', requireSession, videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
