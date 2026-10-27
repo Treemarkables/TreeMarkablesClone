@@ -18,6 +18,7 @@ work here so it doesn't happen again. See the "Avoiding duplicate work" rule in
 Format: `- <area> — branch \`<name>\` — <YYYY-MM-DD> — <one-line scope> [PR #<n>]`
 
 ## Active
+- Job card PAID badge and Xero payment sync — branch `cursor/job-paid-display-xero-4c4c` — 2026-10-27 — PAID badge on the new job card header, Xero payment sync writes paid amount and balance owing, and paid/already-sent jobs are not offered Send to Xero again. Do not merge — main autodeploys.
 - Stripe payouts and invoice paid amount — branch `cursor/stripe-payouts-283e` — 2026-10-26 — Pull Stripe payouts, match charges to jobs, optional Xero post from account 640, and fix invoice payments that left the job paid amount at zero. Backfill script is not run. Do not merge — main autodeploys. [PR #643]
 - Delete a proposal — branch `cursor/delete-proposal-eaf4` — 2026-10-26 — Job diary and proposal view can delete a draft, sent, viewed, or rejected proposal after confirm. Accepted (and any with a payment) stay. Job and quote stay. Customer link shows no longer available. Admin only, company-scoped. Web only, no TestFlight. Do not merge — main autodeploys. [PR #642]
 - iPhone job video upload — branch `cursor/iphone-video-upload-9253` — 2026-10-26 — Job Videos on the iPhone shell fail with "Network error during upload" because the whole .mov is posted through the DigitalOcean/Cloudflare edge. Upload goes to GCS in pieces (direct resumable, same-origin chunk fallback). Web only, no TestFlight. Do not merge — main autodeploys.

@@ -2,6 +2,12 @@ import { Router, Request, Response } from 'express';
 import { XeroClient, PayrollNzApi, Configuration, Invoice, Payment } from 'xero-node';
 import type { IStorage } from './storage';
 import { resolveBillingName } from '@shared/orgOnlyBilling';
+import {
+  jobAlreadySentToXero,
+  paidAmountsWhenXeroReportsPaid,
+  shouldSyncXeroPaymentStatus,
+  xeroReportedInvoiceTotal,
+} from '@shared/jobPaymentDisplay';
 import { TimeTrackingService } from './timeTrackingService';
 
 const router = Router();
@@ -337,6 +343,22 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       }
       
       console.log(`✅ Job found: ${job.jobNumber} - ${job.title}`);
+
+      // Paid, sent, and any other already-sent state already has an invoice
+      // in Xero. Creating another one duplicates it. error/pending with no
+      // stored invoice id can still retry.
+      if (jobAlreadySentToXero(job.xeroStatus, job.xeroInvoiceId)) {
+        console.log(`⛔ Refusing to resend job ${job.jobNumber} to Xero (status ${job.xeroStatus ?? 'unset'})`);
+        return {
+          status: 409,
+          body: {
+            success: false,
+            message: 'This job has already been sent to Xero. Use Reset Xero Sync before sending it again.',
+            errorCode: 'ALREADY_SENT',
+            jobNumber: job.jobNumber ? String(job.jobNumber) : undefined,
+          },
+        };
+      }
       
       // Get customer details
       if (!job.customerId) {
@@ -1659,6 +1681,43 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
     }
   });
 
+  // When Xero reports PAID, mark the job and its invoices paid and bring the
+  // job's paid amount up to the invoice total (never down) with balance owing 0.
+  async function markJobPaidFromXero(
+    job: {
+      id: string;
+      paidAmount?: string | number | null;
+      totalIncludingGst?: string | number | null;
+      totalAmount?: string | number | null;
+    },
+    xeroInvoice: object,
+    paidDate: Date,
+  ): Promise<{ paidAmount: string; balanceDue: string }> {
+    const invoices = await storage.getInvoicesByJob(job.id);
+    const amounts = paidAmountsWhenXeroReportsPaid({
+      currentPaidAmount: job.paidAmount,
+      xeroInvoiceTotal: xeroReportedInvoiceTotal(xeroInvoice),
+      invoiceAmounts: invoices
+        .filter((inv) => (inv.status ?? '').toLowerCase() !== 'cancelled')
+        .map((inv) => inv.amount),
+      jobTotalIncludingGst: job.totalIncludingGst,
+      jobTotalAmount: job.totalAmount,
+    });
+    await storage.updateJob(job.id, {
+      xeroStatus: 'paid',
+      paidAmount: amounts.paidAmount,
+      balanceDue: amounts.balanceDue,
+    });
+    for (const inv of invoices) {
+      await storage.updateInvoice(inv.id, {
+        status: 'paid',
+        paidAt: paidDate,
+        paidNotes: 'Payment confirmed via Xero sync',
+      });
+    }
+    return amounts;
+  }
+
   // Sync payment status from Xero — checks real invoice status and updates local DB if paid
   // POST /api/xero/sync-payment-status { jobId } — single job
   // POST /api/xero/sync-payment-status { all: true } — bulk sync all jobs with a Xero invoice
@@ -1677,7 +1736,9 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       if (all) {
         // Bulk sync — find all jobs that have a Xero invoice ID and aren't already marked paid
         const allJobs = await storage.getJobs();
-        const xeroJobs = allJobs.filter((j: any) => j.xeroInvoiceId && j.xeroStatus !== 'paid');
+        // Include jobs already marked paid when the paid amount or balance
+        // was never filled in, so a later sync repairs the Billing tab.
+        const xeroJobs = allJobs.filter((j: any) => shouldSyncXeroPaymentStatus(j));
         let synced = 0;
         let nowPaid = 0;
 
@@ -1689,15 +1750,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
 
             if (xeroInvoice.status === 'PAID') {
               const paidDate = xeroInvoice.fullyPaidOnDate ? new Date(xeroInvoice.fullyPaidOnDate) : new Date();
-              await storage.updateJob(job.id, { xeroStatus: 'paid' });
-              const invoices = await storage.getInvoicesByJob(job.id);
-              for (const inv of invoices) {
-                await storage.updateInvoice(inv.id, {
-                  status: 'paid',
-                  paidAt: paidDate,
-                  paidNotes: 'Payment confirmed via Xero sync',
-                });
-              }
+              await markJobPaidFromXero(job, xeroInvoice, paidDate);
               nowPaid++;
             }
             synced++;
@@ -1735,17 +1788,9 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
 
       if (xeroStatus === 'PAID') {
         const paidDate = xeroInvoice.fullyPaidOnDate ? new Date(xeroInvoice.fullyPaidOnDate) : new Date();
-        await storage.updateJob(jobId, { xeroStatus: 'paid' });
-        const invoices = await storage.getInvoicesByJob(jobId);
-        for (const inv of invoices) {
-          await storage.updateInvoice(inv.id, {
-            status: 'paid',
-            paidAt: paidDate,
-            paidNotes: 'Payment confirmed via Xero sync',
-          });
-        }
-        console.log(`✅ Job ${job.jobNumber} marked as PAID via Xero sync`);
-        return res.json({ success: true, status: 'paid', paidAt: paidDate });
+        const amounts = await markJobPaidFromXero(job, xeroInvoice, paidDate);
+        console.log(`✅ Job ${job.jobNumber} marked as PAID via Xero sync (paid ${amounts.paidAmount}, balance ${amounts.balanceDue})`);
+        return res.json({ success: true, status: 'paid', paidAt: paidDate, paidAmount: amounts.paidAmount, balanceDue: amounts.balanceDue });
       }
 
       // Not yet paid — return current Xero status for info

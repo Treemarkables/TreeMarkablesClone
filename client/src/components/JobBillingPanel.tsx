@@ -16,6 +16,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useToast } from "@/hooks/use-toast";
 import { SupplierInvoiceManager } from "@/components/SupplierInvoiceManager";
+import { jobShowsPaidBadge } from "@shared/jobPaymentDisplay";
+import { PaidStatusBadge } from "@/components/PaidStatusBadge";
 
 interface JobBillingPanelProps {
   jobId: string;
@@ -40,7 +42,9 @@ interface JobShape {
   id?: string;
   lineItems?: LineItem[];
   totalAmount?: string | number | null;
+  totalIncludingGst?: string | number | null;
   paidAmount?: string | number | null;
+  xeroStatus?: string | null;
   invoiceEligible?: boolean | null;
 }
 
@@ -48,6 +52,7 @@ interface InvoiceShape {
   id: string;
   invoiceNumber?: string | null;
   status?: string | null;
+  amount?: string | number | null;
   totalAmount?: string | number | null;
 }
 
@@ -121,11 +126,18 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
     },
   });
 
-  // Look up any invoice attached to this job for the status badge below.
+  // Same query the job-card header uses (`/api/invoices?jobId=`). The
+  // default query function would request `/api/jobs/:id/invoices`, which
+  // is not a route, so the invoice row never saw a paid status.
   const { data: invResp } = useQuery<{ success?: boolean; data?: InvoiceShape[] }>({
-    queryKey: ["/api/jobs", jobId, "invoices"],
+    queryKey: ["/api/invoices", jobId],
+    queryFn: async () => {
+      const response = await fetch(`/api/invoices?jobId=${jobId}`);
+      if (!response.ok) throw new Error("Failed to fetch invoices");
+      return response.json();
+    },
     enabled: !!jobId,
-    staleTime: 60_000,
+    staleTime: 30_000,
   });
   const invoice = invResp?.data?.[0];
 
@@ -228,7 +240,12 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
   const total = subtotal + gst;
 
   const paidAmount = toNum(job?.paidAmount);
-  const isPaid = paidAmount >= total && total > 0;
+  const isPaid = jobShowsPaidBadge({
+    invoiceStatuses: invoice ? [invoice.status] : [],
+    xeroStatus: job?.xeroStatus,
+    paidAmount,
+    totalIncludingGst: total,
+  });
   const outstanding = Math.max(0, Math.round((total - paidAmount) * 100) / 100);
 
   return (
@@ -295,8 +312,14 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
           <>
             <div className="text-[13.5px] text-muted-foreground leading-relaxed">
               Invoice <span className="font-bold text-foreground">{invoice.invoiceNumber ?? "(no #)"}</span>
-              {invoice.status && <> · status: {invoice.status}</>}
-              {invoice.totalAmount && <> · {money(toNum(invoice.totalAmount))}</>}
+              {(invoice.status ?? "").toLowerCase() === "paid" ? (
+                <> · <span className="font-bold text-emerald-700">Paid</span></>
+              ) : invoice.status ? (
+                <> · status: {invoice.status}</>
+              ) : null}
+              {(invoice.totalAmount || invoice.amount) && (
+                <> · {money(toNum(invoice.totalAmount ?? invoice.amount))}</>
+              )}
             </div>
             <button
               type="button"
@@ -333,7 +356,9 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
             <>
               <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
               <span className="text-foreground font-semibold">Paid in full</span>
-              <span className="text-muted-foreground ml-1">· {money(paidAmount)}</span>
+              {paidAmount > 0 && (
+                <span className="text-muted-foreground ml-1">· {money(paidAmount)}</span>
+              )}
             </>
           ) : depositPaidAmount > 0 && paidAmount > 0 && paidAmount <= depositPaidAmount + 0.01 ? (
             <>
@@ -368,7 +393,7 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
             ))}
           </div>
         )}
-        {stripeConfigured && outstanding > 0.01 && (
+        {stripeConfigured && !isPaid && outstanding > 0.01 && (
           <button
             type="button"
             onClick={() => takePayment.mutate()}
@@ -500,8 +525,10 @@ function InvoiceStatusBadge({ invoice }: { invoice: InvoiceShape | undefined }) 
     );
   }
   const status = (invoice.status ?? "draft").toLowerCase();
-  const colour = status === "paid" ? "bg-emerald-500"
-    : status === "sent" || status === "viewed" ? "bg-blue-500"
+  if (status === "paid") {
+    return <PaidStatusBadge label="Paid" testId="badge-billing-invoice-paid" />;
+  }
+  const colour = status === "sent" || status === "viewed" ? "bg-blue-500"
     : status === "overdue" ? "bg-red-500"
     : "bg-muted-foreground/60";
   const label = status.charAt(0).toUpperCase() + status.slice(1);

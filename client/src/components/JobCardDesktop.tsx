@@ -67,6 +67,8 @@ import {
 } from "lucide-react";
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
 import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
+import { jobAlreadySentToXero, jobShowsPaidBadge } from "@shared/jobPaymentDisplay";
+import { PaidStatusBadge } from "@/components/PaidStatusBadge";
 import { Button } from "@/components/ui/button";
 import { JobRiskAssessmentBar, riskStatusFromUnknown } from "@/components/JobRiskStatusChip";
 import {
@@ -159,7 +161,8 @@ export interface JobCardDesktopProps {
      *  menu item's "Sending…" state so a click gives visible feedback. */
     sendToXeroPending?: boolean;
     /** Opens the parent's void-first confirmation dialog; only rendered
-     *  when the job is already synced (xeroStatus === "sent"). */
+     *  when the job is already in Xero (sent, paid, or any other
+     *  already-sent status, or a stored Xero invoice id). */
     resetXeroSync?: () => void;
     resetXeroSyncPending?: boolean;
   };
@@ -390,6 +393,23 @@ export function JobCardDesktop({
     return total > 0 ? total / 1.15 : undefined;
   })();
 
+  const moneyField = (value: unknown): string | number | null =>
+    typeof value === "string" || typeof value === "number" ? value : null;
+  const showPaidBadge = jobShowsPaidBadge({
+    invoiceStatuses: (jobInvoicesResp?.data ?? []).map((inv) =>
+      typeof inv?.status === "string" ? inv.status : null,
+    ),
+    xeroStatus: typeof job?.xeroStatus === "string" ? job.xeroStatus : null,
+    paidAmount: moneyField(job?.paidAmount),
+    totalIncludingGst: moneyField(job?.totalIncludingGst),
+    totalAmount: moneyField(job?.totalAmount),
+    exGstValue: invoicedValue ?? jobValue,
+  });
+  const xeroAlreadySent = jobAlreadySentToXero(
+    typeof job?.xeroStatus === "string" ? job.xeroStatus : null,
+    typeof job?.xeroInvoiceId === "string" ? job.xeroInvoiceId : null,
+  );
+
   // ── Draggable divider ──────────────────────────────────────────────────
   // Track-relative dragging. We read the split track's bounding rect at
   // pointerdown and update splitPct on every move until release. Clamped to
@@ -543,6 +563,7 @@ export function JobCardDesktop({
             <span className="text-[13px] font-bold bg-primary text-brand-lime px-2.5 py-1 rounded-full flex-shrink-0" data-testid="job-card-desktop-price">
               {formatNzd(jobValue)}
             </span>
+            {showPaidBadge && <PaidStatusBadge />}
             {customerSummary && (
               <span className="text-[12px] text-muted-foreground truncate">· {customerSummary}</span>
             )}
@@ -775,9 +796,11 @@ export function JobCardDesktop({
                 </DropdownMenuItem>
                 {actions?.sendToXero && (
                   // Sent/sending state reads this card's own fresh job query,
-                  // so it flips live — no close/reopen. Stays clickable when
-                  // already sent so the handler's "use Reset Xero Sync" toast
-                  // can explain why nothing re-sends.
+                  // so it flips live — no close/reopen. Paid (and any other
+                  // already-sent status) stays on "Sent to Xero" so a paid
+                  // invoice is not offered for a second send. Stays clickable
+                  // so the handler's "use Reset Xero Sync" toast can explain
+                  // why nothing re-sends.
                   <DropdownMenuItem
                     onClick={actions.sendToXero}
                     disabled={actions?.sendToXeroPending}
@@ -785,19 +808,19 @@ export function JobCardDesktop({
                   >
                     {actions?.sendToXeroPending ? (
                       <Loader2 className="w-4 h-4 mr-2 text-muted-foreground animate-spin" />
-                    ) : job?.xeroStatus === "sent" ? (
+                    ) : xeroAlreadySent ? (
                       <CheckCircle className="w-4 h-4 mr-2 text-muted-foreground" />
                     ) : (
                       <Send className="w-4 h-4 mr-2 text-muted-foreground" />
                     )}
                     {actions?.sendToXeroPending
                       ? "Sending to Xero..."
-                      : job?.xeroStatus === "sent"
+                      : xeroAlreadySent
                         ? "Sent to Xero"
                         : "Send to Xero"}
                   </DropdownMenuItem>
                 )}
-                {actions?.resetXeroSync && job?.xeroStatus === "sent" && (
+                {actions?.resetXeroSync && xeroAlreadySent && (
                   <DropdownMenuItem
                     onClick={actions.resetXeroSync}
                     disabled={actions?.resetXeroSyncPending}

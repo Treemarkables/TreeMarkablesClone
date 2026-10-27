@@ -205,6 +205,8 @@ import { registerReloadGuard } from "@/lib/foregroundReloadGuard";
 import { formatTime12Hour, nzTimeToUTC, utcToNZTime, getNZDateString, getJobScheduledNZDates } from "@shared/dateUtils";
 import { Calendar as DayCalendar } from "@/components/ui/calendar";
 import { statusAfterBooking } from "@shared/jobStatus";
+import { jobAlreadySentToXero, shouldSyncXeroPaymentStatus } from "@shared/jobPaymentDisplay";
+import { PaidStatusBadge } from "@/components/PaidStatusBadge";
 import { Linkify, LinkifyMultiline } from "@/lib/linkify";
 import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
 import { Link } from "wouter";
@@ -1341,18 +1343,14 @@ export function GlobalJobCard({
   // Auto-sync payment status from Xero when a job card opens
   // Silently checks Xero and marks the invoice paid locally if Xero shows PAID
   useEffect(() => {
-    if (
-      !editingJob?.id ||
-      !editingJob?.xeroInvoiceId ||
-      editingJob?.xeroStatus === "paid"
-    )
-      return;
+    if (!editingJob?.id || !shouldSyncXeroPaymentStatus(editingJob)) return;
     const jobId = editingJob.id;
     apiRequest("POST", "/api/xero/sync-payment-status", { jobId })
       .then((res) => res.json())
       .then((result: any) => {
         if (result?.status === "paid") {
           queryClient.invalidateQueries({ queryKey: ["/api/invoices", jobId] });
+          queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "invoices"] });
           queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
           console.log(
             `✅ Xero payment sync: job ${editingJob.jobNumber} marked PAID`,
@@ -2921,7 +2919,12 @@ export function GlobalJobCard({
         body?.message ||
         "Failed to send invoice to Xero. Please try again.";
 
-      if (body?.errorCode === "DUPLICATE_INVOICE_NUMBER") {
+      if (body?.errorCode === "ALREADY_SENT") {
+        title = "Already sent to Xero";
+        description =
+          body?.message ||
+          'This invoice is already in Xero. Use "Reset Xero Sync" first if you need to re-send it.';
+      } else if (body?.errorCode === "DUPLICATE_INVOICE_NUMBER") {
         title = `Invoice #${body?.jobNumber ?? ""} already exists in Xero`;
         description =
           body?.details?.suggestion ||
@@ -4740,7 +4743,7 @@ The Treemarkables Team`;
       queryClient.getQueryData(["/api/jobs", editingJob.id]) as any
     )?.data;
     const liveJob = cachedJob ?? editingJob;
-    if (liveJob?.xeroStatus === "sent") {
+    if (jobAlreadySentToXero(liveJob?.xeroStatus, liveJob?.xeroInvoiceId)) {
       toast({
         title: "Already sent to Xero",
         description:
@@ -5216,19 +5219,19 @@ The Treemarkables Team`;
                   disabled={
                     !editingJob?.id ||
                     mode === "create" ||
-                    editingJob?.xeroStatus === "sent" ||
+                    jobAlreadySentToXero(editingJob?.xeroStatus, editingJob?.xeroInvoiceId) ||
                     sendToXeroMutation.isPending
                   }
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   {sendToXeroMutation.isPending
                     ? "Sending to Xero..."
-                    : editingJob?.xeroStatus === "sent"
+                    : jobAlreadySentToXero(editingJob?.xeroStatus, editingJob?.xeroInvoiceId)
                       ? "Sent to Xero"
                       : "Send to Xero"}
                 </DropdownMenuItem>
                 </PlanGate>
-                {editingJob?.xeroStatus === "sent" && (
+                {jobAlreadySentToXero(editingJob?.xeroStatus, editingJob?.xeroInvoiceId) && (
                   <DropdownMenuItem
                     onClick={() => setShowXeroResetConfirm(true)}
                     disabled={resetXeroSyncMutation.isPending}
@@ -9885,7 +9888,9 @@ The Treemarkables Team`;
                               (jobInvoiceResponse as any)?.data || [];
                             const sentInvoices = invoices.filter(
                               (inv: any) =>
-                                inv.status === "sent" || inv.xeroInvoiceId,
+                                inv.status === "sent" ||
+                                inv.status === "paid" ||
+                                inv.xeroInvoiceId,
                             );
 
                             if (sentInvoices.length === 0) {
@@ -9958,26 +9963,26 @@ The Treemarkables Team`;
                                               "0",
                                           ).toFixed(2)}
                                         </p>
-                                        <Badge
-                                          variant="outline"
-                                          className={`text-xs ${
-                                            invoice.status === "paid"
-                                              ? "border-green-500 text-green-600"
-                                              : invoice.status === "sent"
+                                        {invoice.status === "paid" ? (
+                                          <PaidStatusBadge label="Paid" testId={`badge-invoice-paid-${invoice.id}`} />
+                                        ) : (
+                                          <Badge
+                                            variant="outline"
+                                            className={`text-xs ${
+                                              invoice.status === "sent"
                                                 ? "border-blue-500 text-blue-600"
                                                 : invoice.xeroInvoiceId
                                                   ? "border-purple-500 text-purple-600"
                                                   : "border-gray-400 text-gray-600"
-                                          }`}
-                                        >
-                                          {invoice.status === "paid"
-                                            ? "Paid"
-                                            : invoice.xeroInvoiceId
+                                            }`}
+                                          >
+                                            {invoice.xeroInvoiceId
                                               ? "In Xero"
                                               : invoice.status === "sent"
                                                 ? "Sent"
                                                 : invoice.status || "Draft"}
-                                        </Badge>
+                                          </Badge>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -10392,7 +10397,7 @@ The Treemarkables Team`;
                 disabled={
                   !editingJob?.id ||
                   mode === "create" ||
-                  editingJob?.xeroStatus === "sent" ||
+                  jobAlreadySentToXero(editingJob?.xeroStatus, editingJob?.xeroInvoiceId) ||
                   sendToXeroMutation.isPending
                 }
                 onClick={() => {
@@ -10403,13 +10408,17 @@ The Treemarkables Team`;
               >
                 <SendToXeroIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">
-                  {sendToXeroMutation.isPending ? "Sending..." : "Send to Xero"}
+                  {sendToXeroMutation.isPending
+                    ? "Sending..."
+                    : jobAlreadySentToXero(editingJob?.xeroStatus, editingJob?.xeroInvoiceId)
+                      ? "Sent to Xero"
+                      : "Send to Xero"}
                 </span>
               </button>
               </PlanGate>
 
               {/* Re-send to Xero (conditional) */}
-              {editingJob?.xeroStatus === "sent" && (
+              {jobAlreadySentToXero(editingJob?.xeroStatus, editingJob?.xeroInvoiceId) && (
                 <button
                   type="button"
                   className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"

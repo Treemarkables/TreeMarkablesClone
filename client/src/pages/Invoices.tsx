@@ -22,7 +22,6 @@ import {
   FileText,
   Search,
   Send,
-  CheckCircle,
   Clock,
   AlertCircle,
   Pencil,
@@ -34,6 +33,8 @@ import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import type { Job, Customer, Invoice } from "@shared/schema";
+import { jobAlreadySentToXero, jobShowsPaidBadge } from "@shared/jobPaymentDisplay";
+import { PaidStatusBadge } from "@/components/PaidStatusBadge";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 
 interface ApiResponse<T> {
@@ -123,7 +124,16 @@ export default function Invoices() {
             variant: "destructive",
           });
         }
-      } else if (error.errorCode === "DUPLICATE_INVOICE_NUMBER") {
+      } else if (error?.body?.errorCode === "ALREADY_SENT" || error.errorCode === "ALREADY_SENT") {
+        const body = error?.body ?? error;
+        toast({
+          title: "Already sent to Xero",
+          description:
+            body?.message ||
+            "This invoice is already in Xero. Reset the Xero sync before sending it again.",
+          variant: "destructive",
+        });
+      } else if (error.errorCode === "DUPLICATE_INVOICE_NUMBER" || error?.body?.errorCode === "DUPLICATE_INVOICE_NUMBER") {
         toast({
           title: `Invoice #${error.jobNumber ?? ""} already exists in Xero`,
           description:
@@ -456,15 +466,19 @@ export default function Invoices() {
                       </p>
                     </div>
                     <div className="flex-shrink-0">
-                      {invoice.status === "paid" ? (
-                        <Badge
-                          variant="default"
-                          className="gap-1"
-                          data-testid={`badge-status-${invoice.id}`}
-                        >
-                          <CheckCircle className="h-3 w-3" />
-                          Paid
-                        </Badge>
+                      {jobShowsPaidBadge({
+                        invoiceStatuses: [invoice.status],
+                        xeroStatus: invoice.job?.xeroStatus,
+                        paidAmount: invoice.job?.paidAmount,
+                        totalIncludingGst: invoice.job?.totalIncludingGst,
+                        totalAmount: invoice.job?.totalAmount,
+                        exGstValue: invoice.amount,
+                      }) ? (
+                        <PaidStatusBadge
+                          label="Paid"
+                          testId={`badge-status-${invoice.id}`}
+                          className="gap-1 text-xs"
+                        />
                       ) : invoice.status === "pending" ? (
                         <Badge
                           variant="secondary"
@@ -559,7 +573,12 @@ export default function Invoices() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      {invoice.jobId && !invoice.xeroSyncedAt && (
+                      {invoice.jobId &&
+                        !invoice.xeroSyncedAt &&
+                        !jobAlreadySentToXero(
+                          invoice.job?.xeroStatus,
+                          invoice.xeroInvoiceId || invoice.job?.xeroInvoiceId,
+                        ) && (
                         <PlanGate requires="plan:crew">
                           <Button
                             className="flex-1 gap-2"

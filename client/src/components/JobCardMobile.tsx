@@ -18,6 +18,8 @@ import { useJobActions } from "@/hooks/useJobActions";
 import { useToast } from "@/hooks/use-toast";
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
 import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
+import { jobAlreadySentToXero, jobShowsPaidBadge } from "@shared/jobPaymentDisplay";
+import { PaidStatusBadge } from "@/components/PaidStatusBadge";
 import {
   X as XIcon,
   Camera,
@@ -142,7 +144,8 @@ export interface JobCardMobileProps {
      *  tile's "Sending…" state so a tap gives visible feedback. */
     sendToXeroPending?: boolean;
     /** Opens the parent's void-first confirmation dialog; only rendered
-     *  when the job is already synced (xeroStatus === "sent"). */
+     *  when the job is already in Xero (sent, paid, or any other
+     *  already-sent status, or a stored Xero invoice id). */
     resetXeroSync?: () => void;
     resetXeroSyncPending?: boolean;
   };
@@ -299,6 +302,23 @@ export function JobCardMobile({
     return totalAmount > 0 ? totalAmount / 1.15 : undefined;
   }, [job, invoicedValue]);
 
+  const moneyField = (value: unknown): string | number | null =>
+    typeof value === "string" || typeof value === "number" ? value : null;
+  const showPaidBadge = jobShowsPaidBadge({
+    invoiceStatuses: (jobInvoicesResp?.data ?? []).map((inv) =>
+      typeof inv?.status === "string" ? inv.status : null,
+    ),
+    xeroStatus: typeof job?.xeroStatus === "string" ? job.xeroStatus : null,
+    paidAmount: moneyField(job?.paidAmount),
+    totalIncludingGst: moneyField(job?.totalIncludingGst),
+    totalAmount: moneyField(job?.totalAmount),
+    exGstValue: invoicedValue ?? jobValue,
+  });
+  const xeroAlreadySent = jobAlreadySentToXero(
+    typeof job?.xeroStatus === "string" ? job.xeroStatus : null,
+    typeof job?.xeroInvoiceId === "string" ? job.xeroInvoiceId : null,
+  );
+
   // Modal state for the three composer modals reused from GlobalJobCard.
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showSmsModal, setShowSmsModal] = useState(false);
@@ -395,6 +415,7 @@ export function JobCardMobile({
           <span className="text-[13px] font-bold bg-primary text-brand-lime px-2.5 py-1 rounded-full truncate" data-testid="job-card-mobile-price">
             {formatNzd(jobValue)}
           </span>
+          {showPaidBadge && <PaidStatusBadge />}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
@@ -575,28 +596,28 @@ export function JobCardMobile({
                   colour="indigo"
                   onClick={actions?.queueJob ?? onQueueTile}
                 />
-                {/* Live state comes from this card's own fresh job query —
-                    xeroStatus flips to "sent" via the invalidation after a
-                    successful send, no close/reopen needed. Stays tappable
-                    when already sent so the handler's "use Reset Xero Sync"
-                    toast can explain the state. */}
+                {/* Live state comes from this card's own fresh job query.
+                    Paid, sent, and any other already-sent status all read as
+                    "Sent to Xero" so a paid invoice is not offered for a
+                    second send. Stays tappable when already sent so the
+                    handler's "use Reset Xero Sync" toast can explain it. */}
                 <ActionTile
                   label={
                     actions?.sendToXeroPending
                       ? "Sending..."
-                      : job?.xeroStatus === "sent"
+                      : xeroAlreadySent
                         ? "Sent to Xero"
                         : "Send to Xero"
                   }
                   icon={
                     actions?.sendToXeroPending
                       ? Loader2
-                      : job?.xeroStatus === "sent"
+                      : xeroAlreadySent
                         ? CheckCircle
                         : Send
                   }
                   iconSpin={actions?.sendToXeroPending}
-                  colour={job?.xeroStatus === "sent" ? "green" : "slate"}
+                  colour={xeroAlreadySent ? "green" : "slate"}
                   disabled={!actions?.sendToXero || actions?.sendToXeroPending}
                   onClick={actions?.sendToXero ?? actionStub("Send to Xero")}
                   testId="action-tile-send-to-xero"
@@ -604,7 +625,7 @@ export function JobCardMobile({
                 {/* The AlertDialog opens ON TOP of this Sheet deliberately —
                     closing the Sheet first races Radix's pointer-events
                     cleanup and freezes <body> (see the legacy sheet's note). */}
-                {actions?.resetXeroSync && job?.xeroStatus === "sent" && (
+                {actions?.resetXeroSync && xeroAlreadySent && (
                   <ActionTile
                     label="Reset Xero Sync"
                     icon={RotateCcw}
