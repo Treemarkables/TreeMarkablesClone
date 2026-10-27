@@ -115,7 +115,10 @@ export function paidAmountsWhenXeroReportsPaid(input: {
   jobTotalAmount?: string | number | null;
 }): { paidAmount: string; balanceDue: string } {
   const xeroTotal = moneyAmount(input.xeroInvoiceTotal);
-  const local = (input.invoiceAmounts ?? []).reduce((sum, amount) => sum + moneyAmount(amount), 0);
+  let local = 0;
+  for (const amount of input.invoiceAmounts ?? []) {
+    local += moneyAmount(amount);
+  }
   let invoiceTotal = xeroTotal > 0 ? xeroTotal : local;
   if (invoiceTotal <= 0) {
     invoiceTotal = Math.max(
@@ -123,7 +126,8 @@ export function paidAmountsWhenXeroReportsPaid(input: {
       moneyAmount(input.jobTotalAmount),
     );
   }
-  const paid = Math.max(moneyAmount(input.currentPaidAmount), invoiceTotal);
+  const currentPaid = moneyAmount(input.currentPaidAmount);
+  const paid = currentPaid > invoiceTotal ? currentPaid : invoiceTotal;
   return { paidAmount: paid.toFixed(2), balanceDue: "0.00" };
 }
 

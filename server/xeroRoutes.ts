@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
+import { eq } from 'drizzle-orm';
 import { XeroClient, PayrollNzApi, Configuration, Invoice, Payment } from 'xero-node';
+import { jobs } from '@shared/schema';
 import type { IStorage } from './storage';
+import { db } from './db';
 import { resolveBillingName } from '@shared/orgOnlyBilling';
 import {
   jobAlreadySentToXero,
@@ -1703,11 +1706,17 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       jobTotalIncludingGst: job.totalIncludingGst,
       jobTotalAmount: job.totalAmount,
     });
-    await storage.updateJob(job.id, {
-      xeroStatus: 'paid',
-      paidAmount: amounts.paidAmount,
-      balanceDue: amounts.balanceDue,
-    });
+    // Drizzle's column types, not the Zod insert schema. The generated InsertJob
+    // type collapses later columns onto an array index signature, so a string
+    // balanceDue does not typecheck through storage.updateJob.
+    await db.update(jobs)
+      .set({
+        xeroStatus: 'paid',
+        paidAmount: amounts.paidAmount,
+        balanceDue: amounts.balanceDue,
+        updatedAt: new Date(),
+      })
+      .where(eq(jobs.id, job.id));
     for (const inv of invoices) {
       await storage.updateInvoice(inv.id, {
         status: 'paid',
