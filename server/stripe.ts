@@ -12,10 +12,14 @@
 //                            Needed so Connect direct-charge events (a tenant's customer paying
 //                            an invoice) verify. Each Stripe endpoint has its own secret, so we
 //                            try both. Unset = Connect payment events won't verify.
+//   Payouts can be pulled on demand. Optional webhook events, on both the platform
+//   endpoint and the connected-account endpoint: payout.paid, payout.updated,
+//   payout.created, payout.failed, payout.canceled.
 //   STRIPE_GST_TAX_RATE_ID   txr_... — optional; a 15% tax-exclusive NZ GST rate added
 //                            to subscription checkouts (prices are GST-exclusive). Unset = no GST added.
 
 import { TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
+import type { RawBalanceTxn } from "../shared/stripePayouts";
 
 type StripeClient = any; // typed via runtime import to avoid hard dep
 
@@ -435,6 +439,107 @@ export async function deleteConnectAccount(accountId: string): Promise<boolean> 
   } catch {
     return false; // e.g. account has a balance — leave it for the tenant to close in Stripe
   }
+}
+
+function stripeAccountOptions(stripeAccountId: string | null): { stripeAccount: string } | undefined {
+  return stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+}
+
+function unixDate(seconds: unknown): Date | null {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds)) return null;
+  return new Date(seconds * 1000);
+}
+
+export interface ListedStripePayout {
+  id: string;
+  amountCents: number;
+  currency: string;
+  status: string;
+  arrivalDate: Date | null;
+  created: Date | null;
+  description: string | null;
+}
+
+export async function listStripePayouts(opts: {
+  stripeAccountId: string | null;
+  limit: number;
+}): Promise<ListedStripePayout[]> {
+  const stripe = await getStripe();
+  const limit = Math.min(50, Math.max(1, Math.floor(opts.limit)));
+  const res = await stripe.payouts.list({ limit }, stripeAccountOptions(opts.stripeAccountId));
+  const data = Array.isArray(res?.data) ? res.data : [];
+  return data.flatMap((payout: Record<string, unknown>): ListedStripePayout[] => {
+    const id = typeof payout.id === "string" ? payout.id : "";
+    if (!id.startsWith("po_")) return [];
+    return [{
+      id,
+      amountCents: typeof payout.amount === "number" ? payout.amount : 0,
+      currency: typeof payout.currency === "string" ? payout.currency : "nzd",
+      status: typeof payout.status === "string" ? payout.status : "pending",
+      arrivalDate: unixDate(payout.arrival_date),
+      created: unixDate(payout.created),
+      description: typeof payout.description === "string" ? payout.description : null,
+    }];
+  });
+}
+
+async function hydrateBalanceSource(
+  stripe: {
+    charges: { retrieve: (id: string, opts?: { stripeAccount: string }) => Promise<unknown> };
+    refunds: { retrieve: (id: string, opts?: { stripeAccount: string }) => Promise<unknown> };
+  },
+  source: unknown,
+  stripeAccountId: string | null,
+): Promise<unknown> {
+  if (typeof source !== "string") return source;
+  const opts = stripeAccountOptions(stripeAccountId);
+  try {
+    if (source.startsWith("ch_") || source.startsWith("py_")) return await stripe.charges.retrieve(source, opts);
+    if (source.startsWith("re_")) return await stripe.refunds.retrieve(source, opts);
+  } catch (error) {
+    console.error("Stripe payout: could not read balance transaction source", error instanceof Error ? error.message : error);
+  }
+  return source;
+}
+
+/** Balance transactions that make up one payout (charges, refunds, fees). */
+export async function listPayoutBalanceTransactions(opts: {
+  payoutId: string;
+  stripeAccountId: string | null;
+}): Promise<RawBalanceTxn[]> {
+  const stripe = await getStripe();
+  const out: RawBalanceTxn[] = [];
+  let startingAfter: string | undefined;
+  const requestOptions = stripeAccountOptions(opts.stripeAccountId);
+  for (let page = 0; page < 20; page++) {
+    const res = await stripe.balanceTransactions.list({
+      payout: opts.payoutId,
+      limit: 100,
+      expand: ["data.source"],
+      starting_after: startingAfter,
+    }, requestOptions);
+    const data = Array.isArray(res?.data) ? res.data : [];
+    for (const bt of data) {
+      const id = typeof bt?.id === "string" ? bt.id : "";
+      if (!id) continue;
+      const source = await hydrateBalanceSource(stripe, bt.source, opts.stripeAccountId);
+      out.push({
+        id,
+        type: typeof bt.type === "string" ? bt.type : "other",
+        amount: typeof bt.amount === "number" ? bt.amount : 0,
+        fee: typeof bt.fee === "number" ? bt.fee : 0,
+        net: typeof bt.net === "number" ? bt.net : 0,
+        description: typeof bt.description === "string" ? bt.description : null,
+        source,
+        currency: typeof bt.currency === "string" ? bt.currency : "nzd",
+      });
+    }
+    if (!res?.has_more || data.length === 0) break;
+    const lastId = data[data.length - 1]?.id;
+    startingAfter = typeof lastId === "string" ? lastId : undefined;
+    if (!startingAfter) break;
+  }
+  return out;
 }
 
 // Verifies a Stripe webhook signature against the raw request body and

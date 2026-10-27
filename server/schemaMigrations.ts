@@ -1155,6 +1155,93 @@ const MIGRATIONS: Migration[] = [
        END $$`,
     ],
   },
+  {
+    // Stripe payouts plus the charges, refunds, and fees inside each one.
+    // Xero payment ids live on the line so a second post cannot double-pay.
+    // Same SQL as migrations/manual/20261026_stripe_payouts.sql.
+    name: "stripe-payouts",
+    statements: [
+      `ALTER TABLE xero_settings ADD COLUMN IF NOT EXISTS stripe_clearing_account_code text DEFAULT '640'`,
+      `ALTER TABLE xero_settings ADD COLUMN IF NOT EXISTS stripe_fees_account_code text`,
+      `UPDATE xero_settings SET stripe_clearing_account_code = '640' WHERE stripe_clearing_account_code IS NULL`,
+      `CREATE TABLE IF NOT EXISTS stripe_payouts (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        stripe_payout_id text NOT NULL,
+        stripe_account_id text,
+        amount numeric(12, 2) NOT NULL,
+        currency text NOT NULL DEFAULT 'NZD',
+        status text NOT NULL,
+        arrival_date timestamp,
+        created_stripe timestamp,
+        description text,
+        fee_total numeric(12, 2) NOT NULL DEFAULT 0,
+        charge_total numeric(12, 2) NOT NULL DEFAULT 0,
+        refund_total numeric(12, 2) NOT NULL DEFAULT 0,
+        xero_fee_id text,
+        xero_fee_kind text,
+        xero_fee_message text,
+        xero_posted_at timestamp,
+        xero_posting_at timestamp,
+        xero_summary jsonb,
+        fetched_at timestamp DEFAULT now(),
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS stripe_payouts_business_payout_uniq ON stripe_payouts (business_id, stripe_payout_id)`,
+      `CREATE INDEX IF NOT EXISTS stripe_payouts_business_arrival_idx ON stripe_payouts (business_id, arrival_date)`,
+      `CREATE TABLE IF NOT EXISTS stripe_payout_lines (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        payout_id varchar NOT NULL REFERENCES stripe_payouts(id) ON DELETE CASCADE,
+        balance_transaction_id text NOT NULL,
+        stripe_type text,
+        kind text NOT NULL,
+        amount numeric(12, 2) NOT NULL,
+        fee numeric(12, 2) NOT NULL DEFAULT 0,
+        net numeric(12, 2) NOT NULL DEFAULT 0,
+        currency text NOT NULL DEFAULT 'NZD',
+        description text,
+        stripe_source_id text,
+        stripe_charge_id text,
+        stripe_payment_id text,
+        match_status text NOT NULL DEFAULT 'unmatched',
+        payment_id varchar,
+        job_id varchar,
+        invoice_id varchar,
+        customer_id varchar,
+        xero_payment_id text,
+        xero_credit_note_id text,
+        xero_refund_payment_id text,
+        xero_status text,
+        xero_message text,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS stripe_payout_lines_payout_bt_uniq ON stripe_payout_lines (payout_id, balance_transaction_id)`,
+      `CREATE INDEX IF NOT EXISTS stripe_payout_lines_payout_idx ON stripe_payout_lines (payout_id)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      for (const table of ["stripe_payouts", "stripe_payout_lines"]) {
+        await client.query(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+        const pol = await client.query(
+          `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = '${table}'::regclass LIMIT 1`,
+        );
+        if (pol.rowCount === 0) {
+          await client.query(
+            `CREATE POLICY tenant_isolation ON ${table}
+               USING (business_id = nullif(current_setting('app.current_business', true), ''))
+               WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+          );
+          console.log(`[schema] created tenant_isolation policy on ${table}`);
+        }
+        if ((hasRole.rowCount ?? 0) > 0) {
+          await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO app_tenant`);
+        }
+      }
+    },
+  },
 ];
 
 function textOrNull(value: unknown): string | null {
