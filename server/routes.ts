@@ -11536,7 +11536,7 @@ Return only the rewritten description, nothing else.`,
         && s.content.trim().length > 0,
       );
       if (!hasIntroduction && !hasDescriptionSection) {
-        validationErrors.push('proposal has no description text — the customer would see an empty job description');
+        validationErrors.push('proposal has no saved description text — the customer would see an empty job description');
       }
 
       // No line-item / $0-total check here: pricing is sometimes written in the
@@ -11802,7 +11802,7 @@ Return only the rewritten description, nothing else.`,
         && s.content.trim().length > 0,
       );
       if (!hasIntroduction && !hasDescriptionSection) {
-        validationErrors.push('quote has no description text — the PDF would have an empty job description');
+        validationErrors.push('quote has no saved description text — the PDF would have an empty job description');
       }
 
       // No line-item / $0-total check here: pricing is sometimes written in the
