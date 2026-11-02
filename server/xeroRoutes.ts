@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { XeroClient, PayrollNzApi, Configuration, Invoice, Payment } from 'xero-node';
 import type { IStorage } from './storage';
 import { resolveBillingName } from '@shared/orgOnlyBilling';
+import { mapXeroInvoiceAmounts } from '@shared/xeroInvoiceAmounts';
 import { TimeTrackingService } from './timeTrackingService';
 
 const router = Router();
@@ -626,10 +627,11 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           }
         }
         console.log(`✅ Invoice created in Xero: ${xeroInvoice.invoiceID}`);
-        
-        // Capture confirmed totals from Xero response
-        const confirmedSubtotal = xeroInvoice.subTotal !== undefined ? parseFloat(xeroInvoice.subTotal.toString()) : null;
-        const confirmedTotal = xeroInvoice.total !== undefined ? parseFloat(xeroInvoice.total.toString()) : null;
+
+        // Xero Total is GST-inclusive. invoices.amount and jobs.total_amount
+        // are ex-GST everywhere else, so write SubTotal into those columns and
+        // keep the inclusive total on jobs.total_including_gst.
+        const xeroAmounts = mapXeroInvoiceAmounts(xeroInvoice);
 
         // Update job with Xero invoice ID, mark as completed, and write back confirmed amounts
         await storage.updateJob(jobId, {
@@ -638,23 +640,20 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           xeroInvoiceId: xeroInvoice.invoiceID || undefined,
           xeroStatus: 'sent',
           sentToXeroDate: new Date(),
-          ...(confirmedSubtotal !== null && confirmedSubtotal > 0 && {
-            subtotal: confirmedSubtotal.toFixed(2),
-            totalAmount: (confirmedTotal ?? confirmedSubtotal).toFixed(2),
-          }),
+          ...(xeroAmounts.jobAmounts ?? {}),
         });
         
-        // Update the invoice status to 'sent' and write back confirmed amount
+        // Update the invoice status to 'sent' and write back the ex-GST subtotal
         if (invoice) {
           await storage.updateInvoice(invoice.id, {
             status: 'sent',
             xeroInvoiceId: xeroInvoice.invoiceID || undefined,
             xeroSyncedAt: new Date(),
-            ...(confirmedTotal !== null && confirmedTotal > 0 && {
-              amount: confirmedTotal.toFixed(2),
+            ...(xeroAmounts.invoiceAmount != null && {
+              amount: xeroAmounts.invoiceAmount,
             }),
           });
-          console.log(`✅ Updated invoice ${invoice.invoiceNumber} status to 'sent', amount: $${confirmedTotal}`);
+          console.log(`✅ Updated invoice ${invoice.invoiceNumber} status to 'sent', amount (ex-GST): $${xeroAmounts.invoiceAmount ?? invoice.amount}`);
         }
         
         // Create diary entry for Xero send - prefer Xero's confirmed total, then local invoice amount
