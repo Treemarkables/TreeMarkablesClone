@@ -98,6 +98,7 @@ import {
 } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { compareByRecentActivity } from "@shared/dispatchJobOrder";
+import { dispatchJobTotalExGst } from "@shared/dispatchJobTotal";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1376,21 +1377,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
-          totalAmount:
-            apiJob.subtotal && Number(apiJob.subtotal) > 0
-              ? apiJob.subtotal
-              : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
-                ? String(
-                    Math.round(
-                      (Number(apiJob.totalIncludingGst) / 1.15) * 100,
-                    ) / 100,
-                  )
-                : apiJob.totalAmount && Number(apiJob.totalAmount) > 0
-                  ? String(
-                      Math.round((Number(apiJob.totalAmount) / 1.15) * 100) /
-                        100,
-                    )
-                  : "0",
+          totalAmount: dispatchJobTotalExGst(apiJob),
         });
       });
     }
@@ -1477,21 +1464,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
-          totalAmount:
-            apiJob.subtotal && Number(apiJob.subtotal) > 0
-              ? apiJob.subtotal
-              : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
-                ? String(
-                    Math.round(
-                      (Number(apiJob.totalIncludingGst) / 1.15) * 100,
-                    ) / 100,
-                  )
-                : apiJob.totalAmount && Number(apiJob.totalAmount) > 0
-                  ? String(
-                      Math.round((Number(apiJob.totalAmount) / 1.15) * 100) /
-                        100,
-                    )
-                  : "0",
+          totalAmount: dispatchJobTotalExGst(apiJob),
         });
       });
     }

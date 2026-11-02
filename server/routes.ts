@@ -11132,26 +11132,13 @@ Return only the rewritten description, nothing else.`,
       // Create the invoice
       const invoice = await storage.createInvoice(invoiceData);
 
-      // Update job to store invoice reference AND sync total amount for revenue metrics
-      const jobUpdate: Record<string, unknown> = {
-        invoiceId: invoice.id,
-        invoiceBlocked: false,
-        totalAmount: amount.toString() // Sync invoice amount to job for revenue tracking
-      };
-      // Backfill the job description from the invoice when the job has none yet,
-      // so a description typed straight into the invoice surfaces on the job card.
-      // Only fill when empty — never clobber an existing job description.
-      const invoiceDescription = (customData.description || '').trim();
-      if (invoiceDescription && !(job.description || '').trim()) {
-        jobUpdate.description = invoiceDescription;
-      }
-      await storage.updateJob(id, jobUpdate);
-
-      // Compute exc-GST and inc-GST totals per line item so the diary entry
-      // can show both, clearly labelled. Without this, the diary dumped the
-      // raw `amount` sum (whose GST basis depends on each item's
+      // Compute exc-GST and inc-GST totals per line item so the job row and
+      // the diary entry share one pair of figures. Without this, the diary
+      // dumped the raw `amount` sum (whose GST basis depends on each item's
       // priceIncludesTax flag) while the job-card header always shows
       // exc-GST — producing confusing "$9,145 vs $7,952" discrepancies.
+      // subtotal and total_including_gst are stored here too, so later
+      // screens (Despatch) don't have to guess which column is ex-GST.
       type DiaryLineItem = {
         total?: number | string;
         amount?: number | string;
@@ -11197,6 +11184,29 @@ Return only the rewritten description, nothing else.`,
         exGstTotal *= pct;
         incGstTotal *= pct;
       }
+      const gstAmount = incGstTotal - exGstTotal;
+
+      // Update job to store invoice reference AND sync total amount for revenue metrics.
+      // total_amount stays the ex-GST invoice amount. subtotal and
+      // total_including_gst are written in the same update so a later screen
+      // can prefer subtotal instead of guessing from a zeroed GST column.
+      const jobUpdate: Record<string, unknown> = {
+        invoiceId: invoice.id,
+        invoiceBlocked: false,
+        totalAmount: amount.toString(),
+        subtotal: exGstTotal.toFixed(2),
+        totalIncludingGst: incGstTotal.toFixed(2),
+        gstAmount: gstAmount.toFixed(2),
+      };
+      // Backfill the job description from the invoice when the job has none yet,
+      // so a description typed straight into the invoice surfaces on the job card.
+      // Only fill when empty — never clobber an existing job description.
+      const invoiceDescription = (customData.description || '').trim();
+      if (invoiceDescription && !(job.description || '').trim()) {
+        jobUpdate.description = invoiceDescription;
+      }
+      await storage.updateJob(id, jobUpdate);
+
       const partialSuffix = invoiceType === 'partial' ? ' (partial)' : '';
       const diaryText = `Invoice ${invoiceNumber} created for $${exGstTotal.toFixed(2)} + GST — $${incGstTotal.toFixed(2)} total${partialSuffix}`;
 
