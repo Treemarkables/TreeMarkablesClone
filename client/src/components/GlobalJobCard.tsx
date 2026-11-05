@@ -10919,18 +10919,25 @@ The Treemarkables Team`;
         open={isSchedulingModalOpen}
         onOpenChange={setIsSchedulingModalOpen}
       >
-        <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-2 flex-shrink-0">
+        <DialogContent className="schedule-job-dialog sm:max-w-md max-h-[85vh] flex flex-col p-0">
+          <DialogHeader className="schedule-job-dialog__header px-6 pt-6 pb-2 flex-shrink-0">
             <h2 className="text-lg font-semibold">Schedule Job</h2>
           </DialogHeader>
-          <div className="space-y-4 px-6 py-2 overflow-y-auto flex-1 min-h-0">
+          {/* Body is the only scrollport. stopPropagation keeps Radix's body
+              scroll lock (react-remove-scroll on document touchmove) from
+              preventDefault-ing a vertical swipe before iOS can pan this
+              region. Desktop mouse/wheel is unchanged. */}
+          <div
+            className="schedule-job-dialog__body space-y-4 px-6 py-2 overflow-y-auto flex-1 min-h-0"
+            onTouchMove={(e) => e.stopPropagation()}
+          >
             <div>
               <label className="text-sm font-medium">Select Days</label>
               <p className="text-xs text-muted-foreground">
                 Tap each day this job runs. Tap a day again to remove it — skip
                 the weekend or any other days you don't want.
               </p>
-              <div className="mt-2 rounded-md border flex justify-center">
+              <div className="schedule-job-dialog__calendar mt-2 rounded-md border flex justify-center">
                 <DayCalendar
                   mode="multiple"
                   selected={schedulingData.selectedDates.map(
@@ -11129,7 +11136,7 @@ The Treemarkables Team`;
                   <Calendar className="h-4 w-4 text-green-600" />
                 </Button>
               </div>
-              <div className="mt-2 space-y-2 border rounded-md p-3 max-h-60 overflow-y-auto">
+              <div className="schedule-job-dialog__staff mt-2 space-y-2 border rounded-md p-3 max-h-60 overflow-y-auto">
                 {employees.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No staff members available
@@ -11330,7 +11337,7 @@ The Treemarkables Team`;
               />
             </div>
           </div>
-          <div className="flex justify-between gap-2 px-6 py-4 border-t flex-wrap flex-shrink-0">
+          <div className="schedule-job-dialog__footer flex justify-between gap-2 px-6 py-4 border-t flex-wrap flex-shrink-0">
             {/* Unschedule button — only shown when job already has a scheduled date */}
             <div>
               {editingJob?.scheduledDate && (
