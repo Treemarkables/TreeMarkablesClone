@@ -597,3 +597,87 @@ svg.lucide-loader-circle {
     overflow-x: auto;
   }
 }
+
+/* Schedule Job modal on a phone (portrait, or landscape with a coarse pointer).
+   The dialog is position:fixed and centered with translate(-50%, -50%) plus
+   max-height: 85vh. On iOS that combination does not pan:
+   - 85vh is the large layout viewport, taller than the visual viewport once
+     the notch and home indicator are in play, so Assign Staff Members sits
+     below the fold inside a box that is not itself overflowing.
+   - A translate/transform on the fixed layer makes WKWebView drop touch
+     scrolling of descendant overflow.
+   - Radix Dialog locks body scroll (react-remove-scroll). Its document
+     touchmove listener preventDefaults the gesture unless some ancestor is a
+     real scrollport (scrollHeight > clientHeight). The day buttons are the
+     touch target, so the swipe dies and the list never moves.
+   Wide, tall screens keep the Tailwind layout (centered 85vh dialog). */
+@media (max-width: 767px), ((pointer: coarse) and (max-height: 520px)) {
+  /* Doubled class so these beat the dialog's single-class utilities
+     (max-h-[85vh], translate, overflow-y-auto) no matter the stylesheet order. */
+  .schedule-job-dialog.schedule-job-dialog {
+    top: max(0.5rem, env(safe-area-inset-top, 0px));
+    right: 0;
+    bottom: auto;
+    left: 0;
+    width: min(
+      28rem,
+      calc(
+        100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) -
+          1rem
+      )
+    );
+    max-width: none;
+    height: auto;
+    max-height: calc(
+      100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) -
+        1rem
+    );
+    margin-right: auto;
+    margin-left: auto;
+    transform: none;
+    translate: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .schedule-job-dialog__header,
+  .schedule-job-dialog__footer {
+    position: sticky;
+    z-index: 1;
+    flex-shrink: 0;
+    background-color: hsl(var(--background));
+  }
+
+  .schedule-job-dialog__header {
+    top: 0;
+  }
+
+  .schedule-job-dialog__footer {
+    bottom: 0;
+  }
+
+  .schedule-job-dialog__body.schedule-job-dialog__body {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  /* Day cells are <button>s. pan-y lets a vertical swipe scroll the body
+     instead of the button (or a touch-action hit from the picker) eating it. */
+  .schedule-job-dialog__calendar,
+  .schedule-job-dialog__calendar * {
+    touch-action: pan-y;
+  }
+
+  /* One scrollport. A nested max-height list is not a second gesture target
+     that react-remove-scroll can cancel before the body moves. */
+  .schedule-job-dialog__staff.schedule-job-dialog__staff {
+    max-height: none;
+    overflow: visible;
+  }
+}
