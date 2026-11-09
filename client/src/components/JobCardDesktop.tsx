@@ -647,7 +647,9 @@ export function JobCardDesktop({
                 no duplicate fetches. */}
             <div className="flex-1 overflow-y-auto min-h-0">
               {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
-              {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
+              {activeTab === "billing" && (
+                <JobBillingPanel jobId={jobId} onOpenInvoice={actions?.invoice} />
+              )}
               {activeTab === "backcosting" && <BackCostingPanel jobId={jobId} />}
               {activeTab === "checklist" && roleChecklistEnabled && <JobChecklistPanel jobId={jobId} />}
               {activeTab === "quoting" && <JobQuotingPanel jobId={jobId} />}

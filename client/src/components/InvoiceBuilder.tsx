@@ -41,6 +41,7 @@ import { useToast } from "@/hooks/use-toast";
 import { InvoiceTemplate } from "@/components/InvoiceTemplate";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 import { extractInvoiceLineItems } from "@/lib/invoiceLineItemSources";
+import { invoiceDescriptionFromSources } from "@/lib/invoiceJobDescription";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { DocumentTemplate, Customer, Job, InvoiceSectionConfig } from "@shared/schema";
@@ -350,7 +351,14 @@ export function InvoiceBuilder({
       // edits that were made directly inside the invoice.
       const savedInvoiceDesc =
         existingInvoice.description ?? existingInvoice.notes ?? "";
-      setEditableDescription(savedInvoiceDesc || job.description || "");
+      setEditableDescription(
+        invoiceDescriptionFromSources({
+          existingInvoiceDescription: savedInvoiceDesc,
+          hasProposal: false,
+          hasQuote: false,
+          jobDescription: job.description,
+        }),
+      );
     } else {
       console.log("⚠️ No existing invoices found for this job");
     }
@@ -481,15 +489,19 @@ export function InvoiceBuilder({
     }
     // else: existing invoice already has proposal-sourced, priced items — keep them as-is.
 
-    // Set description from proposal/quote (only if no existing invoice)
+    // Set description from proposal/quote (only if no existing invoice).
+    // job.description is the text on the job card at the moment Invoice was
+    // clicked, including an unsaved multiline draft.
     if (!existingInvoices.length) {
-      if (proposal) {
-        setEditableDescription(proposal.introduction || job.description || "");
-      } else if (quote) {
-        setEditableDescription(quote.description || job.description || "");
-      } else {
-        setEditableDescription(job.description || "");
-      }
+      setEditableDescription(
+        invoiceDescriptionFromSources({
+          hasProposal: !!proposal,
+          proposalIntroduction: proposal?.introduction,
+          hasQuote: !!quote,
+          quoteDescription: quote?.description,
+          jobDescription: job.description,
+        }),
+      );
 
       // Initialize notes for new invoices (use job notes as default)
       setEditableNotes(job.notes || "");

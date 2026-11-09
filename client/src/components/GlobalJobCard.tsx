@@ -207,6 +207,8 @@ import { Calendar as DayCalendar } from "@/components/ui/calendar";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { Linkify, LinkifyMultiline } from "@/lib/linkify";
 import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
+import { readJobDescriptionDraft } from "@/lib/jobDescriptionDraft";
+import { invoiceJobDescriptionFromDraft } from "@/lib/invoiceJobDescription";
 import { Link } from "wouter";
 
 // Lead jobs auto-created on the server land with a literal
@@ -397,6 +399,8 @@ interface GlobalJobCardProps {
   onJobUpdated?: (job: any) => void;
   renderInline?: boolean; // For split-screen panel rendering (desktop)
   initialSidebarTab?: SidebarTab; // Deep-link from push notifications
+  /** Despatch → New → Invoice. Open the invoice builder once a customer is on the job. */
+  initialOpenInvoice?: boolean;
 }
 
 export function GlobalJobCard({
@@ -411,6 +415,7 @@ export function GlobalJobCard({
   onJobUpdated,
   renderInline = false,
   initialSidebarTab,
+  initialOpenInvoice = false,
 }: GlobalJobCardProps) {
   const [checklist, setChecklist] = useState<ChecklistItem[]>(
     Array.isArray(job?.checklist) ? job.checklist : [],
@@ -784,6 +789,9 @@ export function GlobalJobCard({
   const [isSMSComposerOpen, setIsSMSComposerOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  // Frozen at the moment Invoice is clicked so the builder does not init from
+  // a form snapshot that is still "" or only the last saved paragraph.
+  const [carriedInvoiceDescription, setCarriedInvoiceDescription] = useState<string | null>(null);
   const [paidNotesValue, setPaidNotesValue] = useState("");
   const [paidNotesSaving, setPaidNotesSaving] = useState(false);
 
@@ -1319,6 +1327,7 @@ export function GlobalJobCard({
       setIsSMSComposerOpen(false);
       setIsQuoteModalOpen(false);
       setIsInvoiceModalOpen(false);
+      setCarriedInvoiceDescription(null);
       setIsProposalViewerOpen(false);
       setIsProposalBuilderOpen(false);
       setIsProfitTrackerOpen(false);
@@ -3562,8 +3571,26 @@ export function GlobalJobCard({
     }
   };
 
-  // Handle invoice click
+  // Handle invoice click.
+  // JobDetailsPanel (the description field on a new work order) does not write
+  // the form until blur, and the form's "" then hides the saved job
+  // description. Read the field's current text, including an unsaved
+  // paragraph, and freeze it for InvoiceBuilder.
   const handleInvoiceClick = () => {
+    const jobKey = editingJob?.id;
+    const live = jobKey ? readJobDescriptionDraft(jobKey) : null;
+    if (descriptionPopupOpen && live == null) {
+      form.setValue("description", descriptionDraft, { shouldDirty: true });
+    }
+    setCarriedInvoiceDescription(
+      invoiceJobDescriptionFromDraft(
+        live,
+        descriptionPopupOpen && live == null
+          ? descriptionDraft
+          : form.getValues("description"),
+        editingJob?.description,
+      ),
+    );
     if (!selectedCustomer?.id) {
       toast({
         title: "Customer Required",
@@ -3572,15 +3599,22 @@ export function GlobalJobCard({
       });
       return;
     }
-    // Commit any open description-popup draft so form state holds the latest
-    // typed value before InvoiceBuilder reads it. Without this, text entered
-    // via the popup (which doesn't touch form state until the popup closes)
-    // would be missed when the user clicks Invoice before dismissing it.
-    if (descriptionPopupOpen) {
-      form.setValue("description", descriptionDraft, { shouldDirty: true });
-    }
     setIsInvoiceModalOpen(true);
   };
+
+  const openInvoiceRef = useRef(handleInvoiceClick);
+  openInvoiceRef.current = handleInvoiceClick;
+  const autoOpenedInvoiceRef = useRef(false);
+  useEffect(() => {
+    if (!initialOpenInvoice) {
+      autoOpenedInvoiceRef.current = false;
+      return;
+    }
+    if (autoOpenedInvoiceRef.current) return;
+    if (!selectedCustomer?.id) return;
+    autoOpenedInvoiceRef.current = true;
+    openInvoiceRef.current();
+  }, [initialOpenInvoice, selectedCustomer?.id]);
 
   // Handle print click
   const handlePrintClick = () => {};
@@ -10636,7 +10670,7 @@ The Treemarkables Team`;
     // re-opened booking looked like it had "no recollection" of its details.
     schedule: () => handleScheduleClick(),
     quote: () => setIsQuoteModalOpen(true),
-    invoice: () => setIsInvoiceModalOpen(true),
+    invoice: () => handleInvoiceClick(),
     proposal: () => setIsProposalBuilderOpen(true),
     timeTracking: () => setIsTimeTrackingOpen(true),
     profitTracker: () => setIsProfitTrackerOpen(true),
@@ -10660,7 +10694,7 @@ The Treemarkables Team`;
   // one. Pulled out so the desktop card mirrors what GlobalJobCard's
   // own diary panel already wires.
   const handleDiaryQuoteClick = () => setIsQuoteModalOpen(true);
-  const handleDiaryInvoiceClick = () => setIsInvoiceModalOpen(true);
+  const handleDiaryInvoiceClick = () => handleInvoiceClick();
   const handleDiaryProposalClick = (proposalNumber: string) => {
     const proposals = (jobProposalResponse as any)?.data || [];
     const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
@@ -10817,10 +10851,19 @@ The Treemarkables Team`;
             // missed by InvoiceBuilder's initializer.
             job={{
               ...editingJob,
-              // `??` (not `||`) so an intentional user clear ("") isn't
-              // silently replaced by the stale cached value.
+              // Carried at click time. The form value is often still "" (or
+              // only the last saved paragraph) when Invoice is clicked in the
+              // same gesture as typing. Null means the builder was opened
+              // without that snapshot; read the live field, then the form,
+              // then the saved job description.
               description:
-                form.getValues("description") ?? editingJob.description,
+                carriedInvoiceDescription !== null
+                  ? carriedInvoiceDescription
+                  : invoiceJobDescriptionFromDraft(
+                      readJobDescriptionDraft(editingJob.id),
+                      form.getValues("description"),
+                      editingJob.description,
+                    ),
               notes: form.getValues("notes") ?? editingJob.notes,
               address: form.getValues("address") ?? editingJob.address,
               billingAddress:
