@@ -469,7 +469,9 @@ export function JobCardMobile({
       <div className="flex-1 min-h-0 overflow-y-auto bg-muted" data-testid="job-card-mobile-body">
         <div className="pb-[110px]">
           {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
-          {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
+          {activeTab === "billing" && (
+            <JobBillingPanel jobId={jobId} onOpenInvoice={actions?.invoice} />
+          )}
           {activeTab === "backcosting" && (
             <div className="bg-white">
               <BackCostingPanel jobId={jobId} />

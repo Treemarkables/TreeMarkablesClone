@@ -1,4 +1,8 @@
 import { useJobFilters, useLaneFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
+import {
+  dispatchNewInvoiceRequest,
+  shouldStartDispatchInvoiceCreate,
+} from "@/lib/dispatchNewInvoice";
 import { QuoteFollowUpBanner } from "@/components/QuoteFollowUpBanner";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -813,6 +817,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
+  // Set when New → Invoice creates the draft. The card opens the invoice
+  // builder for this job id only, once a customer is on it.
+  const [invoiceLaunchJobId, setInvoiceLaunchJobId] = useState<string | null>(null);
   const [globalJobCardMode, setGlobalJobCardMode] = useState<"create" | "edit">(
     "create",
   );
@@ -1055,6 +1062,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             return;
           }
           setInitialSidebarTab(tabParam);
+          setInvoiceLaunchJobId(null);
           setShowGlobalJobCard(true);
           setGlobalJobCardMode("edit");
           setJobToEdit(jobData as JobAssignment);
@@ -2227,6 +2235,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     localStorage.setItem(lastViewedKey, new Date().toISOString());
 
     setJobToEdit(job);
+    setInvoiceLaunchJobId(null);
     setGlobalJobCardMode("edit");
     setShowGlobalJobCard(true);
     setSelectedJob(null); // Close the job details dialog
@@ -2508,7 +2517,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const createDraftMutation = useMutation<
     { success?: boolean; data?: { id?: string } },
     Error,
-    { status: string; afterOpen?: () => void }
+    { status: string; afterOpen?: () => void; openInvoice?: boolean }
   >({
     mutationFn: async ({ status }) => {
       const res = await apiRequest("POST", "/api/jobs", { status });
@@ -2534,6 +2543,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       setJobToEdit({ jobId: newId, id: newId } as JobAssignment);
       setInitialJobData(null);
       setGlobalJobCardMode("edit");
+      setInvoiceLaunchJobId(vars.openInvoice ? newId : null);
       setShowGlobalJobCard(true);
       vars.afterOpen?.();
     },
@@ -2574,7 +2584,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   const handleCreateInvoice = () => {
-    createDraftMutation.mutate({ status: "invoiced" });
+    // "invoiced" is not a job status — insertJobSchema rejects it and the
+    // card never opens. Create a work order and open the invoice builder.
+    if (!shouldStartDispatchInvoiceCreate(createDraftMutation.isPending)) return;
+    const request = dispatchNewInvoiceRequest();
+    createDraftMutation.mutate({
+      status: request.status,
+      openInvoice: request.openInvoice,
+    });
   };
 
   const saveSchedule = () => {
@@ -3783,7 +3800,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           through GlobalJobCard's layout gate: mobile gets JobCardMobile,
           desktop gets JobCardDesktop. */}
       {showGlobalJobCard && (
-        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); }}>
+        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); setInvoiceLaunchJobId(null); }}>
           <GlobalJobCard
             isOpen={true}
             mode={globalJobCardMode}
@@ -3795,7 +3812,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               setJobToEdit(null);
               setInitialJobData(null);
               setInitialSidebarTab(undefined);
+              setInvoiceLaunchJobId(null);
             }}
+            initialOpenInvoice={
+              invoiceLaunchJobId != null &&
+              invoiceLaunchJobId === (jobToEdit?.jobId || jobToEdit?.id)
+            }
           />
         </JobCardErrorBoundary>
       )}
