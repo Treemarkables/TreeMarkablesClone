@@ -203,6 +203,13 @@ import {
 import { cn } from "@/lib/utils";
 import { registerReloadGuard } from "@/lib/foregroundReloadGuard";
 import { formatTime12Hour, nzTimeToUTC, utcToNZTime, getNZDateString, getJobScheduledNZDates } from "@shared/dateUtils";
+import {
+  buildCrewAssignmentRows,
+  crewIdsForScheduleEdit,
+  formatScheduleStartLabel,
+  scheduleStartTimes,
+  snapScheduleDuration,
+} from "@shared/scheduleCrew";
 import { Calendar as DayCalendar } from "@/components/ui/calendar";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { Linkify, LinkifyMultiline } from "@/lib/linkify";
@@ -823,6 +830,10 @@ export function GlobalJobCard({
   // a second icon next to their staff row. Kept distinct from staffAvailabilityFor
   // so the two modals don't fight over the same "isOpen" flag.
   const [myGoogleCalendarOpen, setMyGoogleCalendarOpen] = useState(false);
+  // The staff block, so reopening a booking can scroll it into view. On a
+  // phone the calendar sits above it and the dialog used to not pan.
+  const staffListRef = useRef<HTMLDivElement>(null);
+  const didScrollStaffRef = useRef(false);
 
   // Time tracking modal state
   const [isTimeTrackingOpen, setIsTimeTrackingOpen] = useState(false);
@@ -942,7 +953,7 @@ export function GlobalJobCard({
   }, [searchQuery]);
 
   // Fetch employees for scheduling assignment (needed upfront)
-  const { data: employeesData } = useQuery({
+  const { data: employeesData, isLoading: employeesLoading } = useQuery({
     queryKey: ["/api/employees"],
     enabled: isOpen || isSchedulingModalOpen,
     staleTime: 5 * 60 * 1000,
@@ -3339,22 +3350,20 @@ export function GlobalJobCard({
           Math.round(Number(editingJob.estimatedDuration) * 60),
         );
       }
+      if (baseDuration) {
+        baseDuration = snapScheduleDuration(Number(baseDuration)) || baseDuration;
+      }
     }
 
-    // Crew can live in any of three fields depending on the path that
-    // scheduled the job (modal save → assignedTo, drag-drop/older flows →
-    // assignedTeam/assignedStaffIds). Take the first non-empty one.
-    const baseAssignedTo: string[] =
-      Array.isArray(editingJob?.assignedTo) &&
-      (editingJob.assignedTo as string[]).length > 0
-        ? (editingJob.assignedTo as string[])
-        : Array.isArray(editingJob?.assignedTeam) &&
-            (editingJob.assignedTeam as string[]).length > 0
-          ? (editingJob.assignedTeam as string[])
-          : Array.isArray((editingJob as any)?.assignedStaffIds) &&
-              (editingJob as any).assignedStaffIds.length > 0
-            ? ((editingJob as any).assignedStaffIds as string[])
-            : [];
+    // Crew can live on the job (assignedTo / assignedTeam / assignedStaffIds)
+    // or only on assignment rows. Union them — taking the first non-empty
+    // field dropped people when a later drop overwrote assignedTeam.
+    const baseAssignedTo = crewIdsForScheduleEdit({
+      assignedTo: editingJob?.assignedTo,
+      assignedTeam: editingJob?.assignedTeam,
+      assignedStaffIds: (editingJob as { assignedStaffIds?: unknown })?.assignedStaffIds,
+      days: existingSelectedDates,
+    });
 
     // Always reset to job-derived defaults first so stale state from a
     // previous modal session can never leak in.
@@ -3406,21 +3415,6 @@ export function GlobalJobCard({
 
         const startNZ = utcToNZTime(startDateUTC);
 
-        // Only include employees whose assignment shares the chosen start
-        // time — keeps stale rows at other times out of the form.
-        const chosenStartMs = startDateUTC.getTime();
-        const uniqueEmployeeIds = [
-          ...new Set(
-            data.data
-              .filter(
-                (a: any) =>
-                  Math.abs(new Date(a.startTime).getTime() - chosenStartMs) <
-                  60_000,
-              )
-              .map((a: any) => a.employeeId),
-          ),
-        ] as string[];
-
         // Distinct NZ days across all assignment rows — the precise day set the
         // crew is actually booked on (covers non-contiguous multi-day jobs).
         const assignmentDays = [
@@ -3430,18 +3424,26 @@ export function GlobalJobCard({
             ),
           ),
         ].sort() as string[];
+        const bookedDays =
+          assignmentDays.length > 0 ? assignmentDays : nextData.selectedDates;
+        // Tick every person on those days. Matching the chosen start to the
+        // minute hid anyone booked earlier or later the same day, so reopening
+        // looked like the crew list had forgotten them.
+        const bookedCrew = crewIdsForScheduleEdit({
+          assignedTo: editingJob?.assignedTo,
+          assignedTeam: editingJob?.assignedTeam,
+          assignedStaffIds: (editingJob as { assignedStaffIds?: unknown })?.assignedStaffIds,
+          assignments: data.data,
+          days: bookedDays,
+        });
 
         nextData = {
           ...nextData,
           date: startNZ.date,
-          selectedDates:
-            assignmentDays.length > 0 ? assignmentDays : nextData.selectedDates,
+          selectedDates: bookedDays,
           startTime: startNZ.time,
-          duration: durationMinutes.toString(),
-          assignedTo:
-            uniqueEmployeeIds.length > 0
-              ? uniqueEmployeeIds
-              : nextData.assignedTo,
+          duration: snapScheduleDuration(durationMinutes) || nextData.duration,
+          assignedTo: bookedCrew.length > 0 ? bookedCrew : nextData.assignedTo,
           notes: chosenAssignment.notes || "",
         };
       }
@@ -3758,6 +3760,27 @@ The Treemarkables Team`;
     }
   };
 
+  // Reopening a booking: bring Assign Staff into view. The day calendar is
+  // tall, and on a phone the dialog did not pan, so the list sat off screen.
+  useEffect(() => {
+    if (!isSchedulingModalOpen) {
+      didScrollStaffRef.current = false;
+      return;
+    }
+    if (!editingJob?.scheduledDate || didScrollStaffRef.current) return;
+    const node = staffListRef.current;
+    if (!node) return;
+    didScrollStaffRef.current = true;
+    const scroller = node.closest(".schedule-job-dialog__body");
+    if (scroller instanceof HTMLElement) {
+      const top =
+        node.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      scroller.scrollTop += top;
+    } else {
+      node.scrollIntoView({ block: "start" });
+    }
+  }, [isSchedulingModalOpen, editingJob?.scheduledDate, employees.length]);
+
   // Staff conflict checking - DISABLED to allow double booking
   // Conflicts are now allowed - staff can be scheduled on multiple jobs at the same time
   useEffect(() => {
@@ -3865,31 +3888,20 @@ The Treemarkables Team`;
       const endTimeNZ = utcToNZTime(endTimeUTC);
       const [endHours, endMinutes] = endTimeNZ.time.split(":").map(Number);
 
-      // Create staff assignments - remove duplicates first
+      // Full crew for the selected days — one row per person per day. The
+      // server deletes this job's existing assignment rows and inserts these,
+      // so adding someone updates the booking instead of stacking a copy.
       const uniqueEmployeeIds = [...new Set(schedulingData.assignedTo)];
-
-      // One assignment per employee per selected day — last day uses day2DurationMs if set
-      const staffAssignments: Array<{
-        employeeId: string;
-        startTime: string;
-        endTime: string;
-        notes: string;
-      }> = [];
-      for (const dayStr of allDays) {
-        const isLastDay = dayStr === endDateStr;
-        const thisDurationMs =
-          isMultiDay && isLastDay ? day2DurationMs : durationMs;
-        const dayStartUTC = nzTimeToUTC(dayStr, timeStr);
-        const dayEndUTC = new Date(dayStartUTC.getTime() + thisDurationMs);
-        for (const employeeId of uniqueEmployeeIds) {
-          staffAssignments.push({
-            employeeId,
-            startTime: dayStartUTC.toISOString(),
-            endTime: dayEndUTC.toISOString(),
-            notes: schedulingData.notes,
-          });
-        }
-      }
+      const staffAssignments = buildCrewAssignmentRows({
+        employeeIds: uniqueEmployeeIds,
+        days: allDays,
+        startTime: timeStr,
+        durationMinutes: parseInt(schedulingData.duration, 10),
+        lastDayDurationMinutes: Math.round(
+          (isMultiDay ? day2DurationMs : durationMs) / 60_000,
+        ),
+        notes: schedulingData.notes,
+      });
 
       // Calculate scheduledEndDate if multi-day (timestamp = start of last day + day2Duration)
       let scheduledEndDateISO: string | null = null;
@@ -10962,18 +10974,23 @@ The Treemarkables Team`;
         open={isSchedulingModalOpen}
         onOpenChange={setIsSchedulingModalOpen}
       >
-        <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-2 flex-shrink-0">
+        <DialogContent className="schedule-job-dialog sm:max-w-md max-h-[85vh] flex flex-col p-0">
+          <DialogHeader className="schedule-job-dialog__header px-6 pt-6 pb-2 flex-shrink-0">
             <h2 className="text-lg font-semibold">Schedule Job</h2>
           </DialogHeader>
-          <div className="space-y-4 px-6 py-2 overflow-y-auto flex-1 min-h-0">
+          {/* Body is the only scrollport on a phone. stopPropagation keeps
+              Radix's document touch lock from cancelling the swipe. */}
+          <div
+            className="schedule-job-dialog__body space-y-4 px-6 py-2 overflow-y-auto flex-1 min-h-0"
+            onTouchMove={(e) => e.stopPropagation()}
+          >
             <div>
               <label className="text-sm font-medium">Select Days</label>
               <p className="text-xs text-muted-foreground">
                 Tap each day this job runs. Tap a day again to remove it — skip
                 the weekend or any other days you don't want.
               </p>
-              <div className="mt-2 rounded-md border flex justify-center">
+              <div className="schedule-job-dialog__calendar mt-2 rounded-md border flex justify-center">
                 <DayCalendar
                   mode="multiple"
                   selected={schedulingData.selectedDates.map(
@@ -11049,18 +11066,11 @@ The Treemarkables Team`;
                     <SelectValue placeholder="Select time" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60">
-                    {Array.from({ length: 23 }, (_, i) => {
-                      const actualIndex = i + 12;
-                      const hours = Math.floor(actualIndex / 2);
-                      const minutes = (actualIndex % 2) * 30;
-                      const time = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-                      const display = `${hours === 0 ? 12 : hours > 12 ? hours - 12 : hours}:${String(minutes).padStart(2, "0")} ${hours < 12 ? "AM" : "PM"}`;
-                      return (
-                        <SelectItem key={time} value={time}>
-                          {display}
-                        </SelectItem>
-                      );
-                    })}
+                    {scheduleStartTimes(schedulingData.startTime).map((time) => (
+                      <SelectItem key={time} value={time}>
+                        {formatScheduleStartLabel(time)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -11151,7 +11161,7 @@ The Treemarkables Team`;
                   </Select>
                 </div>
               )}
-            <div>
+            <div ref={staffListRef} data-testid="schedule-staff-section">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium">
                   Assign Staff Members
@@ -11172,8 +11182,21 @@ The Treemarkables Team`;
                   <Calendar className="h-4 w-4 text-green-600" />
                 </Button>
               </div>
-              <div className="mt-2 space-y-2 border rounded-md p-3 max-h-60 overflow-y-auto">
-                {employees.length === 0 ? (
+              {editingJob?.scheduledDate && (
+                <p
+                  className="text-xs text-muted-foreground mt-1"
+                  data-testid="text-schedule-staff-hint"
+                >
+                  People already on this job are ticked. Tick to add someone, untick to remove them.
+                </p>
+              )}
+              <div
+                className="schedule-job-dialog__staff mt-2 space-y-2 border rounded-md p-3 max-h-60 overflow-y-auto"
+                data-testid="schedule-staff-list"
+              >
+                {employeesLoading && employees.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Loading staff…</p>
+                ) : employees.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No staff members available
                   </p>
@@ -11373,7 +11396,7 @@ The Treemarkables Team`;
               />
             </div>
           </div>
-          <div className="flex justify-between gap-2 px-6 py-4 border-t flex-wrap flex-shrink-0">
+          <div className="schedule-job-dialog__footer flex justify-between gap-2 px-6 py-4 border-t flex-wrap flex-shrink-0">
             {/* Unschedule button — only shown when job already has a scheduled date */}
             <div>
               {editingJob?.scheduledDate && (
