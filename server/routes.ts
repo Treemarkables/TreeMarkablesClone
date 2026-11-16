@@ -20142,14 +20142,17 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       // Keep both crew fields in step. A later edit reads either one, and
       // writing only assignedTeam made the other go stale.
+      // Built as a typed patch: two string[] fields plus a spread makes
+      // TypeScript invent an index signature that Partial<InsertJob> rejects.
       const employeeIds = finalEmployeeIds;
       if (job) {
         const next = statusAfterBooking(job.status);
-        await storage.updateJob(jobId, {
+        const crewPatch: Partial<schema.InsertJob> = {
           assignedTeam: employeeIds,
           assignedTo: employeeIds,
-          ...(next ? { status: next } : {}),
-        });
+        };
+        if (next) crewPatch.status = next;
+        await storage.updateJob(jobId, crewPatch);
       }
 
       // Calculate and update estimated man-hours based on staff assignments
