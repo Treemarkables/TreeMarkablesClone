@@ -38,6 +38,7 @@ import { facebookGraphUrl, readFacebookPageAccessToken, redactFacebookSecrets } 
 import { checkFacebookConnection, loadFacebookPageReviews } from "./services/reviewsService";
 import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
+import { crewIdsAfterSave, newlyAddedCrewIds } from "@shared/scheduleCrew";
 import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { businessIdFromVoiceClient, isBusinessId, voiceIdentityForEmployee, inboundVoiceIdentity } from "./tenancy/voiceIdentity";
@@ -20080,9 +20081,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // Delete existing staff assignments for this job to prevent duplicates when rescheduling
       // Skip deletion when addOnly=true (e.g. drag-drop onto a specific employee row)
       const existingAssignments = await storage.getJobStaffAssignmentsByJob(jobId);
+      const removedAssignmentIds: string[] = [];
       if (!addOnly) {
         for (const existing of existingAssignments) {
           await storage.deleteJobStaffAssignment(existing.id);
+          removedAssignmentIds.push(existing.id);
         }
         console.log(`🗑️ Deleted ${existingAssignments.length} existing staff assignment(s) for job ${jobId}`);
       } else {
@@ -20093,9 +20096,18 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           const timeMatch = existing.startTime && Math.abs(new Date(existing.startTime).getTime() - newStart) < 60000;
           if (empMatch && timeMatch) {
             await storage.deleteJobStaffAssignment(existing.id);
+            removedAssignmentIds.push(existing.id);
           }
         }
       }
+      // Full save: the submitted crew replaces the booking.
+      // addOnly: everyone whose row survived, plus the people just submitted.
+      const finalEmployeeIds = crewIdsAfterSave({
+        addOnly: !!addOnly,
+        existing: existingAssignments.map(a => ({ id: a.id, employeeId: a.employeeId })),
+        removedAssignmentIds,
+        submittedEmployeeIds: uniqueEmployeeIds.filter((id): id is string => typeof id === "string"),
+      });
 
       // Inherit dayRole: if this employee already has any assignment that NZ-day,
       // the new row inherits their existing 'A' / 'B'. Cached per (employeeId, NZ date).
@@ -20128,12 +20140,14 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         created.push(newAssignment);
       }
 
-      // Update job's assignedTeam (deduplicated)
-      const employeeIds = uniqueEmployeeIds;
+      // Keep both crew fields in step. A later edit reads either one, and
+      // writing only assignedTeam made the other go stale.
+      const employeeIds = finalEmployeeIds;
       if (job) {
         const next = statusAfterBooking(job.status);
         await storage.updateJob(jobId, {
           assignedTeam: employeeIds,
+          assignedTo: employeeIds,
           ...(next ? { status: next } : {}),
         });
       }
@@ -20147,8 +20161,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const deferredPushNotifications = sendNotifications
         ? async () => {
             // Multi-day bookings create one assignment per day per employee —
-            // notify each employee once, not once per day.
-            const employeeIdsToNotify = [...new Set(created.map(a => a.employeeId))];
+            // notify each newly added employee once, not once per day, and
+            // not again if they were already on this job.
+            const employeeIdsToNotify = newlyAddedCrewIds(
+              existingAssignments.map(a => a.employeeId),
+              created.map(a => a.employeeId),
+            );
             for (const employeeId of employeeIdsToNotify) {
               try {
                 const employee = await storage.getEmployee(employeeId);
