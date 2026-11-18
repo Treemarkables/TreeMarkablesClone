@@ -16,12 +16,7 @@ import { apiRequest } from "@/lib/queryClient";
 import TurnstileCaptcha, {
   useCaptchaConfig,
 } from "@/components/TurnstileCaptcha";
-
-declare global {
-  interface Window {
-    gtag?: (...args: any[]) => void;
-  }
-}
+import { trackGenerateLead } from "@/lib/marketingTracking";
 
 interface InquiryFormProps {
   onCancel?: () => void;
@@ -70,12 +65,7 @@ export default function InquiryForm({
       return response.json();
     },
     onSuccess: () => {
-      if (window.gtag) {
-        window.gtag("event", "generate_lead", {
-          event_category: "Contact",
-          event_label: "Inquiry Form",
-        });
-      }
+      trackGenerateLead("Inquiry Form");
       setFirstName("");
       setLastName("");
       setEmail("");

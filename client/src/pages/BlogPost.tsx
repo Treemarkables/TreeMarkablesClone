@@ -17,7 +17,7 @@ const blogPosts = {
     readTime: "9 min read",
     image: "/hazardous-tree-gisborne.jpg",
     content: `
-      <p>As a homeowner in Gisborne, your trees are a beautiful and valuable asset. They provide shade in the summer, enhance your property's appeal, and connect you with the natural beauty of the Tairāwhiti region. However, there comes a time when a beloved tree can become a significant liability. A hazardous tree is one with structural defects that make it likely to fail, in whole or in part, posing a risk to people or property.</p>
+      <p>As a homeowner in Gisborne, your trees are a beautiful and valuable asset. They provide shade in the summer, enhance your property's appeal, and connect you with the natural beauty of the Tairāwhiti region. However, there comes a time when a beloved tree can become a significant liability. A hazardous tree is one with structural defects that make it likely to fail, in whole or in part, posing a risk to people or property. If it has to come out, see our <a href="/tree-removal">tree removal in Gisborne</a> service.</p>
 
       <p>Recognising the warning signs early is crucial. Ignoring them can lead to catastrophic damage to your home, vehicle, or even cause serious injury. This guide will walk you through five critical signs that indicate you may need hazardous tree removal in Gisborne.</p>
 
@@ -104,7 +104,7 @@ const blogPosts = {
     readTime: "8 min read",
     image: "/tree-pruning.jpg",
     content: `
-      <p>Gisborne's mild climate and coastal winds help our trees thrive, but they also create conditions where branches can grow quickly, become heavy and, in storm season, pose a real risk to homes and people. As arborists serving Gisborne, Wairoa and the East Coast, we're often called out after high winds or heavy rain to deal with broken limbs that could have been prevented with regular pruning.</p>
+      <p>Gisborne's mild climate and coastal winds help our trees thrive, but they also create conditions where branches can grow quickly, become heavy and, in storm season, pose a real risk to homes and people. As arborists serving Gisborne, Wairoa and the East Coast, we're often called out after high winds or heavy rain to deal with broken limbs that could have been prevented with regular <a href="/tree-pruning">tree pruning</a>.</p>
 
       <p>Pruning isn't just about aesthetics; it's a vital part of tree maintenance. The University of Minnesota Extension notes that pruning is preventive maintenance for insect and disease damage and helps remove dead or dying branches, while professional sources like Angi explain that proper trimming promotes tree health, prevents pest problems, increases sunlight and protects your home. Let's look at why pruning matters so much in our region.</p>
 

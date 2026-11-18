@@ -47,6 +47,13 @@ export const SERVICE_LINKS: ServiceLink[] = [
 
 const PHONE = "027 216 6882";
 
+/**
+ * Suburbs already named on the service pages, plus the Gisborne suburbs
+ * listed in the 18 Nov 2026 SEO plan. No streets, and not the old yard.
+ */
+export const GISBORNE_SERVICE_AREA =
+  "We work across Gisborne: Gisborne Central, Kaiti, Whataupoko, Mangapapa, Te Hapara, Elgin, Lytton West, Riverdale, Awapuni, Tamarau, Wainui, Okitu, Makaraka, Patutahi, Manutuke, Ormond and Makorori. We also travel to Wairoa and the Tairāwhiti East Coast.";
+
 export const GISBORNE_REMOVAL_FAQS: FaqItem[] = [
   {
     q: "Do I need council consent to remove a tree in Gisborne?",
@@ -81,21 +88,21 @@ export const HOME_PAGE: MarketingPage = {
   path: "/",
   title: "Arborist Gisborne | Tree Removal & Pruning | Treemarkables",
   description:
-    "5-star rated arborist in Gisborne for tree removal, pruning, stump grinding and hedge trimming. Call 027 216 6882 for a free quote.",
-  h1: "Arborist Gisborne",
+    "Qualified arborists in Gisborne for tree removal, pruning, stump grinding and hedge trimming. 130+ five-star reviews. Free quotes, short wait times.",
+  h1: "Qualified Arborists in Gisborne",
   lede:
-    "Tree care done once, done right. Gisborne's trusted arborists for safe tree removals, expert pruning and tidy clean-ups, backed by 18+ years and 130+ five-star reviews.",
+    "Qualified arborists in Gisborne for tree removal, pruning, stump grinding and hedge trimming. Fully insured, with 18+ years and 130+ five-star reviews. Free quotes and short wait times.",
   ogImage: "/team-photo.jpg",
 };
 
 export const TREE_REMOVAL_PAGE: MarketingPage = {
   path: "/tree-removal",
-  title: "Tree Removal Gisborne | 24/7 Callouts",
+  title: "Tree Removal Gisborne | Free Quotes | Treemarkables",
   description:
-    "Tree removal in Gisborne for homes and farms, including storm damage. 5-star rated, 24/7. Call 027 216 6882 for a free quote.",
-  h1: "Tree Removal Gisborne",
+    "Safe tree removal in Gisborne by qualified, fully insured arborists. Tight access, storm damage and 24/7 callouts. Clean-up included. Free quote.",
+  h1: "Tree Removal in Gisborne",
   lede:
-    "Gisborne's certified arborists for hazardous, storm-damaged and unwanted trees. Fully insured, fast response, and not a branch left behind.",
+    "Safe tree removal in Gisborne by qualified, fully insured arborists. Tight access, storm damage and 24/7 callouts, with clean-up included.",
   ogImage: "/hazardous-tree-removal.jpg",
   faqs: GISBORNE_REMOVAL_FAQS,
   faqHeading: "Gisborne tree removal questions",
@@ -103,31 +110,60 @@ export const TREE_REMOVAL_PAGE: MarketingPage = {
 
 export const TREE_PRUNING_PAGE: MarketingPage = {
   path: "/tree-pruning",
-  title: "Tree Pruning Gisborne | Treemarkables",
+  title: "Tree Pruning & Trimming Gisborne | Treemarkables",
   description:
-    "Tree pruning in Gisborne: crown reduction, shaping and deadwood by a 5-star rated arborist. Call 027 216 6882 for a free quote.",
-  h1: "Tree Pruning Gisborne",
+    "Tree pruning and trimming in Gisborne: crown reduction, shaping and deadwood removal by qualified arborists. 130+ five-star reviews. Free quote.",
+  h1: "Tree Pruning & Trimming in Gisborne",
   lede:
-    "Expert pruning to keep your trees healthy, safe and beautifully shaped. Qualified arborists across Gisborne and the East Coast.",
+    "Tree pruning and trimming in Gisborne: crown reduction, shaping and deadwood removal by qualified, fully insured arborists.",
   ogImage: "/tree-pruning.jpg",
   faqs: GISBORNE_PRUNING_FAQS,
   faqHeading: "Gisborne tree pruning questions",
 };
 
+export const HEDGE_FAQS: FaqItem[] = [
+  {
+    q: "How often should hedges be trimmed?",
+    a: "Most hedges do best with two trims a year — late spring and early autumn. Fast growers or formal shapes may need a little more. Gisborne's coastal winds grow hedges fast, so a year-round tidy-up is the usual pattern.",
+  },
+  {
+    q: "When should I trim a flowering hedge?",
+    a: "Always just after it finishes flowering, never before — trimming early cuts off next season's blooms.",
+  },
+  {
+    q: "Can you do tall or hard-to-reach hedges?",
+    a: "Yes. We trim tall hedges and shelter belts, including tight spots. Big hedges are welcome.",
+  },
+  {
+    q: "What is included, and what happens to the green waste?",
+    a: "The trim, the shaping, and the clean-up. Clippings and green waste are taken away and the section is left tidy.",
+  },
+  {
+    q: "Do you offer regular maintenance?",
+    a: "Yes. We can set up a scheduled program so the hedges stay sharp.",
+  },
+  {
+    q: "Are you insured and qualified?",
+    a: "Yes. Qualified arborists, fully insured, with $5M public liability cover.",
+  },
+];
+
 export const HEDGE_PAGE: MarketingPage = {
   path: "/hedge-trimming",
-  title: "Hedge Trimming Gisborne | Treemarkables",
+  title: "Hedge Trimming & Hedge Cutting Gisborne | Treemarkables",
   description:
-    "Hedge trimming in Gisborne for homes and coastal properties. 5-star rated. Call 027 216 6882 for a free quote.",
-  h1: "Hedge Trimming Gisborne",
+    "Hedge trimming and hedge cutting in Gisborne for homes, lifestyle blocks and coastal properties. Big hedges welcome, green waste removed. Free quote.",
+  h1: "Hedge Trimming & Cutting in Gisborne",
   lede:
-    "Privacy, windbreaks and clean lines, kept in shape year-round. Gisborne's coastal winds grow hedges fast; we keep them tidy.",
+    "Hedge trimming and hedge cutting in Gisborne by qualified, fully insured arborists. Homes, lifestyle blocks and coastal properties. Big hedges welcome, and the green waste is removed.",
   ogImage: "/hedge-trimming.jpg",
+  faqs: HEDGE_FAQS,
+  faqHeading: "Hedge trimming questions",
 };
 
 export const STUMP_PAGE: MarketingPage = {
   path: "/stump-grinding",
-  title: "Stump Grinding & Stump Removal Gisborne",
+  title: "Stump Grinding & Stump Removal Gisborne | Treemarkables",
   description:
     "Stump grinding and stump removal in Gisborne, including tight-access jobs. 5-star rated. Call 027 216 6882 for a free quote.",
   h1: "Stump Grinding & Stump Removal Gisborne",

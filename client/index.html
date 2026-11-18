@@ -85,19 +85,21 @@
       /* App hosts set class="inflow-app". A leaked marketing snapshot stays hidden. */
       html.inflow-app #tm-prerender { display: none !important; }
     </style>
-    <!-- Event snippet for Click to call conversion page -->
+    <!--
+      Phone clicks. On Treemarkables marketing HTML the document-brand snippet
+      (shared/marketingAnalytics.ts) sets window.__tmReportPhone, loads the
+      Google Ads tag, and sends the click-to-call conversion. The Ads account
+      id is not hardcoded here. Staff and Inflow hosts only record a GA4
+      phone_click, so a job-card tel: link is not a Treemarkables lead.
+    -->
     <script>
     function gtag_report_conversion(url) {
-      var callback = function () {
-        if (typeof(url) != 'undefined') {
-          window.location = url;
-        }
-      };
-      gtag('event', 'conversion', {
-          'send_to': 'AW-607851664/ohyNCIf4spwbEJCp7KEC',
-          'value': 1.0,
-          'currency': 'NZD',
-          'event_callback': callback
+      if (typeof window.__tmReportPhone === 'function') return window.__tmReportPhone(url);
+      gtag('event', 'phone_click', {
+        send_to: 'G-VK3PPB6SFW',
+        link_url: typeof url === 'string' ? url : '',
+        event_category: 'Contact',
+        event_label: 'Phone Number Click'
       });
       return false;
     }

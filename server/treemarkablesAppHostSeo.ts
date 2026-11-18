@@ -19,12 +19,13 @@
  * Those responses, and `/`, carry X-Robots-Tag: noindex plus a canonical to www.
  *
  * http://www.treemarkables.co.nz → https://www.treemarkables.co.nz is outside
- * this repo. DigitalOcean App Platform upgrades HTTP to HTTPS at the edge
- * before the request reaches Node:
- * https://docs.digitalocean.com/products/app-platform/details/limits/
- * ("App Platform automatically upgrades all HTTP requests to HTTPS").
- * Production Helmet then sends HSTS. This middleware does not see plain HTTP
- * on www and does not implement that redirect.
+ * this repo. Checked 18 Nov 2026: that URL 301s at Cloudflare (HTML body
+ * "cloudflare", no x-do-orig-status), so this process never sees the HTTP
+ * request. https://www and both apex hops were already fine. DigitalOcean
+ * App Platform also documents an edge upgrade
+ * (https://docs.digitalocean.com/products/app-platform/details/limits/).
+ * This middleware does not add a second redirect: doing that from
+ * X-Forwarded-Proto would loop if the edge already terminated TLS.
  */
 import fs from "fs";
 import path from "path";
