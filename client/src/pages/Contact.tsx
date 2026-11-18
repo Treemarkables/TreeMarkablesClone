@@ -34,6 +34,7 @@ import { Phone, Mail, MapPin, TreeDeciduous } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
+import { trackGenerateLead } from "@/lib/marketingTracking";
 import TurnstileCaptcha, {
   useCaptchaConfig,
 } from "@/components/TurnstileCaptcha";
@@ -128,13 +129,8 @@ export default function Contact() {
       });
       return await response.json();
     },
-    onSuccess: (response) => {
-      if (window.gtag) {
-        window.gtag("event", "generate_lead", {
-          event_category: "Contact",
-          event_label: "Contact Form",
-        });
-      }
+    onSuccess: () => {
+      trackGenerateLead("Contact Form");
       form.reset();
       // Turnstile tokens are single-use — get a fresh one for the next submit.
       setCaptchaReset((c) => c + 1);

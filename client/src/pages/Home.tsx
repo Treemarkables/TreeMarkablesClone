@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { SiFacebook } from "react-icons/si";
 import logoImage from "@assets/logo-11_1775755479888.png";
-import { HOME_PAGE } from "@shared/treemarkablesPageCopy";
+import { GISBORNE_SERVICE_AREA, HOME_PAGE } from "@shared/treemarkablesPageCopy";
 import SEO from "@/components/SEO";
 import HeaderV2 from "@/components/HeaderV2";
 import InquiryForm from "@/components/InquiryForm";
@@ -47,12 +47,12 @@ interface ApiResponse {
 const PHONE = "0272166882";
 
 const services = [
-  { title: "Tree Removal", desc: "Safe, controlled removals — from hazardous trees to tight-access sections.", img: "/hazardous-tree-removal.jpg", route: "/tree-removal", feature: true },
-  { title: "Tree Pruning", desc: "Healthier structure, better light, and a tidier canopy.", img: "/tree-pruning.jpg", route: "/tree-pruning" },
-  { title: "Stump Grinding", desc: "Ground out below the surface — reclaim your space.", img: "/stump-grinding.jpg", route: "/stump-grinding" },
-  { title: "Hedge Trimming", desc: "Crisp, healthy hedges shaped to last.", img: "/hedge-trimming.jpg", route: "/hedge-trimming" },
-  { title: "24/7 Emergency", desc: "Storm damage? We respond fast, day or night.", img: "/emergency-tree-removal.jpg", route: "/emergency-tree-removal" },
-  { title: "Mulch Delivery", desc: "Fresh arborist mulch, delivered to your gate.", img: "/team-photo-real.jpg", route: "#contact" },
+  { title: "Tree Removal", linkLabel: "Tree removal in Gisborne", desc: "Safe, controlled removals — from hazardous trees to tight-access sections.", img: "/hazardous-tree-removal.jpg", route: "/tree-removal", feature: true },
+  { title: "Tree Pruning", linkLabel: "Tree pruning", desc: "Healthier structure, better light, and a tidier canopy.", img: "/tree-pruning.jpg", route: "/tree-pruning" },
+  { title: "Stump Grinding", linkLabel: "Stump grinding", desc: "Ground out below the surface — reclaim your space.", img: "/stump-grinding.jpg", route: "/stump-grinding" },
+  { title: "Hedge Trimming", linkLabel: "Hedge trimming", desc: "Crisp, healthy hedges shaped to last.", img: "/hedge-trimming.jpg", route: "/hedge-trimming" },
+  { title: "24/7 Emergency", linkLabel: "24/7 Emergency", desc: "Storm damage? We respond fast, day or night.", img: "/emergency-tree-removal.jpg", route: "/emergency-tree-removal" },
+  { title: "Mulch Delivery", linkLabel: "Mulch Delivery", desc: "Fresh arborist mulch, delivered to your gate.", img: "/team-photo-real.jpg", route: "#contact" },
 ];
 
 const steps = [
@@ -211,7 +211,7 @@ export default function Home() {
                   <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-2xl" />
                   <div className="relative h-full flex flex-col justify-end p-6">
                     <div className="flex items-center justify-between">
-                      <h3 className={`font-display font-semibold text-white ${s.feature ? "text-3xl" : "text-xl"}`}>{s.title}</h3>
+                      <h3 className={`font-display font-semibold text-white ${s.feature ? "text-3xl" : "text-xl"}`}>{s.linkLabel}</h3>
                       <span className="h-9 w-9 rounded-full bg-neon text-black flex items-center justify-center translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
                         <ArrowUpRight className="h-5 w-5" />
                       </span>
@@ -229,7 +229,7 @@ export default function Home() {
             })}
           </div>
           <p className="mt-8 text-mute">
-            Also an arborist in <Link href="/wairoa" className="text-forest font-semibold">Wairoa</Link> and along the <Link href="/east-coast" className="text-forest font-semibold">Tairāwhiti East Coast</Link>.
+            {GISBORNE_SERVICE_AREA} Also an arborist in <Link href="/wairoa" className="text-forest font-semibold">Wairoa</Link> and along the <Link href="/east-coast" className="text-forest font-semibold">Tairāwhiti East Coast</Link>.
           </p>
         </div>
       </section>
