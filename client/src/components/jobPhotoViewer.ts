@@ -45,6 +45,21 @@ export function clampPan(
   };
 }
 
+/**
+ * Previous or next index. Null at either end, and when there is only one
+ * photo — the viewer does not wrap.
+ */
+export function adjacentPhotoIndex(
+  index: number,
+  count: number,
+  direction: "next" | "prev",
+): number | null {
+  if (!(count > 1) || index < 0 || index >= count) return null;
+  const next = direction === "next" ? index + 1 : index - 1;
+  if (next < 0 || next >= count) return null;
+  return next;
+}
+
 /** Horizontal flick at scale 1 changes photo. A mostly-vertical move does not. */
 export function swipeDirection(
   dx: number,

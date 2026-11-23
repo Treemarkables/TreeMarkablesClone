@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  adjacentPhotoIndex,
   clampPan,
   dismissBackdropOpacity,
   dismissOffset,
@@ -24,6 +25,19 @@ describe("job photo pinch zoom", () => {
   it("does not pan a fitted photo off the stage", () => {
     assert.deepEqual(clampPan({ x: 40, y: 20 }, 1, { w: 400, h: 800 }), { x: 0, y: 0 });
     assert.deepEqual(clampPan({ x: 500, y: -500 }, 2, { w: 400, h: 800 }), { x: 200, y: -400 });
+  });
+
+  it("steps to the next or previous photo and stops at the ends", () => {
+    assert.equal(adjacentPhotoIndex(0, 13, "prev"), null);
+    assert.equal(adjacentPhotoIndex(0, 13, "next"), 1);
+    assert.equal(adjacentPhotoIndex(4, 13, "next"), 5);
+    assert.equal(adjacentPhotoIndex(4, 13, "prev"), 3);
+    assert.equal(adjacentPhotoIndex(12, 13, "next"), null);
+    assert.equal(adjacentPhotoIndex(12, 13, "prev"), 11);
+    assert.equal(adjacentPhotoIndex(0, 1, "next"), null);
+    assert.equal(adjacentPhotoIndex(0, 1, "prev"), null);
+    assert.equal(adjacentPhotoIndex(-1, 13, "next"), null);
+    assert.equal(adjacentPhotoIndex(13, 13, "prev"), null);
   });
 
   it("swipes to the next photo only when the photo is fitted", () => {
@@ -73,6 +87,37 @@ describe("job photo viewer layout contract", () => {
     assert.match(viewer, /useOverlayHistory/);
     assert.match(viewer, /touchAction:\s*"none"/);
     assert.doesNotMatch(viewer, /max-h-full/);
+  });
+
+  it("steps with edge arrows, arrow keys, and a horizontal swipe, and does not wrap", () => {
+    assert.match(viewer, /aria-label=\{label\}/);
+    assert.match(viewer, /label="Previous photo"/);
+    assert.match(viewer, /label="Next photo"/);
+    assert.match(viewer, /button-previous-photo/);
+    assert.match(viewer, /button-next-photo/);
+    assert.match(viewer, /adjacentPhotoIndex/);
+    assert.match(viewer, /event\.key === "ArrowRight"/);
+    assert.match(viewer, /event\.key !== "ArrowRight" && event\.key !== "ArrowLeft"/);
+    assert.match(viewer, /event\.key === "Escape"/);
+    assert.match(viewer, /swipeDirection/);
+    assert.match(viewer, /top: "50%"/);
+    assert.match(viewer, /translateY\(-50%\)/);
+    assert.match(viewer, /env\(safe-area-inset-left\) \+ 12px/);
+    assert.match(viewer, /env\(safe-area-inset-right\) \+ 12px/);
+    assert.match(viewer, /minWidth: 56/);
+    assert.match(viewer, /minHeight: 56/);
+    assert.match(viewer, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
+    assert.match(viewer, /event\.stopPropagation\(\)/);
+    assert.match(viewer, /try \{[\s\S]*?setPointerCapture\(event\.pointerId\)/);
+    // The arrows are siblings of Close, not children of the gesture stage,
+    // so a tap is not captured as a swipe or a dismiss.
+    const stageAt = viewer.indexOf("onPointerDown={onPointerDown}");
+    const prevAt = viewer.indexOf('testId="button-previous-photo"');
+    const nextAt = viewer.indexOf('testId="button-next-photo"');
+    const closeAt = viewer.indexOf('data-testid="button-close-photo"');
+    assert.ok(stageAt > 0 && prevAt > stageAt && nextAt > prevAt && closeAt > nextAt);
+    assert.doesNotMatch(viewer, /Math\.min\(photos\.length - 1/);
+    assert.doesNotMatch(viewer, /Math\.max\(0, index - 1\)/);
   });
 
   it("job diary opens this viewer instead of the centered dialog", () => {
