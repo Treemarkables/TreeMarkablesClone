@@ -17,6 +17,8 @@ import {
   extractInvoiceLineItems,
   pickInvoiceSourceDocument,
 } from "@/lib/invoiceLineItemSources";
+import { invoiceDescriptionFromSources, invoiceJobDescriptionFromDraft } from "@/lib/invoiceJobDescription";
+import { readJobDescriptionDraft } from "@/lib/jobDescriptionDraft";
 
 // One-button "job's done" flow: mark the job complete, generate the invoice
 // (same line items the InvoiceBuilder would pre-fill), email it to the
@@ -242,11 +244,17 @@ export function CompleteAndInvoiceDialog({
                   .toISOString()
                   .split("T")[0],
                 notes: job.notes || "",
-                description:
-                  proposal?.introduction ||
-                  quote?.description ||
-                  job.description ||
-                  "",
+                description: invoiceDescriptionFromSources({
+                  hasProposal: !!proposal,
+                  proposalIntroduction: proposal?.introduction,
+                  hasQuote: !!quote,
+                  quoteDescription: quote?.description,
+                  jobDescription: invoiceJobDescriptionFromDraft(
+                    readJobDescriptionDraft(jobId),
+                    null,
+                    job.description,
+                  ),
+                }),
                 lineItems: lineItems.map((item) => ({
                   description: item.description,
                   quantity: item.quantity,

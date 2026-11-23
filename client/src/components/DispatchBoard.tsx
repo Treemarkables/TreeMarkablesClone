@@ -1,4 +1,8 @@
 import { useJobFilters, useLaneFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
+import {
+  dispatchNewInvoiceRequest,
+  shouldStartDispatchInvoiceCreate,
+} from "@/lib/dispatchNewInvoice";
 import { QuoteFollowUpBanner } from "@/components/QuoteFollowUpBanner";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,7 +101,9 @@ import {
   formatTime12Hour,
 } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
+import { crewIdsForScheduleEdit } from "@shared/scheduleCrew";
 import { compareByRecentActivity } from "@shared/dispatchJobOrder";
+import { dispatchJobTotalExGst } from "@shared/dispatchJobTotal";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -812,6 +818,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
+  // Set when New → Invoice creates the draft. The card opens the invoice
+  // builder for this job id only, once a customer is on it.
+  const [invoiceLaunchJobId, setInvoiceLaunchJobId] = useState<string | null>(null);
   const [globalJobCardMode, setGlobalJobCardMode] = useState<"create" | "edit">(
     "create",
   );
@@ -1054,6 +1063,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             return;
           }
           setInitialSidebarTab(tabParam);
+          setInvoiceLaunchJobId(null);
           setShowGlobalJobCard(true);
           setGlobalJobCardMode("edit");
           setJobToEdit(jobData as JobAssignment);
@@ -1201,6 +1211,34 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const { data: staffAssignmentsData } = useQuery({
     queryKey: ["/api/staff-assignments"],
   });
+
+  // Crew already on the job being dropped, so Quick Assign opens with them ticked.
+  const pendingBookedIds = useMemo(() => {
+    if (!pendingDrop) return [] as string[];
+    const job = (jobsData as { data?: Array<Record<string, unknown>> } | undefined)?.data?.find(
+      (j) => j.id === pendingDrop.jobId,
+    );
+    const rows = ((staffAssignmentsData as { data?: Array<{ jobId?: string; employeeId?: string; startTime?: string }> } | undefined)?.data ?? [])
+      .filter((a) => a?.jobId === pendingDrop.jobId);
+    const scheduledDates = Array.isArray(job?.scheduledDates)
+      ? job.scheduledDates.filter((d): d is string => typeof d === "string")
+      : null;
+    const dateValue = (value: unknown): string | Date | null =>
+      typeof value === "string" || value instanceof Date ? value : null;
+    return crewIdsForScheduleEdit({
+      assignedTo: job?.assignedTo,
+      assignedTeam: job?.assignedTeam,
+      assignedStaffIds: job?.assignedStaffIds,
+      assignments: rows,
+      days: job
+        ? getJobScheduledNZDates({
+            scheduledDate: dateValue(job.scheduledDate),
+            scheduledEndDate: dateValue(job.scheduledEndDate),
+            scheduledDates,
+          })
+        : [],
+    });
+  }, [pendingDrop, jobsData, staffAssignmentsData]);
 
   // Email templates — feed the Quick Assign dialog's proposal-email option so
   // drop-scheduling sends the same "Proposed Booking" template as the job-card
@@ -1376,21 +1414,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
-          totalAmount:
-            apiJob.subtotal && Number(apiJob.subtotal) > 0
-              ? apiJob.subtotal
-              : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
-                ? String(
-                    Math.round(
-                      (Number(apiJob.totalIncludingGst) / 1.15) * 100,
-                    ) / 100,
-                  )
-                : apiJob.totalAmount && Number(apiJob.totalAmount) > 0
-                  ? String(
-                      Math.round((Number(apiJob.totalAmount) / 1.15) * 100) /
-                        100,
-                    )
-                  : "0",
+          totalAmount: dispatchJobTotalExGst(apiJob),
         });
       });
     }
@@ -1477,21 +1501,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
-          totalAmount:
-            apiJob.subtotal && Number(apiJob.subtotal) > 0
-              ? apiJob.subtotal
-              : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
-                ? String(
-                    Math.round(
-                      (Number(apiJob.totalIncludingGst) / 1.15) * 100,
-                    ) / 100,
-                  )
-                : apiJob.totalAmount && Number(apiJob.totalAmount) > 0
-                  ? String(
-                      Math.round((Number(apiJob.totalAmount) / 1.15) * 100) /
-                        100,
-                    )
-                  : "0",
+          totalAmount: dispatchJobTotalExGst(apiJob),
         });
       });
     }
@@ -2254,6 +2264,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     localStorage.setItem(lastViewedKey, new Date().toISOString());
 
     setJobToEdit(job);
+    setInvoiceLaunchJobId(null);
     setGlobalJobCardMode("edit");
     setShowGlobalJobCard(true);
     setSelectedJob(null); // Close the job details dialog
@@ -2322,6 +2333,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // over scheduledDate, so a past day list would leave the job in Unscheduled
     // after this booking. Status stays work_order (statusAfterBooking only
     // advances a quote).
+    const assignmentsKnown = Array.isArray((staffAssignmentsData as any)?.data);
     const updates: Record<string, unknown> = {
       scheduledDate: startDateTime.toISOString(),
       scheduledEndDate: null,
@@ -2329,6 +2341,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       scheduledStartTime: startTimeStr,
       scheduledEndTime: utcToNZTime(endDateTime).time,
       estimatedDuration: fractionalDurationHours,
+      // The dialog is the full crew (existing people start ticked). Write
+      // that set onto the job so the schedule form reopens with them selected.
+      assignedTo: result.employeeIds,
+      assignedTeam: result.employeeIds,
     };
     const next = statusAfterBooking(job.status);
     if (next && next !== job.status) {
@@ -2375,7 +2391,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             sendNotifications: true,
             sendClientNotification: result.sendClientNotification,
             scheduleBookingReminders: result.scheduleBookingReminders,
-            addOnly: true,
+            // Replace the booking when we know who is already on it, so a
+            // second drop updates the crew instead of leaving a duplicate row.
+            // If assignments have not loaded yet, add only — don't wipe people
+            // the dialog could not show.
+            addOnly: !assignmentsKnown,
           }),
         });
         const assignData = await assignRes.json().catch(() => ({}));
@@ -2510,7 +2530,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         }
 
         queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
-        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            const first = query.queryKey[0];
+            return typeof first === "string" && first.startsWith("/api/jobs");
+          },
+        });
         queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
       } catch {
         // Refetch rolls the optimistic patch back to server truth.
@@ -2535,7 +2560,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const createDraftMutation = useMutation<
     { success?: boolean; data?: { id?: string } },
     Error,
-    { status: string; afterOpen?: () => void }
+    { status: string; afterOpen?: () => void; openInvoice?: boolean }
   >({
     mutationFn: async ({ status }) => {
       const res = await apiRequest("POST", "/api/jobs", { status });
@@ -2561,6 +2586,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       setJobToEdit({ jobId: newId, id: newId } as JobAssignment);
       setInitialJobData(null);
       setGlobalJobCardMode("edit");
+      setInvoiceLaunchJobId(vars.openInvoice ? newId : null);
       setShowGlobalJobCard(true);
       vars.afterOpen?.();
     },
@@ -2601,7 +2627,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   const handleCreateInvoice = () => {
-    createDraftMutation.mutate({ status: "invoiced" });
+    // "invoiced" is not a job status — insertJobSchema rejects it and the
+    // card never opens. Create a work order and open the invoice builder.
+    if (!shouldStartDispatchInvoiceCreate(createDraftMutation.isPending)) return;
+    const request = dispatchNewInvoiceRequest();
+    createDraftMutation.mutate({
+      status: request.status,
+      openInvoice: request.openInvoice,
+    });
   };
 
   const saveSchedule = () => {
@@ -3810,7 +3843,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           through GlobalJobCard's layout gate: mobile gets JobCardMobile,
           desktop gets JobCardDesktop. */}
       {showGlobalJobCard && (
-        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); }}>
+        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); setInvoiceLaunchJobId(null); }}>
           <GlobalJobCard
             isOpen={true}
             mode={globalJobCardMode}
@@ -3822,7 +3855,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               setJobToEdit(null);
               setInitialJobData(null);
               setInitialSidebarTab(undefined);
+              setInvoiceLaunchJobId(null);
             }}
+            initialOpenInvoice={
+              invoiceLaunchJobId != null &&
+              invoiceLaunchJobId === (jobToEdit?.jobId || jobToEdit?.id)
+            }
           />
         </JobCardErrorBoundary>
       )}
@@ -3990,6 +4028,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           droppedEmployeeId={pendingDrop.employeeId}
           employees={employees}
           staffAssignments={(staffAssignmentsData as any)?.data ?? []}
+          bookedEmployeeIds={pendingBookedIds}
           defaultDurationHours={pendingDrop.defaultDurationHours}
           isSubmitting={isConfirmingDrop}
           onCancel={() => {

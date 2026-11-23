@@ -38,6 +38,7 @@ import { facebookGraphUrl, readFacebookPageAccessToken, redactFacebookSecrets } 
 import { checkFacebookConnection, loadFacebookPageReviews } from "./services/reviewsService";
 import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
+import { crewIdsAfterSave, newlyAddedCrewIds } from "@shared/scheduleCrew";
 import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { businessIdFromVoiceClient, isBusinessId, voiceIdentityForEmployee, inboundVoiceIdentity } from "./tenancy/voiceIdentity";
@@ -11132,26 +11133,13 @@ Return only the rewritten description, nothing else.`,
       // Create the invoice
       const invoice = await storage.createInvoice(invoiceData);
 
-      // Update job to store invoice reference AND sync total amount for revenue metrics
-      const jobUpdate: Record<string, unknown> = {
-        invoiceId: invoice.id,
-        invoiceBlocked: false,
-        totalAmount: amount.toString() // Sync invoice amount to job for revenue tracking
-      };
-      // Backfill the job description from the invoice when the job has none yet,
-      // so a description typed straight into the invoice surfaces on the job card.
-      // Only fill when empty — never clobber an existing job description.
-      const invoiceDescription = (customData.description || '').trim();
-      if (invoiceDescription && !(job.description || '').trim()) {
-        jobUpdate.description = invoiceDescription;
-      }
-      await storage.updateJob(id, jobUpdate);
-
-      // Compute exc-GST and inc-GST totals per line item so the diary entry
-      // can show both, clearly labelled. Without this, the diary dumped the
-      // raw `amount` sum (whose GST basis depends on each item's
+      // Compute exc-GST and inc-GST totals per line item so the job row and
+      // the diary entry share one pair of figures. Without this, the diary
+      // dumped the raw `amount` sum (whose GST basis depends on each item's
       // priceIncludesTax flag) while the job-card header always shows
       // exc-GST — producing confusing "$9,145 vs $7,952" discrepancies.
+      // subtotal and total_including_gst are stored here too, so later
+      // screens (Despatch) don't have to guess which column is ex-GST.
       type DiaryLineItem = {
         total?: number | string;
         amount?: number | string;
@@ -11197,6 +11185,29 @@ Return only the rewritten description, nothing else.`,
         exGstTotal *= pct;
         incGstTotal *= pct;
       }
+      const gstAmount = incGstTotal - exGstTotal;
+
+      // Update job to store invoice reference AND sync total amount for revenue metrics.
+      // total_amount stays the ex-GST invoice amount. subtotal and
+      // total_including_gst are written in the same update so a later screen
+      // can prefer subtotal instead of guessing from a zeroed GST column.
+      const jobUpdate: Record<string, unknown> = {
+        invoiceId: invoice.id,
+        invoiceBlocked: false,
+        totalAmount: amount.toString(),
+        subtotal: exGstTotal.toFixed(2),
+        totalIncludingGst: incGstTotal.toFixed(2),
+        gstAmount: gstAmount.toFixed(2),
+      };
+      // Backfill the job description from the invoice when the job has none yet,
+      // so a description typed straight into the invoice surfaces on the job card.
+      // Only fill when empty — never clobber an existing job description.
+      const invoiceDescription = (customData.description || '').trim();
+      if (invoiceDescription && !(job.description || '').trim()) {
+        jobUpdate.description = invoiceDescription;
+      }
+      await storage.updateJob(id, jobUpdate);
+
       const partialSuffix = invoiceType === 'partial' ? ' (partial)' : '';
       const diaryText = `Invoice ${invoiceNumber} created for $${exGstTotal.toFixed(2)} + GST — $${incGstTotal.toFixed(2)} total${partialSuffix}`;
 
@@ -11536,7 +11547,7 @@ Return only the rewritten description, nothing else.`,
         && s.content.trim().length > 0,
       );
       if (!hasIntroduction && !hasDescriptionSection) {
-        validationErrors.push('proposal has no description text — the customer would see an empty job description');
+        validationErrors.push('proposal has no saved description text — the customer would see an empty job description');
       }
 
       // No line-item / $0-total check here: pricing is sometimes written in the
@@ -11802,7 +11813,7 @@ Return only the rewritten description, nothing else.`,
         && s.content.trim().length > 0,
       );
       if (!hasIntroduction && !hasDescriptionSection) {
-        validationErrors.push('quote has no description text — the PDF would have an empty job description');
+        validationErrors.push('quote has no saved description text — the PDF would have an empty job description');
       }
 
       // No line-item / $0-total check here: pricing is sometimes written in the
@@ -20070,9 +20081,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // Delete existing staff assignments for this job to prevent duplicates when rescheduling
       // Skip deletion when addOnly=true (e.g. drag-drop onto a specific employee row)
       const existingAssignments = await storage.getJobStaffAssignmentsByJob(jobId);
+      const removedAssignmentIds: string[] = [];
       if (!addOnly) {
         for (const existing of existingAssignments) {
           await storage.deleteJobStaffAssignment(existing.id);
+          removedAssignmentIds.push(existing.id);
         }
         console.log(`🗑️ Deleted ${existingAssignments.length} existing staff assignment(s) for job ${jobId}`);
       } else {
@@ -20083,9 +20096,18 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           const timeMatch = existing.startTime && Math.abs(new Date(existing.startTime).getTime() - newStart) < 60000;
           if (empMatch && timeMatch) {
             await storage.deleteJobStaffAssignment(existing.id);
+            removedAssignmentIds.push(existing.id);
           }
         }
       }
+      // Full save: the submitted crew replaces the booking.
+      // addOnly: everyone whose row survived, plus the people just submitted.
+      const finalEmployeeIds = crewIdsAfterSave({
+        addOnly: !!addOnly,
+        existing: existingAssignments.map(a => ({ id: a.id, employeeId: a.employeeId })),
+        removedAssignmentIds,
+        submittedEmployeeIds: uniqueEmployeeIds.filter((id): id is string => typeof id === "string"),
+      });
 
       // Inherit dayRole: if this employee already has any assignment that NZ-day,
       // the new row inherits their existing 'A' / 'B'. Cached per (employeeId, NZ date).
@@ -20118,14 +20140,19 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         created.push(newAssignment);
       }
 
-      // Update job's assignedTeam (deduplicated)
-      const employeeIds = uniqueEmployeeIds;
+      // Keep both crew fields in step. A later edit reads either one, and
+      // writing only assignedTeam made the other go stale.
+      // Built as a typed patch: two string[] fields plus a spread makes
+      // TypeScript invent an index signature that Partial<InsertJob> rejects.
+      const employeeIds = finalEmployeeIds;
       if (job) {
         const next = statusAfterBooking(job.status);
-        await storage.updateJob(jobId, {
+        const crewPatch: Partial<schema.InsertJob> = {
           assignedTeam: employeeIds,
-          ...(next ? { status: next } : {}),
-        });
+          assignedTo: employeeIds,
+        };
+        if (next) crewPatch.status = next;
+        await storage.updateJob(jobId, crewPatch);
       }
 
       // Calculate and update estimated man-hours based on staff assignments
@@ -20137,8 +20164,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const deferredPushNotifications = sendNotifications
         ? async () => {
             // Multi-day bookings create one assignment per day per employee —
-            // notify each employee once, not once per day.
-            const employeeIdsToNotify = [...new Set(created.map(a => a.employeeId))];
+            // notify each newly added employee once, not once per day, and
+            // not again if they were already on this job.
+            const employeeIdsToNotify = newlyAddedCrewIds(
+              existingAssignments.map(a => a.employeeId),
+              created.map(a => a.employeeId),
+            );
             for (const employeeId of employeeIdsToNotify) {
               try {
                 const employee = await storage.getEmployee(employeeId);
