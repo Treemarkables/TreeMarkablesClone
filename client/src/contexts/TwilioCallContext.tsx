@@ -7,6 +7,9 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useTwilioVoice, CallEvent } from "@/hooks/useTwilioVoice";
 import { useToast } from "@/hooks/use-toast";
+import { formatTwilioError } from "@/lib/twilioCallError";
+import { registerReloadGuard } from "@/lib/foregroundReloadGuard";
+import { setVoiceCallActive } from "@/lib/voiceCallReloadGuard";
 import { Grip, Mic, MicOff, Volume2, Phone } from "lucide-react";
 
 // Inbound calls use the native iOS CallKit UI whenever iOS will present it —
@@ -101,11 +104,12 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
       // signaling failure) — not the user or the far end hanging up. Owner
       // hit exactly this on build 37 ("answered then hung itself up") with
       // no visible reason anywhere. Put the reason in their face.
-      if (data?.error) {
+      const detail = formatTwilioError(data?.error, data?.errorCode);
+      if (detail) {
         toast({
           variant: "destructive",
           title: "Call dropped",
-          description: data.error,
+          description: detail,
         });
       }
       setCallState("ended");
@@ -128,12 +132,15 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const handleRegistrationError = useCallback(
     (data: CallEvent) => {
       console.error("[TwilioCall] voice registration FAILED — inbound calls will NOT ring on this device", data);
+      const detail = formatTwilioError(
+        data.message ||
+          "This device couldn't register for incoming calls. Close and re-open the app; if it persists, log out and back in.",
+        data.errorCode,
+      );
       toast({
         variant: "destructive",
         title: "Incoming calls won't ring",
-        description:
-          data.message ||
-          "This device couldn't register for incoming calls. Close and re-open the app; if it persists, log out and back in.",
+        description: detail,
       });
     },
     [toast],
@@ -204,8 +211,20 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   // new-build-on-foreground reload) and the retained incomingCall event was
   // already consumed; show the screen anyway with a generic caller label so
   // the user always has mute/speaker/hang-up controls.
-  const showOverlay =
-    isNative && (callState === "connecting" || callState === "active");
+  const callLive = callState === "connecting" || callState === "active";
+
+  // A deploy reload (chunk 404, or "new build" on foreground) drops the
+  // Twilio signaling socket. Hold those reloads until the call is over.
+  useEffect(() => {
+    setVoiceCallActive(callLive);
+    return () => setVoiceCallActive(false);
+  }, [callLive]);
+
+  useEffect(() => {
+    return registerReloadGuard(() => callLive);
+  }, [callLive]);
+
+  const showOverlay = isNative && callLive;
 
   // Diagnostic: surfaces in Safari Web Inspector why the overlay did/didn't show
   // during a live call. Gated on callState so it doesn't spam on idle renders.

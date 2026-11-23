@@ -1,0 +1,864 @@
+declare global {
+  interface Window {
+    __INFLOW_CALL_ACTIVE?: boolean;
+  }
+}
+
+// Capacitor iOS / PWA boot + resume recovery.
+//
+// The TestFlight app is a WKWebView pointed at https://app.inflowapp.co.nz
+// (capacitor.config.ts server.url). A cold open that never paints is almost
+// never "clear your cache" — it is one of:
+//
+// 1. LaunchScreen dismisses onto about:blank and the first remote load hangs
+//    or the WKWebView content process dies (force-quit is the only recovery
+//    unless native reloads the configured URL).
+// 2. HTML arrives but the hashed JS bundle never runs, so #root stays empty.
+// 3. React mounts but /api/auth/me never resolves, and the auth gate paints
+//    an empty cream/white full-screen (looks identical to a dead webview).
+// 4. JS freezes after background; visibilitychange may not even fire
+//    (WKWebView can stick "hidden"). Native didBecomeActive is the backstop.
+//
+// This module is the JS half: a boot flag the native shell can probe, a
+// heartbeat so a frozen context is detectable, and a loop-guarded reload.
+
+export const BOOT_FLAG = "__INFLOW_BOOTED";
+export const HEARTBEAT_FLAG = "__INFLOW_HEARTBEAT_MS";
+export const BOOT_RELOAD_KEY = "inflowBootReloadAttempts";
+
+export const BOOT_TIMEOUT_MS = 18_000;
+export const HEARTBEAT_STALE_MS = 12_000;
+// A heartbeat newer than this means the entry bundle is alive (chunk still
+// downloading). Reloading a live boot throws the user back onto a black
+// about:blank. Older than this means JS never started or the context froze.
+export const HEARTBEAT_ALIVE_MS = 8_000;
+// Hard stop if the inline shell is still up and no real page has painted.
+export const LIVE_BOOT_HARD_TIMEOUT_MS = 45_000;
+// Show the boot error / Retry UI even if a premature booted flag or a
+// text-less white card convinced an earlier check that startup finished.
+export const BOOT_FAILURE_REVEAL_MS = 20_000;
+// Cover already dismissed, #root still empty. A live heartbeat used to
+// suppress this (the bundle had started), which left the paper-white body
+// on screen until the user force-quit. The cover-still-up case is a slow
+// chunk and stays on the longer boot timeout.
+export const EMPTY_ROOT_RELOAD_MS = 8_000;
+export const NATIVE_READY_TIMEOUT_MS = 12_000;
+// about:blank that is not loading failed (radio not up). Retry quickly.
+export const BLANK_IDLE_RELOAD_MS = 2_000;
+// A still loading about:blank used to be treated as stalled at 4s. That
+// cancelled the in flight remote load on the 4s, 10s, and 18s native checks
+// and left an opaque web view white. Match WebViewBootPolicy.loadingStall.
+export const BLANK_HUNG_RELOAD_MS = 18_000;
+// didFail / didFailProvisionalNavigation / content process terminated.
+export const NAV_FAILURE_BACKOFF_MS = 1_500;
+export const AUTH_ME_TIMEOUT_MS = 10_000;
+export const MAX_BOOT_RELOADS = 2;
+export const ATTEMPT_WINDOW_MS = 3 * 60 * 1000;
+
+export const BOOT_PLACEHOLDER_COPY = "Opening Inflow";
+
+export type BootProbeStatus = "booted" | "not-booted" | "wrong-origin" | "blank";
+
+export function isAppOriginHost(host: string): boolean {
+  return (
+    host === "app.inflowapp.co.nz" ||
+    host === "app.treemarkables.co.nz" ||
+    host === "localhost" ||
+    host === "127.0.0.1"
+  );
+}
+
+export function classifyWebViewHref(href: string | null | undefined): BootProbeStatus {
+  if (!href || href === "about:blank" || href.startsWith("about:")) return "blank";
+  try {
+    const url = new URL(href);
+    // Capacitor's bundled origin is not the live server.url — a webview left
+    // on capacitor://localhost after a failed remote load is still a white screen.
+    if (url.protocol === "capacitor:" || url.protocol === "ionic:") return "wrong-origin";
+    if (!isAppOriginHost(url.hostname)) return "wrong-origin";
+  } catch {
+    return "blank";
+  }
+  return "not-booted";
+}
+
+export function shouldForceLoadWhilePending(opts: {
+  href: string | null | undefined;
+  isLoading: boolean;
+  elapsedMs: number;
+  hungLoadMs?: number;
+  idleReloadMs?: number;
+  failureBackoffMs?: number;
+  /** didFail / didFailProvisionalNavigation / content process terminated. */
+  navigationFailed?: boolean;
+  /** Foreground wake of a blank webview that is no longer loading. */
+  force?: boolean;
+}): boolean {
+  const hungLoadMs = opts.hungLoadMs ?? BLANK_HUNG_RELOAD_MS;
+  const idleReloadMs = opts.idleReloadMs ?? BLANK_IDLE_RELOAD_MS;
+  const failureBackoffMs = opts.failureBackoffMs ?? NAV_FAILURE_BACKOFF_MS;
+  const status = classifyWebViewHref(opts.href);
+  if (opts.isLoading) return opts.elapsedMs >= hungLoadMs;
+  if (status === "blank" || status === "wrong-origin") {
+    if (opts.force) return true;
+    if (opts.navigationFailed) return opts.elapsedMs >= failureBackoffMs;
+    return opts.elapsedMs >= idleReloadMs;
+  }
+  if (opts.navigationFailed) return opts.elapsedMs >= failureBackoffMs;
+  return false;
+}
+
+export type NativeBootProbe =
+  | "booted"
+  | "painting"
+  | "empty"
+  | "not-booted"
+  | "blank"
+  | "wrong-origin";
+
+export function normalizeShellText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+export function isBootPlaceholderCopy(value: string): boolean {
+  const text = normalizeShellText(value);
+  return text === BOOT_PLACEHOLDER_COPY || text.startsWith(`${BOOT_PLACEHOLDER_COPY} `);
+}
+
+/**
+ * True when a real route has painted text. The phone sidebar is off-canvas, so
+ * header chrome does not count. An empty `<main>` (Dispatch chunk still
+ * loading behind the null inner Suspense fallback) is not a painted page.
+ * `mainText === null` means there is no `<main>` yet (login / marketing).
+ *
+ * Text-only. A job-card watch page whose `<main>` is just a `<video>` (title
+ * null) has empty innerText — use `shellSignalsRealPage` for that.
+ */
+export function shellTextSignalsRealPage(opts: {
+  rootText: string;
+  mainText: string | null;
+}): boolean {
+  if (opts.mainText !== null) {
+    const main = normalizeShellText(opts.mainText);
+    return main.length > 0 && !isBootPlaceholderCopy(main);
+  }
+  const root = normalizeShellText(opts.rootText);
+  return root.length > 0 && !isBootPlaceholderCopy(root);
+}
+
+/**
+ * Replaced content that means a route has painted even with no innerText.
+ * Small `svg` icons are excluded here (the pull-to-refresh glyph and lucide
+ * icons live in the shell) and checked separately with a size floor.
+ */
+export const RENDERED_MEDIA_SELECTOR =
+  "video, img, canvas, iframe, picture, audio, object, embed";
+
+const MIN_PAINTED_PX = 2;
+const MIN_SVG_PX = 48;
+
+function isBootChrome(el: Element): boolean {
+  let cur: Element | null = el;
+  while (cur) {
+    try {
+      if (cur.getAttribute("data-boot-chrome") != null) return true;
+    } catch {
+      return false;
+    }
+    cur = cur.parentElement;
+  }
+  return false;
+}
+
+function isVisuallyHidden(el: Element): boolean {
+  if (typeof window === "undefined" || typeof window.getComputedStyle !== "function") {
+    return false;
+  }
+  let cur: Element | null = el;
+  while (cur && cur.nodeType === 1) {
+    let style: CSSStyleDeclaration;
+    try {
+      style = window.getComputedStyle(cur);
+    } catch {
+      return false;
+    }
+    if (style.display === "none" || style.visibility === "hidden") return true;
+    const opacity = parseFloat(style.opacity || "1");
+    if (Number.isFinite(opacity) && opacity < 0.05) return true;
+    cur = cur.parentElement;
+  }
+  return false;
+}
+
+function layoutBox(el: Element): { width: number; height: number } | null {
+  try {
+    const rect = el.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True when `root` contains replaced media a person can see, with no innerText.
+ * A video/image/canvas/iframe or a large svg counts. A text-less card does not:
+ * Dispatch's jobs-loading skeleton is a white `bg-card` with pulse bars and no
+ * words. Treating that border as "painted" hid #inflow-boot while `<main>` was
+ * still empty, and the installed text-only native probe then reloaded the
+ * WebView into a white screen.
+ */
+export function elementHasRenderedContent(root: Element | null | undefined): boolean {
+  if (!root || typeof root.querySelectorAll !== "function") return false;
+  let media: Element[] = [];
+  try {
+    media = Array.from(root.querySelectorAll(RENDERED_MEDIA_SELECTOR));
+  } catch {
+    media = [];
+  }
+  for (const node of media) {
+    if (isBootChrome(node) || isVisuallyHidden(node)) continue;
+    const tag = (node.tagName || "").toUpperCase();
+    if (
+      tag === "VIDEO" ||
+      tag === "CANVAS" ||
+      tag === "IFRAME" ||
+      tag === "AUDIO" ||
+      tag === "OBJECT" ||
+      tag === "EMBED"
+    ) {
+      return true;
+    }
+    const box = layoutBox(node);
+    if (box && box.width >= MIN_PAINTED_PX && box.height >= MIN_PAINTED_PX) return true;
+  }
+  let svgs: Element[] = [];
+  try {
+    svgs = Array.from(root.querySelectorAll("svg"));
+  } catch {
+    svgs = [];
+  }
+  for (const svg of svgs) {
+    if (isBootChrome(svg) || isVisuallyHidden(svg)) continue;
+    const box = layoutBox(svg);
+    if (box && box.width >= MIN_SVG_PX && box.height >= MIN_SVG_PX) return true;
+  }
+  return false;
+}
+
+/**
+ * Text, or replaced media. "Opening Inflow" is never ready. A white card,
+ * spinner border, or skeleton with no words is not ready either — that was
+ * the dispatch loading state lifting the cover onto a blank cream page.
+ */
+export function shellSignalsRealPage(opts: {
+  rootText: string;
+  mainText: string | null;
+  mainHasRenderedContent?: boolean;
+  rootHasRenderedContent?: boolean;
+}): boolean {
+  if (opts.mainText !== null) {
+    const main = normalizeShellText(opts.mainText);
+    if (isBootPlaceholderCopy(main)) return false;
+    if (main.length > 0) return true;
+    return opts.mainHasRenderedContent === true;
+  }
+  const root = normalizeShellText(opts.rootText);
+  if (isBootPlaceholderCopy(root)) return false;
+  if (root.length > 0) return true;
+  return opts.rootHasRenderedContent === true;
+}
+
+/** `--background` from index.css. Empty until the stylesheet has applied. */
+export function cssTokenPresent(raw: string | null | undefined): boolean {
+  return typeof raw === "string" && raw.trim().length > 0;
+}
+
+/**
+ * Mirrors the probe string in WebViewBootRecovery.swift. A booted flag with
+ * no visible page is the #579 hole (overlay hidden, viewport still black).
+ * `painting` means the inline shell is up and JS is ticking — do not reload.
+ */
+export function classifyBootSurface(opts: {
+  booted: boolean;
+  bootShellVisible: boolean;
+  heartbeatAgeMs: number | null;
+  rootText: string;
+  mainText: string | null;
+  /** Media or a painted box inside `<main>`. Omitted keeps the text-only probe. */
+  mainHasRenderedContent?: boolean;
+  rootHasRenderedContent?: boolean;
+}): "booted" | "painting" | "empty" | "not-booted" {
+  const visible = shellSignalsRealPage({
+    rootText: opts.rootText,
+    mainText: opts.mainText,
+    mainHasRenderedContent: opts.mainHasRenderedContent,
+    rootHasRenderedContent: opts.rootHasRenderedContent,
+  });
+  if (opts.booted) {
+    if (visible || opts.bootShellVisible) return "booted";
+    return "empty";
+  }
+  const alive = opts.heartbeatAgeMs != null && opts.heartbeatAgeMs < HEARTBEAT_ALIVE_MS;
+  if (opts.bootShellVisible && alive) return "painting";
+  return "not-booted";
+}
+
+export function shouldReloadNativeProbe(opts: {
+  probe: NativeBootProbe;
+  elapsedMs: number;
+  isLoading: boolean;
+  /** Once a healthy boot has been seen, don't reload a brief empty main. */
+  seenHealthyBoot?: boolean;
+  force?: boolean;
+  navigationFailed?: boolean;
+  reloadCount?: number;
+  maxReloads?: number;
+}): boolean {
+  const count = opts.reloadCount ?? 0;
+  const maxReloads = opts.maxReloads ?? 3;
+  if (count >= maxReloads) return false;
+  if (opts.probe === "booted" || opts.probe === "painting") return false;
+  if (opts.probe === "empty") {
+    if (opts.seenHealthyBoot) return false;
+    if (opts.isLoading) return opts.elapsedMs >= BLANK_HUNG_RELOAD_MS;
+    return true;
+  }
+  if (opts.probe === "blank" || opts.probe === "wrong-origin") {
+    return shouldForceLoadWhilePending({
+      href: opts.probe === "blank" ? "about:blank" : "https://evil.example/",
+      isLoading: opts.isLoading,
+      elapsedMs: opts.elapsedMs,
+      force: opts.force,
+      navigationFailed: opts.navigationFailed,
+    });
+  }
+  if (opts.isLoading) return opts.elapsedMs >= BLANK_HUNG_RELOAD_MS;
+  if (opts.navigationFailed) return opts.elapsedMs >= NAV_FAILURE_BACKOFF_MS;
+  return opts.elapsedMs >= BOOT_TIMEOUT_MS;
+}
+
+export function shouldReloadUnbootedDespiteHeartbeat(opts: {
+  booted: boolean;
+  elapsedMs: number;
+  heartbeatAgeMs: number | null;
+  bootTimeoutMs?: number;
+  hardTimeoutMs?: number;
+  heartbeatAliveMs?: number;
+}): boolean {
+  if (opts.booted) return false;
+  const hard = opts.hardTimeoutMs ?? LIVE_BOOT_HARD_TIMEOUT_MS;
+  if (opts.elapsedMs >= hard) return true;
+  const soft = opts.bootTimeoutMs ?? BOOT_TIMEOUT_MS;
+  if (opts.elapsedMs < soft) return false;
+  const alive = opts.heartbeatAliveMs ?? HEARTBEAT_ALIVE_MS;
+  if (opts.heartbeatAgeMs != null && opts.heartbeatAgeMs < alive) return false;
+  return true;
+}
+
+export function shouldReloadUnbootedPage(opts: {
+  booted: boolean;
+  elapsedMs: number;
+  bootTimeoutMs?: number;
+}): boolean {
+  if (opts.booted) return false;
+  return opts.elapsedMs >= (opts.bootTimeoutMs ?? BOOT_TIMEOUT_MS);
+}
+
+export function shouldRecoverFrozenResume(opts: {
+  now: number;
+  lastHeartbeatMs: number | null;
+  booted: boolean;
+  hiddenForMs: number;
+  staleMs?: number;
+  hasPendingNotificationNav?: boolean;
+}): boolean {
+  // A notification tap is what brought us foreground — reloading would
+  // wipe the deep link (and any in-flight job-card open) and land on the
+  // bare dispatch board.
+  if (opts.hasPendingNotificationNav) return false;
+  const staleMs = opts.staleMs ?? HEARTBEAT_STALE_MS;
+  if (!opts.booted) {
+    // A foreground that still isn't booted after being away is the
+    // "restored dead WKWebView" case. Ignore brief focus blips.
+    return opts.hiddenForMs >= 3_000;
+  }
+  if (opts.lastHeartbeatMs == null) return true;
+  return opts.now - opts.lastHeartbeatMs >= staleMs;
+}
+
+export function readBootReloadAttempts(
+  raw: string | null,
+  now: number,
+  windowMs = ATTEMPT_WINDOW_MS,
+): number {
+  if (!raw) return 0;
+  try {
+    const parsed = JSON.parse(raw) as { count?: number; at?: number };
+    if (typeof parsed.count !== "number" || typeof parsed.at !== "number") return 0;
+    if (now - parsed.at > windowMs) return 0;
+    return parsed.count;
+  } catch {
+    return 0;
+  }
+}
+
+export function canAttemptBootReload(attempts: number, max = MAX_BOOT_RELOADS): boolean {
+  return attempts >= 0 && attempts < max;
+}
+
+export function nextBootReloadState(attempts: number, now: number): { count: number; at: number } {
+  return { count: attempts + 1, at: now };
+}
+
+type BootGlobals = {
+  [BOOT_FLAG]?: boolean;
+  [HEARTBEAT_FLAG]?: number;
+};
+
+function bootGlobals(): BootGlobals {
+  return window as unknown as BootGlobals;
+}
+
+export function markAppBooted(now = Date.now()): void {
+  const g = bootGlobals();
+  g[BOOT_FLAG] = true;
+  g[HEARTBEAT_FLAG] = now;
+  try {
+    const overlay = document.getElementById("inflow-boot");
+    overlay?.setAttribute("data-booted", "1");
+    overlay?.removeAttribute("data-stuck");
+    document.documentElement.dataset.inflowBooted = "1";
+  } catch {
+    /* ignore */
+  }
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("inflow_boot")) {
+      url.searchParams.delete("inflow_boot");
+      const next = url.pathname + url.search + url.hash;
+      window.history.replaceState(window.history.state, "", next);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("inflow-booted"));
+  } catch {
+    /* ignore */
+  }
+  signalNativeBoot({ type: "appReady" });
+}
+
+interface NativeBootMessage {
+  type: "appReady" | "bootFailed" | "bootError" | "reload";
+  message?: string;
+}
+
+interface WebkitMessageHandler {
+  postMessage: (body: unknown) => void;
+}
+
+interface InflowBootPlugin {
+  appReady?: () => void | Promise<void>;
+  bootFailed?: (data: { message: string }) => void | Promise<void>;
+}
+
+function webkitBootHandler(): WebkitMessageHandler | null {
+  const w = window as Window & {
+    webkit?: { messageHandlers?: { inflowBoot?: WebkitMessageHandler } };
+  };
+  return w.webkit?.messageHandlers?.inflowBoot ?? null;
+}
+
+function inflowBootPlugin(): InflowBootPlugin | null {
+  const cap = (window as Window & {
+    Capacitor?: { Plugins?: { InflowBoot?: InflowBootPlugin } };
+  }).Capacitor;
+  return cap?.Plugins?.InflowBoot ?? null;
+}
+
+/** Tell the Capacitor shell the web app has a real screen, or that boot failed. */
+export function signalNativeBoot(message: NativeBootMessage): void {
+  try {
+    webkitBootHandler()?.postMessage(message);
+  } catch {
+    /* Older TestFlight builds have no inflowBoot handler. */
+  }
+  try {
+    const plugin = inflowBootPlugin();
+    if (message.type === "appReady") void plugin?.appReady?.();
+    if (message.type === "bootFailed" || message.type === "bootError") {
+      void plugin?.bootFailed?.({ message: message.message ?? "" });
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new CustomEvent("inflow-app-ready", { detail: message }));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function reportBootClientError(message: string, stack?: string, context = "boot"): void {
+  if (typeof fetch !== "function") return;
+  const url = typeof window !== "undefined" ? window.location.href : "";
+  const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  fetch("/api/client-errors", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      stack,
+      componentStack: context,
+      url,
+      userAgent,
+    }),
+  }).catch(() => {});
+}
+
+function bootCoverIsVisible(): boolean {
+  const overlay = document.getElementById("inflow-boot");
+  if (!overlay || overlay.getAttribute("data-booted") === "1") return false;
+  return !isVisuallyHidden(overlay);
+}
+
+/** Marketing snapshot outside #root. Hidden snapshots (app shell) do not count. */
+function visiblePrerenderText(): boolean {
+  const el = document.getElementById("tm-prerender");
+  if (!el || isVisuallyHidden(el)) return false;
+  return normalizeShellText(el.innerText || "").length > 0;
+}
+
+export function readRealScreenVisible(): boolean {
+  if (typeof document === "undefined") return false;
+  if (visiblePrerenderText()) return true;
+  const root = document.getElementById("root");
+  const main = root?.querySelector("main") ?? null;
+  return shellSignalsRealPage({
+    rootText: root?.innerText ?? "",
+    mainText: main ? (main.innerText ?? "") : null,
+    mainHasRenderedContent: main ? elementHasRenderedContent(main) : false,
+    rootHasRenderedContent: !main && root ? elementHasRenderedContent(root) : false,
+  });
+}
+
+export function shouldRevealBootFailure(opts: {
+  elapsedMs: number;
+  realScreenVisible: boolean;
+  revealAfterMs?: number;
+}): boolean {
+  if (opts.realScreenVisible) return false;
+  return opts.elapsedMs >= (opts.revealAfterMs ?? BOOT_FAILURE_REVEAL_MS);
+}
+
+/**
+ * Reload a cold start whose splash has already come down and nothing has
+ * painted. `bootCoverVisible` means #inflow-boot is still on screen — that
+ * is a slow route chunk, not a white web view, and must not be cancelled.
+ */
+export function shouldRecoverBlankRoot(opts: {
+  elapsedMs: number;
+  realScreenVisible: boolean;
+  bootCoverVisible: boolean;
+  callActive?: boolean;
+  emptyAfterMs?: number;
+}): boolean {
+  if (opts.callActive) return false;
+  if (opts.realScreenVisible) return false;
+  if (opts.bootCoverVisible) return false;
+  return opts.elapsedMs >= (opts.emptyAfterMs ?? EMPTY_ROOT_RELOAD_MS);
+}
+
+const BOOT_FAILURE_TITLE = "Inflow didn't open";
+const BOOT_FAILURE_FALLBACK =
+  "Inflow did not finish opening. Check your connection and try again.";
+
+/** Replace the loading cover with the error / Retry UI. A real screen wins. */
+export function revealBootFailure(message?: string): void {
+  if (readRealScreenVisible()) {
+    markAppBooted();
+    return;
+  }
+  const g = bootGlobals();
+  g[BOOT_FLAG] = false;
+  const text = (message || "").trim() || BOOT_FAILURE_FALLBACK;
+  try {
+    const overlay = document.getElementById("inflow-boot");
+    if (overlay) {
+      overlay.removeAttribute("data-booted");
+      overlay.setAttribute("data-stuck", "1");
+      const title = overlay.querySelector(".boot-title");
+      const sub = overlay.querySelector(".boot-sub");
+      if (title) title.textContent = BOOT_FAILURE_TITLE;
+      if (sub) sub.textContent = text;
+    }
+  } catch {
+    /* ignore */
+  }
+  signalNativeBoot({ type: "bootFailed", message: text });
+}
+
+/** Show a boot-time exception on the cover and report it. A real screen is left alone. */
+export function noteBootError(message: string, stack?: string): void {
+  if (readRealScreenVisible()) return;
+  const text = message.trim() || "Script error";
+  try {
+    (window as Window & { __INFLOW_BOOT_ERROR?: string }).__INFLOW_BOOT_ERROR = text;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const overlay = document.getElementById("inflow-boot");
+    const sub = overlay?.querySelector(".boot-sub");
+    if (sub) sub.textContent = text;
+    overlay?.setAttribute("data-error", "1");
+  } catch {
+    /* ignore */
+  }
+  signalNativeBoot({ type: "bootError", message: text });
+  reportBootClientError(text, stack);
+}
+
+export function cacheBustingReload(): void {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("inflow_boot", String(Date.now()));
+    window.location.replace(url.toString());
+  } catch {
+    window.location.reload();
+  }
+}
+
+export function touchHeartbeat(now = Date.now()): void {
+  bootGlobals()[HEARTBEAT_FLAG] = now;
+}
+
+export function isAppBooted(): boolean {
+  return bootGlobals()[BOOT_FLAG] === true;
+}
+
+export function requestBootReload(reason: string): boolean {
+  // Same rule as chunk recovery: a reload mid-call drops Twilio (PR 628).
+  // The flag is set by voiceCallReloadGuard. Read it off window so this
+  // module stays free of local imports (the Node boot tests load it directly).
+  if (typeof window !== "undefined" && window.__INFLOW_CALL_ACTIVE === true) {
+    console.warn(`[boot-recovery] not reloading during a call (${reason})`);
+    return false;
+  }
+  const now = Date.now();
+  let raw: string | null = null;
+  try {
+    raw = sessionStorage.getItem(BOOT_RELOAD_KEY);
+  } catch {
+    raw = null;
+  }
+  const attempts = readBootReloadAttempts(raw, now);
+  if (!canAttemptBootReload(attempts)) {
+    console.warn(`[boot-recovery] gave up after ${attempts} reloads (${reason})`);
+    return false;
+  }
+  const next = nextBootReloadState(attempts, now);
+  try {
+    sessionStorage.setItem(BOOT_RELOAD_KEY, JSON.stringify(next));
+  } catch {
+    /* private mode / webview — browser loop protection is the backstop */
+  }
+  console.warn(`[boot-recovery] reloading (${reason}) attempt ${next.count}/${MAX_BOOT_RELOADS}`);
+  // The inline boot script has already dropped a controlling service worker.
+  // cacheBustingReload still bypasses a cached HTML document.
+  cacheBustingReload();
+  return true;
+}
+
+let watchdogStarted = false;
+
+function hasPendingNotificationDeepLink(): boolean {
+  // Only treat a *fresh* notification deep-link as blocking frozen-resume
+  // reload. #568 also checked sessionStorage dispatch_open_job with no TTL —
+  // if the job card never opened (chunk hang / black root), that key stayed
+  // forever and disabled the only JS recovery path for the rest of the
+  // WebView session. ?job= in the live URL still counts (user mid-open).
+  try {
+    const raw = localStorage.getItem("pendingNotificationNav");
+    if (raw) {
+      const parsed = JSON.parse(raw) as { path?: string; ts?: number };
+      if (parsed?.path && Date.now() - (parsed.ts || 0) < 60_000) return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (new URLSearchParams(window.location.search).get("job")) return true;
+  } catch {
+    /* ignore */
+  }
+  const early = (window as unknown as { __pendingNotificationPath?: string | null }).__pendingNotificationPath;
+  return typeof early === "string" && early.length > 0;
+}
+
+export function startNativeBootWatchdogs(): void {
+  if (watchdogStarted) return;
+  watchdogStarted = true;
+
+  const startedAt = Date.now();
+  let hiddenAt: number | null = document.visibilityState === "hidden" ? startedAt : null;
+
+  // Tick even before the first real page. A fresh heartbeat tells the HTML
+  // watchdog and the native probe that a slow Dispatch chunk is not a dead
+  // WebView — reloading it was painting black about:blank again.
+  const heartbeatId = window.setInterval(() => {
+    touchHeartbeat();
+  }, 2_000);
+
+  const failureAlreadyShown = () =>
+    document.getElementById("inflow-boot")?.getAttribute("data-stuck") === "1";
+
+  const armBootTimeout = (delayMs: number) => {
+    window.setTimeout(() => {
+      if (failureAlreadyShown()) return;
+      const hb = bootGlobals()[HEARTBEAT_FLAG] ?? null;
+      if (
+        shouldReloadUnbootedDespiteHeartbeat({
+          booted: isAppBooted(),
+          elapsedMs: Date.now() - startedAt,
+          heartbeatAgeMs: hb == null ? null : Date.now() - hb,
+        })
+      ) {
+        requestBootReload("boot-timeout");
+      }
+    }, delayMs);
+  };
+  armBootTimeout(BOOT_TIMEOUT_MS);
+  armBootTimeout(LIVE_BOOT_HARD_TIMEOUT_MS);
+
+  // Splash already gone, root still empty: the paper-white body. A fresh
+  // heartbeat means the entry bundle started, which used to block this
+  // reload until force-quit. The cover-still-up path is left to the
+  // timeouts above so a slow Dispatch chunk is not cancelled.
+  window.setTimeout(() => {
+    if (
+      shouldRecoverBlankRoot({
+        elapsedMs: Date.now() - startedAt,
+        realScreenVisible: readRealScreenVisible(),
+        bootCoverVisible: bootCoverIsVisible(),
+        callActive: typeof window !== "undefined" && window.__INFLOW_CALL_ACTIVE === true,
+      })
+    ) {
+      requestBootReload("empty-root");
+    }
+  }, EMPTY_ROOT_RELOAD_MS);
+
+  // Guaranteed stop. A booted flag or a live heartbeat must not leave the
+  // cover up, or a text-less white card on screen, forever.
+  window.setTimeout(() => {
+    const stored = (window as Window & { __INFLOW_BOOT_ERROR?: string }).__INFLOW_BOOT_ERROR;
+    if (
+      shouldRevealBootFailure({
+        elapsedMs: Date.now() - startedAt,
+        realScreenVisible: readRealScreenVisible(),
+      })
+    ) {
+      revealBootFailure(stored);
+    }
+  }, BOOT_FAILURE_REVEAL_MS);
+
+  window.setInterval(() => {
+    if (failureAlreadyShown() && readRealScreenVisible()) markAppBooted();
+  }, 500);
+
+  document.addEventListener("visibilitychange", () => {
+    const now = Date.now();
+    if (document.visibilityState === "hidden") {
+      hiddenAt = now;
+      return;
+    }
+    const hiddenForMs = hiddenAt == null ? 0 : now - hiddenAt;
+    hiddenAt = null;
+    // Wait a beat so a notification tap can persist its deep link before
+    // we decide to reload. Checking immediately lost the job-card path —
+    // native inject and this handler raced, and the reload landed on
+    // bare /dispatch.
+    //
+    // Re-read the heartbeat AFTER the grace window. Capturing it at
+    // visibilitychange (pre-#568) made every >12s background look frozen
+    // even when JS had resumed and was ticking again — force-reload every
+    // warm open, which raced chunk load and painted the black empty root.
+    window.setTimeout(() => {
+      if (
+        shouldRecoverFrozenResume({
+          now: Date.now(),
+          lastHeartbeatMs: bootGlobals()[HEARTBEAT_FLAG] ?? null,
+          booted: isAppBooted(),
+          hiddenForMs,
+          hasPendingNotificationNav: hasPendingNotificationDeepLink(),
+        })
+      ) {
+        requestBootReload("frozen-resume");
+      }
+    }, 1500);
+  });
+
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted && !isAppBooted()) {
+      requestBootReload("bfcache-unbooted");
+    }
+  });
+
+  window.addEventListener("pagehide", () => {
+    window.clearInterval(heartbeatId);
+  });
+}
+
+function readCssBackgroundToken(): string {
+  try {
+    return getComputedStyle(document.documentElement).getPropertyValue("--background");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Hide #inflow-boot only after a real route has text or rendered media AND
+ * the CSS bundle has applied. App's first effect used to call markAppBooted()
+ * as soon as the sidebar shell committed. On a phone that shell's inner
+ * Suspense fallback is empty while the Dispatch chunk downloads, the inline
+ * shell disappeared, and the viewport was the #1a1a1a body — a black screen
+ * native recovery then treated as healthy.
+ *
+ * A `<main>` that is only a `<video>` (job-card watch links have no title)
+ * counts. An empty dispatch `<main>` still does not.
+ */
+export function watchUntilRealPagePainted(): () => void {
+  let stopped = false;
+  let timer = 0;
+
+  const tick = () => {
+    if (stopped || isAppBooted()) return;
+    const root = document.getElementById("root");
+    const main = root?.querySelector("main") ?? null;
+    const ready =
+      shellSignalsRealPage({
+        rootText: root?.innerText ?? "",
+        mainText: main ? (main.innerText ?? "") : null,
+        mainHasRenderedContent: main ? elementHasRenderedContent(main) : false,
+        rootHasRenderedContent: root ? elementHasRenderedContent(root) : false,
+      }) && cssTokenPresent(readCssBackgroundToken());
+    if (!ready) {
+      timer = window.setTimeout(tick, 150);
+      return;
+    }
+    // Two frames so the page is on screen before the inline shell hides.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (!stopped && !isAppBooted()) markAppBooted();
+      });
+    });
+  };
+
+  tick();
+  return () => {
+    stopped = true;
+    window.clearTimeout(timer);
+  };
+}

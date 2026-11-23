@@ -8,7 +8,7 @@
  * Scope:
  *   - Customer card (read-only display + map link)
  *   - Job Description (editable, auto-save on blur)
- *   - Internal Notes (orange-tinted, auto-save on blur)
+ *   - Internal Notes (orange staff only card: notes, Voice, equipment chips)
  *   - Status / Lead Source / Quote Method selects
  *   - Customer confirmed checkbox
  *
@@ -21,6 +21,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, ChevronDown, Mic, MicOff, Lock, UserPlus, Pencil, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  publishJobDescriptionDraft,
+  readJobDescriptionDraft,
+} from "@/lib/jobDescriptionDraft";
 import { getJobStatusChip } from "@/lib/jobStatusColors";
 import { useToast } from "@/hooks/use-toast";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
@@ -29,6 +33,7 @@ import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAut
 import { JobSiteMapSection } from "@/components/JobSiteMapSection";
 import { AiPolishDescription } from "@/components/AiPolishDescription";
 import { JobTimerControl } from "@/components/JobTimerControl";
+import { JobEquipmentChips } from "@/components/JobEquipmentChips";
 
 // The Web Speech API (webkitSpeechRecognition) is present on `window` inside the
 // iOS Capacitor WKWebView but is a silent no-op there — recognition never starts,
@@ -71,6 +76,7 @@ interface JobShape {
   tenantContactEmail?: string | null;
   tenantContactPhone?: string | null;
   tenantContactMobile?: string | null;
+  equipment?: string[] | null;
 }
 
 interface SavedContact {
@@ -232,19 +238,36 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   const [description, setDescription] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
   const [descriptionFromProposal, setDescriptionFromProposal] = useState(false);
+  // True while the field holds text the server does not have yet. A refetch
+  // of the shorter saved value must not wipe a paragraph the user just added.
+  const descriptionDirtyRef = useRef(false);
   useEffect(() => {
     if (!job) return;
-    if (job.description && job.description.trim()) {
-      setDescription(job.description);
+    const server = job.description ?? "";
+    const existing = readJobDescriptionDraft(jobId);
+    // Tab changes unmount this panel. The draft store still has what they
+    // typed, which may be ahead of the job row.
+    if (existing && existing.text !== server) {
+      descriptionDirtyRef.current = true;
+      setDescription(existing.text);
       setDescriptionFromProposal(false);
+      return;
+    }
+    if (descriptionDirtyRef.current) return;
+    if (server.trim()) {
+      setDescription(server);
+      setDescriptionFromProposal(false);
+      publishJobDescriptionDraft(jobId, server);
     } else if (proposalDescription) {
       setDescription(proposalDescription);
       setDescriptionFromProposal(true);
+      publishJobDescriptionDraft(jobId, proposalDescription);
     } else {
       setDescription("");
       setDescriptionFromProposal(false);
+      publishJobDescriptionDraft(jobId, "");
     }
-  }, [job?.description, proposalDescription]);
+  }, [job?.description, proposalDescription, jobId]);
   useEffect(() => { if (job) setInternalNotes(job.internalNotes ?? ""); }, [job?.internalNotes]);
   // Auto-size both textareas to their content (min height comes from rows=3).
   // scrollHeight is the exact browser measurement — same pattern as the
@@ -294,6 +317,37 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
     },
   });
+
+  // Publish every keystroke so Invoice can read it on the same click as blur.
+  // Blur reads the DOM value, not the React state from the previous render,
+  // so the last character typed before the click is included. If an earlier
+  // save completes after a newer one, write the newest text again.
+  const persistDescription = (sent: string) => {
+    saveField.mutate(
+      { description: sent },
+      {
+        onSuccess: () => {
+          const current = descriptionRef.current?.value;
+          if (current != null && current !== sent) {
+            persistDescription(current);
+            return;
+          }
+          descriptionDirtyRef.current = false;
+        },
+      },
+    );
+  };
+  const applyDescription = (next: string, save: boolean) => {
+    publishJobDescriptionDraft(jobId, next);
+    setDescription(next);
+    const server = job?.description ?? "";
+    if (next === server) {
+      descriptionDirtyRef.current = false;
+      return;
+    }
+    descriptionDirtyRef.current = true;
+    if (save) persistDescription(next);
+  };
 
   // Lanes — custom buckets a job can sit in (orthogonal to status). Assigning goes through the
   // dedicated /lane endpoint (not the auto-save PUT) so on-enter automations fire consistently.
@@ -747,8 +801,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             context="job-description"
             onTranscript={(text) => {
               const next = description ? `${description} ${text}` : text;
-              setDescription(next);
-              saveField.mutate({ description: next });
+              applyDescription(next, true);
             }}
           />
         </div>
@@ -763,10 +816,8 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
         <textarea
           ref={descriptionRef}
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          onBlur={() => {
-            if ((job?.description ?? "") !== description) saveField.mutate({ description });
-          }}
+          onChange={(e) => applyDescription(e.target.value, false)}
+          onBlur={(e) => applyDescription(e.target.value, true)}
           placeholder="Add a job description..."
           rows={3}
           className="w-full bg-muted rounded-xl px-3.5 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/70 outline-none focus:bg-card focus:ring-2 focus:ring-ring resize-none overflow-hidden"
@@ -774,10 +825,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
         />
         <AiPolishDescription
           text={description}
-          onApply={(polished) => {
-            setDescription(polished);
-            saveField.mutate({ description: polished });
-          }}
+          onApply={(polished) => applyDescription(polished, true)}
           className="mt-2"
         />
       </div>
@@ -813,6 +861,12 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           className="w-full bg-card border border-orange/25 rounded-xl px-3.5 py-3 text-[15px] text-foreground placeholder:text-muted-foreground/70 outline-none focus:ring-2 focus:ring-orange/60 resize-none overflow-hidden"
           data-testid="internal-notes"
         />
+        <div className="mt-3 pt-3 border-t border-orange/25">
+          <div className="text-[12.5px] font-semibold text-orange mb-2">
+            Equipment
+          </div>
+          <JobEquipmentChips jobId={jobId} selected={job?.equipment} />
+        </div>
       </div>
 
       {/* ── Status grid ── */}
@@ -824,6 +878,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           options={[
             { value: "lead", label: "Lead" },
             { value: "quote", label: "Quote" },
+            { value: "mulch", label: "Mulch" },
             { value: "work_order", label: "Work Order" },
             { value: "scheduled", label: "Scheduled" },
             { value: "completed", label: "Completed" },
@@ -1075,20 +1130,39 @@ function ContactsCard({
     customer?.name, customer?.email, customer?.phone, customer?.mobile,
   ]);
 
+  const contactKeys = ["firstName", "lastName", "email", "mobile", "phone"] as const;
+
   const commit = (k: "firstName" | "lastName" | "email" | "mobile" | "phone") => {
     const next = draft[k];
     const current = fields[k];
     if ((next ?? "") === (current ?? "")) return;
     const key = fieldKey(k);
     const trimmed = (next ?? "").trim();
+    const patch: Record<string, unknown> = {};
     if (trimmed === "") {
       // Intentional clear. The server's anti-wipe safeguard restores empty
       // values UNLESS the field is named in _clearFields, so without this a
       // user can never remove a contact number/email — it just reappears.
-      saveField.mutate({ [key]: null, _clearFields: [key] } as unknown as Partial<JobShape>);
+      patch[key as string] = null;
+      patch._clearFields = [key];
     } else {
-      saveField.mutate({ [key]: trimmed } as Partial<JobShape>);
+      patch[key as string] = trimmed;
     }
+    // While the job has no contact of its own, the job tab shows the CUSTOMER
+    // record's name/email/phone (see jobHasOwnContact above). That fallback is
+    // display-only and is suppressed the instant ANY jobContact* field gets a
+    // value — so saving just the edited field made everything else on screen
+    // vanish (typing the email blanked the first name, last name and phone).
+    // Promote the whole visible contact onto the job in the same write so what
+    // the user is looking at is what gets stored.
+    if (tab === "job" && !jobHasOwnContact) {
+      for (const other of contactKeys) {
+        if (other === k) continue;
+        const v = (draft[other] ?? fields[other] ?? "").trim();
+        if (v) patch[fieldKey(other) as string] = v;
+      }
+    }
+    saveField.mutate(patch as unknown as Partial<JobShape>);
   };
 
   return (

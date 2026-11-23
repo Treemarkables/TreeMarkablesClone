@@ -1,5 +1,17 @@
 // Firebase Cloud Messaging service using Firebase Admin SDK
 import admin from 'firebase-admin';
+import { APP_URL } from '../config/appUrl.js';
+import { jobIdFromNotificationPath, resolveNotificationPath } from '@shared/notificationDeepLink';
+
+function stringData(data: Record<string, unknown> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!data) return out;
+  for (const [key, value] of Object.entries(data)) {
+    if (value == null || value === '') continue;
+    out[key] = String(value);
+  }
+  return out;
+}
 
 export interface FcmSendResult {
   ok: boolean;
@@ -61,16 +73,28 @@ class FirebaseMessagingService {
     if (!this.init()) return { ok: false, errorCode: 'not-configured' };
 
     try {
-      const dataPayload: Record<string, string> = { ...(notification.data || {}) };
+      const dataPayload = stringData(notification.data);
       if (notification.clickAction) {
         dataPayload.clickAction = notification.clickAction;
       }
+      if (!dataPayload.jobId && dataPayload.clickAction) {
+        const fromPath = jobIdFromNotificationPath(dataPayload.clickAction);
+        if (fromPath) dataPayload.jobId = fromPath;
+      }
+      // Legacy senders used a bare `/dispatch` clickAction even when jobId was
+      // in `data`. Resolve here so APNs/FCM/web all carry the job-card path.
+      const resolved = resolveNotificationPath(dataPayload);
+      if (resolved) dataPayload.clickAction = resolved;
 
       // collapseId makes APNs/FCM replace an undelivered or displayed copy of
       // the same logical alert instead of stacking it — an employee whose
       // reinstalls left several live tokens pointing at one phone sees a
       // single banner, not one per token. apns-collapse-id max is 64 bytes.
       const collapseId = notification.collapseId?.slice(0, 64);
+      const clickPath = dataPayload.clickAction;
+      const clickLink = clickPath
+        ? `${APP_URL}${clickPath.startsWith('/') ? clickPath : `/${clickPath}`}`
+        : undefined;
 
       const message: admin.messaging.Message = {
         token,
@@ -84,16 +108,24 @@ class FirebaseMessagingService {
             'apns-priority': '10',
             ...(collapseId ? { 'apns-collapse-id': collapseId } : {}),
           },
-          payload: { aps: { sound: 'default', badge: 1 } },
+          // Repeat custom keys on the APNs payload itself. Specifying `aps`
+          // alone has in some Admin SDK versions dropped top-level `data`
+          // from userInfo, which made iOS taps fall through to the default
+          // dispatch board.
+          payload: {
+            aps: { sound: 'default', badge: 1 },
+            ...dataPayload,
+          },
         },
         android: {
           priority: 'high',
           ...(collapseId ? { collapseKey: collapseId } : {}),
           notification: {
             sound: 'default',
-            ...(notification.clickAction ? { clickAction: notification.clickAction } : {}),
+            ...(clickPath ? { clickAction: clickPath } : {}),
           },
         },
+        ...(clickLink ? { webpush: { fcmOptions: { link: clickLink } } } : {}),
       };
 
       const result = await admin.messaging().send(message);
@@ -169,6 +201,7 @@ class FirebaseMessagingService {
     scheduledTime: string;
     address?: string;
   }): Promise<boolean> {
+    // jobId is not on this legacy helper; callers that have it use notifyJobAssignment.
     return this.sendToDevice(token, {
       title: 'New Job Assignment',
       body: `Job #${data.jobNumber}: ${data.jobTitle}\n${data.scheduledDate} at ${data.scheduledTime}`,

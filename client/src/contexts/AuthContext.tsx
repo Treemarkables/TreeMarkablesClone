@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react';
 import { Employee } from '@shared/schema';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
+import { AUTH_ME_TIMEOUT_MS } from '@/lib/nativeBootRecovery';
 
 // Authenticated user payload returned by /api/auth/me — includes resolved permissions
 export interface AuthUser extends Employee {
@@ -13,6 +14,7 @@ export interface AuthUser extends Employee {
   // "addon:*"), for plan-based UI gating. Mirrors the server feature gates.
   planKey?: string;
   entitlements?: string[];
+  mfaEnabled?: boolean;
 }
 
 interface AuthContextType {
@@ -33,6 +35,11 @@ interface AuthContextType {
   can: (requires: string) => boolean;
   login: (credentials: { employeeId?: string; email?: string; password?: string }) => Promise<any>;
   loginPending: boolean;
+  // Drop a localStorage user the server does not recognise (no session cookie).
+  abandonCachedSession: () => void;
+  completeMfa: (opts: { code: string; recovery?: boolean }) => Promise<any>;
+  mfaPending: boolean;
+  adoptSession: (user: AuthUser) => void;
   logout: () => void;
 }
 
@@ -94,10 +101,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: meResponse, isError: authQueryError } = useQuery<{ success: boolean; data: AuthUser | null }>({
     queryKey: ['/api/auth/me'],
     queryFn: async () => {
-      // Custom query function that handles 401 gracefully
-      const res = await fetch('/api/auth/me', {
-        credentials: 'include',
-      });
+      // Custom query function that handles 401 gracefully. A timeout is
+      // required in the Capacitor WKWebView: a hung /api/auth/me used to
+      // leave isLoading=true forever (empty cream/white full-screen) when
+      // localStorage had no cached user. Aborting lets the bookkeeping
+      // effect mark the initial check complete and paint login/dispatch.
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), AUTH_ME_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch('/api/auth/me', {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
       
       // If not authenticated, return null instead of throwing
       if (res.status === 401) {
@@ -110,7 +129,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       return await res.json();
     },
-    retry: 2,
+    retry: (failureCount, error) => {
+      const name = (error as Error)?.name || '';
+      // One retry after a hung /me abort; don't sit on the boot gate for 30s+.
+      if (name === 'AbortError') return failureCount < 1;
+      return failureCount < 2;
+    },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
     staleTime: 5 * 60 * 1000,   // treat auth as fresh for 5 min — no background churn
     gcTime: 10 * 60 * 1000,      // keep in cache 10 min so re-navigation is instant
@@ -133,9 +157,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.success && data.data) {
         console.log('Login Success - User Data:', data.data);
         console.log('Login Success - Role:', data.data.role, typeof data.data.role);
-        setCurrentUser(data.data);
+        const { recoveryCodes: _codes, ...user } = data.data as AuthUser & { recoveryCodes?: string[] };
+        setCurrentUser(user);
         // Set the query data directly instead of invalidating to prevent race condition
-        queryClient.setQueryData(['/api/auth/me'], { success: true, data: data.data });
+        queryClient.setQueryData(['/api/auth/me'], { success: true, data: user });
+      }
+    },
+  });
+
+  const mfaMutation = useMutation({
+    mutationFn: async (opts: { code: string; recovery?: boolean }) => {
+      await queryClient.cancelQueries({ queryKey: ['/api/auth/me'] });
+      const path = opts.recovery ? '/api/auth/mfa/verify-recovery' : '/api/auth/mfa/verify';
+      const res = await apiRequest('POST', path, { code: opts.code });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.success && data.data) {
+        const { recoveryCodes: _codes, ...user } = data.data as AuthUser & { recoveryCodes?: string[] };
+        setCurrentUser(user);
+        queryClient.setQueryData(['/api/auth/me'], { success: true, data: user });
       }
     },
   });
@@ -187,8 +228,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return result;
   };
 
+  const completeMfa = async (opts: { code: string; recovery?: boolean }) => {
+    const result = await mfaMutation.mutateAsync(opts);
+    lastLoginTimeRef.current = Date.now();
+    return result;
+  };
+
+  const adoptSession = (user: AuthUser) => {
+    lastLoginTimeRef.current = Date.now();
+    const { recoveryCodes: _codes, ...safe } = user as AuthUser & { recoveryCodes?: string[] };
+    setCurrentUser(safe);
+    queryClient.setQueryData(['/api/auth/me'], { success: true, data: safe });
+  };
+
   const logout = () => {
     logoutMutation.mutate();
+  };
+
+  // The iOS shell can keep treemarkables_user after WKWebView drops the session
+  // cookie. The server then answers "Please log in" on Add Staff. Clear the
+  // cached user so the login screen can set a cookie the webview will store.
+  const abandonCachedSession = () => {
+    consecutive401sRef.current = 0;
+    setCurrentUser(null);
+    queryClient.setQueryData(['/api/auth/me'], { success: false, data: null });
+    setLocation('/login');
   };
 
   // Dev mode auto-login: automatically log in as admin when not authenticated
@@ -314,6 +378,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         can,
         login,
         loginPending: loginMutation.isPending,
+        abandonCachedSession,
+        completeMfa,
+        mfaPending: mfaMutation.isPending,
+        adoptSession,
         logout,
       }}
     >

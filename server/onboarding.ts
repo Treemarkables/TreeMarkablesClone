@@ -5,7 +5,7 @@
  * subscription. Runs as the DB owner (signup has no tenant context yet), so every insert
  * sets `business_id` explicitly — the column default is Treemarkables and would be wrong.
  */
-import { db, ownerDb } from "./db";
+import { ownerDb } from "./db";
 import { businesses, businessSettings, employees, subscriptions, subscriptionPlans, documentTemplates } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -40,19 +40,21 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
   const slug = slugify(input.businessName);
   if (!slug) throw new Error("Please enter a valid business name.");
 
-  const [dupEmail] = await db.select({ id: employees.id }).from(employees).where(eq(employees.email, email)).limit(1);
+  const [dupEmail] = await ownerDb.select({ id: employees.id }).from(employees).where(eq(employees.email, email)).limit(1);
   if (dupEmail) throw new Error("An account with that email already exists.");
-  const [dupSlug] = await db.select({ id: businesses.id }).from(businesses).where(eq(businesses.slug, slug)).limit(1);
+  const [dupSlug] = await ownerDb.select({ id: businesses.id }).from(businesses).where(eq(businesses.slug, slug)).limit(1);
   if (dupSlug) throw new Error("A business with that name already exists — try a more specific name.");
 
   const hash = await bcrypt.hash(input.password, 10);
 
   // neon-http has no transactions, so create the business first then compensate (delete the
   // partial tenant) if any later step fails — keeps signup atomic, no orphaned rows.
-  const [biz] = await db.insert(businesses).values({ name: input.businessName, slug }).returning();
+  // Always use ownerDb: signup is an owner-path, but createTenant must never inherit a
+  // pinned tenant connection if a future caller has one (RLS would hide/fail the insert).
+  const [biz] = await ownerDb.insert(businesses).values({ name: input.businessName, slug }).returning();
   try {
-    await db.insert(businessSettings).values({ businessId: biz.id, businessName: input.businessName });
-    const [emp] = await db.insert(employees).values({
+    await ownerDb.insert(businessSettings).values({ businessId: biz.id, businessName: input.businessName });
+    const [emp] = await ownerDb.insert(employees).values({
       businessId: biz.id,
       firstName: input.firstName,
       lastName: input.lastName,
@@ -65,9 +67,9 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
     }).returning();
 
     // Start every new tenant on Freemium.
-    const [freemium] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.key, "freemium")).limit(1);
+    const [freemium] = await ownerDb.select().from(subscriptionPlans).where(eq(subscriptionPlans.key, "freemium")).limit(1);
     if (freemium) {
-      await db.insert(subscriptions).values({ businessId: biz.id, planId: freemium.id, status: "active" });
+      await ownerDb.insert(subscriptions).values({ businessId: biz.id, planId: freemium.id, status: "active" });
     }
 
     // Seed the tenant's OWN default PDF/document templates (quote, proposal, invoice).
@@ -77,7 +79,7 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
     // (companyName/address/email/phone/GST), so an unset insert would re-introduce
     // the very leak this closes. Address/phone are unknown at signup → blank (the
     // renderers hide empty fields); the owner fills them later in Company Info.
-    await db.insert(documentTemplates).values(
+    await ownerDb.insert(documentTemplates).values(
       DEFAULT_DOC_TEMPLATES.map((d) => ({
         businessId: biz.id,
         name: d.name,
@@ -95,11 +97,11 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
     return { businessId: biz.id, employeeId: emp.id };
   } catch (err) {
     // Compensating rollback — undo the partial tenant.
-    await db.delete(documentTemplates).where(eq(documentTemplates.businessId, biz.id)).catch(() => {});
-    await db.delete(subscriptions).where(eq(subscriptions.businessId, biz.id)).catch(() => {});
-    await db.delete(employees).where(eq(employees.businessId, biz.id)).catch(() => {});
-    await db.delete(businessSettings).where(eq(businessSettings.businessId, biz.id)).catch(() => {});
-    await db.delete(businesses).where(eq(businesses.id, biz.id)).catch(() => {});
+    await ownerDb.delete(documentTemplates).where(eq(documentTemplates.businessId, biz.id)).catch(() => {});
+    await ownerDb.delete(subscriptions).where(eq(subscriptions.businessId, biz.id)).catch(() => {});
+    await ownerDb.delete(employees).where(eq(employees.businessId, biz.id)).catch(() => {});
+    await ownerDb.delete(businessSettings).where(eq(businessSettings.businessId, biz.id)).catch(() => {});
+    await ownerDb.delete(businesses).where(eq(businesses.id, biz.id)).catch(() => {});
     throw err;
   }
 }

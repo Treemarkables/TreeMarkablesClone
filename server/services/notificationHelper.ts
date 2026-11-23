@@ -1,5 +1,6 @@
 import { storage } from '../storage.js';
 import { getStaffPushWindow, isWithinStaffPushWindow, nextStaffPushWindowStart } from './notificationWindow.js';
+import { currentBusinessId, runWithBusiness } from '../tenancy/tenantStore.js';
 
 /**
  * Notification helper service
@@ -449,25 +450,38 @@ export async function notifyCustomerSmsReply(customerName: string, messageBody: 
 }
 
 /**
- * Send a push notification to all admin employees who have customerMessages enabled
+ * Send a push notification to admin employees of ONE business who have
+ * customerMessages enabled.
+ *
+ * The business is the explicit argument, or the request/job already bound
+ * with runWithBusiness. With neither, this refuses. It used to call
+ * getAllEmployees() with no business and deliver Treemarkables replies to
+ * every tenant's admins.
  */
-export async function pushToAdminsWithCustomerMessages(options: NotificationOptions) {
-  try {
-    const employees = await storage.getAllEmployees();
-    const admins = employees.filter(emp => emp.role === 'admin');
-    let sent = 0;
-    for (const admin of admins) {
-      const prefs = await storage.getNotificationPreferences(admin.id);
-      if (prefs?.customerMessages !== false) {
-        const result = await notifyEmployee(admin.id, options);
-        if (result) sent++;
-      }
-    }
-    return sent;
-  } catch (error) {
-    console.error('Error pushing to admins:', error);
+export async function pushToAdminsWithCustomerMessages(options: NotificationOptions, businessId?: string) {
+  const bid = businessId || currentBusinessId();
+  if (!bid) {
+    console.error('[tenant] pushToAdminsWithCustomerMessages refused: no business scope');
     return 0;
   }
+  return runWithBusiness(bid, async () => {
+    try {
+      const employees = await storage.getAllEmployees();
+      const admins = employees.filter(emp => emp.role === 'admin' && (!emp.businessId || emp.businessId === bid));
+      let sent = 0;
+      for (const admin of admins) {
+        const prefs = await storage.getNotificationPreferences(admin.id);
+        if (prefs?.customerMessages !== false) {
+          const result = await notifyEmployee(admin.id, options);
+          if (result) sent++;
+        }
+      }
+      return sent;
+    } catch (error) {
+      console.error('Error pushing to admins:', error);
+      return 0;
+    }
+  });
 }
 
 /**
@@ -670,20 +684,19 @@ export async function notifyConversationReply(conversation: {
     // to swallow a near-instant double-call, short enough that a real follow-up
     // message still gets its own bell entry. (The old guard blanket-suppressed
     // every reply on a conversation for a whole 24h.)
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentNotifications = await storage.getNotificationsCreatedSince(since);
+    // Targeted existence queries (was: download all notifications from the last
+    // 24h and scan in JS on every inbound reply).
     const alreadyNotified = messageId
-      ? recentNotifications.some(
-          (n) =>
-            n.type === 'new_conversation' &&
-            (n.metadata as any)?.messageId === messageId,
-        )
-      : recentNotifications.some(
-          (n) =>
-            n.type === 'new_conversation' &&
-            (n.metadata as any)?.conversationId === conversation.id &&
-            Date.now() - new Date(n.createdAt as any).getTime() < 5 * 60 * 1000,
-        );
+      ? await storage.hasNotificationSince({
+          type: 'new_conversation',
+          since: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          metadata: { key: 'messageId', value: messageId },
+        })
+      : await storage.hasNotificationSince({
+          type: 'new_conversation',
+          since: new Date(Date.now() - 5 * 60 * 1000),
+          metadata: { key: 'conversationId', value: conversation.id },
+        });
     if (alreadyNotified) {
       console.log(`✅ Skipping duplicate conversation reply notification for: ${conversation.id}`);
       return true;

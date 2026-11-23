@@ -58,6 +58,8 @@ interface QuickAssignDialogProps {
   droppedEmployeeId: string;
   employees: Employee[];
   staffAssignments: AdvisoryAssignment[];
+  /** People already on this job. They start ticked so a drop can add or remove. */
+  bookedEmployeeIds?: string[];
   defaultDurationHours: number;
   isSubmitting: boolean;
   onCancel: () => void;
@@ -77,6 +79,7 @@ export function QuickAssignDialog({
   droppedEmployeeId,
   employees,
   staffAssignments,
+  bookedEmployeeIds = [],
   defaultDurationHours,
   isSubmitting,
   onCancel,
@@ -97,9 +100,13 @@ export function QuickAssignDialog({
   const [scheduleBookingReminders, setScheduleBookingReminders] =
     useState(false);
 
+  const bookedKey = bookedEmployeeIds.join("\0");
   useEffect(() => {
     if (!open) return;
-    setSelectedIds(new Set([droppedEmployeeId]));
+    const booked = bookedKey ? bookedKey.split("\0") : [];
+    setSelectedIds(
+      new Set([...booked, droppedEmployeeId].filter((id) => id.length > 0)),
+    );
     const h = Math.max(0, Math.floor(defaultDurationHours));
     const m = Math.round(Math.max(0, defaultDurationHours - h) * 60);
     setHours(h);
@@ -107,12 +114,12 @@ export function QuickAssignDialog({
     setSendClientNotification(false);
     setSendProposalEmail(false);
     setScheduleBookingReminders(false);
-  }, [open, droppedEmployeeId, defaultDurationHours]);
+  }, [open, droppedEmployeeId, defaultDurationHours, bookedKey]);
 
-  const activeEmployees = useMemo(
-    () => employees.filter((e) => e.isActive),
-    [employees],
-  );
+  const activeEmployees = useMemo(() => {
+    const booked = new Set(bookedEmployeeIds);
+    return employees.filter((e) => e.isActive !== false || booked.has(e.id));
+  }, [employees, bookedEmployeeIds]);
 
   const totalMinutes = hours * 60 + minutes;
   const endTotalMinutes = Math.min(droppedHour * 60 + totalMinutes, 23 * 60 + 59);

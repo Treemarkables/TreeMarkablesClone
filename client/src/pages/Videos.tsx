@@ -12,10 +12,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Upload, Copy, Download, Video as VideoIcon, Search, Pencil, Check, X, Briefcase, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { uploadFileWithProgress, type UploadProgress } from "@/lib/uploadWithProgress";
+import { type UploadProgress } from "@/lib/uploadWithProgress";
+import { uploadLibraryVideo } from "@/lib/directVideoUpload";
 import { isNativeApp } from "@/lib/platform";
 import { canSaveToPhotos, saveToPhotos, isPhotosPermissionError } from "@/lib/mediaLibrary";
+import { isShareDismissed, saveFailureCopy } from "@/lib/saveMedia";
 import { formatNZTime } from "@shared/dateUtils";
+import { videoHasCaptions } from "@/lib/videoCaptions";
 
 // Per-video state for the native (iOS app) download path. Current app builds
 // ship the MediaLibrary plugin, which downloads natively and saves straight
@@ -53,13 +56,9 @@ export default function Videos() {
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       setUploadProgress({ loaded: 0, total: file.size, percent: 0, phase: "uploading" });
-      // Text fields must precede the file part so the streaming upload parses them in time.
-      const fields: Record<string, string> = {};
-      if (title.trim()) fields.title = title.trim();
-      return uploadFileWithProgress<any>({
-        url: `/api/videos`,
+      return uploadLibraryVideo({
         file,
-        fields,
+        title: title.trim() || undefined,
         onProgress: setUploadProgress,
       });
     },
@@ -201,10 +200,11 @@ export default function Videos() {
       try {
         await navigator.share({ files: [nativeDownload.file] });
         setNativeDownload(null);
-      } catch (err: any) {
-        if (err?.name === "AbortError") return; // sheet closed — keep it staged
+      } catch (err) {
+        if (isShareDismissed(err)) return; // sheet closed — keep it staged
         setNativeDownload(null);
-        toast({ title: "Could not save video", variant: "destructive" });
+        const copy = saveFailureCopy("video", err);
+        toast({ title: copy.title, description: copy.description, variant: "destructive" });
       }
       return;
     }
@@ -324,7 +324,7 @@ export default function Videos() {
               <p className="text-xs text-muted-foreground">
                 {uploadProgress?.phase === "processing"
                   ? "Finalizing on the server — almost done."
-                  : "Large videos can take a few minutes on mobile data. Keep this open."}
+                  : "Large iPhone videos upload in pieces so a slow connection can finish. Keep this open."}
               </p>
             </div>
           )}
@@ -448,7 +448,7 @@ export default function Videos() {
                   playsInline
                   className="w-full max-h-72 rounded bg-black object-contain"
                 >
-                  {v.captionsStatus === "ready" && (
+                  {videoHasCaptions(v) && (
                     <track
                       kind="captions"
                       srcLang="en"

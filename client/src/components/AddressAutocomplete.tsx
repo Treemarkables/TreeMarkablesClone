@@ -3,6 +3,7 @@ import { MapPin, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useSelectAllOnFocus } from "@/lib/selectAllOnFocus";
 
 export interface ParsedAddress {
   fullAddress: string;
@@ -62,6 +63,7 @@ export function AddressAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isSelectingSuggestionRef = useRef(false);
+  const selectAllOnFocus = useSelectAllOnFocus();
 
   // Function to search addresses using backend API
   const searchAddresses = async (query: string) => {
@@ -348,10 +350,11 @@ export function AddressAutocomplete({
           value={formatAddress(value)}
           onChange={(e) => handleInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
+          onMouseDown={selectAllOnFocus.onMouseDown}
+          onMouseUp={selectAllOnFocus.onMouseUp}
+          onClick={selectAllOnFocus.onClick}
           onFocus={(e) => {
-            // Highlight the whole address on focus so typing immediately replaces it
-            // (no need to manually delete the pre-filled value first)
-            e.target.select();
+            selectAllOnFocus.onFocus(e);
             if (value.length >= 3) setShowSuggestions(suggestions.length > 0);
           }}
           onBlur={onBlur}

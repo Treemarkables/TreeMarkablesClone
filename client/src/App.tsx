@@ -12,12 +12,17 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { BugReportProvider } from "@/contexts/BugReportContext";
+import { BugReportButton } from "@/components/BugReportButton";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
 import { WebCallProvider } from "@/contexts/WebCallContext";
 import { WebCallButton } from "@/components/WebCallButton";
 // NOTE: useState/useEffect/useCallback are imported further down (imports are
 // hoisted module-wide, so the hooks below can use them).
-import { lazy, Suspense, startTransition } from "react";
+import { lazy, Suspense, startTransition, type ComponentType } from "react";
+import { isAppBooted, watchUntilRealPagePainted } from "@/lib/nativeBootRecovery";
+import { useMarkAppBooted } from "@/lib/useMarkAppBooted";
+import { isTreemarkablesPublicPath } from "@shared/treemarkablesMarketingPaths";
 
 // ---------------------------------------------------------------------------
 // Flash-free navigation. Wouter v3 reads the browser location through
@@ -63,6 +68,9 @@ const MulchThanks = lazy(() => import("@/pages/MulchThanks"));
 const Blog = lazy(() => import("@/pages/Blog"));
 const BlogPost = lazy(() => import("@/pages/BlogPost"));
 const SummerOffer = lazy(() => import("@/pages/SummerOffer"));
+const EmergencyTreeRemoval = lazy(() => import("@/pages/EmergencyTreeRemoval"));
+const Wairoa = lazy(() => import("@/pages/Wairoa"));
+const EastCoast = lazy(() => import("@/pages/EastCoast"));
 const Contact = lazy(() => import("@/pages/Contact"));
 const PrivacyPolicy = lazy(() => import("@/pages/PrivacyPolicy"));
 const JobDashboard = lazy(() => import("@/pages/JobDashboard"));
@@ -74,6 +82,7 @@ const Videos = lazy(() => import("@/pages/Videos"));
 const Library = lazy(() => import("@/pages/Library"));
 const Help = lazy(() => import("@/pages/Help"));
 const HelpAdmin = lazy(() => import("@/pages/admin/HelpAdmin"));
+const BugReportsAdmin = lazy(() => import("@/pages/admin/BugReportsAdmin"));
 const Opportunities = lazy(() => import("@/pages/Opportunities"));
 const ConversationDetail = lazy(() => import("@/pages/ConversationDetail"));
 const Reputation = lazy(() => import("@/pages/Reputation"));
@@ -144,7 +153,9 @@ const QuotingProcessSettings = lazy(() => import("@/pages/QuotingProcessSettings
 const DocumentBuilderPage = lazy(() => import("@/pages/DocumentBuilderPage"));
 const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
 const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
+const StripePayouts = lazy(() => import("@/pages/StripePayouts"));
 const SettingsAccount = lazy(() => import("@/pages/SettingsAccount"));
+const SettingsSecurity = lazy(() => import("@/pages/SettingsSecurity"));
 const SettingsChannels = lazy(() => import("@/pages/SettingsChannels"));
 const SettingsSuppliers = lazy(() => import("@/pages/SettingsSuppliers"));
 const SupplierInvoices = lazy(() => import("@/pages/SupplierInvoices"));
@@ -156,6 +167,7 @@ const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoR
 const SettingsVoiceAgent = lazy(() => import("@/pages/SettingsVoiceAgent"));
 const SettingsAiKnowledge = lazy(() => import("@/pages/SettingsAiKnowledge"));
 const FollowUpQueue = lazy(() => import("@/pages/FollowUpQueue"));
+const QuoteFollowUps = lazy(() => import("@/pages/QuoteFollowUps"));
 const UnlinkedCalls = lazy(() => import("@/pages/UnlinkedCalls"));
 const Reconciliation = lazy(() => import("@/pages/Reconciliation"));
 const ProfitabilityCalculator = lazy(() => import("@/pages/ProfitabilityCalculator"));
@@ -180,18 +192,112 @@ function ScrollToTop() {
   return null;
 }
 
-// Fallback shown while a lazy-loaded route chunk is fetched. Renders nothing
-// (no spinner) — the sidebar shell stays visible and the content area simply
-// fills in once the chunk arrives. Used by both Suspense boundaries.
-function PageSpinner() {
-  return null;
+// Auth-gate + cold-start Suspense placeholder. Must not be an empty cream/white
+// (or empty near-black) full-screen — on TestFlight that is indistinguishable
+// from a dead WKWebView. Match the index.html / native boot shell until
+// /api/auth/me resolves (or times out) AND until the first lazy route chunk
+// (Login / Dispatch) actually mounts. The outer Suspense used to fall back to
+// PageSpinner→null; after #556 painted body/#webview #1a1a1a that was a pure
+// black screen for the whole cold-start chunk download.
+const bootShellStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#1a1a1a",
+  color: "#f5f5f0",
+};
+
+function BootPlaceholder() {
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center bg-[#1a1a1a] text-[#f5f5f0]"
+      style={bootShellStyle}
+    >
+      <p className="text-base font-medium" style={{ margin: 0, fontSize: "1.25rem", fontWeight: 650 }}>
+        Opening Inflow
+      </p>
+    </div>
+  );
 }
+
+// Public pages on the Treemarkables marketing host already have their copy in
+// the first HTML byte. Painting "Opening Inflow" here is what Google was
+// using as the homepage snippet, and it replaces that copy. Staff hosts
+// (app.treemarkables.co.nz, Inflow) keep the boot shell.
+function isTreemarkablesMarketingDocument(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname.split(":")[0].trim().toLowerCase().replace(/\.$/, "");
+  if (host !== "www.treemarkables.co.nz" && host !== "treemarkables.co.nz") return false;
+  return isTreemarkablesPublicPath(window.location.pathname);
+}
+
+function MarketingAwareBoot() {
+  if (isTreemarkablesMarketingDocument()) return null;
+  return <BootPlaceholder />;
+}
+
+// Inner (sidebar) Suspense fallback. After the first real page has painted,
+// stay null so in-app navigations keep the chrome. Until then a null fallback
+// is a black phone viewport: the sidebar is off-canvas and the Dispatch chunk
+// is the thing that fills <main>. #579 only replaced the OUTER fallback, so a
+// logged-in cold start never showed it.
+function PageSpinner() {
+  if (isAppBooted()) return null;
+  return <BootPlaceholder />;
+}
+
+// Public customer and marketing routes mark booted on mount. Their first
+// paint can be a video, image, canvas, PDF-less card, or a spinner with no
+// text inside <main> — the text detector then leaves #inflow-boot up forever.
+// Staff shells are not wrapped: an empty dispatch <main> must stay unbooted.
+function withPublicBoot<P extends object>(Page: ComponentType<P>) {
+  function PublicBootedPage(props: P) {
+    useMarkAppBooted();
+    return <Page {...props} />;
+  }
+  return PublicBootedPage;
+}
+
+const PublicLogin = withPublicBoot(Login);
+const PublicSignup = withPublicBoot(Signup);
+const PublicHome = withPublicBoot(Home);
+const PublicTreeRemoval = withPublicBoot(TreeRemoval);
+const PublicTreePruning = withPublicBoot(TreePruning);
+const PublicStumpGrinding = withPublicBoot(StumpGrinding);
+const PublicHedgeTrimming = withPublicBoot(HedgeTrimming);
+const PublicMulch = withPublicBoot(Mulch);
+const PublicMulchThanks = withPublicBoot(MulchThanks);
+const PublicBlog = withPublicBoot(Blog);
+const PublicBlogPost = withPublicBoot(BlogPost);
+const PublicSummerOffer = withPublicBoot(SummerOffer);
+const PublicEmergencyTreeRemoval = withPublicBoot(EmergencyTreeRemoval);
+const PublicWairoa = withPublicBoot(Wairoa);
+const PublicEastCoast = withPublicBoot(EastCoast);
+const PublicContact = withPublicBoot(Contact);
+const PublicPrivacyPolicy = withPublicBoot(PrivacyPolicy);
+const PublicCustomerPortal = withPublicBoot(CustomerPortal);
+const PublicProposalAccept = withPublicBoot(ProposalAccept);
+const PublicProposalViewer = withPublicBoot(ProposalViewer);
+const PublicQuoteViewer = withPublicBoot(QuoteViewer);
+const PublicInvoiceView = withPublicBoot(InvoiceView);
+const PublicInvoiceViewer = withPublicBoot(InvoiceViewer);
+const PublicPaymentComplete = withPublicBoot(PaymentComplete);
+const PublicReviewPage = withPublicBoot(PublicReview);
+const PublicTimelinePage = withPublicBoot(PublicTimeline);
+const PublicWatchVideo = withPublicBoot(WatchVideo);
+const PublicNotFound = withPublicBoot(NotFound);
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NotificationBell } from "@/components/NotificationBell";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { useAuth } from "@/contexts/AuthContext";
 import { Redirect } from "wouter";
 import { initializeFirebase } from "@/lib/firebase";
+import {
+  ackNativeNotificationTap,
+  peekNotificationNav,
+  persistNotificationNav,
+} from "@/lib/notificationNav";
 import { useQuery } from "@tanstack/react-query";
 import { addDays, subDays } from "date-fns";
 
@@ -203,7 +309,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // Wait for auth check to complete before redirecting. Render a neutral
   // background (no spinner) so there's no loading ring on startup.
   if (isLoading) {
-    return <div className="min-h-screen bg-background" />;
+    return <BootPlaceholder />;
   }
   
   // Redirect to login if not authenticated
@@ -228,7 +334,7 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
   // Wait for auth check to complete before redirecting. Render a neutral
   // background (no spinner) so there's no loading ring on startup.
   if (isLoading) {
-    return <div className="min-h-screen bg-background" />;
+    return <BootPlaceholder />;
   }
   
   // Redirect to login if not authenticated
@@ -240,6 +346,10 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 }
 
 // Inner component that uses useSidebar hook
+// Mobile header icon-button size: a 40px circle that may shrink to 36px so
+// the /dispatch action row fits a 375pt phone (see the header comment below).
+const MOBILE_HEADER_ICON = "h-11 w-11 min-w-11 shrink-0";
+
 function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const { isCrew, isAdmin, logout, currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState("jobs");
@@ -280,7 +390,8 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   const dispatchLanes = lanesResponse?.data || [];
   // Status and lane are mutually-exclusive views. Selecting one clears the other.
   // Status filters are multi-select: toggling a status adds/removes it from the
-  // active set ([] = All), so e.g. W/O + Scheduled can be viewed together.
+  // active set ([] = All), so e.g. Unscheduled + Scheduled can be viewed together.
+  // A fresh session starts on Unscheduled (DEFAULT_DISPATCH_JOB_FILTERS).
   const toggleStatus = (v: string) => {
     setDispatchFilters(
       dispatchFilters.includes(v)
@@ -390,27 +501,36 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   }, []);
   
   return (
-    <div className="flex h-screen overflow-hidden w-full">
+    <div className="flex h-screen overflow-hidden w-full bg-background">
       <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
-        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden md:p-2 md:gap-2">
           {/* Mobile header - sidebar toggle, logo, and actions */}
+          {/* On /dispatch an admin sees nine 44px controls (logo, bug, bell,
+              +, paste, filter, lanes, search, account). They wrap onto a
+              second row on a 360px phone instead of shrinking under 44px or
+              sliding off the right edge. */}
           <header
-            className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-background"
-            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 0.75rem)" }}
+            className="md:hidden flex w-full min-w-0 flex-wrap items-center gap-1 px-2 py-2 border-b bg-background"
+            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 0.5rem)" }}
           >
             <LogoSidebarTrigger size={44} />
-            {businessName && (
-              <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight" data-testid="header-business-name-mobile">
+            {/* Business name is hidden on /dispatch — the action row needs the width */}
+            {businessName && !isDispatchPage && (
+              <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight px-1" data-testid="header-business-name-mobile">
                 {businessName}
               </span>
             )}
+            {/* Report a problem — every member, every screen */}
+            <BugReportButton className={MOBILE_HEADER_ICON} />
             {/* Notifications Bell — standalone so flex-1 spacer gives it room from actions */}
-            {isAdmin && <div className="shrink-0"><NotificationBell /></div>}
+            {isAdmin && <NotificationBell />}
 
             {/* Spacer: pushes action buttons to the right, away from the bell */}
             <div className="flex-1" />
             
-            <div className="flex items-center gap-2">
+            {/* `contents` makes the actions direct flex children of the header so
+                they share its gap and shrink evenly alongside the bug/bell buttons */}
+            <div className="contents">
 
               {/* Dispatch controls — only shown on /dispatch */}
               {isDispatchPage && (
@@ -422,9 +542,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         size="icon"
                         aria-label="Create new"
                         data-testid="create-new-button-mobile"
-                        className="rounded-full bg-brand-lime text-brand-lime-foreground border-brand-lime-border shrink-0 h-12 w-12"
+                        className={`rounded-full bg-brand-lime text-brand-lime-foreground border-brand-lime-border ${MOBILE_HEADER_ICON}`}
                       >
-                        <Plus className="h-7 w-7" />
+                        <Plus className="h-6 w-6" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -439,6 +559,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         data-testid="create-quote-button-mobile"
                       >
                         Quote
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-mulch"))}
+                        data-testid="create-mulch-button-mobile"
+                      >
+                        Mulch
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
@@ -461,9 +587,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
                     aria-label="Paste message"
                     data-testid="paste-message-button-mobile"
-                    className="rounded-full text-orange-600 border-orange-400 bg-orange-100 shrink-0 h-12 w-12"
+                    className={`rounded-full text-orange-600 border-orange-400 bg-orange-100 ${MOBILE_HEADER_ICON}`}
                   >
-                    <MessageSquare className="h-7 w-7 text-orange-600" />
+                    <MessageSquare className="h-6 w-6 text-orange-600" />
                   </Button>
 
                   <DropdownMenu>
@@ -471,11 +597,11 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-11 w-11 ${(dispatchFilters.length > 0 || dispatchLane !== "all") ? "text-primary" : "text-muted-foreground"}`}
+                        className={`${MOBILE_HEADER_ICON} ${(dispatchFilters.length > 0 || dispatchLane !== "all") ? "text-primary" : "text-muted-foreground"}`}
                         aria-label="Filter jobs"
                         data-testid="mobile-filter-dropdown-trigger"
                       >
-                        <Filter className="h-7 w-7" />
+                        <Filter className="h-6 w-6" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -507,7 +633,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`h-11 w-11 ${dispatchLane !== "all" ? "text-primary" : "text-muted-foreground"}`}
+                          className={`${MOBILE_HEADER_ICON} ${dispatchLane !== "all" ? "text-primary" : "text-muted-foreground"}`}
                           aria-label="Filter by lane"
                           data-testid="dispatch-lanes-button-mobile"
                         >
@@ -542,9 +668,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   }}
                   aria-label={dispatchSearchOpen ? "Close search" : "Search jobs"}
                   data-testid="mobile-search-toggle"
-                  className="text-muted-foreground h-11 w-11"
+                  className={`text-muted-foreground ${MOBILE_HEADER_ICON}`}
                 >
-                  {dispatchSearchOpen ? <X className="h-7 w-7" /> : <Search className="h-7 w-7" />}
+                  {dispatchSearchOpen ? <X className="h-6 w-6" /> : <Search className="h-6 w-6" />}
                 </Button>
               )}
               
@@ -566,7 +692,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {isAdmin && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label="Account menu" data-testid="button-account-dropdown-mobile">
+                    <Button variant="ghost" size="icon" className={MOBILE_HEADER_ICON} aria-label="Account menu" data-testid="button-account-dropdown-mobile">
                       <User className="h-6 w-6" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -640,7 +766,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           </header>
           
           {/* Desktop header - full menu */}
-          <header className="hidden md:flex items-center justify-between p-2 border-b bg-background">
+          <header className="hidden md:flex items-center justify-between px-4 py-2 inflow-chrome shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
               <LogoSidebarTrigger size={36} />
               {businessName && (
@@ -655,6 +781,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               <PlanGate requires="addon:call_recording">
                 <WebCallButton />
               </PlanGate>
+
+              {/* Report a problem — every member, every screen */}
+              <BugReportButton />
 
               {/* Notifications Bell */}
               <NotificationBell />
@@ -776,6 +905,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         data-testid="create-quote-button-desktop"
                       >
                         Quote
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-mulch"))}
+                        data-testid="create-mulch-button-desktop"
+                      >
+                        Mulch
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
@@ -910,7 +1045,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               )}
             </div>
           </header>
-          <main className="flex-1 w-full max-w-full min-w-0 min-h-0 relative md:pt-6" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+          <main className={`flex-1 w-full max-w-full min-w-0 min-h-0 relative overflow-hidden ${isDispatchPage ? "" : "md:inflow-chrome"}`} style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             {/* Global pull-to-refresh: swipe down from the top of any page to
                 refetch. Dispatch has its own (wired to its queries), so the
                 global one stands down there. Touch-only — desktop unaffected. */}
@@ -1015,6 +1150,7 @@ function Router() {
         const url: string | undefined = event.data?.url;
         console.log('🔔 SW NOTIFICATION_CLICKED received:', { url });
         if (url) {
+          persistNotificationNav(url);
           setLocation(url);
           // If navigating to dispatch with a job, fire the event so DispatchBoard opens that job card
           if (url.startsWith('/dispatch')) {
@@ -1045,19 +1181,27 @@ function Router() {
   //     cold tap fell through to the default `/` → `/dispatch` redirect and
   //     landed on the dashboard instead of the job/conversation.
   const navigateFromNotification = useCallback((url: string) => {
+    persistNotificationNav(url);
     setLocation(url);
-    // Fire the dispatch-board signal immediately AND again at 150ms — the first
-    // catches the case where DispatchBoard is already mounted and wouter's
-    // same-pathname setLocation doesn't trigger a re-render; the second catches
-    // the case where setLocation needed a tick to settle (or the board is still
-    // mounting after a cold start).
-    if (url.startsWith('/dispatch')) {
-      const fire = () => window.dispatchEvent(
-        new CustomEvent('notification-navigation', { detail: { url } }),
-      );
-      fire();
-      setTimeout(fire, 150);
+    // Dispatch-board dests are acked by DispatchBoard once the job card
+    // actually opens. Acking here used to stop the native retry loop before
+    // the lazy board mounted.
+    if (!url.startsWith('/dispatch')) {
+      ackNativeNotificationTap();
+      return;
     }
+    const fire = () => window.dispatchEvent(
+      new CustomEvent('notification-navigation', { detail: { url } }),
+    );
+    fire();
+    const delays = [150, 400, 1000, 2000, 4000];
+    const timers = delays.map((ms) => window.setTimeout(fire, ms));
+    const onHandled = () => {
+      timers.forEach((id) => window.clearTimeout(id));
+      window.removeEventListener('notification-navigation-handled', onHandled);
+    };
+    window.addEventListener('notification-navigation-handled', onHandled);
+    window.setTimeout(onHandled, 5000);
   }, [setLocation]);
 
   // Live listener — warm taps.
@@ -1070,10 +1214,10 @@ function Router() {
         return;
       }
       window.dispatchEvent(new Event('nativeNotificationTapAck'));
-      // Clear the persisted/early-captured copies so the cold-start consumer
-      // doesn't replay this same tap on the next reload.
-      (window as any).__pendingNotificationPath = null;
-      try { localStorage.removeItem('pendingNotificationNav'); } catch {}
+      // Keep pendingNotificationNav until DispatchBoard (or a non-dispatch
+      // route) confirms — a frozen-resume reload after this event used to
+      // find an empty store and land on the bare board.
+      persistNotificationNav(url);
       navigateFromNotification(url);
     };
     window.addEventListener('nativeNotificationTap', handler);
@@ -1081,37 +1225,27 @@ function Router() {
   }, [navigateFromNotification]);
 
   // Mount-consumer — cold taps. Runs once when the app boots and replays any
-  // deep-link the native layer captured before React was ready.
+  // deep-link the native layer captured before React was ready. Peek, don't
+  // consume: DispatchBoard clears after the job card opens so a reload in
+  // between still has the path.
   useEffect(() => {
-    // 1) In-memory global set by index.html's early-capture listener.
-    const early: string | null = (window as any).__pendingNotificationPath ?? null;
-    (window as any).__pendingNotificationPath = null;
-    if (early) {
-      console.log('🔔 Consuming early-captured notification path:', early);
-      navigateFromNotification(early);
-      try { localStorage.removeItem('pendingNotificationNav'); } catch {}
-      return;
-    }
-
-    // 2) localStorage fallback persisted natively on cold launch. Gated on a
-    //    60s freshness window so a normal app open never jumps to a stale job.
-    try {
-      const raw = localStorage.getItem('pendingNotificationNav');
-      if (raw) {
-        localStorage.removeItem('pendingNotificationNav');
-        const parsed = JSON.parse(raw);
-        if (parsed?.path && typeof parsed.path === 'string'
-            && Date.now() - (parsed.ts || 0) < 60_000) {
-          console.log('🔔 Consuming persisted notification path:', parsed.path);
-          navigateFromNotification(parsed.path);
-        }
-      }
-    } catch {
-      /* localStorage unavailable — nothing to replay */
+    const pending = peekNotificationNav();
+    if (pending) {
+      console.log('🔔 Consuming captured notification path:', pending);
+      navigateFromNotification(pending);
     }
     // Run once on mount; navigateFromNotification is stable via useCallback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // After auth finishes (cold start was sitting on BootPlaceholder), replay
+  // any still-pending notification path so we don't lose it to the `/` →
+  // `/dispatch` redirect.
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
+    const pending = peekNotificationNav();
+    if (pending) navigateFromNotification(pending);
+  }, [isLoading, isAuthenticated, navigateFromNotification]);
 
   // Detect Capacitor (iOS Inflow app) once — used to keep marketing/customer pages
   // out of the native app shell. The iOS WebView loads the same URL as the website,
@@ -1127,15 +1261,19 @@ function Router() {
     // Home page — this prevents the visible "Home ↔ Dispatch" flicker on every server restart.
     // No spinner: just the background, so there's no loading ring on startup.
     if (isLoading) {
-      return <div className="min-h-screen bg-background" />;
+      return <MarketingAwareBoot />;
     }
     if (isAuthenticated) {
+      const pending = peekNotificationNav();
+      if (pending) {
+        return <Redirect to={pending} />;
+      }
       return <Redirect to="/dispatch" />;
     }
     if (isNative) {
       return <Redirect to="/login" />;
     }
-    return <Home />;
+    return <PublicHome />;
   }
 
   // Native-app guard: if the iOS Capacitor user somehow lands on a marketing/public route
@@ -1150,6 +1288,9 @@ function Router() {
       '/tree-pruning',
       '/stump-grinding',
       '/hedge-trimming',
+      '/emergency-tree-removal',
+      '/wairoa',
+      '/east-coast',
       '/mulch',
       '/blog',
       '/summer-offer',
@@ -1166,20 +1307,23 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/login" component={Login}/>
-      <Route path="/signup" component={Signup}/>
-      <Route path="/home" component={Home}/>
-      <Route path="/tree-removal" component={TreeRemoval}/>
-      <Route path="/tree-pruning" component={TreePruning}/>
-      <Route path="/stump-grinding" component={StumpGrinding}/>
-      <Route path="/hedge-trimming" component={HedgeTrimming}/>
-      <Route path="/mulch" component={Mulch}/>
-      <Route path="/mulch/thanks" component={MulchThanks}/>
-      <Route path="/blog" component={Blog}/>
-      <Route path="/blog/:slug" component={BlogPost}/>
-      <Route path="/summer-offer" component={SummerOffer}/>
-      <Route path="/contact" component={Contact}/>
-      <Route path="/privacy-policy" component={PrivacyPolicy}/>
+      <Route path="/login" component={PublicLogin}/>
+      <Route path="/signup" component={PublicSignup}/>
+      <Route path="/home" component={PublicHome}/>
+      <Route path="/tree-removal" component={PublicTreeRemoval}/>
+      <Route path="/tree-pruning" component={PublicTreePruning}/>
+      <Route path="/stump-grinding" component={PublicStumpGrinding}/>
+      <Route path="/hedge-trimming" component={PublicHedgeTrimming}/>
+      <Route path="/emergency-tree-removal" component={PublicEmergencyTreeRemoval}/>
+      <Route path="/wairoa" component={PublicWairoa}/>
+      <Route path="/east-coast" component={PublicEastCoast}/>
+      <Route path="/mulch" component={PublicMulch}/>
+      <Route path="/mulch/thanks" component={PublicMulchThanks}/>
+      <Route path="/blog" component={PublicBlog}/>
+      <Route path="/blog/:slug" component={PublicBlogPost}/>
+      <Route path="/summer-offer" component={PublicSummerOffer}/>
+      <Route path="/contact" component={PublicContact}/>
+      <Route path="/privacy-policy" component={PublicPrivacyPolicy}/>
       
       {/* Redirect /dashboard to /dispatch for convenience (default landing page) */}
       <Route path="/dashboard">
@@ -1198,7 +1342,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* Today — daily command centre (fleet compliance + today's jobs) */}
+      {/* Today — morning summary, extra instructions, crew grouped jobs */}
       <Route path="/today">
         <ProtectedRoute>
           <SidebarLayout>
@@ -1259,6 +1403,13 @@ function Router() {
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
+      <Route path="/admin/bug-reports">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <BugReportsAdmin />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
       <Route path="/profitability-calculator">
         <ProtectedRoute>
           <SidebarLayout>
@@ -1268,16 +1419,16 @@ function Router() {
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
-      <Route path="/customer-portal" component={CustomerPortal}/>
-      <Route path="/proposal/:proposalId/accept" component={ProposalAccept}/>
-      <Route path="/proposal/:proposalId" component={ProposalViewer}/>
-      <Route path="/quote/:quoteId" component={QuoteViewer}/>
-      <Route path="/invoice/:invoiceId/view" component={InvoiceView}/>
-      <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
-      <Route path="/payment-complete" component={PaymentComplete}/>
-      <Route path="/review/:token" component={PublicReview}/>
-      <Route path="/timeline/:token" component={PublicTimeline}/>
-      <Route path="/watch/:videoId" component={WatchVideo}/>
+      <Route path="/customer-portal" component={PublicCustomerPortal}/>
+      <Route path="/proposal/:proposalId/accept" component={PublicProposalAccept}/>
+      <Route path="/proposal/:proposalId" component={PublicProposalViewer}/>
+      <Route path="/quote/:quoteId" component={PublicQuoteViewer}/>
+      <Route path="/invoice/:invoiceId/view" component={PublicInvoiceView}/>
+      <Route path="/invoice/:invoiceId" component={PublicInvoiceViewer}/>
+      <Route path="/payment-complete" component={PublicPaymentComplete}/>
+      <Route path="/review/:token" component={PublicReviewPage}/>
+      <Route path="/timeline/:token" component={PublicTimelinePage}/>
+      <Route path="/watch/:videoId" component={PublicWatchVideo}/>
       
       {/* Dashboard pages with sidebar - Admin only */}
       <Route path="/opportunities">
@@ -1291,6 +1442,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <FollowUpQueue />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/quote-follow-ups">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <QuoteFollowUps />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
@@ -1523,6 +1681,19 @@ function Router() {
       <Route path="/dispatch-board">
         {() => <Redirect to="/dispatch" />}
       </Route>
+      {/* There is no standalone job page — a job opens as a card on the dispatch
+          board via ?job=. Alias /jobs/:id so links and notification deep-links
+          built that way (in-app links, older bell rows) land on the job instead
+          of the 404 page; any extra params (e.g. ?tab=) are carried across. */}
+      <Route path="/jobs/:id">
+        {(params) => (
+          <Redirect
+            to={`/dispatch?job=${encodeURIComponent(params.id)}${
+              window.location.search ? "&" + window.location.search.slice(1) : ""
+            }`}
+          />
+        )}
+      </Route>
       <Route path="/calendar">
         <ProtectedRoute>
           <SidebarLayout>
@@ -1622,6 +1793,16 @@ function Router() {
           <SettingsBilling />
         </SidebarLayout>
       </Route>
+      <Route path="/settings/payouts/:id">
+        <SidebarLayout>
+          <StripePayouts />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/payouts">
+        <SidebarLayout>
+          <StripePayouts />
+        </SidebarLayout>
+      </Route>
       <Route path="/settings/account">
         <SidebarLayout>
           <SettingsAccount />
@@ -1654,10 +1835,7 @@ function Router() {
       </Route>
       <Route path="/settings/security">
         <SidebarLayout>
-          <SettingsPlaceholder 
-            title="Security & API"
-            description="Password settings, API keys and access control"
-          />
+          <SettingsSecurity />
         </SidebarLayout>
       </Route>
       <Route path="/settings/forms">
@@ -1825,7 +2003,7 @@ function Router() {
         </SidebarLayout>
       </Route>
       {/* Fallback to 404 */}
-      <Route component={NotFound} />
+      <Route component={PublicNotFound} />
     </Switch>
   );
 }
@@ -1841,6 +2019,13 @@ function App() {
       console.error('❌ Failed to initialize Firebase:', error);
     }
   }, []);
+
+  // Hide #inflow-boot only after a real route has text and the CSS bundle has
+  // applied. Marking booted from this component's first effect (#579) ran when
+  // the sidebar shell committed — before the Dispatch chunk filled <main> —
+  // so the inline shell disappeared and native recovery stopped while the
+  // phone viewport was still the #1a1a1a body.
+  useEffect(() => watchUntilRealPagePainted(), []);
 
   // Watchdog for Radix Dialog/Sheet leaving `body { pointer-events: none }`
   // stuck after rapid nested open/close cycles (notably in the job card).
@@ -1895,12 +2080,14 @@ function App() {
     <ErrorBoundary>
       {/* hook=useTransitionedLocation defers route swaps into a React
           transition, so navigating to a not-yet-loaded lazy page keeps the
-          current page visible instead of flashing the (null) Suspense
-          fallback while the chunk downloads. */}
+          current page visible instead of flashing the Suspense fallback while
+          the chunk downloads. Cold start still needs BootPlaceholder (above)
+          because there is no prior page to keep on screen. */}
       <WouterRouter hook={useTransitionedLocation}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <AuthProvider>
+            <BugReportProvider>
             <TwilioCallProvider>
             <WebCallProvider>
               <ScrollToTop />
@@ -1910,11 +2097,12 @@ function App() {
                   Login, Home, marketing and the customer-facing viewers, plus
                   Router's own early <Home/> return. Sidebar pages resolve at the
                   inner boundary above before reaching here. */}
-              <Suspense fallback={<PageSpinner />}>
+              <Suspense fallback={<MarketingAwareBoot />}>
                 <Router />
               </Suspense>
             </WebCallProvider>
             </TwilioCallProvider>
+            </BugReportProvider>
           </AuthProvider>
         </TooltipProvider>
       </QueryClientProvider>

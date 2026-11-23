@@ -7,18 +7,28 @@ import { db } from '../db.js';
 import * as schema from '../../shared/schema.js';
 import { and, eq, inArray } from 'drizzle-orm';
 import { getNZDateString, jobRunsOnNZDate } from '../../shared/dateUtils.js';
-import { ROLE_LABEL, isRoleKey } from '../../shared/crewRoles.js';
+import { isRoleKey } from '../../shared/crewRoles.js';
+import { groupRolesByEmployee, joinRoleLabels, outstandingForRoles, primaryDayRole, sortRoles } from '../../shared/crewDayRoles.js';
+import { doneIdsIncludingLinkedJha, type JobRiskAssessmentLink } from '../../shared/jhaJobRisk.js';
+import { loadRiskLinksForJobs } from '../jhaJobRisk.js';
 
-// De-duplication helper: check if a reminder of this type for this entity was already sent in the last 24 hours
-async function wasReminderSentRecently(type: string, entityId: string, entityField: 'jobId' | 'quoteId'): Promise<boolean> {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const recentNotifications = await storage.getNotificationsCreatedSince(since);
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-  return recentNotifications.some(n => {
-    if (n.type !== type) return false;
-    if (entityField === 'jobId') return n.jobId === entityId;
-    if (entityField === 'quoteId') return n.quoteId === entityId;
-    return false;
+// De-duplication helper: has a reminder of this type for this entity been sent
+// inside the window? ONE indexed existence query. This used to download every
+// notification from the last 24h and scan it in JS — per job, per hourly tick,
+// on both instances — which was the single biggest source of Neon network
+// egress in Aug/Sep 2026 (2.4M calls × ~1 MB).
+async function wasReminderSentRecently(
+  type: string,
+  entityId: string,
+  entityField: 'jobId' | 'quoteId',
+  windowMs: number = DAY_MS,
+): Promise<boolean> {
+  return storage.hasNotificationSince({
+    type,
+    since: new Date(Date.now() - windowMs),
+    ...(entityField === 'jobId' ? { jobId: entityId } : { quoteId: entityId }),
   });
 }
 
@@ -186,18 +196,30 @@ async function checkUnstaffedTomorrowJobs(): Promise<void> {
   }
 }
 
-// Check 3: Completed jobs with no invoice raised after 7+ days
+// Check 3: Completed jobs with no invoice raised after 7+ days.
+//
+// Scope is deliberately narrow: jobs completed 7–60 days ago, created in this
+// app (imported ServiceM8 history has no invoice rows here and is not
+// actionable), and nagged at most once a week. The previous version re-notified
+// every completed-uninvoiced job in the database daily — ~1,900 notifications a
+// day on prod, 148k rows, 95% of the notifications table.
+const UNINVOICED_MIN_AGE_DAYS = 7;
+const UNINVOICED_MAX_AGE_DAYS = 60;
+const UNINVOICED_REMIND_EVERY_DAYS = 7;
+
 async function checkUninvoicedCompletedJobs(): Promise<void> {
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const completedJobs = await storage.getJobsByStatus('completed');
+  const now = Date.now();
+  const candidates = await storage.getUninvoicedCompletedJobs({
+    from: new Date(now - UNINVOICED_MAX_AGE_DAYS * DAY_MS),
+    to: new Date(now - UNINVOICED_MIN_AGE_DAYS * DAY_MS),
+  });
 
-  for (const job of completedJobs) {
-    if (!job.completedDate || new Date(job.completedDate) > sevenDaysAgo) continue;
+  for (const job of candidates) {
+    if (!job.completedDate) continue;
 
-    const invoices = await storage.getInvoicesByJob(job.id);
-    if (invoices.length > 0) continue;
-
-    const alreadySent = await wasReminderSentRecently('reminder_uninvoiced', job.id, 'jobId');
+    const alreadySent = await wasReminderSentRecently(
+      'reminder_uninvoiced', job.id, 'jobId', UNINVOICED_REMIND_EVERY_DAYS * DAY_MS,
+    );
     if (alreadySent) continue;
 
     const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
@@ -271,20 +293,20 @@ async function checkOutstandingRoleTasks(): Promise<void> {
   const roleRows = await db.select().from(schema.jobDayRoles)
     .where(eq(schema.jobDayRoles.nzDate, todayNZ));
   if (roleRows.length === 0) return;
-  const roleByEmployee = new Map(roleRows.map(r => [r.employeeId, r.roleKey]));
+  const rolesByEmployee = groupRolesByEmployee(roleRows);
 
   const taskRows = await db.select().from(schema.roleChecklistTasks);
-  const tasksByRole = new Map<string, Array<{ itemId: string; label: string }>>();
-  for (const t of taskRows) {
-    if (!t.isEnabled || !isRoleKey(t.roleKey)) continue;
-    const list = tasksByRole.get(t.roleKey) ?? [];
-    list.push({ itemId: t.itemId, label: t.label });
-    tasksByRole.set(t.roleKey, list);
-  }
-  if (tasksByRole.size === 0) return;
+  if (!taskRows.some(t => t.isEnabled && isRoleKey(t.roleKey))) return;
 
   const { jobs } = await storage.getAllJobs({ limit: 999999, status: 'work_order' });
-  const recent = await storage.getNotificationsCreatedSince(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const since24h = new Date(Date.now() - DAY_MS);
+  const todaysJobIds = jobs.filter((job) => jobRunsOnNZDate(job, todayNZ)).map((job) => job.id);
+  let riskByJob = new Map<string, JobRiskAssessmentLink>();
+  try {
+    riskByJob = await loadRiskLinksForJobs(todaysJobIds, todayNZ);
+  } catch (err) {
+    console.error('[ReminderChecker] Could not load morning risk status:', err);
+  }
 
   for (const job of jobs) {
     if (!jobRunsOnNZDate(job, todayNZ)) continue;
@@ -303,36 +325,41 @@ async function checkOutstandingRoleTasks(): Promise<void> {
     if (workedToday.length === 0) continue;
 
     const completions = await storage.getJobChecklistCompletions(job.id);
-    const done = new Set(completions.map(c => c.itemId));
+    const done = doneIdsIncludingLinkedJha(completions, riskByJob.get(job.id), todayNZ);
 
     for (const employeeId of workedToday) {
-      const roleKey = roleByEmployee.get(employeeId);
-      if (!roleKey || !isRoleKey(roleKey)) continue;
-      const outstanding = (tasksByRole.get(roleKey) ?? []).filter(t => !done.has(t.itemId));
+      const roles = rolesByEmployee.get(employeeId) ?? [];
+      if (roles.length === 0) continue;
+      const outstanding = outstandingForRoles(roles, taskRows, done);
       if (outstanding.length === 0) continue;
 
       // One nudge per person per job per day — this is a reminder, not a nag.
-      const alreadySent = recent.some(n =>
-        n.type === 'reminder_role_tasks' && n.jobId === job.id && n.userId === employeeId);
+      const alreadySent = await storage.hasNotificationSince({
+        type: 'reminder_role_tasks', since: since24h, jobId: job.id, userId: employeeId,
+      });
       if (alreadySent) continue;
 
-      const label = ROLE_LABEL[roleKey];
+      const outstandingRoles = sortRoles(outstanding.map(t => t.roleKey));
+      const label = joinRoleLabels(outstandingRoles);
+      const title = outstandingRoles.length <= 1
+        ? `${outstanding.length} ${label} task${outstanding.length === 1 ? '' : 's'} still unticked`
+        : `${outstanding.length} tasks still unticked (${label})`;
       await storage.createNotification({
-        title: `${outstanding.length} ${label} task${outstanding.length === 1 ? '' : 's'} still unticked`,
+        title,
         message: `Job #${job.jobNumber}: ${outstanding.map(t => t.label).join(', ')}`,
         type: 'reminder_role_tasks',
         priority: 'medium',
         isRead: false,
         userId: employeeId,
         jobId: job.id,
-        actionUrl: `/jobs/${job.id}`,
-        metadata: { roleKey, itemIds: outstanding.map(t => t.itemId) },
+        actionUrl: `/dispatch?job=${job.id}`,
+        metadata: { roleKey: primaryDayRole(outstandingRoles), roleKeys: outstandingRoles, itemIds: outstanding.map(t => t.itemId) },
       });
 
       await notificationHelper.notifyEmployee(employeeId, {
-        title: `${outstanding.length} ${label} task${outstanding.length === 1 ? '' : 's'} still unticked`,
+        title,
         body: `Job #${job.jobNumber}: ${outstanding.map(t => t.label).join(' · ')}`,
-        clickAction: `/jobs/${job.id}`,
+        clickAction: `/dispatch?job=${job.id}`,
         collapseId: `role-tasks-${job.id}-${employeeId}-${todayNZ}`,
       });
       console.log(`[ReminderChecker] Role-task reminder: Job #${job.jobNumber} → ${employeeId} (${label})`);

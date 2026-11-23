@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { Conversation, ConversationMessage } from "@shared/schema";
+import { fillEmptyJobContact } from "@shared/jobContactFill";
 import { insertLeadSchema } from "@shared/schema";
 import { SiFacebook } from "react-icons/si";
 import {
@@ -339,6 +340,14 @@ export default function Opportunities() {
         jobContactMobile: isMobileNumber ? leadData.phone || "" : "",
         conversationId: sourceConversationId,
       };
+      Object.assign(
+        jobData,
+        fillEmptyJobContact(jobData, {
+          name: leadData.name,
+          email: leadData.email,
+          phone: leadData.phone,
+        }),
+      );
 
       console.log("🔵 Creating job with data:", jobData);
       const jobRes = await apiRequest("POST", "/api/jobs", jobData);
@@ -513,7 +522,7 @@ export default function Opportunities() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white w-full overflow-x-hidden">
+    <div className="flex flex-col h-full bg-background w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b w-full gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -693,7 +702,7 @@ export default function Opportunities() {
             </p>
           </div>
         ) : (
-          <div className="divide-y">
+          <div className="inflow-list">
             {console.log(
               "🔍 [v13 DEBUG] Rendering conversations:",
               conversations.length,
@@ -708,7 +717,7 @@ export default function Opportunities() {
               return (
                 <div
                   key={conversation.id}
-                  className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover-elevate active-elevate-2 ${selectedIds.has(conversation.id) ? "bg-primary/10" : ""}`}
+                  className={`inflow-chrome-item flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover-elevate active-elevate-2 ${selectedIds.has(conversation.id) ? "bg-primary/10" : ""}`}
                   data-testid={`conversation-item-${conversation.id}`}
                 >
                   {/* Selection Checkbox */}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { resolveBillingName } from "@shared/orgOnlyBilling";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -243,7 +244,7 @@ export default function InvoiceView() {
   // name override on the job wins over the invoice contact name and the linked
   // customer's name.
   const billingName =
-    job?.billingNameOverride || invoice.contactName || customer?.name || null;
+    resolveBillingName(job?.billingNameOverride || invoice.contactName || customer?.name || null, customer);
 
   const lineItems: any[] = Array.isArray(invoice.items) ? invoice.items : [];
   const lineItemTotal = lineItems.reduce((sum, item) => {
@@ -345,8 +346,8 @@ export default function InvoiceView() {
                       : `Issued ${new Date(invoice.issueDate).toLocaleDateString("en-NZ")}${invoice.dueDate ? ` · Due ${new Date(invoice.dueDate).toLocaleDateString("en-NZ")}` : ""}`}
                 </p>
                 <div className="flex flex-wrap gap-2 mt-4">
-                  {/* Pay online — only when this business can take card payments (single
-                      Stripe account = Treemarkables until Connect); others pay by bank transfer. */}
+                  {/* Pay now only when the server says this invoice can take a card.
+                      Treemarkables production invoices set onlinePaymentEnabled false. */}
                   {stripeConfigured &&
                     invoice.onlinePaymentEnabled &&
                     !justPaid &&

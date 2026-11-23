@@ -7,6 +7,7 @@ import {
   Pin,
   ClipboardList,
   ListTodo,
+  MessageSquare,
   Video,
   Search,
   BookOpen,
@@ -20,6 +21,7 @@ import {
   TrendingUp,
   Building2,
   TreePine,
+  Bug,
   type LucideIcon, Receipt,
 } from "lucide-react";
 import {
@@ -44,6 +46,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
+import { useBugReport } from "@/contexts/BugReportContext";
 import { PlanGate } from "@/components/PlanGate";
 
 interface AppSidebarProps {
@@ -101,6 +104,7 @@ function SidebarNavContent({
 }) {
   // Platform operator (Treemarkables/Inflow) — gates the Subscribers footer link.
   const platformOperator = useRoleChecklistFeature();
+  const { open: openBugReport } = useBugReport();
 
   // Which tenant this session belongs to — the response envelope varies across
   // cached consumers ({data} vs bare row), so coerce both shapes.
@@ -112,6 +116,13 @@ function SidebarNavContent({
 
   // Same flag as the spike page: GET /api/hazard-pins/enabled → HAZARD_TREE_PINS.
   // Hidden while loading or when the flag is off (enabled !== true).
+  const { data: followUpCountResp } = useQuery<{ data?: { count?: number } }>({
+    queryKey: ["/api/quote-follow-ups/count"],
+    staleTime: 60_000,
+    enabled: isAdmin,
+  });
+  const followUpCount = followUpCountResp?.data?.count ?? 0;
+
   const { data: hazardPinsEnabledResp } = useQuery<{ data?: { enabled?: boolean } }>({
     queryKey: ["/api/hazard-pins/enabled"],
     staleTime: 5 * 60 * 1000,
@@ -130,7 +141,7 @@ function SidebarNavContent({
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const safetyActive = location === "/safety" || location.startsWith("/safety/") || ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
   const financeActive = ["/metrics", "/profitability-calculator"].includes(location);
-  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox"].includes(location);
+  const opsActive = ["/calendar", "/workflows", "/follow-up-queue", "/quote-follow-ups", "/reputation", "/reviews", "/marketing", "/inbox"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
   const [safetyOpen, setSafetyOpen] = useState(safetyActive);
@@ -296,6 +307,23 @@ function SidebarNavContent({
                   )}
                 </SidebarMenuItem>
               ))}
+
+              {/* Conversations — customer threads. Same /opportunities page that
+                  used to sit inside Operations & Analysis, now next to Jobs. */}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === "/opportunities" || location.startsWith("/conversation/")}
+                    className={ITEM}
+                  >
+                    <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-conversations">
+                      <NavIcon icon={MessageSquare} />
+                      <span>Conversations</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
 
               {/* Calls — recorded call log (paid add-on, any tier) */}
               {isAdmin && (
@@ -558,13 +586,20 @@ function SidebarNavContent({
                         </SidebarMenuSubItem>
                         </PlanGate>
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/opportunities"}>
-                            <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-opportunities"><span>Conversations</span></Link>
+                          <SidebarMenuSubButton asChild isActive={location === "/follow-up-queue"}>
+                            <Link href="/follow-up-queue" onClick={handleLinkClick} data-testid="link-follow-up-queue"><span>Follow-up Queue</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/follow-up-queue"}>
-                            <Link href="/follow-up-queue" onClick={handleLinkClick} data-testid="link-follow-up-queue"><span>Follow-up Queue</span></Link>
+                          <SidebarMenuSubButton asChild isActive={location === "/quote-follow-ups"}>
+                            <Link href="/quote-follow-ups" onClick={handleLinkClick} data-testid="link-quote-follow-ups">
+                              <span>Follow-ups</span>
+                              {followUpCount > 0 && (
+                                <span className="ml-2 rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5" data-testid="badge-quote-followups">
+                                  {followUpCount}
+                                </span>
+                              )}
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
@@ -602,6 +637,33 @@ function SidebarNavContent({
           {/* Platform-operator only: concierge subscriber management. Same
               allowlist gate as the Settings Platform section; the server
               enforces via requirePlatformAdmin regardless. */}
+          {/* Report a problem — every member (beta testers included). */}
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild className={ITEM}>
+              <button
+                className="w-full justify-start"
+                data-testid="button-sidebar-report-problem"
+                onClick={() => {
+                  close();
+                  openBugReport();
+                }}
+              >
+                <Bug className="h-5 w-5 shrink-0 text-slate-600" />
+                <span>Report a problem</span>
+              </button>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {/* Platform-operator only: cross-tenant bug-report triage. */}
+          {isAdmin && platformOperator && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={location === "/admin/bug-reports"} className={ITEM}>
+                <Link href="/admin/bug-reports" onClick={handleLinkClick} data-testid="link-bug-reports">
+                  <Bug className="h-5 w-5 shrink-0 text-slate-600" />
+                  <span>Bug reports</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           {isAdmin && platformOperator && (
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={location === "/admin/subscribers"} className={ITEM}>
@@ -708,9 +770,9 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     );
   }
 
-  // Desktop: use the standard shadcn Sidebar component
+  // Desktop: floating rounded card — Dispatch Board mockup 1 chrome.
   return (
-    <Sidebar>
+    <Sidebar variant="floating">
       <SidebarNavContent {...navProps} />
     </Sidebar>
   );

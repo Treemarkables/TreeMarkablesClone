@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Loader2, Phone, Mail, Building2, Trash2, Plus } from "lucide-react";
@@ -7,8 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Switch } from "@/components/ui/switch";
+import { ApiError, apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { formatNZTime } from "@shared/dateUtils";
+import { TREEMARKABLES_BUSINESS_IDS } from "@shared/roleChecklistAccess";
 
 interface PlanOpt { id: string; key: string; name: string; }
 interface SubscriptionInfo { status: string; planId: string | null; planKey: string | null; planName: string | null; stripeManaged: boolean; }
@@ -18,9 +21,15 @@ interface SubscriberSummary {
   name: string;
   slug: string | null;
   status: string;
+  comped?: boolean;
   createdAt: string | null;
   requiredDone: number;
   requiredTotal: number;
+  ownerEmail?: string | null;
+  ownerName?: string | null;
+  planKey?: string | null;
+  planName?: string | null;
+  subscriptionStatus?: string | null;
 }
 
 interface Channel { id: string; channelType: string; identifier: string; label: string | null; isActive: boolean; }
@@ -54,7 +63,7 @@ function ProgressPill({ done, total }: { done: number; total: number }) {
 
 function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { toast } = useToast();
-  const { data, isLoading } = useQuery<{ success: boolean; data: { business: SubscriberSummary; settings: Record<string, any> | null; channels: Channel[]; checklist: { requiredDone: number; requiredTotal: number }; plans: PlanOpt[]; subscription: SubscriptionInfo | null } }>({
+  const { data, isLoading } = useQuery<{ success: boolean; data: { business: SubscriberSummary; comped: boolean; settings: Record<string, any> | null; channels: Channel[]; checklist: { requiredDone: number; requiredTotal: number }; plans: PlanOpt[]; subscription: SubscriptionInfo | null; ownerEmail?: string | null; ownerName?: string | null } }>({
     queryKey: [`/api/admin/subscribers/${id}`],
   });
 
@@ -133,6 +142,17 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
     onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't update status", description: e.message }),
   });
 
+  const setComped = useMutation({
+    mutationFn: async (comped: boolean) => {
+      const r = await apiRequest("PUT", `/api/admin/subscribers/${id}/comp`, { comped });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.message || "Could not update comp.");
+      return j;
+    },
+    onSuccess: invalidate,
+    onError: (e: Error) => toast({ variant: "destructive", title: "Couldn't update comp", description: e.message }),
+  });
+
   const setPlan = useMutation({
     mutationFn: async () => {
       const r = await apiRequest("PUT", `/api/admin/subscribers/${id}/plan`, { planId: planSel });
@@ -152,17 +172,24 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const subscription = data?.data?.subscription ?? null;
   const plans = data?.data?.plans ?? [];
   const suspended = biz?.status === "suspended";
+  const comped = data?.data?.comped ?? false;
 
   return (
     <div>
       <Button variant="ghost" size="sm" onClick={onBack} className="mb-4 inline-flex items-center gap-2">
         <ArrowLeft className="h-4 w-4" /> All subscribers
       </Button>
-      <div className="flex items-center gap-3 mb-6">
+      <div className={`flex items-center gap-3 ${(data?.data?.ownerEmail || data?.data?.ownerName) ? "mb-2" : "mb-6"}`}>
         <h2 className="text-xl font-semibold">{biz?.name}</h2>
         {biz && <ProgressPill done={biz.requiredDone} total={biz.requiredTotal} />}
         {suspended && <span className="text-xs px-2 py-0.5 rounded-full border border-destructive/40 text-destructive">Suspended</span>}
+        {comped && <span className="text-xs px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/5">Comped</span>}
       </div>
+      {(data?.data?.ownerEmail || data?.data?.ownerName) && (
+        <p className="text-sm text-muted-foreground mb-6">
+          {[data?.data?.ownerName, data?.data?.ownerEmail].filter(Boolean).join(" · ")}
+        </p>
+      )}
 
       <Card className="mb-6 border-border">
         <CardHeader><CardTitle>Plan &amp; status</CardTitle></CardHeader>
@@ -182,8 +209,28 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
             </Button>
           </div>
 
+          <div className="pt-4 border-t border-border flex items-center justify-between gap-3">
+            <div>
+              <p className="font-medium">Comp for life</p>
+              <p className="text-sm text-muted-foreground">
+                {comped
+                  ? "Free forever: full Business tier, every add-on, no usage caps. Never billed."
+                  : "Give this subscriber everything for free — Business tier, all add-ons, no usage caps — with no Stripe involvement."}
+              </p>
+            </div>
+            <Switch
+              checked={comped}
+              disabled={setComped.isPending}
+              onCheckedChange={(v) => setComped.mutate(v)}
+              aria-label="Comp for life"
+            />
+          </div>
+
           <div className="pt-4 border-t border-border">
             <p className="font-medium mb-1">Plan</p>
+            {comped && (
+              <p className="text-xs text-muted-foreground mb-2">Comped — the plan below is ignored while the comp is on.</p>
+            )}
             {subscription?.stripeManaged ? (
               <p className="text-sm text-muted-foreground">
                 {subscription.planName || subscription.planKey || "—"} · managed via Stripe (change it in Stripe, not here).
@@ -295,14 +342,30 @@ function SubscriberDetail({ id, onBack }: { id: string; onBack: () => void }) {
   );
 }
 
+function matchesSubscriberSearch(s: SubscriberSummary, query: string): boolean {
+  if (!query) return true;
+  const haystack = [s.name, s.slug, s.ownerEmail, s.ownerName, s.planName, s.planKey]
+    .filter((v): v is string => typeof v === "string" && v.length > 0)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
 export default function AdminSubscribers() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const { data, isLoading, error } = useQuery<{ success: boolean; data: SubscriberSummary[] }>({
     queryKey: ["/api/admin/subscribers"],
     retry: false,
   });
 
   const subscribers = data?.data ?? [];
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return subscribers.filter((s) => matchesSubscriberSearch(s, q));
+  }, [subscribers, search]);
+
+  const forbidden = error instanceof ApiError && error.status === 403;
 
   return (
     <div className="pt-20 px-4 md:px-8 max-w-3xl mx-auto pb-16">
@@ -317,33 +380,67 @@ export default function AdminSubscribers() {
       ) : (
         <>
           <h1 className="text-2xl font-semibold mb-1">Subscribers</h1>
-          <p className="text-muted-foreground mb-6">Set up and review any subscriber's account during onboarding.</p>
+          <p className="text-muted-foreground mb-6">
+            Every business created at signup appears here, newest first. Search by business name or the owner email they used.
+          </p>
 
           {isLoading ? (
             <div className="flex items-center text-sm text-muted-foreground"><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading…</div>
+          ) : forbidden ? (
+            <Card className="border-border"><CardContent className="pt-6 text-sm text-muted-foreground">This page is for platform administrators.</CardContent></Card>
           ) : error ? (
-            <Card className="border-border"><CardContent className="pt-6 text-sm text-muted-foreground">This area is restricted to platform administrators.</CardContent></Card>
+            <Card className="border-border"><CardContent className="pt-6 text-sm text-muted-foreground">Could not load subscribers. Refresh and try again.</CardContent></Card>
           ) : subscribers.length === 0 ? (
             <p className="text-sm text-muted-foreground">No subscribers yet.</p>
           ) : (
-            <div className="space-y-2">
-              {subscribers.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setSelectedId(s.id)}
-                  className="w-full flex items-center justify-between rounded-lg border border-border p-3 text-left hover:bg-muted/50"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="font-medium truncate">{s.name}</span>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <ProgressPill done={s.requiredDone} total={s.requiredTotal} />
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="mb-4">
+                <Label htmlFor="subscriberSearch" className="sr-only">Search subscribers</Label>
+                <Input
+                  id="subscriberSearch"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by business name or email"
+                  autoComplete="off"
+                />
+              </div>
+              {filtered.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No subscribers match that search.</p>
+              ) : (
+                <div className="space-y-2">
+                  {filtered.map((s) => {
+                    const platform = TREEMARKABLES_BUSINESS_IDS.includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedId(s.id)}
+                        className="w-full flex items-center justify-between rounded-lg border border-border p-3 text-left hover:bg-muted/50"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{s.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {[s.ownerName, s.ownerEmail].filter(Boolean).join(" · ") || "No owner email on file"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          {platform && <span className="text-xs px-2 py-0.5 rounded-full border border-border text-muted-foreground">Platform</span>}
+                          {s.comped && <span className="text-xs px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/5">Comped</span>}
+                          {s.planName && <span className="hidden sm:inline text-xs text-muted-foreground">{s.planName}</span>}
+                          {s.createdAt && (
+                            <span className="hidden md:inline text-xs text-muted-foreground">{formatNZTime(s.createdAt, "date")}</span>
+                          )}
+                          <ProgressPill done={s.requiredDone} total={s.requiredTotal} />
+                          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </>
       )}

@@ -14,9 +14,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BookOpen, ChevronRight, ArrowLeft, PlayCircle, Search, Pencil } from "lucide-react";
+import { BookOpen, ChevronRight, ArrowLeft, PlayCircle, Search, Pencil, Bug } from "lucide-react";
 import { helpCategoryRank } from "@/lib/helpCategories";
 import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
+import { useBugReport } from "@/contexts/BugReportContext";
 
 type HelpArticleSummary = {
   id: string;
@@ -57,6 +58,7 @@ export default function Help() {
   // section) — shows a shortcut to the /admin/help authoring page, where
   // videos can be renamed, re-filed, and deleted.
   const isOperator = useRoleChecklistFeature();
+  const { open: openBugReport } = useBugReport();
 
   const listQuery = useQuery({
     queryKey: ["/api/help/articles"],
@@ -200,6 +202,19 @@ export default function Help() {
             </CardContent>
           </Card>
         )}
+
+      <Card className="mb-8">
+        <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center">
+          <Bug className="h-6 w-6 shrink-0 text-foreground" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-semibold">Found a bug or something odd?</h2>
+            <p className="text-sm text-muted-foreground">
+              Tell us in a few words, record a voice note, or attach photos and a screen recording. It lands straight with the team.
+            </p>
+          </div>
+          <Button onClick={openBugReport} data-testid="button-help-report-problem">Report a problem</Button>
+        </CardContent>
+      </Card>
 
       {byCategory[GETTING_STARTED]?.length > 0 && (
         <section className="mb-8">

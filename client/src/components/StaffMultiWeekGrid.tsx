@@ -40,7 +40,7 @@ interface StaffMultiWeekGridProps {
   perDaySummary: Map<string, { revenue: number; jobCount: number }>;
   jobColorMap: Map<string, JobColors>;
   customerMap: Map<string, string>;
-  dailyTarget: number;
+  dailyTarget: number | null;
   todayKey: string;
   onOpenJob: (job: Job) => void;
   onDrillToDay: (dateKey: string) => void;
@@ -148,8 +148,8 @@ export function StaffMultiWeekGrid({
     return '#ffffff';
   };
 
-  // One continuous strip per job run: square ends + edge-bleed margins on
-  // middle days so the chip visually crosses cell borders.
+  // Each day is its own job block. Desktop keeps the 1rem radius used by
+  // Dispatch timeline cards. Phones are square so the chips are straight-edged.
   const chipStyle = (slot: MultiWeekCellSlot, colors: JobColors, dashed: boolean) => ({
     backgroundColor: colors.bg,
     borderLeft: slot.isRunStart ? `3px ${dashed ? 'dashed' : 'solid'} ${colors.border}` : undefined,
@@ -160,9 +160,8 @@ export function StaffMultiWeekGrid({
           borderBottom: `1px dashed ${colors.border}`,
         }
       : {}),
-    marginLeft: slot.isRunStart ? 2 : -2,
-    marginRight: slot.isRunEnd ? 2 : -2,
-    borderRadius: `${slot.isRunStart ? 4 : 0}px ${slot.isRunEnd ? 4 : 0}px ${slot.isRunEnd ? 4 : 0}px ${slot.isRunStart ? 4 : 0}px`,
+    marginLeft: 2,
+    marginRight: 2,
   });
 
   const renderJobChip = (slot: MultiWeekCellSlot, dashed: boolean) => {
@@ -173,7 +172,7 @@ export function StaffMultiWeekGrid({
         key={slot.id}
         onClick={e => { e.stopPropagation(); onOpenJob(slot.job); }}
         title={`${label} — ${slot.timeLabel}${dashed ? ' (unassigned)' : ''}`}
-        className="block w-full text-left overflow-hidden shrink-0 hover:brightness-95 transition-all px-1 py-0.5"
+        className="block w-[calc(100%-4px)] text-left overflow-hidden shrink-0 hover:brightness-95 transition-all px-1 py-0.5 rounded-none md:rounded-2xl"
         style={chipStyle(slot, colors, dashed)}
       >
         <span className="block text-[10px] font-semibold leading-tight truncate" style={{ color: colors.text }}>
@@ -314,11 +313,13 @@ export function StaffMultiWeekGrid({
         const chipClass =
           summary.jobCount === 0
             ? 'text-gray-300'
-            : summary.revenue >= dailyTarget
-              ? 'text-green-700 bg-green-100'
-              : summary.revenue >= dailyTarget * 0.7
-                ? 'text-amber-700 bg-amber-100'
-                : 'text-red-700 bg-red-100';
+            : dailyTarget == null
+              ? 'text-gray-600'
+              : summary.revenue >= dailyTarget
+                ? 'text-green-700 bg-green-100'
+                : summary.revenue >= dailyTarget * 0.7
+                  ? 'text-amber-700 bg-amber-100'
+                  : 'text-red-700 bg-red-100';
         return (
           <div
             key={`rev-${meta.dateKey}`}

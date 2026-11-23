@@ -170,6 +170,12 @@ const PREF_SECTIONS: PrefSection[] = [
         description: "When a quote has been out unanswered",
         icon: Clock,
       },
+      {
+        type: "quote_followup_waiting",
+        label: "Quote follow-ups waiting",
+        description: "A daily reminder when follow-up drafts are waiting for approval",
+        icon: Clock,
+      },
     ],
   },
   {

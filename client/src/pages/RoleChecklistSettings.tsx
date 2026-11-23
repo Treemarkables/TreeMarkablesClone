@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { RoleChecklistTask } from "@shared/schema";
+import { isRoleKey, ROLE_KEYS, ROLE_LABEL, type RoleKey } from "@/lib/crewRoles";
 
 // Curated icon set users can pick from. Keeping this finite (not the full lucide
 // set) so the UI is fast and the rendered SVG is predictable. Add more here as
@@ -73,22 +74,12 @@ function renderIcon(name: string, className = "w-4 h-4") {
   return <Icon className={className} />;
 }
 
-type RoleKey = "A" | "B" | "C";
-
-const ROLE_LABEL: Record<RoleKey, string> = {
-  C: "Kaitiaki",
-  A: "Kaiwhangai",
-  B: "Kaitirotiro",
-};
-
 const ROLE_BLURB: Record<RoleKey, string> = {
   C: "Site leader — the worker holding overall responsibility for the day.",
-  A: "Documentation — risk assessments, photos, content for the job record.",
+  A: "Documentation — photos and content for the job record.",
   B: "Site supervisor — customer comms, signs, pre-start checks.",
+  R: "Morning risk assessment for this job. Completing the linked JHA clears Risk needed.",
 };
-
-// Order roles like the panel does: leader first, then docs, then supervisor.
-const ROLE_KEYS: RoleKey[] = ["C", "A", "B"];
 
 export default function RoleChecklistSettings() {
   // Treemarkables-only feature — block direct navigation for other tenants.
@@ -98,11 +89,13 @@ export default function RoleChecklistSettings() {
     A: "",
     B: "",
     C: "",
+    R: "",
   });
   const [newIcon, setNewIcon] = useState<Record<RoleKey, string>>({
     A: "Check",
     B: "Check",
     C: "Check",
+    R: "Shield",
   });
 
   const { data, isLoading } = useQuery<{
@@ -118,9 +111,10 @@ export default function RoleChecklistSettings() {
     A: [],
     B: [],
     C: [],
+    R: [],
   };
   for (const t of tasks) {
-    if (t.roleKey === "A" || t.roleKey === "B" || t.roleKey === "C") {
+    if (isRoleKey(t.roleKey)) {
       tasksByRole[t.roleKey].push(t);
     }
   }
@@ -215,7 +209,7 @@ export default function RoleChecklistSettings() {
       </div>
 
       <Tabs defaultValue="C" className="w-full">
-        <TabsList className="grid grid-cols-3 w-full">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full h-auto">
           {ROLE_KEYS.map((r) => (
             <TabsTrigger
               key={r}

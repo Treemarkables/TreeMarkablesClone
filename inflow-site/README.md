@@ -13,10 +13,15 @@ Lives as a sibling folder inside the Treemarkables monorepo for now. Built as a 
 - [Wouter](https://github.com/molefrog/wouter) for routing (matches the main app)
 - Inter Tight web font via [rsms.me/inter](https://rsms.me/inter/)
 
-No backend. Marketing pages are static. The "Request access" form either:
+No backend. Marketing pages are static. **Sign up does not open the visitor's mail app.**
 
-1. POSTs to an HTTP endpoint configured via `VITE_REQUEST_ACCESS_ENDPOINT`, **or**
-2. Falls back to opening the user's mail client with a pre-filled message to `hello@inflowapp.co.nz` if no endpoint is set.
+Header, home, features, about, and pricing CTAs go to the live app:
+
+`https://app.inflowapp.co.nz/signup`
+
+That page posts to `POST /api/signup`, which runs `createTenant` (business + admin employee + freemium subscription). The contact form collects name, business, and email, then sends the visitor to the same URL with those fields prefilled. They set a password on the app. A `mailto:` link is shown only if that signup URL cannot be built — it is not the success path.
+
+Optional override for a non-production app: `VITE_APP_SIGNUP_URL`. Leave it unset in production.
 
 ---
 
@@ -56,26 +61,20 @@ npm run preview      # serves the built site locally
 
 ---
 
-## Wiring the request-access form
+## Sign up
 
-Two options:
+Account creation is the app's existing signup, not a marketing-site endpoint and not a mail draft.
 
-### Option A — POST to a real endpoint (recommended once you have one)
-
-1. Pick a destination. Easiest options:
-   - A new `POST /api/inflow/request-access` route in the existing Treemarkables `server/routes.ts` (writes to a new `inflow_access_requests` table — needs schema migration approval).
-   - A Cloud Function / Workers script that emails you.
-   - A Formspree / Tally / Basin form (no backend code at all).
-2. Set the endpoint in an env file:
+1. Production needs **no** env var. CTAs use `https://app.inflowapp.co.nz/signup` (`BRAND.signupUrl` in `src/lib/brand.ts`).
+2. To point a preview build at another app, set:
    ```bash
    # inflow-site/.env.local
-   VITE_REQUEST_ACCESS_ENDPOINT=https://api.example.com/inflow-access
+   VITE_APP_SIGNUP_URL=https://app.inflowapp.co.nz/signup
    ```
-3. The form posts JSON: `{ name, business, trade, crewSize, email, phone, tools, message }`.
+   The value must be an `https` URL (or `http://localhost`). A `mailto:` value is ignored and the live signup URL is used instead.
+3. The contact form adds `businessName`, `firstName`, `lastName`, `email`, and `plan=freemium`. Pricing CTAs add `plan=freemium|crew|business`. The app signup page reads those query params, then `POST /api/signup` creates the tenant.
 
-### Option B — Mail client fallback (current default)
-
-Do nothing. When `VITE_REQUEST_ACCESS_ENDPOINT` is unset, submitting the form opens the user's mail client pre-filled with the details, addressed to `hello@inflowapp.co.nz`. Good enough until you wire something up.
+`hello@inflowapp.co.nz` stays as a contact address (footer, and the form's error state). Submitting the form does not open Mail.
 
 ---
 
@@ -86,7 +85,7 @@ Target: **separate DO Static Site** behind `inflowapp.co.nz`. The existing Treem
 1. Create a new DO Static Site app pointing at this repo, with **Source Directory** `/inflow-site` and **Build Command** `npm run build`, **Output Directory** `dist`.
 2. In Cloudflare DNS for `inflowapp.co.nz`, add an `ALIAS`/`CNAME` for `@` (apex) and `www` pointing at the DO Static Site's hostname. Keep grey-cloud (DNS-only) — matches the pattern from CLAUDE.md for `app.treemarkables.co.nz`.
 3. Verify the DO app issues TLS for both `inflowapp.co.nz` and `www.inflowapp.co.nz`.
-4. Set `VITE_REQUEST_ACCESS_ENDPOINT` in DO's env vars (if using Option A above).
+4. Leave `VITE_APP_SIGNUP_URL` unset so Sign up stays on `https://app.inflowapp.co.nz/signup`. Set it only for a non-production app.
 
 DNS / DO actions happen through dashboards, not from this repo.
 
@@ -103,7 +102,7 @@ DNS / DO actions happen through dashboards, not from this repo.
 
 ## What this site **isn't** (deliberately)
 
-- Not the app — the actual product runs at `app.treemarkables.co.nz` (until separation completes).
+- Not the app — the product runs at `https://app.inflowapp.co.nz`. Sign up there (`/signup`) creates the tenant.
 - Not a CMS. Copy lives in `.tsx`. Add a CMS once content velocity demands it.
 - Not SEO-optimised for organic search yet. It's a SPA, so search engines render JS-light. If organic search becomes a channel, migrate to Astro or Next.js (or add `vite-plugin-ssr`) — most of the components carry over.
 - Not where the help/SOPs live. Subscriber-only help is in-app at `/help` (see `INFLOW_HELP_PLAN.md`).

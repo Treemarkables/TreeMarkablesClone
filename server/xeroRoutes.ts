@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { XeroClient, PayrollNzApi, Configuration, Invoice, Payment } from 'xero-node';
 import type { IStorage } from './storage';
+import { resolveBillingName } from '@shared/orgOnlyBilling';
+import { mapXeroInvoiceAmounts } from '@shared/xeroInvoiceAmounts';
 import { TimeTrackingService } from './timeTrackingService';
 
 const router = Router();
@@ -12,6 +14,40 @@ const xeroClient = new XeroClient({
   clientSecret: process.env.XERO_CLIENT_SECRET!,
   grantType: 'client_credentials',
 });
+
+export interface XeroPushResult {
+  status: number;
+  body: {
+    success: boolean;
+    message: string;
+    details?: unknown;
+    missingField?: string;
+    invoiceId?: string;
+    invoiceNumber?: string;
+    errorCode?: string;
+    jobNumber?: string;
+  };
+}
+
+let pushJobInvoiceToXeroImpl: ((jobId: string) => Promise<XeroPushResult>) | null = null;
+
+/** The Invoices-page Xero send. Callers must already have confirmed the write. */
+export function pushJobInvoiceToXero(jobId: string): Promise<XeroPushResult> {
+  if (!pushJobInvoiceToXeroImpl) {
+    return Promise.resolve({
+      status: 500,
+      body: { success: false, message: 'Xero is not ready' },
+    });
+  }
+  return pushJobInvoiceToXeroImpl(jobId);
+}
+
+export async function getConnectedXeroClient(): Promise<XeroClient | null> {
+  if (!getConnectedXeroClientImpl) return null;
+  return getConnectedXeroClientImpl();
+}
+
+let getConnectedXeroClientImpl: (() => Promise<XeroClient | null>) | null = null;
 
 export function registerXeroRoutes(app: any, storage: IStorage) {
   console.log('🔗 Xero Custom Connection mode enabled');
@@ -252,23 +288,12 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
     
     return xeroClient;
   }
-  
-  // Send job invoice to Xero (used by Invoices page)
-  app.post('/api/xero/send-invoice', requireXeroAdmin, async (req: Request, res: Response) => {
-    try {
-      console.log('📤 Xero send-invoice request received:', req.body);
-      const { jobId } = req.body;
-      
-      if (!jobId) {
-        console.error('❌ No job ID provided');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Job ID is required' 
-        });
-      }
-      
-      console.log(`📤 Processing send-invoice for jobId: ${jobId}`);
 
+  getConnectedXeroClientImpl = () => getValidXeroClient();
+
+  // Same Xero write the Invoices page uses. The follow-up queue calls this
+  // only after Approve & Sync. The HTTP route below is unchanged in what it sends.
+  pushJobInvoiceToXeroImpl = async (jobId: string): Promise<XeroPushResult> => {
       // Persist failure reasons to the Job Diary so they're visible in the
       // Timeline even when the client's transient error toast is missed/off
       // screen. This is the reliable surfacing channel on this app (see the
@@ -294,10 +319,10 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       if (!client) {
         console.error('❌ Not connected to Xero');
         await recordXeroFailure('Not connected to Xero. Reconnect in Settings → Integrations, then send again.');
-        return res.status(400).json({
+        return { status: 400, body: {
           success: false,
           message: 'Not connected to Xero. Please connect first.'
-        });
+        } };
       }
       
       console.log('✅ Xero client ready');
@@ -306,10 +331,10 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       const job = await storage.getJob(jobId);
       if (!job) {
         console.error(`❌ Job not found: ${jobId}`);
-        return res.status(404).json({ 
+        return { status: 404, body: { 
           success: false, 
           message: 'Job not found' 
-        });
+        } };
       }
       
       console.log(`✅ Job found: ${job.jobNumber} - ${job.title}`);
@@ -317,19 +342,19 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       // Get customer details
       if (!job.customerId) {
         console.error(`❌ Job ${jobId} has no customer assigned`);
-        return res.status(400).json({ 
+        return { status: 400, body: { 
           success: false, 
           message: 'Job has no customer assigned' 
-        });
+        } };
       }
       
       const customer = await storage.getCustomer(job.customerId);
       if (!customer) {
         console.error(`❌ Customer not found: ${job.customerId}`);
-        return res.status(404).json({ 
+        return { status: 404, body: { 
           success: false, 
           message: 'Customer not found' 
-        });
+        } };
       }
       
       console.log(`✅ Customer found: ${customer.name}`);
@@ -339,10 +364,10 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       const connection = await storage.getActiveXeroConnection();
       if (!connection) {
         console.error('❌ No active Xero connection found');
-        return res.status(400).json({ 
+        return { status: 400, body: { 
           success: false, 
           message: 'Not connected to Xero. Please connect first.' 
-        });
+        } };
       }
       const tenantId = connection.tenantId;
       
@@ -350,8 +375,10 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       let xeroContactId: string;
       
       try {
+        // Org-only customers (e.g. GDC staff records) bill to the organisation contact in Xero.
+        const xeroContactName = resolveBillingName(customer.name, customer);
         // Search for existing contact by name - escape special characters
-        const escapedName = customer.name.replace(/"/g, '\\"');
+        const escapedName = xeroContactName.replace(/"/g, '\\"');
         console.log(`🔍 Searching for Xero contact: "${escapedName}"`);
         
         let contactsResponse;
@@ -366,7 +393,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           console.log(`⚠️ Xero contact search failed, trying fallback approach...`);
           const allContactsResponse = await client.accountingApi.getContacts(tenantId);
           const matchingContact = allContactsResponse.body.contacts?.find(
-            c => c.name?.toLowerCase() === customer.name.toLowerCase()
+            c => c.name?.toLowerCase() === xeroContactName.toLowerCase()
           );
           contactsResponse = { 
             body: { 
@@ -380,9 +407,9 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           console.log(`✅ Found existing Xero contact: ${xeroContactId}`);
         } else {
           // Create new contact
-          console.log(`📝 Creating new Xero contact for: ${customer.name}`);
+          console.log(`📝 Creating new Xero contact for: ${xeroContactName}`);
           const newContact = {
-            name: customer.name,
+            name: xeroContactName,
             emailAddress: customer.email || undefined,
             phones: customer.phone ? [{
               phoneType: 'DEFAULT' as any,
@@ -413,11 +440,11 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         const errorDetails = error?.response?.body?.Elements?.[0]?.ValidationErrors || [];
         console.error('Xero error details:', errorMessage, errorDetails);
         await recordXeroFailure(`Failed to create/find the customer contact in Xero: ${errorMessage}. (If a contact with this name already exists in Xero but is archived, restore it first — Xero blocks duplicate contact names.)`);
-        return res.status(500).json({
+        return { status: 500, body: {
           success: false,
           message: `Failed to create/find contact in Xero: ${errorMessage}`,
           details: errorDetails
-        });
+        } };
       }
       
       // Check if job has an address
@@ -429,12 +456,12 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       if (!address || address.length < 5) {
         console.error(`❌ Job ${job.jobNumber} has invalid or missing address`);
         await recordXeroFailure('Cannot send to Xero: the job/invoice needs a valid address (at least 5 characters). Add an address on the invoice, then send again.');
-        return res.status(400).json({
+        return { status: 400, body: {
           success: false,
           message: 'Cannot send to Xero: Job/Invoice must have a valid address (at least 5 characters). Please edit the invoice to add an address.',
           missingField: 'address',
           invoiceId: jobInvoice?.id
-        });
+        } };
       }
       
       // Get Xero settings for account code and tax type
@@ -526,10 +553,10 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           const jobLineItems = job.lineItems || [];
           if (jobLineItems.length === 0) {
             await recordXeroFailure('Cannot send to Xero: this job has no invoice line items. Add at least one line item (or an invoice amount) before sending.');
-            return res.status(400).json({
+            return { status: 400, body: {
               success: false,
               message: 'Job must have at least one line item to create an invoice'
-            });
+            } };
           }
           invoiceLineItems = jobLineItems.map((item: any) => ({
             description: item.description || 'Tree Service',
@@ -600,10 +627,11 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           }
         }
         console.log(`✅ Invoice created in Xero: ${xeroInvoice.invoiceID}`);
-        
-        // Capture confirmed totals from Xero response
-        const confirmedSubtotal = xeroInvoice.subTotal !== undefined ? parseFloat(xeroInvoice.subTotal.toString()) : null;
-        const confirmedTotal = xeroInvoice.total !== undefined ? parseFloat(xeroInvoice.total.toString()) : null;
+
+        // Xero Total is GST-inclusive. invoices.amount and jobs.total_amount
+        // are ex-GST everywhere else, so write SubTotal into those columns and
+        // keep the inclusive total on jobs.total_including_gst.
+        const xeroAmounts = mapXeroInvoiceAmounts(xeroInvoice);
 
         // Update job with Xero invoice ID, mark as completed, and write back confirmed amounts
         await storage.updateJob(jobId, {
@@ -612,23 +640,20 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           xeroInvoiceId: xeroInvoice.invoiceID || undefined,
           xeroStatus: 'sent',
           sentToXeroDate: new Date(),
-          ...(confirmedSubtotal !== null && confirmedSubtotal > 0 && {
-            subtotal: confirmedSubtotal.toFixed(2),
-            totalAmount: (confirmedTotal ?? confirmedSubtotal).toFixed(2),
-          }),
+          ...(xeroAmounts.jobAmounts ?? {}),
         });
         
-        // Update the invoice status to 'sent' and write back confirmed amount
+        // Update the invoice status to 'sent' and write back the ex-GST subtotal
         if (invoice) {
           await storage.updateInvoice(invoice.id, {
             status: 'sent',
             xeroInvoiceId: xeroInvoice.invoiceID || undefined,
             xeroSyncedAt: new Date(),
-            ...(confirmedTotal !== null && confirmedTotal > 0 && {
-              amount: confirmedTotal.toFixed(2),
+            ...(xeroAmounts.invoiceAmount != null && {
+              amount: xeroAmounts.invoiceAmount,
             }),
           });
-          console.log(`✅ Updated invoice ${invoice.invoiceNumber} status to 'sent', amount: $${confirmedTotal}`);
+          console.log(`✅ Updated invoice ${invoice.invoiceNumber} status to 'sent', amount (ex-GST): $${xeroAmounts.invoiceAmount ?? invoice.amount}`);
         }
         
         // Create diary entry for Xero send - prefer Xero's confirmed total, then local invoice amount
@@ -652,12 +677,12 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           }
         });
         
-        res.json({ 
+        return { status: 200, body: { 
           success: true, 
           message: 'Invoice sent to Xero successfully',
           invoiceNumber: xeroInvoice.invoiceNumber,
           invoiceId: xeroInvoice.invoiceID,
-        });
+        } };
       } catch (error: any) {
         console.error('Error creating Xero invoice:', error);
 
@@ -700,7 +725,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
 
         await recordXeroFailure(`${errorMessage} — ${suggestion}`);
 
-        res.status(500).json({
+        return { status: 500, body: {
           success: false,
           message: errorMessage,
           errorCode: isDuplicateNumber ? 'DUPLICATE_INVOICE_NUMBER' : undefined,
@@ -710,13 +735,32 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
             taxType,
             suggestion,
           }
+        } };
+      }
+    return { status: 500, body: { success: false, message: 'An error occurred while sending invoice to Xero' } };
+  };
+
+  // Send job invoice to Xero (used by Invoices page)
+  app.post('/api/xero/send-invoice', requireXeroAdmin, async (req: Request, res: Response) => {
+    try {
+      console.log('📤 Xero send-invoice request received:', req.body);
+      const { jobId } = req.body;
+
+      if (!jobId) {
+        console.error('❌ No job ID provided');
+        return res.status(400).json({
+          success: false,
+          message: 'Job ID is required'
         });
       }
+
+      const result = await pushJobInvoiceToXero(jobId);
+      return res.status(result.status).json(result.body);
     } catch (error) {
       console.error('Error in send-invoice:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while sending invoice to Xero' 
+      res.status(500).json({
+        success: false,
+        message: 'An error occurred while sending invoice to Xero'
       });
     }
   });

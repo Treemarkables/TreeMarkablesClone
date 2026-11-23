@@ -88,6 +88,21 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/emergency-tree-removal" className="text-gray-300 hover:text-orange-400 transition-colors">
+                  Emergency Tree Removal
+                </Link>
+              </li>
+              <li>
+                <Link href="/wairoa" className="text-gray-300 hover:text-orange-400 transition-colors">
+                  Arborist Wairoa
+                </Link>
+              </li>
+              <li>
+                <Link href="/east-coast" className="text-gray-300 hover:text-orange-400 transition-colors">
+                  East Coast Arborist
+                </Link>
+              </li>
+              <li>
                 <Link href="/blog" className="text-gray-300 hover:text-orange-400 transition-colors" data-testid="link-footer-blog">
                   Tree Care Blog
                 </Link>
@@ -116,7 +131,10 @@ export default function Footer() {
                 027-216-6882
               </a>
               <p className="text-gray-300 text-sm" data-testid="text-footer-location">
-                Gisborne & Surrounding Areas
+                26 Cochrane Street, Gisborne, NZ
+              </p>
+              <p className="text-gray-300 text-sm">
+                Gisborne, Tairāwhiti, Wairoa &amp; the East Coast
               </p>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChevronLeft, ChevronRight, Check, MapPin, AlignJustify, MessageSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, AlignJustify, MessageSquare } from "lucide-react";
 import { useState, useMemo, useRef } from "react";
 import {
   format,
@@ -19,6 +19,10 @@ import {
 } from "date-fns";
 import { nzTimeToUTC } from "@shared/dateUtils";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  DISPATCH_JOBS_QUERY_KEY,
+  patchDispatchJobInCache,
+} from "@/lib/dispatchJobsCache";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { JobCardErrorBoundary } from "@/components/JobCardErrorBoundary";
 import { useToast } from "@/hooks/use-toast";
@@ -34,17 +38,24 @@ import {
   effectiveGanttMins,
   formatNZD,
   ganttFormatMins,
+  ganttFormatRange,
   ganttFormatTime,
   ganttInitials,
+  ganttJobName,
   ganttLaneStyle,
   ganttTimeToMins,
   jobDayCount,
   jobRevenue,
   makeGanttMinsToPercent,
+  revenueBarClass,
+  revenueBarPercent,
+  revenueChipClass,
   revenueColor as sharedRevenueColor,
   type CalendarJob as Job,
 } from "@/components/calendar/calendarMath";
 import { useCalendarData } from "@/components/calendar/useCalendarData";
+import { DailyRevenueTargetControl } from "@/components/DailyRevenueTargetControl";
+import { DispatchGanttJobCardContent } from "@/components/calendar/DispatchGanttJobCardContent";
 
 type ViewMode = "day" | "week" | "2weeks" | "4weeks" | "month";
 
@@ -253,7 +264,33 @@ export function CalendarGrid({
     const startDateTime = nzTimeToUTC(nzDateStr, startTimeStr);
     const endDateTime = nzTimeToUTC(nzDateStr, endTimeStr);
 
+    // A drag onto a single calendar cell is a single-day placement: pin the
+    // job to that one NZ day and its new time-of-day. Clear scheduledEndDate
+    // and scheduledDates — a leftover span (or a past day set) keeps the job
+    // on every old day and leaves it in the Unscheduled rail, because
+    // hasUpcomingBookingNZ prefers scheduledDates over scheduledDate.
+    // Write the job first so the staff-assignment expansion below reads the
+    // single new day, not the stale set. Status is not changed here.
+    const schedulePatch = {
+      scheduledDate: startDateTime.toISOString(),
+      scheduledEndDate: null,
+      scheduledDates: null,
+      scheduledStartTime: startTimeStr,
+      scheduledEndTime: endTimeStr,
+    };
+
     try {
+      await patchDispatchJobInCache(jobId, schedulePatch);
+
+      const jobRes = await fetch(`/api/jobs/${jobId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(schedulePatch),
+      });
+      if (!jobRes.ok) {
+        throw new Error("Failed to update job schedule");
+      }
+
       if (assignmentId) {
         await fetch(`/api/staff-assignments/${assignmentId}`, {
           method: "PUT",
@@ -285,29 +322,14 @@ export function CalendarGrid({
         });
       }
 
-      // A drag onto a single calendar cell is a single-day placement: pin the
-      // job to that one NZ day and its new time-of-day. We MUST also clear any
-      // stale scheduledEndDate — otherwise a job that previously had an end
-      // date keeps it, leaving scheduledDate..scheduledEndDate spanning weeks.
-      // That phantom span makes the job render on every day in the range (wrong
-      // date) and splits its price across all those days on the roster.
-      await fetch(`/api/jobs/${jobId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scheduledDate: startDateTime.toISOString(),
-          scheduledEndDate: null,
-          scheduledStartTime: startTimeStr,
-          scheduledEndTime: endTimeStr,
-        }),
-      });
-
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
       queryClient.invalidateQueries({
         queryKey: ["/api/jobs?limit=10000&offset=0"],
       });
+      queryClient.invalidateQueries({ queryKey: [DISPATCH_JOBS_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
     } catch {
+      queryClient.invalidateQueries({ queryKey: [DISPATCH_JOBS_QUERY_KEY] });
       toast({
         title: "Reschedule failed",
         description: "Could not update the job time.",
@@ -328,13 +350,13 @@ export function CalendarGrid({
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div
-      className="w-full h-full flex flex-col"
+      className="w-full h-full flex flex-col gap-2"
       onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
       onTouchStart={handleSwipeTouchStart}
       onTouchEnd={handleSwipeTouchEnd}
     >
       {/* Navigation Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-white flex-shrink-0 flex-wrap gap-2">
+      <div className="flex items-center justify-between px-4 py-3 inflow-chrome flex-shrink-0 flex-wrap gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -384,6 +406,8 @@ export function CalendarGrid({
               />
             </div>
           )}
+          {viewMode !== "day" && <DailyRevenueTargetControl />}
+          <div className="inline-flex items-center rounded-full bg-muted p-1 gap-0.5">
           {(["day", "week", "2weeks", "4weeks"] as ViewMode[]).map((v) => (
             <Button
               key={v}
@@ -391,6 +415,7 @@ export function CalendarGrid({
               size="sm"
               onClick={() => setViewMode(v)}
               data-testid={`button-view-${v}`}
+              className="rounded-full"
             >
               {v === "2weeks"
                 ? "2 wks"
@@ -399,6 +424,7 @@ export function CalendarGrid({
                   : v.charAt(0).toUpperCase() + v.slice(1)}
             </Button>
           ))}
+          </div>
         </div>
       </div>
 
@@ -407,10 +433,12 @@ export function CalendarGrid({
         dayRevenue !== null &&
         displayDayRevenue !== null && (
           <div
-            className="border-b bg-gray-50 flex-shrink-0"
+            className={`rounded-2xl flex-shrink-0 ${
+              DAY_TARGET != null && displayDayRevenue >= DAY_TARGET ? "bg-emerald-50" : "bg-muted/60"
+            }`}
             data-testid="day-revenue-bar"
           >
-            <div className="flex items-center gap-3 px-4 py-2">
+            <div className="flex items-center gap-3 px-4 py-2 flex-wrap">
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {format(currentDate, "d MMM")} jobs:
               </span>
@@ -425,24 +453,26 @@ export function CalendarGrid({
                 const dayJobs = getUniqueJobsForDate(currentDate);
                 return (
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {dayJobs.length} job{dayJobs.length !== 1 ? "s" : ""} · target {formatNZD(DAY_TARGET)} exc. GST
+                    {dayJobs.length} job{dayJobs.length !== 1 ? "s" : ""}
                   </span>
                 );
               })()}
+              <span className="text-xs text-muted-foreground">·</span>
+              <DailyRevenueTargetControl />
               <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${dayRevenue >= DAY_TARGET ? "bg-green-500" : dayRevenue >= DAY_TARGET * 0.7 ? "bg-amber-400" : "bg-red-400"}`}
+                  className={`h-full rounded-full transition-all duration-500 ${revenueBarClass(dayRevenue, DAY_TARGET)}`}
                   style={{
-                    width: `${Math.min(100, (dayRevenue / DAY_TARGET) * 100)}%`,
+                    width: `${revenueBarPercent(dayRevenue, DAY_TARGET)}%`,
                   }}
                 />
               </div>
-              {displayDayRevenue >= DAY_TARGET && (
+              {DAY_TARGET != null && displayDayRevenue >= DAY_TARGET && (
                 <span className="text-xs font-medium text-green-700 whitespace-nowrap">
                   Target hit!
                 </span>
               )}
-              {displayDayRevenue > 0 && displayDayRevenue < DAY_TARGET && (
+              {DAY_TARGET != null && displayDayRevenue > 0 && displayDayRevenue < DAY_TARGET && (
                 <span className="text-xs text-muted-foreground whitespace-nowrap">
                   {formatNZD(DAY_TARGET - displayDayRevenue)} to go
                 </span>
@@ -470,7 +500,7 @@ export function CalendarGrid({
 
       {/* Grid */}
       <div
-        className="flex-1 overflow-auto"
+        className="flex-1 min-h-0 overflow-auto inflow-chrome"
         onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
       >
         <div
@@ -478,11 +508,11 @@ export function CalendarGrid({
           style={viewMode === "day" ? { minWidth: GANTT_COL_W + ganttHourLabels.length * GANTT_MIN_COL_W } : undefined}
         >
           {/* Header row */}
-          <div className="sticky top-0 z-10 flex bg-white border-b">
+          <div className="sticky top-0 z-10 flex bg-card border-b">
             {viewMode === "day" ? (
               <>
                 <div
-                  className="flex-shrink-0 border-r bg-gray-50 font-semibold p-2 text-sm sticky left-0 z-20 flex items-end"
+                  className="flex-shrink-0 border-r bg-card font-semibold p-2 text-sm sticky left-0 z-20 flex items-end"
                   style={{ width: GANTT_COL_W }}
                 >
                   CREW
@@ -518,7 +548,7 @@ export function CalendarGrid({
                       </div>
                       {rev > 0 && (
                         <div
-                          className={`mt-1 text-[10px] font-medium px-1 py-0.5 rounded ${rev >= DAY_TARGET ? "text-green-700 bg-green-50" : rev >= DAY_TARGET * 0.7 ? "text-amber-700 bg-amber-50" : "text-red-700 bg-red-50"}`}
+                          className={`mt-1 text-[10px] font-medium px-1 py-0.5 rounded ${revenueChipClass(rev, DAY_TARGET)}`}
                         >
                           {formatNZD(rev)}
                         </div>
@@ -552,8 +582,8 @@ export function CalendarGrid({
                 >
                   {/* Name column */}
                   <div
-                    className="flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10"
-                    style={{ width: GANTT_COL_W, backgroundColor: '#f9fafb' }}
+                    className="flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10 bg-card"
+                    style={{ width: GANTT_COL_W }}
                   >
                     <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-[10px] font-bold flex-shrink-0">
                       ?
@@ -584,9 +614,14 @@ export function CalendarGrid({
                       const ls = ganttLaneStyle(lane, totalLanes);
                       const c = getJobColor(job.id);
                       const custName = getCustomerName(job);
+                      const jobName = ganttJobName(job, custName);
                       const timeLabel = job.scheduledStartTime
-                        ? `${ganttFormatTime(job.scheduledStartTime)}–${ganttFormatTime(job.scheduledEndTime)}`
+                        ? ganttFormatRange(
+                            ganttFormatTime(job.scheduledStartTime),
+                            ganttFormatTime(job.scheduledEndTime),
+                          )
                         : '';
+                      const price = getJobPrice(job);
                       return (
                         <button
                           key={job.id}
@@ -603,8 +638,8 @@ export function CalendarGrid({
                           }}
                           onDragEnd={() => setDayViewDragOver(null)}
                           onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
-                          title={`${custName}${timeLabel ? ' — ' + timeLabel : ''} (unassigned — drag to assign crew)`}
-                          className="absolute rounded text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400 cursor-grab active:cursor-grabbing"
+                          title={`${jobName}${timeLabel ? ' · ' + timeLabel : ''} (unassigned, drag to assign crew)`}
+                          className="absolute rounded-2xl text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400 cursor-grab active:cursor-grabbing"
                           style={{
                             left: `${Math.max(0, startPct)}%`,
                             width: `${blockW}%`,
@@ -618,37 +653,21 @@ export function CalendarGrid({
                             minWidth: 40,
                           }}
                         >
-                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
-                            <div className="flex items-start gap-1">
-                              <span className="text-[10px] font-semibold leading-tight flex-1 min-w-0 whitespace-normal break-words" style={{ color: c.text }}>
-                                {custName}
-                              </span>
-                              {job.customerConfirmed && (
-                                <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: c.border }} />
-                              )}
-                              {!job.customerConfirmed && job.customerReplyReceivedAt && (
-                                <MessageSquare className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={2.5} style={{ color: c.border }} />
-                              )}
-                            </div>
-                            {blockW > 8 && timeLabel && (
-                              <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
-                                {timeLabel}
-                              </span>
-                            )}
-                            {(() => {
-                              const price = getJobPrice(job);
-                              return price > 0 ? (
-                                <span className="text-[10px] font-bold leading-tight block truncate" style={{ color: c.border }}>
-                                  {formatNZD(price)}
-                                </span>
-                              ) : null;
-                            })()}
-                            {blockW > 8 && (
+                          <DispatchGanttJobCardContent
+                            address={job.address}
+                            timeLabel={timeLabel}
+                            jobName={jobName}
+                            priceLabel={price > 0 ? formatNZD(price) : null}
+                            color={c}
+                            customerConfirmed={job.customerConfirmed}
+                            customerReplyReceived={Boolean(job.customerReplyReceivedAt)}
+                            showDetails={blockW > 8}
+                            footer={
                               <span className="text-[9px] leading-tight block truncate text-gray-400">
                                 drag to assign
                               </span>
-                            )}
-                          </div>
+                            }
+                          />
                         </button>
                       );
                     })}
@@ -676,8 +695,10 @@ export function CalendarGrid({
                 {/* Name column */}
                 {viewMode === "day" ? (
                   <div
-                    className="flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10"
-                    style={{ width: GANTT_COL_W, backgroundColor: gPalette.row + '80' }}
+                    className={`flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10 ${
+                      empDayItems.length > 0 ? "bg-blue-50" : "bg-card"
+                    }`}
+                    style={{ width: GANTT_COL_W }}
                   >
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
@@ -709,8 +730,13 @@ export function CalendarGrid({
                 {viewMode === "day" ? (
                   /* ── Gantt timeline bar ─────────────────────────────── */
                   <div
-                    className={`flex-1 relative transition-colors duration-100 ${dayViewDragOver === employee.id ? 'ring-2 ring-inset ring-blue-400' : ''}`}
-                    style={{ backgroundColor: dayViewDragOver === employee.id ? gPalette.row : gPalette.row + "55" }}
+                    className={`flex-1 relative transition-colors duration-100 ${
+                      dayViewDragOver === employee.id
+                        ? "ring-2 ring-inset ring-blue-400 bg-blue-50"
+                        : empDayItems.length > 0
+                          ? "bg-blue-50/40"
+                          : "bg-card"
+                    }`}
                     onDragOver={(e) => {
                       e.preventDefault();
                       e.dataTransfer.dropEffect = "move";
@@ -772,7 +798,7 @@ export function CalendarGrid({
                       return (
                         <>
                           <div
-                            className="absolute pointer-events-none rounded border-2 border-dashed border-blue-500 bg-blue-400/25 flex items-center justify-center px-1 overflow-hidden"
+                            className="absolute pointer-events-none rounded-2xl border-2 border-dashed border-blue-500 bg-blue-400/25 flex items-center justify-center px-1 overflow-hidden"
                             style={{
                               left: `${leftPct}%`,
                               width: `${widthPct}%`,
@@ -804,57 +830,43 @@ export function CalendarGrid({
                       const ls = ganttLaneStyle(lane, totalLanes);
                       const c = getJobColor(job.id);
                       const custName = getCustomerName(job);
+                      const jobName = ganttJobName(job, custName);
                       const timeLabel = eff.fromAssignment
-                        ? `${ganttFormatMins(eff.startMins)}–${ganttFormatMins(eff.endMins)}`
-                        : `${ganttFormatTime(job.scheduledStartTime)}–${ganttFormatTime(job.scheduledEndTime)}`;
+                        ? ganttFormatRange(
+                            ganttFormatMins(eff.startMins),
+                            ganttFormatMins(eff.endMins),
+                          )
+                        : ganttFormatRange(
+                            ganttFormatTime(job.scheduledStartTime),
+                            ganttFormatTime(job.scheduledEndTime),
+                          );
+                      const price = getJobPrice(job);
                       return (
                         <button
                           key={job.id}
                           onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
-                          title={`${custName} — ${timeLabel}`}
-                          className="absolute rounded text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                          title={`${jobName} · ${timeLabel}`}
+                          className="absolute rounded-2xl text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
                           style={{
                             left: `${Math.max(0, startPct)}%`,
                             width: `${blockW}%`,
                             top: ls.top,
                             height: ls.height,
                             backgroundColor: c.bg,
-                            borderLeft: `3px solid ${c.border}`,
+                            border: `1px solid ${c.border}33`,
                             minWidth: 32,
                           }}
                         >
-                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
-                            <div className="flex items-start gap-1">
-                              <span className="text-[10px] font-semibold leading-tight flex-1 min-w-0 whitespace-normal break-words" style={{ color: c.text }}>
-                                {custName}
-                              </span>
-                              {job.customerConfirmed && (
-                                <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: c.border }} />
-                              )}
-                              {!job.customerConfirmed && job.customerReplyReceivedAt && (
-                                <MessageSquare className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={2.5} style={{ color: c.border }} />
-                              )}
-                            </div>
-                            {blockW > 8 && timeLabel && (
-                              <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
-                                {timeLabel}
-                              </span>
-                            )}
-                            {(() => {
-                              const price = getJobPrice(job);
-                              return price > 0 ? (
-                                <span className="text-[10px] font-bold leading-tight block truncate" style={{ color: c.border }}>
-                                  {formatNZD(price)}
-                                </span>
-                              ) : null;
-                            })()}
-                            {job.address && (
-                              <span className="text-[9px] leading-tight flex items-start gap-0.5 whitespace-normal break-words" style={{ color: c.text, opacity: 0.7 }}>
-                                <MapPin className="w-2 h-2 shrink-0 mt-0.5" />
-                                <span className="min-w-0">{job.address.split(",")[0]}</span>
-                              </span>
-                            )}
-                          </div>
+                          <DispatchGanttJobCardContent
+                            address={job.address}
+                            timeLabel={timeLabel}
+                            jobName={jobName}
+                            priceLabel={price > 0 ? formatNZD(price) : null}
+                            color={c}
+                            customerConfirmed={job.customerConfirmed}
+                            customerReplyReceived={Boolean(job.customerReplyReceivedAt)}
+                            showDetails={blockW > 8}
+                          />
                         </button>
                       );
                     })}
@@ -908,7 +920,7 @@ export function CalendarGrid({
                             return (
                               <div
                                 key={job.id}
-                                className="text-xs p-1.5 rounded border cursor-pointer mb-1"
+                                className="text-xs p-1.5 rounded-xl border cursor-pointer mb-1"
                                 style={{ backgroundColor: c.bg, borderColor: c.border, color: c.text }}
                                 onClick={() => {
                                   setSelectedJobId(job.id);
