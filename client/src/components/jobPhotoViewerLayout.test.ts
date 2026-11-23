@@ -47,6 +47,8 @@ function newViewerHtml(src = PHOTO): string {
   </head><body style="margin:0;background:#000;">
     <div style="position:fixed;inset:0;height:100dvh;width:100%;display:flex;flex-direction:column;overflow:hidden;background:#000;">
       <div id="count" style="position:fixed;z-index:99;top:calc(env(safe-area-inset-top) + 34px);left:calc(env(safe-area-inset-left) + 16px);width:max-content;max-width:calc(100% - 6.5rem);color:#fff;font:14px sans-serif;pointer-events:none;">3 of 83</div>
+      <button id="prev" aria-label="Previous photo" style="position:fixed;z-index:100;top:50%;left:calc(env(safe-area-inset-left) + 12px);transform:translateY(-50%);width:56px;height:56px;min-width:56px;min-height:56px;border-radius:999px;border:2px solid #fff;background:#000;color:#fff;font:700 28px sans-serif;">‹</button>
+      <button id="next" aria-label="Next photo" style="position:fixed;z-index:100;top:50%;right:calc(env(safe-area-inset-right) + 12px);transform:translateY(-50%);width:56px;height:56px;min-width:56px;min-height:56px;border-radius:999px;border:2px solid #fff;background:#000;color:#fff;font:700 28px sans-serif;">›</button>
       <button id="close" style="position:fixed;z-index:100;top:calc(env(safe-area-inset-top) + 16px);right:calc(env(safe-area-inset-right) + 12px);width:56px;height:56px;min-width:56px;min-height:56px;border-radius:999px;border:2px solid #fff;background:#000;color:#fff;font:700 28px sans-serif;">X</button>
       <div id="stage" style="position:relative;flex:1;min-width:0;min-height:0;overflow:hidden;">
         <img id="photo" alt="" src="${src}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;">
@@ -79,6 +81,44 @@ function rawCompositeHtml(): string {
       <div id="close" style="position:absolute;top:12px;right:12px;width:44px;height:44px;background:#000;color:#fff;">X</div>
     </div>
   </body></html>`;
+}
+
+function assertEdgeArrows(
+  box: Record<string, number | null>,
+  label: string,
+  insets: { left: number; right: number; top: number; bottom: number } = {
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+) {
+  assert.ok((box.prevW ?? 0) >= 44, `${label} prev width ${box.prevW}`);
+  assert.ok((box.prevH ?? 0) >= 44, `${label} prev height ${box.prevH}`);
+  assert.ok((box.nextW ?? 0) >= 44, `${label} next width ${box.nextW}`);
+  assert.ok((box.nextH ?? 0) >= 44, `${label} next height ${box.nextH}`);
+  assert.ok((box.prevLeft ?? -1) >= insets.left - 1, `${label} prev left ${box.prevLeft}`);
+  assert.ok(
+    (box.nextRight ?? 9999) <= (box.innerW ?? 0) - insets.right + 1,
+    `${label} next right ${box.nextRight}`,
+  );
+  assert.ok((box.prevRight ?? 9999) <= (box.nextLeft ?? 0), `${label} arrows overlap each other`);
+  const mid = (box.innerH ?? 0) / 2;
+  const prevMid = (box.prevTop ?? 0) + (box.prevH ?? 0) / 2;
+  const nextMid = (box.nextTop ?? 0) + (box.nextH ?? 0) / 2;
+  assert.ok(Math.abs(prevMid - mid) <= 2, `${label} prev not centred ${prevMid} vs ${mid}`);
+  assert.ok(Math.abs(nextMid - mid) <= 2, `${label} next not centred ${nextMid} vs ${mid}`);
+  assert.ok((box.prevTop ?? -1) >= insets.top - 1, `${label} prev overlaps the status bar`);
+  assert.ok(
+    (box.prevBottom ?? 9999) <= (box.innerH ?? 0) - insets.bottom + 1,
+    `${label} prev overlaps the home indicator`,
+  );
+  const overlapsClose =
+    (box.nextLeft ?? 0) < (box.closeRight ?? 0) &&
+    (box.nextRight ?? 0) > (box.closeLeft ?? 0) &&
+    (box.nextTop ?? 0) < (box.closeBottom ?? 0) &&
+    (box.nextBottom ?? 0) > (box.closeTop ?? 0);
+  assert.equal(overlapsClose, false, `${label} next overlaps close`);
 }
 
 function wait(ms: number) {
@@ -182,6 +222,10 @@ describe("Android photo viewer fit", { skip: CHROME ? false : "google-chrome is 
               const stageBox = stage ? stage.getBoundingClientRect() : null;
               const count = document.getElementById('count');
               const countBox = count ? count.getBoundingClientRect() : null;
+              const prev = document.getElementById('prev');
+              const next = document.getElementById('next');
+              const prevBox = prev ? prev.getBoundingClientRect() : null;
+              const nextBox = next ? next.getBoundingClientRect() : null;
               const naturalW = photoEl.naturalWidth || photo.width;
               const naturalH = photoEl.naturalHeight || photo.height;
               const fit = Math.min(photo.width / naturalW, photo.height / naturalH);
@@ -197,6 +241,18 @@ describe("Android photo viewer fit", { skip: CHROME ? false : "google-chrome is 
                 countRight: countBox ? countBox.right : null,
                 countTop: countBox ? countBox.top : null,
                 countBottom: countBox ? countBox.bottom : null,
+                prevLeft: prevBox ? prevBox.left : null,
+                prevRight: prevBox ? prevBox.right : null,
+                prevTop: prevBox ? prevBox.top : null,
+                prevBottom: prevBox ? prevBox.bottom : null,
+                prevW: prevBox ? prevBox.width : null,
+                prevH: prevBox ? prevBox.height : null,
+                nextLeft: nextBox ? nextBox.left : null,
+                nextRight: nextBox ? nextBox.right : null,
+                nextTop: nextBox ? nextBox.top : null,
+                nextBottom: nextBox ? nextBox.bottom : null,
+                nextW: nextBox ? nextBox.width : null,
+                nextH: nextBox ? nextBox.height : null,
                 photoW: photo.width,
                 photoH: photo.height,
                 photoTop: photo.top,
@@ -239,6 +295,7 @@ describe("Android photo viewer fit", { skip: CHROME ? false : "google-chrome is 
         (after.countRight ?? 9999) <= (after.closeLeft ?? 0),
         `counter right ${after.countRight} overlaps close left ${after.closeLeft}`,
       );
+      assertEdgeArrows(after, "412x915");
 
       await cdp.send(
         "Emulation.setDeviceMetricsOverride",
@@ -252,6 +309,30 @@ describe("Android photo viewer fit", { skip: CHROME ? false : "google-chrome is 
         (narrow.countRight ?? 9999) <= (narrow.closeLeft ?? 0),
         `narrow counter right ${narrow.countRight} overlaps close left ${narrow.closeLeft}`,
       );
+      assertEdgeArrows(narrow, "360x800");
+
+      const withInsets = (top: number, right: number, bottom: number, left: number) =>
+        newViewerHtml()
+          .replaceAll("env(safe-area-inset-top)", `${top}px`)
+          .replaceAll("env(safe-area-inset-right)", `${right}px`)
+          .replaceAll("env(safe-area-inset-bottom)", `${bottom}px`)
+          .replaceAll("env(safe-area-inset-left)", `${left}px`);
+
+      await cdp.send(
+        "Emulation.setDeviceMetricsOverride",
+        { width: 390, height: 844, deviceScaleFactor: 3, mobile: true },
+        sessionId,
+      );
+      const iphone = await measure(withInsets(59, 0, 34, 0), "photo-viewer-iphone-arrows");
+      assertEdgeArrows(iphone, "iphone portrait", { left: 0, right: 0, top: 59, bottom: 34 });
+
+      await cdp.send(
+        "Emulation.setDeviceMetricsOverride",
+        { width: 844, height: 390, deviceScaleFactor: 3, mobile: true },
+        sessionId,
+      );
+      const landscape = await measure(withInsets(0, 47, 21, 47), "photo-viewer-iphone-arrows-landscape");
+      assertEdgeArrows(landscape, "iphone landscape", { left: 47, right: 47, top: 0, bottom: 21 });
 
       await cdp.send(
         "Emulation.setDeviceMetricsOverride",

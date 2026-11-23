@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOverlayHistory } from "@/hooks/useOverlayHistory";
 import {
+  adjacentPhotoIndex,
   clampPan,
   dismissBackdropOpacity,
   dismissOffset,
@@ -32,7 +33,69 @@ import {
  * A downward drag on a fitted photo follows the finger and dismisses; a
  * zoomed photo still pans. Opening pushes a history entry so Android back
  * closes the viewer.
+ *
+ * Previous and next are the same 56px white ring as Close, centred on the
+ * left and right edges and inset by the safe area. They sit outside the
+ * gesture layer: a tap steps the photo and does not dismiss or pinch.
+ * They hide while the photo is zoomed so a pan can use the edges; arrow
+ * keys still step. A horizontal swipe changes photo only while it is
+ * fitted. Neither the arrows nor a swipe wrap past the ends.
  */
+
+/** Shared with Close: inline sizes, because WebView drops the Tailwind ones. */
+const edgeControlStyle = {
+  position: "fixed" as const,
+  width: 56,
+  height: 56,
+  minWidth: 56,
+  minHeight: 56,
+  zIndex: 100,
+  backgroundColor: "#000",
+  color: "#fff",
+  border: "2px solid #fff",
+  borderRadius: 9999,
+  touchAction: "manipulation" as const,
+};
+
+function PhotoEdgeButton({
+  side,
+  label,
+  testId,
+  onPress,
+  children,
+}: {
+  side: "left" | "right";
+  label: string;
+  testId: string;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        onPress();
+      }}
+      aria-label={label}
+      data-testid={testId}
+      className="fixed z-[100] h-14 w-14 min-h-14 min-w-14 shrink-0 rounded-full border-2 border-white bg-black text-white shadow-lg [&_svg]:size-7"
+      style={{
+        ...edgeControlStyle,
+        top: "50%",
+        transform: "translateY(-50%)",
+        left: side === "left" ? "calc(env(safe-area-inset-left) + 12px)" : "auto",
+        right: side === "right" ? "calc(env(safe-area-inset-right) + 12px)" : "auto",
+      }}
+    >
+      {children}
+    </Button>
+  );
+}
+
 export function JobPhotoViewer({
   open,
   photos,
@@ -102,20 +165,33 @@ export function JobPhotoViewer({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
+      // A photo annotator (or another dialog) portaled above this viewer
+      // must take the key. Closing both at once hid the photo the user
+      // was marking up.
+      const dialogs = document.querySelectorAll("[role='dialog']");
+      const top = dialogs[dialogs.length - 1];
+      if (top && top.getAttribute("data-testid") !== "job-photo-viewer") return;
       if (event.key === "Escape") {
-        // A photo annotator (or another dialog) portaled above this viewer
-        // must take Escape. Closing both at once hid the photo the user
-        // was marking up.
-        const dialogs = document.querySelectorAll("[role='dialog']");
-        const top = dialogs[dialogs.length - 1];
-        if (top && top.getAttribute("data-testid") !== "job-photo-viewer") return;
         event.preventDefault();
         onCloseRef.current();
-      } else if (event.key === "ArrowRight") {
-        onIndexChange?.(Math.min(photos.length - 1, index + 1));
-      } else if (event.key === "ArrowLeft") {
-        onIndexChange?.(Math.max(0, index - 1));
+        return;
       }
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest("input, textarea, select, [contenteditable='true']")
+      ) {
+        return;
+      }
+      event.preventDefault();
+      const next = adjacentPhotoIndex(
+        index,
+        photos.length,
+        event.key === "ArrowRight" ? "next" : "prev",
+      );
+      if (next != null) onIndexChange?.(next);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -138,7 +214,13 @@ export function JobPhotoViewer({
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (closingRef.current) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // Capture keeps the swipe if the finger leaves the photo. A WebView that
+    // rejects capture must still be able to change photos.
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // The pointer id is not active. Track the gesture from this stage.
+    }
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.current.size >= 2) {
       const [a, b] = [...pointers.current.values()];
@@ -224,8 +306,12 @@ export function JobPhotoViewer({
         event.clientY - current.originY,
         scaleRef.current,
       );
-      if (direction === "next" && index < photos.length - 1) onIndexChange?.(index + 1);
-      if (direction === "prev" && index > 0) onIndexChange?.(index - 1);
+      // Fitted photos only. Pinch (two pointers) and a downward drag never
+      // land here, and a zoomed photo is a pan, so this cannot fight either.
+      if (direction) {
+        const next = adjacentPhotoIndex(index, photos.length, direction);
+        if (next != null) onIndexChange?.(next);
+      }
     }
     if (pointers.current.size < 2 && current?.mode === "pinch") {
       gesture.current = null;
@@ -234,6 +320,12 @@ export function JobPhotoViewer({
   };
 
   const zoomed = scale > 1;
+  const showPrevious = !zoomed && adjacentPhotoIndex(index, photos.length, "prev") != null;
+  const showNext = !zoomed && adjacentPhotoIndex(index, photos.length, "next") != null;
+  const showAnother = (direction: "next" | "prev") => {
+    const next = adjacentPhotoIndex(index, photos.length, direction);
+    if (next != null) onIndexChange?.(next);
+  };
 
   return (
     <div
@@ -292,33 +384,6 @@ export function JobPhotoViewer({
             }}
           />
         </div>
-
-        {photos.length > 1 && index > 0 && !zoomed && (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="absolute left-3 top-1/2 z-[91] h-11 w-11 -translate-y-1/2 rounded-full border-white/40 bg-black/60 text-white"
-            onClick={() => onIndexChange?.(index - 1)}
-            aria-label="Previous photo"
-            data-testid="button-previous-photo"
-          >
-            <ChevronLeft className="h-6 w-6" />
-          </Button>
-        )}
-        {photos.length > 1 && index < photos.length - 1 && !zoomed && (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="absolute right-3 top-1/2 z-[91] h-11 w-11 -translate-y-1/2 rounded-full border-white/40 bg-black/60 text-white"
-            onClick={() => onIndexChange?.(index + 1)}
-            aria-label="Next photo"
-            data-testid="button-next-photo"
-          >
-            <ChevronRight className="h-6 w-6" />
-          </Button>
-        )}
       </div>
 
       {(onAnnotate || onDownload || photos.length > 1) && (
@@ -363,6 +428,27 @@ export function JobPhotoViewer({
             </div>
           )}
         </div>
+      )}
+
+      {showPrevious && (
+        <PhotoEdgeButton
+          side="left"
+          label="Previous photo"
+          testId="button-previous-photo"
+          onPress={() => showAnother("prev")}
+        >
+          <ChevronLeft style={{ width: 28, height: 28 }} strokeWidth={2.5} />
+        </PhotoEdgeButton>
+      )}
+      {showNext && (
+        <PhotoEdgeButton
+          side="right"
+          label="Next photo"
+          testId="button-next-photo"
+          onPress={() => showAnother("next")}
+        >
+          <ChevronRight style={{ width: 28, height: 28 }} strokeWidth={2.5} />
+        </PhotoEdgeButton>
       )}
 
       <Button
