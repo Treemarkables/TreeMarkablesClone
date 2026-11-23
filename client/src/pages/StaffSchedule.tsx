@@ -1,10 +1,23 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
-import { addDays, format, isToday, startOfWeek } from 'date-fns';
 import { ChevronLeft, ChevronRight, MapPin, AlignJustify, Check, Reply, MessageSquare } from 'lucide-react';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import type { Job as BaseJob, Employee } from '@shared/schema';
 import { getJobScheduledNZDates } from '@shared/dateUtils';
+import { DAILY_REVENUE_TARGET_GST_LABEL, parseDailyRevenueTarget } from '@shared/dailyRevenueTarget';
+import {
+  NZ_TZ,
+  formatRosterDateDayMonth,
+  formatRosterDateDayMonthYear,
+  formatRosterDateLong,
+  nzTodayKey,
+  persistRosterDate,
+  rosterDateFromSearch,
+  rosterDaySwipe,
+  shiftDateKey,
+  startOfIsoWeekKey,
+  utcDayOfWeek,
+} from '@/pages/staffScheduleDate';
 
 type Job = BaseJob & {
   confirmationReplySentAt?: string | Date | null;
@@ -28,7 +41,6 @@ const WEEKS_OF: Record<ViewMode, number> = { day: 0, '1w': 1, '2w': 2, '3w': 3, 
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const NZ_TZ = 'Pacific/Auckland';
 // The timeline starts at 8 AM by default — most jobs do — and only expands
 // backwards if the day actually contains a job scheduled earlier. Hours before
 // the earliest job are hidden so the grid isn't padded with dead space.
@@ -103,18 +115,10 @@ function initials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
 }
 
-function nzDateStr(date: Date) {
-  return formatInTimeZone(date, NZ_TZ, 'yyyy-MM-dd');
-}
-
-// Shift a YYYY-MM-DD key by whole days via noon-UTC anchoring — same DST-safe
-// technique as getJobScheduledNZDates, so iterating never drifts across the
-// NZ daylight-saving boundaries.
-function shiftDateKey(key: string, deltaDays: number): string {
-  const d = new Date(key + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + deltaDays);
-  return d.toISOString().split('T')[0];
-}
+// Day-Gantt job blocks. Desktop keeps the 1rem radius. Phones are square —
+// a 16px radius on a short mobile row reads as a pill around every job.
+const JOB_BLOCK_CLASS =
+  'absolute rounded-none md:rounded-2xl text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400';
 
 // Assigns overlapping items in a single row to vertical lanes so they don't cover each other.
 // Returns a map of item.id → { lane, totalLanes }.
@@ -207,16 +211,12 @@ function getJobPrice(job: Job): number {
   return total > 0 ? total / 1.15 : 0;
 }
 
-// Number of NZ-local days a job spans (min 1). Used to split price + revenue
-// evenly across each day's block / KPI for multi-day jobs.
+// Number of NZ-local days a job actually runs on (min 1). Used to split price +
+// revenue evenly across each day's block / KPI for multi-day jobs. Counts the
+// scheduledDates set when present, so a Mon + Wed booking splits over 2 days,
+// not the 3-day span — matching the week-mode perDaySummary.
 function jobDayCount(job: Job): number {
-  if (!job.scheduledDate || !job.scheduledEndDate) return 1;
-  const startKey = nzDateStr(new Date(job.scheduledDate));
-  const endKey = nzDateStr(new Date(job.scheduledEndDate));
-  if (endKey <= startKey) return 1;
-  const startMs = new Date(startKey + 'T12:00:00Z').getTime();
-  const endMs = new Date(endKey + 'T12:00:00Z').getTime();
-  return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+  return Math.max(1, getJobScheduledNZDates(job).length);
 }
 
 // Price attributed to a single day of the job (exc. GST). For single-day jobs
@@ -236,11 +236,11 @@ function formatNZDShort(amount: number): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function StaffSchedule() {
-  const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    const now = toZonedTime(new Date(), NZ_TZ);
-    now.setHours(0, 0, 0, 0);
-    return now;
-  });
+  // NZ calendar key, also written to ?date= so a remount (job card, iOS
+  // webview reload) comes back to this day instead of recomputing "today".
+  const [dateKey, setDateKey] = useState<string>(
+    () => rosterDateFromSearch(window.location.search) ?? nzTodayKey(),
+  );
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
   const [rowHeight, setRowHeight] = useState(72);
@@ -262,18 +262,32 @@ export default function StaffSchedule() {
     return () => clearInterval(id);
   }, []);
 
-  const dateStr = nzDateStr(selectedDate);
-  const isTodaySelected = isToday(selectedDate);
-  const todayKey = nzDateStr(toZonedTime(new Date(), NZ_TZ));
+  const dateStr = dateKey;
+  const todayKey = nzTodayKey();
+  const isTodaySelected = dateKey === todayKey;
 
-  // Week-mode date range: Monday-start week containing selectedDate, spanning
-  // `weeks` × 7 contiguous NZ days. Keys generated via noon-UTC anchoring (DST-safe).
+  useLayoutEffect(() => {
+    persistRosterDate(dateKey);
+  }, [dateKey]);
+
+  // Back/forward restores the day that was in the URL. replaceState (above)
+  // does not fire popstate, so changing days with the arrows does not loop.
+  useEffect(() => {
+    const onPop = () => {
+      setDateKey(rosterDateFromSearch(window.location.search) ?? nzTodayKey());
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  // Week-mode date range: Monday-start week containing the selected NZ day,
+  // spanning `weeks` × 7 contiguous date keys. Shifted in UTC so a DST
+  // boundary never skips or repeats a day.
   const rangeDates = useMemo(() => {
     if (!isWeekMode) return [] as string[];
-    const monday = startOfWeek(selectedDate, { weekStartsOn: 1 });
-    const startKey = nzDateStr(monday);
+    const startKey = startOfIsoWeekKey(dateKey);
     return Array.from({ length: weeks * 7 }, (_, i) => shiftDateKey(startKey, i));
-  }, [isWeekMode, weeks, selectedDate]);
+  }, [isWeekMode, weeks, dateKey]);
   const rangeSet = useMemo(() => new Set(rangeDates), [rangeDates]);
   const rangeStart = rangeDates[0];
   const rangeEnd = rangeDates[rangeDates.length - 1];
@@ -324,7 +338,7 @@ export default function StaffSchedule() {
   // Excludes only statuses that don't represent confirmed revenue — matches
   // CalendarGrid's REVENUE_EXCLUDE set. `completed`/`invoiced`/`paid` jobs
   // DID generate revenue and must stay in the tally on past days.
-  const DAILY_TARGET = Number(businessSettingsData?.data?.dailyRevenueTarget) || 3500;
+  const DAILY_TARGET = parseDailyRevenueTarget(businessSettingsData?.data?.dailyRevenueTarget);
   const revenueInfo = useMemo(() => {
     const REVENUE_EXCLUDE = new Set(['archived', 'unsuccessful', 'cancelled', 'quote', 'lead']);
     const revenueJobs = dayJobs.filter(j => !REVENUE_EXCLUDE.has(j.status));
@@ -335,9 +349,9 @@ export default function StaffSchedule() {
     return {
       scheduledRevenue,
       dailyTarget: DAILY_TARGET,
-      percentComplete: DAILY_TARGET > 0 ? Math.round((scheduledRevenue / DAILY_TARGET) * 100) : 0,
+      percentComplete: DAILY_TARGET != null && DAILY_TARGET > 0 ? Math.round((scheduledRevenue / DAILY_TARGET) * 100) : 0,
       jobCount: revenueJobs.length,
-      belowTarget: scheduledRevenue < DAILY_TARGET,
+      belowTarget: DAILY_TARGET == null ? null : scheduledRevenue < DAILY_TARGET,
     };
   }, [dayJobs, DAILY_TARGET]);
 
@@ -554,10 +568,14 @@ export default function StaffSchedule() {
     unassignedByDate.forEach(list => list.forEach(j => jobIds.add(j.id)));
     slotsByEmployeeByDate.forEach(byDate => byDate.forEach(list => list.forEach(s => jobIds.add(s.job.id))));
     const weekdayCount = rangeDates.filter(k => {
-      const dow = new Date(k + 'T12:00:00Z').getUTCDay();
+      const dow = utcDayOfWeek(k);
       return dow !== 0 && dow !== 6;
     }).length;
-    return { revenue, jobCount: jobIds.size, target: DAILY_TARGET * weekdayCount };
+    return {
+      revenue,
+      jobCount: jobIds.size,
+      target: DAILY_TARGET == null ? null : DAILY_TARGET * weekdayCount,
+    };
   }, [perDaySummary, unassignedByDate, slotsByEmployeeByDate, rangeDates, DAILY_TARGET]);
 
   // Dynamic timeline start — default 8 AM, but expand backwards if the day
@@ -592,45 +610,62 @@ export default function StaffSchedule() {
   // Prev/next moves one day in Day mode, one full period in week modes
   const navigate = (delta: number) => {
     const step = isWeekMode ? delta * 7 * weeks : delta;
-    setSelectedDate(d => {
-      const next = addDays(d, step);
-      return next;
-    });
+    setDateKey(prev => shiftDateKey(prev, step));
   };
 
   // Clicking a day in the week grid drops into the Day Gantt for that date
-  const drillToDay = (dateKey: string) => {
-    const d = new Date(dateKey + 'T00:00:00');
-    d.setHours(0, 0, 0, 0);
-    setSelectedDate(d);
+  const drillToDay = (key: string) => {
+    setDateKey(key);
     setViewMode('day');
   };
 
   // Swipe-to-navigate. The timeline grid scrolls horizontally on its own, so
   // we capture its scrollLeft on touch start and skip the date change if the
   // user was actually scrolling the timeline rather than swiping the page.
+  // The job card is a child of this surface. A horizontal move on the card
+  // (tab strip, or closing/backing out) must not change the day — that was
+  // landing people on the next day when they returned to the roster.
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const swipeTouchStartX = useRef<number | null>(null);
   const swipeTouchStartY = useRef<number | null>(null);
   const swipeStartScrollLeft = useRef<number>(0);
+  const swipeFromJobCard = useRef(false);
 
   const handleSwipeTouchStart = (e: React.TouchEvent) => {
+    const target = e.target instanceof Element ? e.target : null;
+    swipeFromJobCard.current = showJobCard || !!target?.closest('[data-roster-job-card]');
+    if (swipeFromJobCard.current) {
+      swipeTouchStartX.current = null;
+      swipeTouchStartY.current = null;
+      return;
+    }
     swipeTouchStartX.current = e.touches[0].clientX;
     swipeTouchStartY.current = e.touches[0].clientY;
     swipeStartScrollLeft.current = timelineRef.current?.scrollLeft ?? 0;
   };
 
-  const handleSwipeTouchEnd = (e: React.TouchEvent) => {
-    if (swipeTouchStartX.current === null || swipeTouchStartY.current === null) return;
-    const deltaX = e.changedTouches[0].clientX - swipeTouchStartX.current;
-    const deltaY = e.changedTouches[0].clientY - swipeTouchStartY.current;
-    const scrollDelta = Math.abs((timelineRef.current?.scrollLeft ?? 0) - swipeStartScrollLeft.current);
+  const clearSwipe = () => {
     swipeTouchStartX.current = null;
     swipeTouchStartY.current = null;
-    if (scrollDelta > 5) return;
-    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-      navigate(deltaX < 0 ? 1 : -1);
-    }
+    swipeFromJobCard.current = false;
+  };
+
+  const handleSwipeTouchEnd = (e: React.TouchEvent) => {
+    const scrollDelta = Math.abs((timelineRef.current?.scrollLeft ?? 0) - swipeStartScrollLeft.current);
+    const direction = rosterDaySwipe({
+      startX: swipeTouchStartX.current,
+      startY: swipeTouchStartY.current,
+      endX: e.changedTouches[0].clientX,
+      endY: e.changedTouches[0].clientY,
+      scrollDelta,
+      fromJobCard: swipeFromJobCard.current || showJobCard,
+    });
+    clearSwipe();
+    if (direction !== 0) navigate(direction);
+  };
+
+  const handleSwipeTouchCancel = () => {
+    clearSwipe();
   };
 
   const openJob = (job: Job) => {
@@ -641,9 +676,10 @@ export default function StaffSchedule() {
   // ── Render ──
   return (
     <div
-      className="flex flex-col h-full bg-white overflow-hidden"
+      className="flex flex-col h-full bg-background overflow-hidden"
       onTouchStart={handleSwipeTouchStart}
       onTouchEnd={handleSwipeTouchEnd}
+      onTouchCancel={handleSwipeTouchCancel}
     >
 
       {/* ── Header ── */}
@@ -651,9 +687,9 @@ export default function StaffSchedule() {
         <div>
           <h1 className="text-base font-semibold text-gray-900">Live Roster</h1>
           <p className="text-xs text-gray-500">
-            {isWeekMode
-              ? `${format(new Date(rangeStart + 'T12:00:00'), 'd MMM')} – ${format(new Date(rangeEnd + 'T12:00:00'), 'd MMM yyyy')}`
-              : format(selectedDate, 'EEEE d MMMM yyyy')}
+            {isWeekMode && rangeStart && rangeEnd
+              ? `${formatRosterDateDayMonth(rangeStart)} – ${formatRosterDateDayMonthYear(rangeEnd)}`
+              : formatRosterDateLong(dateKey)}
             {' · '}
             {crewMembers.length} crew
             {' · '}
@@ -704,11 +740,7 @@ export default function StaffSchedule() {
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
-            onClick={() => {
-              const now = toZonedTime(new Date(), NZ_TZ);
-              now.setHours(0, 0, 0, 0);
-              setSelectedDate(now);
-            }}
+            onClick={() => setDateKey(nzTodayKey())}
             className={`px-3 py-1 text-xs font-medium rounded-md border transition-colors ${
               (isWeekMode ? rangeSet.has(todayKey) : isTodaySelected)
                 ? 'bg-orange-500 text-white border-orange-500'
@@ -732,58 +764,76 @@ export default function StaffSchedule() {
           <span className="text-xs text-gray-500 whitespace-nowrap">Period revenue:</span>
           <span
             className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
-              periodSummary.revenue < periodSummary.target
-                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                : 'bg-green-50 text-green-700 border-green-200'
+              periodSummary.target == null
+                ? 'bg-gray-50 text-gray-700 border-gray-200'
+                : periodSummary.revenue < periodSummary.target
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-green-50 text-green-700 border-green-200'
             }`}
           >
             ${periodSummary.revenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
           </span>
           <span className="text-xs text-gray-400 whitespace-nowrap">
-            {periodSummary.jobCount} job{periodSummary.jobCount !== 1 ? 's' : ''} · target ${periodSummary.target.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} exc. GST
+            {periodSummary.jobCount} job{periodSummary.jobCount !== 1 ? 's' : ''}
+            {periodSummary.target == null
+              ? ''
+              : ` · target $${periodSummary.target.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} ${DAILY_REVENUE_TARGET_GST_LABEL}`}
           </span>
           <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
-                periodSummary.revenue < periodSummary.target ? 'bg-amber-400' : 'bg-green-500'
+                periodSummary.target == null
+                  ? 'bg-gray-300'
+                  : periodSummary.revenue < periodSummary.target
+                    ? 'bg-amber-400'
+                    : 'bg-green-500'
               }`}
-              style={{ width: `${periodSummary.target > 0 ? Math.min(100, Math.round((periodSummary.revenue / periodSummary.target) * 100)) : 0}%` }}
+              style={{ width: `${periodSummary.target != null && periodSummary.target > 0 ? Math.min(100, Math.round((periodSummary.revenue / periodSummary.target) * 100)) : 0}%` }}
             />
           </div>
         </div>
       ) : (
       <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0 flex-wrap gap-y-1">
         <span className="text-xs text-gray-500 whitespace-nowrap">
-          {format(selectedDate, 'd MMM')} revenue:
+          {formatRosterDateDayMonth(dateKey)} revenue:
         </span>
-        <span
-          className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
-            revenueInfo.belowTarget
-              ? 'bg-amber-50 text-amber-700 border-amber-200'
-              : 'bg-green-50 text-green-700 border-green-200'
-          }`}
-        >
-          ${revenueInfo.scheduledRevenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
-        </span>
-        <span className="text-xs text-gray-400 whitespace-nowrap">
-          {revenueInfo.jobCount} job{revenueInfo.jobCount !== 1 ? 's' : ''} · target ${revenueInfo.dailyTarget.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} exc. GST
-        </span>
-        <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              revenueInfo.belowTarget ? 'bg-amber-400' : 'bg-green-500'
+          <span
+            className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
+              revenueInfo.belowTarget == null
+                ? 'bg-gray-50 text-gray-700 border-gray-200'
+                : revenueInfo.belowTarget
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-green-50 text-green-700 border-green-200'
             }`}
-            style={{ width: `${Math.min(100, revenueInfo.percentComplete)}%` }}
-          />
-        </div>
-        {!revenueInfo.belowTarget && (
-          <span className="text-xs font-medium text-green-700 whitespace-nowrap">Target hit!</span>
-        )}
-        {revenueInfo.belowTarget && revenueInfo.scheduledRevenue > 0 && (
-          <span className="text-xs text-gray-400 whitespace-nowrap">
-            ${(revenueInfo.dailyTarget - revenueInfo.scheduledRevenue).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} to go
+          >
+            ${revenueInfo.scheduledRevenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
           </span>
-        )}
+          <span className="text-xs text-gray-400 whitespace-nowrap">
+            {revenueInfo.jobCount} job{revenueInfo.jobCount !== 1 ? 's' : ''}
+            {revenueInfo.dailyTarget == null
+              ? ''
+              : ` · target $${revenueInfo.dailyTarget.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} ${DAILY_REVENUE_TARGET_GST_LABEL}`}
+          </span>
+          <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                revenueInfo.belowTarget == null
+                  ? 'bg-gray-300'
+                  : revenueInfo.belowTarget
+                    ? 'bg-amber-400'
+                    : 'bg-green-500'
+              }`}
+              style={{ width: `${Math.min(100, revenueInfo.percentComplete)}%` }}
+            />
+          </div>
+          {revenueInfo.belowTarget === false && (
+            <span className="text-xs font-medium text-green-700 whitespace-nowrap">Target hit!</span>
+          )}
+          {revenueInfo.belowTarget === true && revenueInfo.scheduledRevenue > 0 && revenueInfo.dailyTarget != null && (
+            <span className="text-xs text-gray-400 whitespace-nowrap">
+              ${(revenueInfo.dailyTarget - revenueInfo.scheduledRevenue).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} to go
+            </span>
+          )}
       </div>
       )}
 
@@ -889,7 +939,7 @@ export default function StaffSchedule() {
                         key={slot.id}
                         onClick={() => openJob(job)}
                         title={`${label} — ${timeLabel} (unassigned)`}
-                        className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                        className={JOB_BLOCK_CLASS}
                         style={{
                           left: `${left}%`,
                           width: `${width}%`,
@@ -1038,7 +1088,7 @@ export default function StaffSchedule() {
                           key={slot.id}
                           onClick={() => openJob(job)}
                           title={`${label} — ${timeLabel}`}
-                          className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                          className={JOB_BLOCK_CLASS}
                           style={{
                             left: `${left}%`,
                             width: `${width}%`,
@@ -1146,12 +1196,19 @@ export default function StaffSchedule() {
 
       {/* ── Job card modal ── */}
       {showJobCard && selectedJob && (
-        <GlobalJobCard
-          job={selectedJob}
-          isOpen={showJobCard}
-          onClose={() => { setShowJobCard(false); setSelectedJob(null); }}
-          mode="edit"
-        />
+        <div
+          data-roster-job-card=""
+          onTouchStart={e => e.stopPropagation()}
+          onTouchEnd={e => e.stopPropagation()}
+          onTouchCancel={e => e.stopPropagation()}
+        >
+          <GlobalJobCard
+            job={selectedJob}
+            isOpen={showJobCard}
+            onClose={() => { setShowJobCard(false); setSelectedJob(null); }}
+            mode="edit"
+          />
+        </div>
       )}
     </div>
   );

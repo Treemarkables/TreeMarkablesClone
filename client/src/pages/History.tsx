@@ -234,10 +234,10 @@ export default function History() {
   return (
     <div className="flex flex-col h-full overflow-x-hidden w-full max-w-full min-w-0">
       {/* Header - Mobile Responsive */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 border-b bg-white gap-3 sm:gap-0">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 border-b bg-card gap-3 sm:gap-0">
         <div className="flex items-center gap-2">
           <Archive className="h-5 w-5 text-gray-600" />
-          <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Job History</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-foreground">Job History</h1>
           <Badge className="bg-blue-100 text-blue-800">
             {jobs.length}
           </Badge>
@@ -256,7 +256,7 @@ export default function History() {
       </div>
 
       {/* Search and Filter Bar - Mobile Responsive */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 border-b bg-gray-50">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 border-b bg-muted/60">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <Input
@@ -547,7 +547,7 @@ export default function History() {
       </div>
 
       {/* Pagination Footer - Mobile Responsive */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-3 sm:p-4 border-t bg-gray-50 gap-3 sm:gap-0">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-3 sm:p-4 border-t bg-muted/60 gap-3 sm:gap-0">
         <div className="flex items-center gap-2 justify-center sm:justify-start">
           <span className="text-xs sm:text-sm text-gray-600">View</span>
           <Select value={itemsPerPage.toString()} onValueChange={(value) => {

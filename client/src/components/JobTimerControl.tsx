@@ -13,6 +13,7 @@
  * back-costing and gross margin server-side.
  */
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Play, Square, Timer, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,9 +27,20 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { getNZDateString } from "@shared/dateUtils";
 import type { RoleKey } from "@/lib/crewRoles";
+import { parseClockInRoles, rolesFromDayRolePayload } from "@shared/crewDayRoles";
 import { RoleChips } from "@/components/crew/RoleChips";
 import { StaffPickerList } from "@/components/crew/StaffPickerList";
 import {
@@ -37,6 +49,11 @@ import {
 } from "@/components/crew/ClockOutChecklistSheet";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  jhaAssessmentHref,
+  type JobRiskAssessmentLink,
+  type RiskAssessmentStatus,
+} from "@shared/jhaJobRisk";
 
 interface RunningTimer {
   id: string;
@@ -67,10 +84,12 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentUser } = useAuth();
+  const [, navigate] = useLocation();
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [riskPromptOpen, setRiskPromptOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [roles, setRoles] = useState<Record<string, RoleKey | null>>({});
+  const [roles, setRoles] = useState<Record<string, RoleKey[]>>({});
   const [outstanding, setOutstanding] = useState<OutstandingItem[] | null>(null);
   // Backdated clock-in — "we started at 7:30 but forgot to press the button".
   const [useCustomTime, setUseCustomTime] = useState(false);
@@ -88,7 +107,7 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   // picker is open (badges for people already clocked in elsewhere).
   // Roles for today, so the picker's chips arrive pre-filled — on the second job of
   // the day the foreman just hits Start.
-  const { data: dayRolesResp } = useQuery<{ data: Array<{ employeeId: string; dayRole: RoleKey }> }>({
+  const { data: dayRolesResp } = useQuery<{ data: Array<{ employeeId: string; dayRole?: RoleKey | null; dayRoles?: RoleKey[] }> }>({
     queryKey: ["/api/day-roles"],
     staleTime: 60_000,
   });
@@ -143,8 +162,8 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
       preset.add(currentUser.id);
     }
     setSelectedIds(preset);
-    const existing: Record<string, RoleKey | null> = {};
-    for (const r of dayRolesResp?.data ?? []) existing[r.employeeId] = r.dayRole;
+    const existing: Record<string, RoleKey[]> = {};
+    for (const r of dayRolesResp?.data ?? []) existing[r.employeeId] = rolesFromDayRolePayload(r);
     setRoles(existing);
     setUseCustomTime(false);
     setCustomTime("");
@@ -183,7 +202,7 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
     mutationFn: async (payload: {
       employeeIds: string[];
       startedAt?: string;
-      roles?: Record<string, RoleKey>;
+      roles?: Record<string, RoleKey[]>;
     }) => {
       const res = await apiRequest("POST", `/api/jobs/${jobId}/timer/start`, payload);
       return (await res.json()) as { data?: { switchedJobIds?: string[] } };
@@ -273,6 +292,58 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
 
   const anyPending = startMutation.isPending || stopMutation.isPending || stopAllMutation.isPending;
 
+  const { data: jobResp } = useQuery<{
+    data?: { riskAssessmentStatus?: RiskAssessmentStatus; riskAssessmentId?: string | null };
+  }>({
+    queryKey: ["/api/jobs", jobId],
+    enabled: !!jobId,
+    staleTime: 15_000,
+  });
+
+  const riskLink = (): JobRiskAssessmentLink => {
+    const cached = queryClient.getQueryData<{
+      data?: { riskAssessmentStatus?: RiskAssessmentStatus; riskAssessmentId?: string | null };
+    }>(["/api/jobs", jobId]);
+    const data = cached?.data ?? jobResp?.data;
+    const status = data?.riskAssessmentStatus;
+    if (status === "completed" || status === "draft" || status === "none") {
+      return {
+        riskAssessmentStatus: status,
+        riskAssessmentId: data?.riskAssessmentId ?? null,
+      };
+    }
+    return { riskAssessmentStatus: "none", riskAssessmentId: null };
+  };
+
+  // Soft reminder only. Continue anyway still opens the same clock-in picker.
+  const handleStartPress = async () => {
+    let link = riskLink();
+    const known = queryClient.getQueryData<{
+      data?: { riskAssessmentStatus?: RiskAssessmentStatus };
+    }>(["/api/jobs", jobId])?.data?.riskAssessmentStatus;
+    if (known !== "completed" && known !== "draft" && known !== "none") {
+      try {
+        const fresh = await queryClient.fetchQuery<{
+          data?: { riskAssessmentStatus?: RiskAssessmentStatus; riskAssessmentId?: string | null };
+        }>({ queryKey: ["/api/jobs", jobId] });
+        const status = fresh?.data?.riskAssessmentStatus;
+        if (status === "completed" || status === "draft" || status === "none") {
+          link = {
+            riskAssessmentStatus: status,
+            riskAssessmentId: fresh?.data?.riskAssessmentId ?? null,
+          };
+        }
+      } catch {
+        link = { riskAssessmentStatus: "none", riskAssessmentId: null };
+      }
+    }
+    if (link.riskAssessmentStatus === "completed") {
+      openPicker();
+      return;
+    }
+    setRiskPromptOpen(true);
+  };
+
   return (
     <div
       className="rounded-lg border border-border bg-card px-4 py-3"
@@ -313,7 +384,7 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
               )}
             </Button>
           )}
-          <Button size="sm" onClick={openPicker} disabled={anyPending} data-testid="button-timer-start">
+          <Button size="sm" onClick={() => { void handleStartPress(); }} disabled={anyPending} data-testid="button-timer-start">
             <Play className="h-4 w-4 mr-1.5" />
             Start
           </Button>
@@ -359,8 +430,9 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
               Clock in staff
             </DialogTitle>
             <DialogDescription>
-              Select who is working on this job and give them their role for the
-              day. Staff clocked in on another job will be switched here.
+              Select who is working on this job and give them their roles for the
+              day. One person can hold more than one. Staff clocked in on another
+              job will be switched here.
             </DialogDescription>
           </DialogHeader>
 
@@ -397,8 +469,8 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
               selected ? (
                 <RoleChips
                   size="sm"
-                  value={roles[emp.id] ?? null}
-                  onSelect={(role) => setRoles((r) => ({ ...r, [emp.id]: role }))}
+                  value={roles[emp.id] ?? []}
+                  onChange={(next) => setRoles((r) => ({ ...r, [emp.id]: next }))}
                   disabled={startMutation.isPending}
                   testIdPrefix={`picker-role-${emp.id}`}
                 />
@@ -466,9 +538,9 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
                 const employeeIds = Array.from(selectedIds);
                 // Only send roles for people actually being clocked in, and only
                 // where one is set — an empty chip row means "leave their role alone".
-                const pickedRoles: Record<string, RoleKey> = {};
+                const pickedRoles: Record<string, RoleKey[]> = {};
                 for (const id of employeeIds) {
-                  const role = roles[id];
+                  const role = parseClockInRoles(roles[id]);
                   if (role) pickedRoles[id] = role;
                 }
                 startMutation.mutate({ employeeIds, startedAt, roles: pickedRoles });
@@ -488,6 +560,31 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={riskPromptOpen} onOpenChange={setRiskPromptOpen}>
+        <AlertDialogContent data-testid="dialog-risk-reminder">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Complete risk assessment for this job?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The morning risk assessment for this job is not done yet. You can complete it now, or start and finish it later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => openPicker()}
+              data-testid="button-risk-continue"
+            >
+              Continue anyway
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => navigate(jhaAssessmentHref(jobId, riskLink()))}
+              data-testid="button-risk-do-now"
+            >
+              Do it now
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ClockOutChecklistSheet
         jobId={jobId}

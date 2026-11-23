@@ -7,6 +7,7 @@ import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Linkify } from "@/components/Linkify";
+import { videoHasCaptions } from "@/lib/videoCaptions";
 
 interface QuoteViewerProps {}
 
@@ -486,7 +487,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
                           className="w-full max-h-[480px] rounded-lg bg-black object-contain"
                           data-testid={`video-${v.id}`}
                         >
-                          {v.captionsStatus === "ready" && (
+                          {videoHasCaptions(v) && (
                             <track
                               kind="captions"
                               srcLang="en"

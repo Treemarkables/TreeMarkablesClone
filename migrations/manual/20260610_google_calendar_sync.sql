@@ -23,11 +23,14 @@ CREATE TABLE IF NOT EXISTS "google_calendar_connections" (
   "sync_token" text,                         -- incremental events.list cursor (pull side)
   "is_active" boolean DEFAULT true,
   "last_synced_at" timestamp,
+  "sync_status" text NOT NULL DEFAULT 'synced', -- synced | error
   "last_error" text,
   "created_at" timestamp DEFAULT now(),
   "updated_at" timestamp DEFAULT now(),
   CONSTRAINT "gcal_conn_business_user_unique" UNIQUE ("business_id", "user_id")
 );
+-- Existing databases created before sync_status: the boot migration adds it.
+ALTER TABLE "google_calendar_connections" ADD COLUMN IF NOT EXISTS "sync_status" text NOT NULL DEFAULT 'synced';
 
 -- Push-side state: one Google event per (job, connection, NZ day).
 -- Multi-day jobs sync as one event per scheduled day so weekend carve-outs

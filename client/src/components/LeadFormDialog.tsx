@@ -1,4 +1,5 @@
 import { UseFormReturn } from "react-hook-form";
+import { useSelectAllOnFocus } from "@/lib/selectAllOnFocus";
 import { z } from "zod";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -33,6 +34,7 @@ export function LeadFormDialog({
   includeStatus = false,
   testIdPrefix
 }: LeadFormDialogProps) {
+  const selectAllAddress = useSelectAllOnFocus();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
@@ -106,6 +108,7 @@ export function LeadFormDialog({
                   <FormControl>
                     <Input 
                       {...field} 
+                      {...selectAllAddress}
                       placeholder="Service address" 
                       data-testid={`input-address-${testIdPrefix}`}
                     />

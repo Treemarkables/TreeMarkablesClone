@@ -1,5 +1,6 @@
 import { Section, Container } from "@/components/Container";
 import { LinkButton } from "@/components/Button";
+import { BRAND } from "@/lib/brand";
 
 export default function About() {
   return (
@@ -87,8 +88,8 @@ export default function About() {
               Built on the East Coast. Designed for NZ trades — GST, NZD, Pacific/Auckland time, real local context — but the platform works wherever you work.
             </p>
             <div className="mt-8">
-              <LinkButton href="/contact" variant="primary" size="lg">
-                Get in touch
+              <LinkButton href={BRAND.signupUrl} external variant="primary" size="lg">
+                Sign up
               </LinkButton>
             </div>
           </div>

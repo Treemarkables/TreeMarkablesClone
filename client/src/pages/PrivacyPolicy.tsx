@@ -109,7 +109,7 @@ export default function PrivacyPolicy() {
               </p>
               <div className="text-gray-700 space-y-1">
                 <p className="font-semibold">Treemarkables LTD</p>
-                <p>213 Stanley Road, Gisborne</p>
+                <p>26 Cochrane Street, Gisborne, NZ</p>
                 <p>Email: <a href="mailto:quotes@treemarkables.nz" className="text-orange-600 hover:text-orange-700 underline">quotes@treemarkables.nz</a></p>
                 <p>Phone: <a href="tel:0272166882" className="text-orange-600 hover:text-orange-700 underline">027-216-6882</a></p>
               </div>

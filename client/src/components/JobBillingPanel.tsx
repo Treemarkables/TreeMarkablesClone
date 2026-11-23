@@ -6,18 +6,21 @@
  * new empty row. Auto-saves on blur via PUT /api/jobs/:id with the
  * full lineItems array (jsonb column).
  *
- * Invoice + Payment cards stay view-only — those flows live on the
- * invoices table and have their own dedicated screens.
+ * Invoice opens the shared invoice builder (Create and View). Payment
+ * recording still lives on the invoice.
  */
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, AlertCircle, CheckCircle2, CreditCard, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useToast } from "@/hooks/use-toast";
 import { SupplierInvoiceManager } from "@/components/SupplierInvoiceManager";
 
 interface JobBillingPanelProps {
   jobId: string;
+  /** Opens the invoice builder. Create and View both land there; an existing invoice is edited, not duplicated. */
+  onOpenInvoice?: () => void;
 }
 
 interface LineItem {
@@ -89,7 +92,7 @@ function makeEmptyItem(): LineItem {
   };
 }
 
-export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
+export function JobBillingPanel({ jobId, onOpenInvoice }: JobBillingPanelProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -159,7 +162,7 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
     onSuccess: (data: any) => {
       const url = data?.data?.url;
       if (url) {
-        window.open(url, "_blank");
+        openExternalUrl(url);
         return;
       }
       toast({
@@ -299,7 +302,7 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
             </div>
             <button
               type="button"
-              onClick={stub("View invoice")}
+              onClick={onOpenInvoice ?? stub("View invoice")}
               className="w-full mt-3 bg-primary text-primary-foreground py-3 rounded-xl font-bold text-[15px]"
               data-testid="view-invoice"
             >
@@ -313,7 +316,7 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
             </div>
             <button
               type="button"
-              onClick={stub("Create invoice")}
+              onClick={onOpenInvoice ?? stub("Create invoice")}
               className="w-full mt-3 bg-primary text-primary-foreground py-3 rounded-xl font-bold text-[15px] flex items-center justify-center gap-1.5"
               data-testid="create-invoice"
             >

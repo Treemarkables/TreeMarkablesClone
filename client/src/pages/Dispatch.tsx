@@ -3,7 +3,7 @@ import { OnboardingBanner } from "@/components/OnboardingBanner";
 
 export default function Dispatch() {
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden">
       <OnboardingBanner />
       <DispatchBoard />
     </div>

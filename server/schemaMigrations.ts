@@ -17,6 +17,8 @@
 // ============================================================================
 import type { PoolClient } from "pg";
 import { pool } from "./db";
+import { TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
+import { planUntouchedDraftRefresh } from "../shared/quoteFollowUps";
 
 interface Migration {
   // Stable name shown in logs. Append-only — do not rename existing entries.
@@ -571,23 +573,34 @@ const MIGRATIONS: Migration[] = [
         updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT job_day_roles_employee_date_uniq UNIQUE (employee_id, nz_date))`,
       `CREATE INDEX IF NOT EXISTS job_day_roles_date_idx ON job_day_roles (nz_date)`,
-      // Backfill from the legacy column. Re-runs harmlessly every boot (ON CONFLICT
-      // DO NOTHING), which also self-heals rows written through the old path while
-      // both writers are live. DISTINCT ON keeps the most recently updated row when
-      // a person's assignments disagree for the same NZ day.
+      // Backfill from the legacy column. Re-runs every boot. DISTINCT ON keeps the
+      // most recently updated row when a person's assignments disagree for the same
+      // NZ day. Skip a person-day that already has any job_day_roles row — that
+      // matches the old ON CONFLICT (employee, date) DO NOTHING, and it must not
+      // name that constraint: a later migration drops it so one person can hold
+      // more than one role. Naming it would fail every boot after that drop, and
+      // a per-role NOT EXISTS would re-insert a stale single day_role beside roles
+      // the crew had already set.
       `INSERT INTO job_day_roles (business_id, employee_id, nz_date, role_key)
-         SELECT DISTINCT ON (employee_id, nz_date) business_id, employee_id, nz_date, day_role
+         SELECT business_id, employee_id, nz_date, day_role
            FROM (
-             SELECT business_id,
-                    employee_id,
-                    to_char((start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Pacific/Auckland')::date, 'YYYY-MM-DD') AS nz_date,
-                    day_role,
-                    updated_at
-               FROM job_staff_assignments
-              WHERE day_role IN ('A', 'B', 'C')
-           ) src
-          ORDER BY employee_id, nz_date, updated_at DESC
-         ON CONFLICT ON CONSTRAINT job_day_roles_employee_date_uniq DO NOTHING`,
+             SELECT DISTINCT ON (employee_id, nz_date) business_id, employee_id, nz_date, day_role
+               FROM (
+                 SELECT business_id,
+                        employee_id,
+                        to_char((start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Pacific/Auckland')::date, 'YYYY-MM-DD') AS nz_date,
+                        day_role,
+                        updated_at
+                   FROM job_staff_assignments
+                  WHERE day_role IN ('A', 'B', 'C', 'R')
+               ) src
+              ORDER BY employee_id, nz_date, updated_at DESC
+           ) picked
+          WHERE NOT EXISTS (
+            SELECT 1 FROM job_day_roles existing
+             WHERE existing.employee_id = picked.employee_id
+               AND existing.nz_date = picked.nz_date
+          )`,
     ],
     postChecks: async (client) => {
       const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
@@ -745,7 +758,598 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS jobs_status_completed_date_idx ON jobs (status, completed_date)`,
     ],
   },
+  {
+    // Shared rate-limit counters (login throttle + public write limits).
+    // Global, not tenant-scoped — same class as `session`. No RLS / no
+    // app_tenant grant: both app instances read/write via the owner pool.
+    name: "rate-limits-table",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS rate_limits (
+        key text PRIMARY KEY,
+        count integer NOT NULL DEFAULT 0,
+        reset_at timestamptz NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS rate_limits_reset_at_idx ON rate_limits (reset_at)`,
+    ],
+  },
+  {
+    // Wave 2: optional TOTP MFA per employee + org enforce-later switch.
+    // Secrets are AES-GCM ciphertext. Recovery codes are HMAC hashes.
+    // Default mfa_enforcement='optional' so unenrolled field login is unchanged.
+    name: "employee-mfa",
+    statements: [
+      `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS mfa_enforcement text NOT NULL DEFAULT 'optional'`,
+      `CREATE TABLE IF NOT EXISTS employee_mfa (
+        employee_id varchar PRIMARY KEY REFERENCES employees(id) ON DELETE CASCADE,
+        business_id varchar,
+        totp_secret_ciphertext text NOT NULL,
+        enabled boolean NOT NULL DEFAULT false,
+        enrolled_at timestamp,
+        last_verified_at timestamp,
+        last_used_counter integer,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS employee_mfa_business_idx ON employee_mfa (business_id)`,
+      `CREATE TABLE IF NOT EXISTS employee_mfa_recovery_codes (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        employee_id varchar NOT NULL REFERENCES employee_mfa(employee_id) ON DELETE CASCADE,
+        business_id varchar,
+        code_hash text NOT NULL,
+        used_at timestamp,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS employee_mfa_recovery_employee_idx ON employee_mfa_recovery_codes (employee_id)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      for (const table of ["employee_mfa", "employee_mfa_recovery_codes"]) {
+        await client.query(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+        const pol = await client.query(
+          `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = $1::regclass LIMIT 1`,
+          [table],
+        );
+        if (pol.rowCount === 0) {
+          await client.query(
+            `CREATE POLICY tenant_isolation ON ${table}
+               USING (business_id = nullif(current_setting('app.current_business', true), ''))
+               WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+          );
+          console.log(`[schema] created tenant_isolation policy on ${table}`);
+        }
+        if ((hasRole.rowCount ?? 0) > 0) {
+          await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO app_tenant`);
+        }
+      }
+    },
+  },
+  {
+    // Wave 3: auth audit trail. Table may already exist in Neon — CREATE IF
+    // NOT EXISTS + ADD COLUMN IF NOT EXISTS, never ALTER a primary key.
+    // Writes go through ownerDb (login is an owner-path) and fail-open.
+    name: "audit-log-table",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS audit_log (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        business_id varchar,
+        actor_employee_id varchar,
+        target_employee_id varchar,
+        action text NOT NULL,
+        success boolean NOT NULL DEFAULT true,
+        ip text,
+        user_agent text,
+        metadata jsonb,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS business_id varchar`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS actor_employee_id varchar`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS target_employee_id varchar`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS action text`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS success boolean DEFAULT true`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS ip text`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS user_agent text`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS metadata jsonb`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT CURRENT_TIMESTAMP`,
+      `CREATE INDEX IF NOT EXISTS audit_log_business_created_idx ON audit_log (business_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS audit_log_actor_created_idx ON audit_log (actor_employee_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS audit_log_action_created_idx ON audit_log (action, created_at DESC)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      await client.query(`ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = 'audit_log'::regclass LIMIT 1`,
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON audit_log
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+        console.log(`[schema] created tenant_isolation policy on audit_log`);
+      }
+      if ((hasRole.rowCount ?? 0) > 0) {
+        await client.query(`GRANT SELECT, INSERT ON audit_log TO app_tenant`);
+      }
+    },
+  },
+  {
+    // Today page extra instructions (ops notes for a person or a whole crew
+    // on an NZ calendar day). Sits next to daily_job_notes; does not store
+    // job equipment / kit.
+    name: "daily-ops-notes-table",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS daily_ops_notes (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        date text NOT NULL,
+        scope text NOT NULL,
+        person_id varchar,
+        crew_id varchar,
+        note text NOT NULL,
+        created_by varchar,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS daily_ops_notes_business_date_idx ON daily_ops_notes (business_id, date)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      await client.query(`ALTER TABLE daily_ops_notes ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = 'daily_ops_notes'::regclass LIMIT 1`,
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON daily_ops_notes
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+        console.log(`[schema] created tenant_isolation policy on daily_ops_notes`);
+      }
+      if ((hasRole.rowCount ?? 0) > 0) {
+        await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON daily_ops_notes TO app_tenant`);
+      }
+    },
+  },
+  {
+    // One-shot Treemarkables seed: daily revenue KPI 4000 NZD exc. GST.
+    // schema_data_seeds records that the seed ran, so a later choice of 3500
+    // is not overwritten on the next boot. Other businesses keep their stored
+    // value (column default 3500 when they have never set one).
+    name: "treemarkables-daily-revenue-target-4000",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS schema_data_seeds (
+        name text PRIMARY KEY,
+        applied_at timestamp NOT NULL DEFAULT now()
+      )`,
+    ],
+    postChecks: async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO schema_data_seeds (name)
+         VALUES ('treemarkables-daily-revenue-target-4000')
+         ON CONFLICT (name) DO NOTHING
+         RETURNING name`,
+      );
+      if ((inserted.rowCount ?? 0) === 0) return;
+      await client.query(
+        `UPDATE business_settings
+            SET daily_revenue_target = 4000,
+                updated_at = now()
+          WHERE (
+            business_name ILIKE 'treemarkables'
+            OR id = 'default'
+            OR business_id = ANY($1::text[])
+          )
+          AND (daily_revenue_target IS NULL OR daily_revenue_target = 3500)`,
+        [[...TREEMARKABLES_BUSINESS_IDS]],
+      );
+    },
+  },
+  {
+    // One person can hold more than one checklist role on the same day. The
+    // original unique (employee_id, nz_date) made a second role overwrite the
+    // first. Dropping that constraint deletes no rows and changes no column
+    // types: every existing row already has one role_key, so it still satisfies
+    // unique (employee_id, nz_date, role_key). The same widening on
+    // job_role_completions lets a close snapshot freeze each role they held.
+    // A historical one-role snapshot stays one row.
+    name: "job-day-roles-multi-per-person",
+    statements: [
+      `ALTER TABLE job_day_roles DROP CONSTRAINT IF EXISTS job_day_roles_employee_date_uniq`,
+      `DO $$
+       BEGIN
+         IF NOT EXISTS (
+           SELECT 1 FROM pg_constraint WHERE conname = 'job_day_roles_employee_date_role_uniq'
+         ) THEN
+           ALTER TABLE job_day_roles
+             ADD CONSTRAINT job_day_roles_employee_date_role_uniq
+             UNIQUE (employee_id, nz_date, role_key);
+         END IF;
+       END $$`,
+      `ALTER TABLE job_role_completions DROP CONSTRAINT IF EXISTS job_role_completions_job_employee_uniq`,
+      `DO $$
+       BEGIN
+         IF NOT EXISTS (
+           SELECT 1 FROM pg_constraint WHERE conname = 'job_role_completions_job_employee_role_uniq'
+         ) THEN
+           ALTER TABLE job_role_completions
+             ADD CONSTRAINT job_role_completions_job_employee_role_uniq
+             UNIQUE (job_id, employee_id, role_key);
+         END IF;
+       END $$`,
+    ],
+  },
+  {
+    // Quote follow-up queue. One row per quote and nudge step so the hourly
+    // detector cannot draft the same step twice. Step 0 is the expiry re-quote.
+    // revised_from_quote_id points a new draft quote at the original; the
+    // original row is never updated by the clone.
+    name: "quote-follow-up-workflow",
+    statements: [
+      `ALTER TABLE quotes ADD COLUMN IF NOT EXISTS revised_from_quote_id varchar`,
+      `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS quote_followup_workflow_enabled boolean DEFAULT true`,
+      `ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS quote_followup_nudge_days jsonb DEFAULT '[3, 7, 14]'::jsonb`,
+      `CREATE TABLE IF NOT EXISTS quote_follow_ups (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        quote_id varchar NOT NULL,
+        job_id varchar,
+        customer_id varchar,
+        kind text NOT NULL,
+        nudge_step integer NOT NULL,
+        channel text NOT NULL DEFAULT 'sms',
+        status text NOT NULL DEFAULT 'draft',
+        subject text,
+        message text NOT NULL DEFAULT '',
+        recipient_name text,
+        recipient_phone text,
+        recipient_email text,
+        source_type text NOT NULL DEFAULT 'quote',
+        requote_id varchar,
+        snooze_until timestamp,
+        sent_at timestamp,
+        diary_entry_id varchar,
+        cancel_reason text,
+        created_at timestamp NOT NULL DEFAULT now(),
+        updated_at timestamp NOT NULL DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS quote_follow_ups_quote_step_uniq ON quote_follow_ups (business_id, quote_id, nudge_step)`,
+      `CREATE INDEX IF NOT EXISTS quote_follow_ups_business_status_idx ON quote_follow_ups (business_id, status)`,
+      `ALTER TABLE quote_follow_ups ADD COLUMN IF NOT EXISTS source_type text NOT NULL DEFAULT 'quote'`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      await client.query(`ALTER TABLE quote_follow_ups ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = 'quote_follow_ups'::regclass LIMIT 1`,
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON quote_follow_ups
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+        console.log(`[schema] created tenant_isolation policy on quote_follow_ups`);
+      }
+      if ((hasRole.rowCount ?? 0) > 0) {
+        await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON quote_follow_ups TO app_tenant`);
+      }
+    },
+  },
+  {
+    // Invoices sent to the customer but missing from Xero. One row per invoice
+    // so the hourly detector cannot queue the same invoice twice. Nothing in
+    // this migration talks to Xero.
+    name: "invoices-not-in-xero",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS invoice_xero_follow_ups (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        invoice_id varchar NOT NULL,
+        job_id varchar,
+        customer_id varchar,
+        status text NOT NULL DEFAULT 'draft',
+        snooze_until timestamp,
+        last_error text,
+        synced_at timestamp,
+        diary_entry_id varchar,
+        created_at timestamp NOT NULL DEFAULT now(),
+        updated_at timestamp NOT NULL DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS invoice_xero_follow_ups_invoice_uniq ON invoice_xero_follow_ups (business_id, invoice_id)`,
+      `CREATE INDEX IF NOT EXISTS invoice_xero_follow_ups_business_status_idx ON invoice_xero_follow_ups (business_id, status)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      await client.query(`ALTER TABLE invoice_xero_follow_ups ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = 'invoice_xero_follow_ups'::regclass LIMIT 1`,
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON invoice_xero_follow_ups
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+        console.log(`[schema] created tenant_isolation policy on invoice_xero_follow_ups`);
+      }
+      if ((hasRole.rowCount ?? 0) > 0) {
+        await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON invoice_xero_follow_ups TO app_tenant`);
+      }
+    },
+  },
+  {
+    // Completed jobs with no invoice, or an invoice that has not been sent.
+    // One row per job. A sent invoice missing from Xero stays on
+    // invoice_xero_follow_ups. Nothing here creates or sends an invoice.
+    name: "completed-jobs-not-billed",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS job_billing_follow_ups (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        job_id varchar NOT NULL,
+        customer_id varchar,
+        invoice_id varchar,
+        step text NOT NULL,
+        channel text NOT NULL DEFAULT 'sms',
+        status text NOT NULL DEFAULT 'draft',
+        subject text,
+        message text NOT NULL DEFAULT '',
+        recipient_name text,
+        recipient_phone text,
+        recipient_email text,
+        snooze_until timestamp,
+        last_error text,
+        completed_at timestamp,
+        diary_entry_id varchar,
+        created_at timestamp NOT NULL DEFAULT now(),
+        updated_at timestamp NOT NULL DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS job_billing_follow_ups_job_uniq ON job_billing_follow_ups (business_id, job_id)`,
+      `CREATE INDEX IF NOT EXISTS job_billing_follow_ups_business_status_idx ON job_billing_follow_ups (business_id, status)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      await client.query(`ALTER TABLE job_billing_follow_ups ENABLE ROW LEVEL SECURITY`);
+      const pol = await client.query(
+        `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = 'job_billing_follow_ups'::regclass LIMIT 1`,
+      );
+      if (pol.rowCount === 0) {
+        await client.query(
+          `CREATE POLICY tenant_isolation ON job_billing_follow_ups
+             USING (business_id = nullif(current_setting('app.current_business', true), ''))
+             WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+        );
+        console.log(`[schema] created tenant_isolation policy on job_billing_follow_ups`);
+      }
+      if ((hasRole.rowCount ?? 0) > 0) {
+        await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON job_billing_follow_ups TO app_tenant`);
+      }
+    },
+  },
+  {
+    // Follow-up drafts were stored with proposals.proposal_number (PROP-<timestamp>).
+    // Rewrite only pending rows that still equal the generated default. A saved
+    // edit sets draft_edited_at and is left alone. Sent rows are not updated.
+    name: "quote-follow-up-customer-number",
+    statements: [
+      `ALTER TABLE quote_follow_ups ADD COLUMN IF NOT EXISTS draft_edited_at timestamp`,
+    ],
+    postChecks: async (client) => {
+      await refreshUntouchedQuoteFollowUpDrafts(client);
+    },
+  },
+  {
+    // Push failures record sync_status on the connection (the table already
+    // has last_error). Additive so a deploy can persist "Calendar sync broken"
+    // without a manual Neon step.
+    name: "google-calendar-connection-sync-status",
+    statements: [
+      `DO $$ BEGIN
+         IF EXISTS (
+           SELECT 1 FROM information_schema.tables
+           WHERE table_schema = 'public' AND table_name = 'google_calendar_connections'
+         ) THEN
+           ALTER TABLE google_calendar_connections ADD COLUMN IF NOT EXISTS sync_status text NOT NULL DEFAULT 'synced';
+         END IF;
+       END $$`,
+    ],
+  },
+  {
+    // Stripe payouts plus the charges, refunds, and fees inside each one.
+    // Xero payment ids live on the line so a second post cannot double-pay.
+    // Same SQL as migrations/manual/20261026_stripe_payouts.sql.
+    name: "stripe-payouts",
+    statements: [
+      `ALTER TABLE xero_settings ADD COLUMN IF NOT EXISTS stripe_clearing_account_code text DEFAULT '640'`,
+      `ALTER TABLE xero_settings ADD COLUMN IF NOT EXISTS stripe_fees_account_code text`,
+      `UPDATE xero_settings SET stripe_clearing_account_code = '640' WHERE stripe_clearing_account_code IS NULL`,
+      `CREATE TABLE IF NOT EXISTS stripe_payouts (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        stripe_payout_id text NOT NULL,
+        stripe_account_id text,
+        amount numeric(12, 2) NOT NULL,
+        currency text NOT NULL DEFAULT 'NZD',
+        status text NOT NULL,
+        arrival_date timestamp,
+        created_stripe timestamp,
+        description text,
+        fee_total numeric(12, 2) NOT NULL DEFAULT 0,
+        charge_total numeric(12, 2) NOT NULL DEFAULT 0,
+        refund_total numeric(12, 2) NOT NULL DEFAULT 0,
+        xero_fee_id text,
+        xero_fee_kind text,
+        xero_fee_message text,
+        xero_posted_at timestamp,
+        xero_posting_at timestamp,
+        xero_summary jsonb,
+        fetched_at timestamp DEFAULT now(),
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS stripe_payouts_business_payout_uniq ON stripe_payouts (business_id, stripe_payout_id)`,
+      `CREATE INDEX IF NOT EXISTS stripe_payouts_business_arrival_idx ON stripe_payouts (business_id, arrival_date)`,
+      `CREATE TABLE IF NOT EXISTS stripe_payout_lines (
+        business_id varchar,
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        payout_id varchar NOT NULL REFERENCES stripe_payouts(id) ON DELETE CASCADE,
+        balance_transaction_id text NOT NULL,
+        stripe_type text,
+        kind text NOT NULL,
+        amount numeric(12, 2) NOT NULL,
+        fee numeric(12, 2) NOT NULL DEFAULT 0,
+        net numeric(12, 2) NOT NULL DEFAULT 0,
+        currency text NOT NULL DEFAULT 'NZD',
+        description text,
+        stripe_source_id text,
+        stripe_charge_id text,
+        stripe_payment_id text,
+        match_status text NOT NULL DEFAULT 'unmatched',
+        payment_id varchar,
+        job_id varchar,
+        invoice_id varchar,
+        customer_id varchar,
+        xero_payment_id text,
+        xero_credit_note_id text,
+        xero_refund_payment_id text,
+        xero_status text,
+        xero_message text,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS stripe_payout_lines_payout_bt_uniq ON stripe_payout_lines (payout_id, balance_transaction_id)`,
+      `CREATE INDEX IF NOT EXISTS stripe_payout_lines_payout_idx ON stripe_payout_lines (payout_id)`,
+    ],
+    postChecks: async (client) => {
+      const hasRole = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant' LIMIT 1`);
+      for (const table of ["stripe_payouts", "stripe_payout_lines"]) {
+        await client.query(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+        const pol = await client.query(
+          `SELECT 1 FROM pg_policy WHERE polname = 'tenant_isolation' AND polrelid = '${table}'::regclass LIMIT 1`,
+        );
+        if (pol.rowCount === 0) {
+          await client.query(
+            `CREATE POLICY tenant_isolation ON ${table}
+               USING (business_id = nullif(current_setting('app.current_business', true), ''))
+               WITH CHECK (business_id = nullif(current_setting('app.current_business', true), ''))`,
+          );
+          console.log(`[schema] created tenant_isolation policy on ${table}`);
+        }
+        if ((hasRole.rowCount ?? 0) > 0) {
+          await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO app_tenant`);
+        }
+      }
+    },
+  },
 ];
+
+function textOrNull(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function editedAt(value: unknown): string | Date | null {
+  if (value instanceof Date) return value;
+  if (typeof value === "string" && value.trim()) return value;
+  return null;
+}
+
+/**
+ * Rewrites pending follow-up drafts that still match the generated default so
+ * the customer number is the short one. User-edited drafts get draft_edited_at
+ * and are not changed. Safe to run on every boot.
+ */
+async function refreshUntouchedQuoteFollowUpDrafts(client: PoolClient): Promise<void> {
+  const found = await client.query(
+    `SELECT
+       f.id,
+       f.status,
+       f.kind,
+       f.channel,
+       f.message,
+       f.subject,
+       f.recipient_name,
+       f.draft_edited_at,
+       CASE
+         WHEN f.source_type = 'proposal' THEN p.proposal_number
+         WHEN f.source_type = 'job' THEN j.job_number
+         ELSE q.quote_number
+       END AS document_number,
+       j.job_number,
+       j.address AS job_address,
+       CASE
+         WHEN f.source_type = 'quote' THEN rq.quote_number
+         ELSE rp.proposal_number
+       END AS new_document_number,
+       (
+         SELECT bs.business_name
+         FROM business_settings bs
+         WHERE bs.business_id = f.business_id
+         ORDER BY bs.updated_at DESC NULLS LAST
+         LIMIT 1
+       ) AS business_name
+     FROM quote_follow_ups f
+     LEFT JOIN quotes q ON f.source_type = 'quote' AND q.id = f.quote_id
+     LEFT JOIN proposals p ON f.source_type = 'proposal' AND p.id = f.quote_id
+     LEFT JOIN quotes rq ON f.source_type = 'quote' AND rq.id = f.requote_id
+     LEFT JOIN proposals rp ON f.source_type <> 'quote' AND rp.id = f.requote_id
+     LEFT JOIN jobs j ON j.id = COALESCE(
+       f.job_id,
+       CASE WHEN f.source_type = 'job' THEN f.quote_id END,
+       q.job_id,
+       p.job_id
+     )
+     WHERE f.status IN ('draft', 'snoozed')
+       AND f.draft_edited_at IS NULL`,
+  );
+  let rewritten = 0;
+  let marked = 0;
+  for (const row of found.rows) {
+    const id = textOrNull(row.id);
+    if (!id) continue;
+    const plan = planUntouchedDraftRefresh({
+      status: textOrNull(row.status) ?? "",
+      draftEditedAt: editedAt(row.draft_edited_at),
+      kind: textOrNull(row.kind) ?? "",
+      channel: textOrNull(row.channel) ?? "sms",
+      message: textOrNull(row.message) ?? "",
+      subject: textOrNull(row.subject),
+      recipientName: textOrNull(row.recipient_name),
+      businessName: textOrNull(row.business_name) ?? "",
+      documentNumber: textOrNull(row.document_number),
+      jobNumber: textOrNull(row.job_number),
+      jobAddress: textOrNull(row.job_address),
+      newDocumentNumber: textOrNull(row.new_document_number),
+    });
+    if (plan.action === "rewrite") {
+      const updated = await client.query(
+        `UPDATE quote_follow_ups
+            SET message = $2, subject = $3, updated_at = now()
+          WHERE id = $1
+            AND status IN ('draft', 'snoozed')
+            AND draft_edited_at IS NULL
+            AND message IS DISTINCT FROM $2`,
+        [id, plan.message, plan.subject],
+      );
+      rewritten += updated.rowCount ?? 0;
+    } else if (plan.action === "mark_edited") {
+      const updated = await client.query(
+        `UPDATE quote_follow_ups
+            SET draft_edited_at = now()
+          WHERE id = $1
+            AND status IN ('draft', 'snoozed')
+            AND draft_edited_at IS NULL`,
+        [id],
+      );
+      marked += updated.rowCount ?? 0;
+    }
+  }
+  if (rewritten > 0 || marked > 0) {
+    console.log(`[schema] quote follow-up numbers: rewrote ${rewritten} untouched draft(s), left ${marked} edited`);
+  }
+}
 
 let migrationPromise: Promise<void> | null = null;
 

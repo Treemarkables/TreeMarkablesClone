@@ -93,11 +93,27 @@ const MAX_NOTIFICATION_LIST_LIMIT = 500;
 const ALWAYS_SHOW_NOTIFICATION_TYPES = new Set([
   'email_reply', 'sms_reply', 'payment_received', 'invoice_paid',
   'reminder_uninvoiced', 'reminder_no_crew', 'reminder_stale_quote', 'reminder_stale_lead',
+  'quote_followup_waiting',
 ]);
+
+// Logged-in requests carry a business id (tenant middleware). Cron and
+// session-less webhooks do not — those keep the previous unscoped query so
+// they can still see every tenant they are explicitly walking. A signed-in
+// user must never list or mutate another business's rows through these tables.
+function businessEq(column: Parameters<typeof eq>[0]): SQL | undefined {
+  const bid = currentBusinessId();
+  return bid ? eq(column, bid) : undefined;
+}
+
+function andBusiness(column: Parameters<typeof eq>[0], predicate: SQL): SQL {
+  const scope = businessEq(column);
+  return scope ? and(scope, predicate)! : predicate;
+}
 import { EXPENSE_COMPANY_KEYWORDS } from "@shared/customerFilters";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
 import { appendUniquePhotoUrls } from "@shared/treePins";
+import { sanitizeJobEquipment } from "@shared/jobEquipmentCatalogue";
 
 // Compute an invoice's ex-GST revenue contribution.
 //
@@ -314,7 +330,7 @@ export interface IStorage {
   getUninvoicedCompletedJobs(completedBetween: { from: Date; to: Date }): Promise<Job[]>;
   getJobsScheduledAroundNZDate(nzDate: string): Promise<Array<Job & { customerName: string | null }>>;
   getCompletedJobsWithCustomerNames(): Promise<Array<Job & { customerName: string | null; invoiceAmountIncGst: number | null }>>;
-  getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
+  getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }, sort?: "recentActivity"): Promise<{ jobs: Job[]; total: number }>;
   searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
   createJobFromCall(params: {
     callId: string;
@@ -574,6 +590,9 @@ export interface IStorage {
   getPendingOutboundMessages(status?: string): Promise<schema.PendingOutboundMessage[]>;
   getPendingOutboundMessage(id: string): Promise<schema.PendingOutboundMessage | undefined>;
   updatePendingOutboundMessage(id: string, updates: Partial<schema.PendingOutboundMessage>): Promise<schema.PendingOutboundMessage>;
+  // Atomic pending → sending. A second caller gets undefined and must not send.
+  claimPendingOutboundMessage(id: string): Promise<schema.PendingOutboundMessage | undefined>;
+  releasePendingOutboundMessageClaim(id: string): Promise<void>;
 
   // Employee Management
   createEmployee(employee: InsertEmployee): Promise<Employee>;
@@ -1934,12 +1953,16 @@ class DatabaseStorage implements IStorage {
   // ========================================
   
   async createJob(job: InsertJob): Promise<Job> {
+    const payload: InsertJob =
+      job.equipment !== undefined
+        ? { ...job, equipment: sanitizeJobEquipment(job.equipment) }
+        : job;
     // Stamp workOrderAt when a job is created directly at work_order status
     // (e.g. from proposal acceptance paths that skip the lead/quote stages).
-    if (job.status === 'work_order' && !(job as any).workOrderAt) {
-      (job as any).workOrderAt = new Date();
+    if (payload.status === 'work_order' && !(payload as any).workOrderAt) {
+      (payload as any).workOrderAt = new Date();
     }
-    const [newJob] = await db.insert(schema.jobs).values(withTenant(job)).returning();
+    const [newJob] = await db.insert(schema.jobs).values(withTenant(payload)).returning();
     return newJob;
   }
 
@@ -2098,7 +2121,7 @@ class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }> {
+  async getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }, sort?: "recentActivity"): Promise<{ jobs: Job[]; total: number }> {
     const limit = options?.limit ?? 10; // Default to 10 jobs
     const offset = options?.offset ?? 0;
     
@@ -2132,20 +2155,94 @@ class DatabaseStorage implements IStorage {
       customerPhone: schema.customers.phone,
       customerMobile: schema.customers.mobile,
     };
-    const jobsQuery = whereClause
-      ? db.select(baseSelect)
-        .from(schema.jobs)
-        .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
-        .where(whereClause)
-        .orderBy(desc(schema.jobs.createdAt))
-        .limit(limit)
-        .offset(offset)
-      : db.select(baseSelect)
-        .from(schema.jobs)
-        .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
-        .orderBy(desc(schema.jobs.createdAt))
-        .limit(limit)
-        .offset(offset);
+
+    // Dispatch Unscheduled (sort=recentActivity) orders by the latest of the
+    // job row, the newest diary entry, and proposal/quote sent or accepted.
+    // One grouped scan per table, then a hash join — not a lateral lookup per
+    // job. job_diary_entries has no job_id index (pkey + business_id only);
+    // correlated MAX subqueries were previously 5–10s on this list.
+    // GREATEST skips nulls. created_at is inside it, and is also the tiebreak.
+    // Keep the columns in sync with shared/dispatchJobOrder.ts.
+    // The builders below are only joined into the query for that sort. Other
+    // callers still order by created_at and do not run these scans.
+    const sortByRecentActivity = sort === "recentActivity";
+    const diaryLatest = db
+      .select({
+        jobId: schema.jobDiaryEntries.jobId,
+        latestDiaryAt: sql<Date | null>`max(${schema.jobDiaryEntries.createdAt})`.as("latest_diary_at"),
+      })
+      .from(schema.jobDiaryEntries)
+      .groupBy(schema.jobDiaryEntries.jobId)
+      .as("diary_latest");
+    const proposalLatest = db
+      .select({
+        jobId: schema.proposals.jobId,
+        latestProposalAt: sql<Date | null>`max(GREATEST(${schema.proposals.sentDate}, ${schema.proposals.responseDate}, ${schema.proposals.signedDate}))`.as("latest_proposal_at"),
+      })
+      .from(schema.proposals)
+      .groupBy(schema.proposals.jobId)
+      .as("proposal_latest");
+    const quoteLatest = db
+      .select({
+        jobId: schema.quotes.jobId,
+        latestQuoteAt: sql<Date | null>`max(GREATEST(${schema.quotes.sentDate}, ${schema.quotes.responseDate}))`.as("latest_quote_at"),
+      })
+      .from(schema.quotes)
+      .groupBy(schema.quotes.jobId)
+      .as("quote_latest");
+    const recentActivityExpr = () => sql`GREATEST(
+      ${schema.jobs.updatedAt},
+      ${schema.jobs.createdAt},
+      ${schema.jobs.lastActivityAt},
+      ${schema.jobs.proposalSentDate},
+      ${schema.jobs.quotePresentedDate},
+      ${schema.jobs.workOrderAt},
+      ${diaryLatest.latestDiaryAt},
+      ${proposalLatest.latestProposalAt},
+      ${quoteLatest.latestQuoteAt}
+    )`;
+
+    const jobsQuery = sortByRecentActivity
+      ? (whereClause
+        ? db.select({
+            ...baseSelect,
+            recentActivityAt: recentActivityExpr().as("recent_activity_at"),
+          })
+          .from(schema.jobs)
+          .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+          .leftJoin(diaryLatest, eq(diaryLatest.jobId, schema.jobs.id))
+          .leftJoin(proposalLatest, eq(proposalLatest.jobId, schema.jobs.id))
+          .leftJoin(quoteLatest, eq(quoteLatest.jobId, schema.jobs.id))
+          .where(whereClause)
+          .orderBy(sql`${recentActivityExpr()} DESC NULLS LAST`, desc(schema.jobs.createdAt))
+          .limit(limit)
+          .offset(offset)
+        : db.select({
+            ...baseSelect,
+            recentActivityAt: recentActivityExpr().as("recent_activity_at"),
+          })
+          .from(schema.jobs)
+          .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+          .leftJoin(diaryLatest, eq(diaryLatest.jobId, schema.jobs.id))
+          .leftJoin(proposalLatest, eq(proposalLatest.jobId, schema.jobs.id))
+          .leftJoin(quoteLatest, eq(quoteLatest.jobId, schema.jobs.id))
+          .orderBy(sql`${recentActivityExpr()} DESC NULLS LAST`, desc(schema.jobs.createdAt))
+          .limit(limit)
+          .offset(offset))
+      : (whereClause
+        ? db.select(baseSelect)
+          .from(schema.jobs)
+          .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+          .where(whereClause)
+          .orderBy(desc(schema.jobs.createdAt))
+          .limit(limit)
+          .offset(offset)
+        : db.select(baseSelect)
+          .from(schema.jobs)
+          .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+          .orderBy(desc(schema.jobs.createdAt))
+          .limit(limit)
+          .offset(offset));
 
     // Get total count (for pagination)
     const countQuery = whereClause
@@ -2194,6 +2291,7 @@ class DatabaseStorage implements IStorage {
         customerPhone: row.customerPhone || row.customerMobile,
         confirmationReplySentAt: diary?.replySentAt ?? null,
         customerReplyReceivedAt: diary?.customerReplyAt ?? null,
+        ...(row.recentActivityAt != null ? { recentActivityAt: row.recentActivityAt } : {}),
       };
     });
     
@@ -2895,37 +2993,41 @@ class DatabaseStorage implements IStorage {
   }
   
   async getCall(id: string): Promise<Call | undefined> {
-    const calls = await db.select().from(schema.calls).where(eq(schema.calls.id, id));
+    const calls = await db.select().from(schema.calls).where(andBusiness(schema.calls.businessId, eq(schema.calls.id, id)));
     return calls[0];
   }
   
   async updateCall(id: string, updates: Partial<InsertCall>): Promise<Call> {
     const [updatedCall] = await db.update(schema.calls)
       .set(updates)
-      .where(eq(schema.calls.id, id))
+      .where(andBusiness(schema.calls.businessId, eq(schema.calls.id, id)))
       .returning();
     return updatedCall;
   }
   
   async getCallsByCustomer(customerId: string): Promise<Call[]> {
-    return await db.select().from(schema.calls).where(eq(schema.calls.customerId, customerId)).orderBy(desc(schema.calls.createdAt));
+    return await db.select().from(schema.calls).where(andBusiness(schema.calls.businessId, eq(schema.calls.customerId, customerId))).orderBy(desc(schema.calls.createdAt));
   }
   
   async getCallsByJobId(jobId: string): Promise<Call[]> {
-    return await db.select().from(schema.calls).where(eq(schema.calls.jobId, jobId)).orderBy(desc(schema.calls.createdAt));
+    return await db.select().from(schema.calls).where(andBusiness(schema.calls.businessId, eq(schema.calls.jobId, jobId))).orderBy(desc(schema.calls.createdAt));
   }
   
   async getCallsByLead(leadId: string): Promise<Call[]> {
-    return await db.select().from(schema.calls).where(eq(schema.calls.leadId, leadId)).orderBy(desc(schema.calls.createdAt));
+    return await db.select().from(schema.calls).where(andBusiness(schema.calls.businessId, eq(schema.calls.leadId, leadId))).orderBy(desc(schema.calls.createdAt));
   }
 
   async getAllCalls(limit: number = 100): Promise<Call[]> {
+    const scope = businessEq(schema.calls.businessId);
+    if (scope) {
+      return await db.select().from(schema.calls).where(scope).orderBy(desc(schema.calls.createdAt)).limit(limit);
+    }
     return await db.select().from(schema.calls).orderBy(desc(schema.calls.createdAt)).limit(limit);
   }
 
   async deleteCall(id: string): Promise<boolean> {
     const deleted = await db.delete(schema.calls)
-      .where(eq(schema.calls.id, id))
+      .where(andBusiness(schema.calls.businessId, eq(schema.calls.id, id)))
       .returning();
     return deleted.length > 0;
   }
@@ -4552,13 +4654,13 @@ class DatabaseStorage implements IStorage {
     return newNotification;
   }
   async getNotification(id: string): Promise<Notification | undefined> {
-    const [notification] = await db.select().from(schema.notifications).where(eq(schema.notifications.id, id));
+    const [notification] = await db.select().from(schema.notifications).where(andBusiness(schema.notifications.businessId, eq(schema.notifications.id, id)));
     return notification || undefined;
   }
   async updateNotification(id: string, updates: UpdateNotification): Promise<Notification> {
     const [updatedNotification] = await db.update(schema.notifications)
       .set(updates)
-      .where(eq(schema.notifications.id, id))
+      .where(andBusiness(schema.notifications.businessId, eq(schema.notifications.id, id)))
       .returning();
     return updatedNotification;
   }
@@ -4568,6 +4670,8 @@ class DatabaseStorage implements IStorage {
     // Sep 2026) and was the second-largest source of Neon network egress.
     const effectiveLimit = Math.min(Math.max(Number(limit) || 0, 0) || DEFAULT_NOTIFICATION_LIST_LIMIT, MAX_NOTIFICATION_LIST_LIMIT);
     const conditions = [eq(schema.notifications.archived, false)];
+    const scope = businessEq(schema.notifications.businessId);
+    if (scope) conditions.push(scope);
     if (userId) {
       conditions.push(eq(schema.notifications.userId, userId));
     }
@@ -4606,6 +4710,8 @@ class DatabaseStorage implements IStorage {
   }
   async getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]> {
     const conditions = [eq(schema.notifications.isRead, false), eq(schema.notifications.archived, false)];
+    const scope = businessEq(schema.notifications.businessId);
+    if (scope) conditions.push(scope);
     if (userId) {
       conditions.push(eq(schema.notifications.userId, userId));
     }
@@ -4628,12 +4734,14 @@ class DatabaseStorage implements IStorage {
   async markNotificationAsRead(id: string): Promise<Notification> {
     const [updatedNotification] = await db.update(schema.notifications)
       .set({ isRead: true, readAt: new Date() })
-      .where(eq(schema.notifications.id, id))
+      .where(andBusiness(schema.notifications.businessId, eq(schema.notifications.id, id)))
       .returning();
     return updatedNotification;
   }
   async markAllNotificationsAsRead(userId?: string): Promise<void> {
     const conditions = [eq(schema.notifications.archived, false)];
+    const scope = businessEq(schema.notifications.businessId);
+    if (scope) conditions.push(scope);
     if (userId) {
       conditions.push(eq(schema.notifications.userId, userId));
     }
@@ -4646,12 +4754,14 @@ class DatabaseStorage implements IStorage {
     // same reminder isn't immediately recreated on the next hourly check.
     await db.update(schema.notifications)
       .set({ archived: true })
-      .where(eq(schema.notifications.id, id));
+      .where(andBusiness(schema.notifications.businessId, eq(schema.notifications.id, id)));
   }
   async deleteAllNotifications(userId?: string): Promise<void> {
     // Archive instead of delete — keeps records for reminder de-dup so the
     // same reminders aren't immediately recreated on the next hourly check.
     const conditions = [eq(schema.notifications.archived, false)];
+    const scope = businessEq(schema.notifications.businessId);
+    if (scope) conditions.push(scope);
     if (userId) {
       conditions.push(eq(schema.notifications.userId, userId));
     }
@@ -4665,11 +4775,13 @@ class DatabaseStorage implements IStorage {
     // The "hide notifications for completed jobs unless always-shown type"
     // rule from filterCompletedJobNotifications is reproduced as a predicate.
     const alwaysShow = Array.from(ALWAYS_SHOW_NOTIFICATION_TYPES);
+    const bid = currentBusinessId();
     const visible = sql`${schema.notifications.archived} = false
       AND (${schema.notifications.jobId} IS NULL
         OR ${schema.notifications.type} IN (${sql.join(alwaysShow.map(t => sql`${t}`), sql`, `)})
         OR NOT EXISTS (SELECT 1 FROM ${schema.jobs} j WHERE j.id = ${schema.notifications.jobId} AND j.status = 'completed'))
-      ${userId ? sql`AND ${schema.notifications.userId} = ${userId}` : sql``}`;
+      ${userId ? sql`AND ${schema.notifications.userId} = ${userId}` : sql``}
+      ${bid ? sql`AND ${schema.notifications.businessId} = ${bid}` : sql``}`;
 
     const [totals] = await db.select({
       total: sql<number>`count(*)::int`,
@@ -4720,6 +4832,8 @@ class DatabaseStorage implements IStorage {
       eq(schema.notifications.type, opts.type),
       gte(schema.notifications.createdAt, opts.since),
     ];
+    const scope = businessEq(schema.notifications.businessId);
+    if (scope) conditions.push(scope);
     if (opts.jobId) conditions.push(eq(schema.notifications.jobId, opts.jobId));
     if (opts.quoteId) conditions.push(eq(schema.notifications.quoteId, opts.quoteId));
     if (opts.userId) conditions.push(eq(schema.notifications.userId, opts.userId));
@@ -4836,6 +4950,26 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.pendingOutboundMessages.id, id))
       .returning();
     return updated;
+  }
+
+  async claimPendingOutboundMessage(id: string): Promise<schema.PendingOutboundMessage | undefined> {
+    const [claimed] = await db.update(schema.pendingOutboundMessages)
+      .set({ status: 'sending' })
+      .where(and(
+        eq(schema.pendingOutboundMessages.id, id),
+        eq(schema.pendingOutboundMessages.status, 'pending'),
+      ))
+      .returning();
+    return claimed;
+  }
+
+  async releasePendingOutboundMessageClaim(id: string): Promise<void> {
+    await db.update(schema.pendingOutboundMessages)
+      .set({ status: 'pending' })
+      .where(and(
+        eq(schema.pendingOutboundMessages.id, id),
+        eq(schema.pendingOutboundMessages.status, 'sending'),
+      ));
   }
 
   async createEmployee(employee: InsertEmployee): Promise<Employee> {
@@ -6014,10 +6148,10 @@ class DatabaseStorage implements IStorage {
   }
 
   async getConversation(id: string): Promise<any> {
-    // Get the conversation first
+    // Get the conversation first. A signed-in business only sees its own thread.
     const [conversation] = await db.select()
       .from(schema.conversations)
-      .where(eq(schema.conversations.id, id));
+      .where(andBusiness(schema.conversations.businessId, eq(schema.conversations.id, id)));
     
     if (!conversation) return undefined;
     
@@ -6045,13 +6179,13 @@ class DatabaseStorage implements IStorage {
   async updateConversation(id: string, updates: UpdateConversation): Promise<Conversation> {
     const [conversation] = await db.update(schema.conversations)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(schema.conversations.id, id))
+      .where(andBusiness(schema.conversations.businessId, eq(schema.conversations.id, id)))
       .returning();
     return conversation;
   }
 
   async deleteConversation(id: string): Promise<void> {
-    await db.delete(schema.conversations).where(eq(schema.conversations.id, id));
+    await db.delete(schema.conversations).where(andBusiness(schema.conversations.businessId, eq(schema.conversations.id, id)));
   }
 
   async getAllConversations(filters?: {
@@ -6145,13 +6279,13 @@ class DatabaseStorage implements IStorage {
 
   async getConversationsByLead(leadId: string): Promise<Conversation[]> {
     return await db.select().from(schema.conversations)
-      .where(eq(schema.conversations.leadId, leadId))
+      .where(andBusiness(schema.conversations.businessId, eq(schema.conversations.leadId, leadId)))
       .orderBy(desc(schema.conversations.lastMessageAt));
   }
 
   async getConversationsByCustomer(customerId: string): Promise<Conversation[]> {
     return await db.select().from(schema.conversations)
-      .where(eq(schema.conversations.customerId, customerId))
+      .where(andBusiness(schema.conversations.businessId, eq(schema.conversations.customerId, customerId)))
       .orderBy(desc(schema.conversations.lastMessageAt));
   }
 
@@ -6163,18 +6297,20 @@ class DatabaseStorage implements IStorage {
         status: 'converted',
         updatedAt: new Date()
       })
-      .where(eq(schema.conversations.id, id))
+      .where(andBusiness(schema.conversations.businessId, eq(schema.conversations.id, id)))
       .returning();
     return conversation;
   }
 
   async getUnreadConversationsCount(userId?: string): Promise<number> {
+    const scope = businessEq(schema.conversations.businessId);
     const result = await db.select({ count: sql<number>`count(*)` })
       .from(schema.conversations)
       .where(
         and(
           sql`${schema.conversations.unreadCount} > 0`,
-          userId ? eq(schema.conversations.assignedTo, userId) : sql`true`
+          userId ? eq(schema.conversations.assignedTo, userId) : sql`true`,
+          scope ?? sql`true`
         )
       );
     return result[0]?.count || 0;
@@ -6185,6 +6321,14 @@ class DatabaseStorage implements IStorage {
   // ========================================
   
   async createConversationMessage(message: InsertConversationMessage): Promise<ConversationMessage> {
+    // Refuse to append onto another business's thread. Session-less writers
+    // (inbound email/SMS) have no business context and keep the previous path.
+    if (currentBusinessId()) {
+      const parent = await this.getConversation(message.conversationId);
+      if (!parent) {
+        throw new Error("Conversation not found");
+      }
+    }
     const [newMessage] = await db.insert(schema.conversationMessages).values(withTenant(message)).returning();
     
     // Update conversation's last message info
@@ -6195,35 +6339,43 @@ class DatabaseStorage implements IStorage {
         unreadCount: message.direction === 'inbound' ? sql`${schema.conversations.unreadCount} + 1` : schema.conversations.unreadCount,
         updatedAt: new Date()
       })
-      .where(eq(schema.conversations.id, message.conversationId));
+      .where(andBusiness(schema.conversations.businessId, eq(schema.conversations.id, message.conversationId)));
     
     return newMessage;
   }
 
   async getConversationMessage(id: string): Promise<ConversationMessage | undefined> {
-    const [message] = await db.select().from(schema.conversationMessages).where(eq(schema.conversationMessages.id, id));
+    const [message] = await db.select().from(schema.conversationMessages).where(andBusiness(schema.conversationMessages.businessId, eq(schema.conversationMessages.id, id)));
     return message || undefined;
   }
 
   async updateConversationMessage(id: string, updates: UpdateConversationMessage): Promise<ConversationMessage> {
     const [message] = await db.update(schema.conversationMessages)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(schema.conversationMessages.id, id))
+      .where(andBusiness(schema.conversationMessages.businessId, eq(schema.conversationMessages.id, id)))
       .returning();
     return message;
   }
 
   async deleteConversationMessage(id: string): Promise<void> {
-    await db.delete(schema.conversationMessages).where(eq(schema.conversationMessages.id, id));
+    await db.delete(schema.conversationMessages).where(andBusiness(schema.conversationMessages.businessId, eq(schema.conversationMessages.id, id)));
   }
 
   async getConversationMessages(conversationId: string): Promise<ConversationMessage[]> {
+    if (currentBusinessId()) {
+      const parent = await this.getConversation(conversationId);
+      if (!parent) return [];
+    }
     return await db.select().from(schema.conversationMessages)
       .where(eq(schema.conversationMessages.conversationId, conversationId))
       .orderBy(schema.conversationMessages.createdAt);
   }
 
   async markConversationMessagesAsRead(conversationId: string, readBy: string): Promise<void> {
+    if (currentBusinessId()) {
+      const parent = await this.getConversation(conversationId);
+      if (!parent) return;
+    }
     // Mark all unread messages as read
     await db.update(schema.conversationMessages)
       .set({ 
@@ -6244,7 +6396,7 @@ class DatabaseStorage implements IStorage {
         unreadCount: 0,
         updatedAt: new Date()
       })
-      .where(eq(schema.conversations.id, conversationId));
+      .where(andBusiness(schema.conversations.businessId, eq(schema.conversations.id, conversationId)));
   }
 
   async searchPhotos(filters: PhotoSearch): Promise<Photo[]> {
@@ -7901,14 +8053,14 @@ class DatabaseStorage implements IStorage {
   async getCallRecord(id: string): Promise<schema.CallRecord | null> {
     const [result] = await db.select()
       .from(schema.callRecords)
-      .where(eq(schema.callRecords.id, id));
+      .where(andBusiness(schema.callRecords.businessId, eq(schema.callRecords.id, id)));
     return result || null;
   }
 
   async updateCallRecord(id: string, updates: Partial<schema.InsertCallRecord>): Promise<schema.CallRecord> {
     const [result] = await db.update(schema.callRecords)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(schema.callRecords.id, id))
+      .where(andBusiness(schema.callRecords.businessId, eq(schema.callRecords.id, id)))
       .returning();
     return result;
   }
@@ -7921,6 +8073,8 @@ class DatabaseStorage implements IStorage {
     limit?: number;
   }): Promise<schema.CallRecord[]> {
     const conditions = [];
+    const scope = businessEq(schema.callRecords.businessId);
+    if (scope) conditions.push(scope);
     
     if (filters?.jobId) {
       conditions.push(eq(schema.callRecords.jobId, filters.jobId));
@@ -7953,21 +8107,22 @@ class DatabaseStorage implements IStorage {
   async getCallRecordsByJob(jobId: string): Promise<schema.CallRecord[]> {
     return await db.select()
       .from(schema.callRecords)
-      .where(eq(schema.callRecords.jobId, jobId))
+      .where(andBusiness(schema.callRecords.businessId, eq(schema.callRecords.jobId, jobId)))
       .orderBy(desc(schema.callRecords.createdAt));
   }
 
   async getCallRecordsByCustomer(customerId: string): Promise<schema.CallRecord[]> {
     return await db.select()
       .from(schema.callRecords)
-      .where(eq(schema.callRecords.customerId, customerId))
+      .where(andBusiness(schema.callRecords.businessId, eq(schema.callRecords.customerId, customerId)))
       .orderBy(desc(schema.callRecords.createdAt));
   }
 
   async deleteCallRecord(id: string): Promise<boolean> {
     const result = await db.delete(schema.callRecords)
-      .where(eq(schema.callRecords.id, id));
-    return true;
+      .where(andBusiness(schema.callRecords.businessId, eq(schema.callRecords.id, id)))
+      .returning();
+    return result.length > 0;
   }
 
   // ========================================

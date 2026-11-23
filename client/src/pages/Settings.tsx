@@ -35,6 +35,7 @@ import {
   Banknote,
   PhoneMissed,
   Receipt,
+  Wallet,
   FileStack,
   CreditCard,
   PhoneCall,
@@ -46,6 +47,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
+import { useAuth } from "@/contexts/AuthContext";
 
 type SettingOption = {
   id: string;
@@ -102,8 +104,8 @@ const settingsSections: SettingSection[] = [
       },
       {
         id: "security",
-        title: "Security & API",
-        description: "Password settings, API keys and access control",
+        title: "Security",
+        description: "Authenticator app, signed-in devices and sign out everywhere",
         icon: KeyRound,
         path: "/settings/security"
       },
@@ -182,7 +184,7 @@ const settingsSections: SettingSection[] = [
       {
         id: "role-checklist-tasks",
         title: "Role Checklist Tasks",
-        description: "Customise tasks for Kaitiaki, Kaiwhangai and Kaitirotiro",
+        description: "Customise tasks for Kaitiaki, Kaiwhangai, Kaitirotiro and Risk assessment",
         icon: ClipboardList,
         path: "/settings/role-checklist-tasks"
       },
@@ -380,6 +382,13 @@ const settingsSections: SettingSection[] = [
         path: "/invoices"
       },
       {
+        id: "stripe-payouts",
+        title: "Stripe payouts",
+        description: "Match Stripe payouts to jobs and post them to Xero clearing",
+        icon: Wallet,
+        path: "/settings/payouts"
+      },
+      {
         id: "unlinked-calls",
         title: "Unlinked Calls",
         description: "Review inbound calls not yet attached to a job or customer",
@@ -458,12 +467,14 @@ const SETTING_IMAGES: Record<string, string> = {
   integrations: "integrations",
   "xero-reconciliation": "xero",
   invoices: "invoices",
+  "stripe-payouts": "billing",
   "unlinked-calls": "calls"
 };
 
 export default function Settings() {
   // Role checklist tasks (Kaitiaki / Kaiwhangai / Kaitirotiro) are Treemarkables-only.
   const roleChecklistEnabled = useRoleChecklistFeature();
+  const { isAdmin } = useAuth();
   const [query, setQuery] = useState("");
 
   const sections = useMemo(() => {
@@ -480,6 +491,7 @@ export default function Settings() {
           // so other publisher tenants (e.g. the demo tenant) reach it by URL.
           if (option.id === "help-content" && !roleChecklistEnabled) return false;
           if (option.id === "bug-reports" && !roleChecklistEnabled) return false;
+          if (option.id === "stripe-payouts" && !isAdmin) return false;
           if (!q) return true;
           return (
             option.title.toLowerCase().includes(q) ||
@@ -488,15 +500,15 @@ export default function Settings() {
         })
       }))
       .filter((section) => section.options.length > 0);
-  }, [query, roleChecklistEnabled]);
+  }, [query, roleChecklistEnabled, isAdmin]);
 
   return (
     <div className="flex flex-col min-h-full overflow-y-auto p-6 space-y-8">
       {/* Header */}
       <div className="space-y-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-          <p className="text-gray-600">Manage your account and business settings</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Settings</h1>
+          <p className="text-muted-foreground">Manage your account and business settings</p>
         </div>
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

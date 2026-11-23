@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { resolveBillingName } from "@shared/orgOnlyBilling";
 import express from "express";
 import { Webhook as SvixWebhook } from 'svix';
 import { addClient, removeClient, broadcast } from "./sseManager";
@@ -13,14 +14,44 @@ declare module 'express-session' {
   interface SessionData {
     employeeId?: string;
     businessId?: string;
+    pendingMfaEmployeeId?: string;
+    pendingMfaBusinessId?: string;
+    pendingMfaPurpose?: 'challenge' | 'enroll';
+    pendingTotpSecret?: string;
+    sessionCreatedAt?: string;
+    userAgent?: string;
+    ip?: string;
+    mfaVerified?: boolean;
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
+import { clearProposalContent, withProposalContentLock } from "./proposalContentLock";
+import { beginProposalSend, releaseProposalSend } from "./proposalSendClaim";
+import { deleteProposalDocument } from "./services/deleteProposalDocument";
+import { clientSafeErrorText } from "./httpErrorText";
+import { buildTodayOverview, createTodayExtraInstruction, deleteTodayExtraInstruction, HttpError } from "./todayOverview";
+import { loadEffectiveRiskLinksForJobs, loadRiskLinksForJobs, recordRiskAssessmentChecklistDone } from "./jhaJobRisk";
+import { checklistCompletionClearsRiskDue, doneIdsIncludingLinkedJha, jhaCompletionRequiresJob, normalizeJhaJobId, RISK_ASSESSMENT_CHECKLIST_ITEM_ID, type JobRiskAssessmentLink } from "@shared/jhaJobRisk";
+import { sanitizeJobEquipment } from "@shared/jobEquipmentCatalogue";
 import { APP_URL } from "./config/appUrl";
+import { facebookGraphUrl, readFacebookPageAccessToken, redactFacebookSecrets } from "./config/facebookGraph";
+import { checkFacebookConnection, loadFacebookPageReviews } from "./services/reviewsService";
 import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
+import { crewIdsAfterSave, newlyAddedCrewIds } from "@shared/scheduleCrew";
 import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
+import { businessIdFromVoiceClient, isBusinessId, voiceIdentityForEmployee, inboundVoiceIdentity } from "./tenancy/voiceIdentity";
+import { VOICE_TOKEN_TTL_SECONDS } from "@shared/voiceToken";
+import {
+  HANGUP_TWIML,
+  decideInboundDialFollowup,
+  parseDialCallDuration,
+  parseDialLeg,
+  planInboundRing,
+  recoveryPhoneDialTwiml,
+} from "./services/inboundCallPlan";
+import { readVoiceClientPresence, recordVoiceClientPresence } from "./services/voiceClientPresence";
 import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
@@ -32,7 +63,7 @@ import { cacheDeletePrefix } from "./perfCache";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db, ownerDb } from "./db";
-import { eq, desc, sql, inArray, and, gte, lt, lte, ne, asc } from "drizzle-orm";
+import { eq, desc, sql, inArray, notInArray, and, gte, lt, lte, ne, asc } from "drizzle-orm";
 import { invoices, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
@@ -81,13 +112,23 @@ import { getTwilioClient } from "./services/twilioClient";
 import { mintStreamToken } from "./services/voiceAgent";
 import jwt from "jsonwebtoken";
 import path from "path";
+import { handleTreemarkablesSitemap, renderTreemarkablesSitemap } from "./treemarkablesSitemap";
 import bcrypt from "bcrypt";
 import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
 import { registerBugReportRoutes } from "./bugReports";
+import { registerOpsRoutes } from "./opsRoutes";
+import { registerQuoteFollowUpRoutes } from "./quoteFollowUpRoutes";
+import { registerInvoiceXeroRoutes } from "./invoiceXeroRoutes";
+import { registerJobsNotBilledRoutes } from "./jobsNotBilledRoutes";
+import { registerStripePayoutRoutes } from "./stripePayoutRoutes";
+import { reconcileJobPaidFromPayments } from "./jobPaidFromPayments";
+import { ingestStripePayoutWebhook } from "./stripePayoutSync";
 import {
   isStripeConfigured,
   businessOwnsStripeAccount,
+  invoiceCardCheckoutDisabled,
+  invoiceOnlinePaymentEnabled,
   getPublishableKey,
   createDepositCheckoutSession,
   createInvoiceCheckoutSession,
@@ -109,7 +150,13 @@ import * as usageMeter from "./services/usageMeter";
 import * as supplierIngest from "./services/supplierInvoiceIngest";
 import { computeJobRiskFlags } from "./services/scheduleRiskFlags";
 import { createTenant } from "./onboarding";
+import { getSubscriberOwnerContact, listSubscriberSummaries } from "./adminSubscribers";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
+import { checkLoginThrottle, clearLoginIdentifierThrottle } from "./security/loginThrottle";
+import { disableMfa, getMfaRow, mfaLoginGate } from "./security/mfaService";
+import { beginPendingMfaSession, clearHostSessionCookie, clearLegacyDomainSessionCookie, establishEmployeeSession } from "./security/authSession";
+import { registerMfaAndSessionRoutes } from "./security/mfaRoutes";
+import { AUDIT_ACTIONS, recordAuthEvent } from "./security/auditLog";
 import {
   ensureRoleTiersSeeded,
   getEmployeePermissions,
@@ -153,9 +200,24 @@ if (ffmpegStatic) {
 }
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { formatNZTime, getJobScheduledNZDates, jobRunsOnNZDate, getNZDateString, nzTimeToUTC } from "@shared/dateUtils";
-import { ROLE_LABEL as ROLE_LABELS, isRoleKey } from "@shared/crewRoles";
+import { isRoleKey } from "@shared/crewRoles";
+import {
+  aggregateRoleSnapshots,
+  groupRolesByEmployee,
+  joinRoleLabels,
+  outstandingForRoles,
+  parseClockInRoles,
+  primaryDayRole,
+  resolveDesiredDayRoles,
+  selectRolesForDate,
+  sortRoles,
+  type RoleKey,
+} from "@shared/crewDayRoles";
 import { composeCustomerAddress } from "@shared/customerAddress";
-import { statusAfterBooking } from "@shared/jobStatus";
+import { statusAfterBooking, statusAfterDiaryBook } from "@shared/jobStatus";
+import { runPendingMessageApproval } from "@shared/holdingMessageApproval";
+import { fillEmptyJobContactFromSources } from "@shared/jobContactFill";
+import { backfillEmptyJobContact } from "./jobContactBackfill";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { runLaneEntryAutomations, onQuoteSentToLane } from "./services/laneAutomationService";
 import { workflowAutomationService } from "./services/workflowAutomation";
@@ -163,14 +225,23 @@ import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
-import { renderBrandedEmail, renderInvoiceEmail } from "./emailTemplates";
+import { renderBrandedEmail, renderInvoiceEmail, invoiceBankTransferNote } from "./emailTemplates";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter, type BeforeAfterBranding } from "./photoStorage";
 import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
+import {
+  deletePhotoAnnotation,
+  findPhotoAnnotations,
+  upsertPhotoAnnotation,
+} from "./photoAnnotationStore";
 import { renderSiteMapSnapshot, renderImageSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
+import { describeVideoFile } from "@shared/videoUpload";
+import { registerDirectVideoUploadRoutes } from "./videoUploadRoutes";
+import { google } from "googleapis";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
-import { queueJobPush, removeJobEvents, getConnectionForUser } from "./services/googleCalendarSync";
+import { queueJobPush, removeJobEvents, getConnectionForUser, backfillFutureScheduledWorkOrders } from "./services/googleCalendarSync";
+import { googleCalendarBrowserOrigin, googleCalendarRedirectUri } from "@shared/googleCalendarConnect";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
 
@@ -237,8 +308,14 @@ const videoUpload = multer({
     fileSize: 2 * 1024 * 1024 * 1024, // 2 GB
     files: 1,
   },
-  fileFilter: (req, file, cb) => {
-    cb(null, file.mimetype.startsWith('video/'));
+  fileFilter: (_req, file, cb) => {
+    // WebKit often sends an iPhone .mov as application/octet-stream or with an
+    // empty type. The extension is enough; a non-video is still rejected.
+    if (describeVideoFile(file.originalname || "", file.mimetype || "")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only video files can be uploaded"));
+    }
   }
 });
 
@@ -289,7 +366,7 @@ function serializeJobTimestamps(job: any): any {
   const serialized = { ...job };
   
   // Convert timestamp fields to ISO UTC strings
-  const timestampFields = ['scheduledDate', 'scheduledEndDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt', 'customerReplyReceivedAt'];
+  const timestampFields = ['scheduledDate', 'scheduledEndDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt', 'customerReplyReceivedAt', 'recentActivityAt', 'proposalSentDate', 'quotePresentedDate'];
   
   for (const field of timestampFields) {
     if (serialized[field]) {
@@ -1073,17 +1150,22 @@ async function notifyBillingProblem(businessId: string, status: string): Promise
 async function buildOnboardingChecklist(businessId: string) {
   const settings = await storage.getBusinessSettingsForBusiness(businessId);
   const invoiceTemplate = await storage.getDefaultDocumentTemplateForBusiness(businessId, 'invoice');
-  const [{ count: channelCount }] = await db
+  // ownerDb: the concierge list calls this for EVERY tenant while the operator
+  // is RLS-pinned to Treemarkables. The request-scoped `db` proxy would either
+  // count zero rows or throw, and a throw 500'd the whole Subscribers page.
+  const [channelRow] = await ownerDb
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.tenantChannels)
     .where(and(eq(schema.tenantChannels.businessId, businessId), eq(schema.tenantChannels.isActive, true)));
-  const [{ count: importedCustomerCount }] = await db
+  const channelCount = channelRow?.count ?? 0;
+  const [importedRow] = await ownerDb
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.customers)
     .where(and(
       eq(schema.customers.businessId, businessId),
       sql`${schema.customers.importSource} IS NOT NULL AND ${schema.customers.importSource} <> 'manual'`,
     ));
+  const importedCustomerCount = importedRow?.count ?? 0;
 
   const has = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
 
@@ -1094,8 +1176,8 @@ async function buildOnboardingChecklist(businessId: string) {
     { key: 'contact', label: 'Contact details', description: 'Phone and email shown to your customers.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyPhone) && has(invoiceTemplate?.companyEmail) },
     { key: 'address', label: 'Business address', description: 'Shown on your documents.', path: '/settings/company', optional: false, done: has(invoiceTemplate?.companyAddress) },
     { key: 'bank', label: 'Bank details', description: "So customers can pay your invoices — without it, no payment block shows.", path: '/settings/company', optional: false, done: has(settings?.bankAccountName) && has(settings?.bankAccountNumber) },
-    { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: (channelCount ?? 0) > 0 },
-    { key: 'importData', label: 'Import your data', description: 'Bring your customers and jobs across from ServiceM8 or a CSV export.', path: '/settings/import', optional: true, done: (importedCustomerCount ?? 0) > 0 },
+    { key: 'channels', label: 'Inbound channels', description: 'Register your phone/email so calls, texts and replies route to you.', path: '/settings/channels', optional: false, done: channelCount > 0 },
+    { key: 'importData', label: 'Import your data', description: 'Bring your customers and jobs across from ServiceM8 or a CSV export.', path: '/settings/import', optional: true, done: importedCustomerCount > 0 },
     { key: 'gst', label: 'GST number', description: 'Shown on tax invoices (only if GST-registered).', path: '/settings/company', optional: true, done: has(settings?.businessGstNumber) },
     { key: 'tradeVocabulary', label: 'Trade vocabulary', description: 'Improves voice-to-quote and AI accuracy for your trade.', path: '/settings/company', optional: true, done: has(settings?.tradeVocabulary) },
     { key: 'replyForward', label: 'Forward customer replies', description: 'Optionally copy job replies to your own inbox.', path: '/settings/company', optional: true, done: has(settings?.jobReplyForwardEmail) },
@@ -1774,7 +1856,7 @@ async function generateInvoicePDFBuffer(
 
     // Per-invoice billing-name override (saved on the invoice) takes priority over the
     // job-level billingNameOverride so "edit for this invoice only" actually sticks on render.
-    const billingName = invoiceData?.contactName || job?.billingNameOverride || customer?.name || 'Customer';
+    const billingName = resolveBillingName(invoiceData?.contactName || job?.billingNameOverride || customer?.name || 'Customer', customer, job);
     const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
     const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
 
@@ -1818,7 +1900,7 @@ async function generateInvoicePDFBuffer(
         case 'companyInfo': {
           const parts: string[] = [];
           if (cfg.showName !== false) parts.push(co.name);
-          if (cfg.showAddress !== false) parts.push(co.address);
+          if (cfg.showAddress !== false && co.address) parts.push(co.address);
           if (cfg.showPhone !== false) parts.push(`Ph: ${co.phone}`);
           if (cfg.showEmail !== false) parts.push(co.email);
           if (cfg.showGST) parts.push(`GST: ${co.gstNumber}`);
@@ -2022,7 +2104,7 @@ async function generateInvoicePDFBuffer(
 
           const parts: string[] = [];
           if (cfg.showCompanyName !== false) parts.push(co.name);
-          if (cfg.showAddress !== false) parts.push(co.address.replace(/\n/g, ', '));
+          if (cfg.showAddress !== false && co.address) parts.push(co.address.replace(/\n/g, ', '));
           if (cfg.showPhone !== false) parts.push(`Phone: ${co.phone}`);
           if (cfg.showEmail !== false) parts.push(`Email: ${co.email}`);
           doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
@@ -2219,19 +2301,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // XERO INTEGRATION ROUTES
   // ========================================
   registerXeroRoutes(app, storage);
+  registerStripePayoutRoutes(app);
   // In-app bug / feedback reports (text + voice + photos + video) — server/bugReports.ts
   registerBugReportRoutes(app, { requireSession, requirePlatformAdmin, imageUpload, videoUpload, audioUpload });
+  registerOpsRoutes(app);
+  registerQuoteFollowUpRoutes(app);
+  registerInvoiceXeroRoutes(app);
+  registerJobsNotBilledRoutes(app);
   
   // ========================================
   // CLIENT-SIDE ERROR LOGGING
   app.post('/api/client-errors', (req: Request, res: Response) => {
-    const { message, stack, componentStack, url, userAgent } = req.body || {};
+    const {
+      message, stack, componentStack, url, userAgent,
+      context, jobId, entryId, entryType, request: failedRequest, status, serverMessage, timestamp,
+    } = req.body || {};
+    const clip = (value: unknown, max: number) =>
+      typeof value === 'string' ? value.slice(0, max) : undefined;
     console.error('🚨 [CLIENT ERROR]', {
-      message,
+      message: clip(message, 500),
       url,
       userAgent,
-      stack: stack?.slice(0, 500),
-      componentStack: componentStack?.slice(0, 500),
+      stack: clip(stack, 500),
+      componentStack: clip(componentStack, 500),
+      context,
+      jobId,
+      entryId,
+      entryType,
+      request: failedRequest,
+      status,
+      serverMessage: clip(serverMessage, 300),
+      timestamp,
     });
     res.json({ success: true });
   });
@@ -2304,30 +2404,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/auth/login - Create server-side session with employee ID or email+password
-  // Login throttle (2026-07-14 audit L3). In-memory sliding window — no store
-  // dependency; the app runs 2 instances so the effective ceiling is up to 2×
-  // per limit, which still reduces an unthrottled bcrypt oracle to a useless
-  // guessing rate. Per-IP catches spray-across-accounts; per-identifier catches
-  // a distributed attack on one account. A successful login clears its
+  // Login throttle (2026-07-14 audit L3, Wave 1 shared store). Dual-key window —
+  // 30/IP + 10/identifier per 15 min, 429. Postgres-backed so both prod instances
+  // share the ceiling (the in-memory Map doubled under instance_count: 2 and
+  // reset on deploy). Per-IP catches spray-across-accounts; per-identifier
+  // catches a distributed attack on one account. A successful login clears its
   // identifier key so a user who finally remembers their password isn't locked.
-  const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-  const LOGIN_MAX_PER_IP = 30;
-  const LOGIN_MAX_PER_IDENTIFIER = 10;
-  const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-  const bumpLoginKey = (key: string, max: number): boolean => {
-    const now = Date.now();
-    // Lazy prune so the map can't grow unbounded across the window
-    if (loginAttempts.size > 10_000) {
-      for (const [k, v] of loginAttempts) if (v.resetAt <= now) loginAttempts.delete(k);
-    }
-    const entry = loginAttempts.get(key);
-    if (!entry || entry.resetAt <= now) {
-      loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
-      return true;
-    }
-    entry.count += 1;
-    return entry.count <= max;
-  };
+  // Dedicated throttle — not stacked with the public-write limiter.
 
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
@@ -2338,10 +2421,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const identifier = (typeof email === 'string' && email.trim().toLowerCase())
         || (typeof employeeId === 'string' && employeeId)
         || '';
-      const ipOk = bumpLoginKey(`ip:${ip}`, LOGIN_MAX_PER_IP);
-      const idOk = !identifier || bumpLoginKey(`id:${identifier}`, LOGIN_MAX_PER_IDENTIFIER);
-      if (!ipOk || !idOk) {
+      const { allowed: loginAllowed } = await checkLoginThrottle({ ip, identifier });
+      if (!loginAllowed) {
         console.warn(`[SECURITY] Login throttled (ip: ${ip})`);
+        recordAuthEvent(req, {
+          action: AUDIT_ACTIONS.LOGIN_FAILURE,
+          success: false,
+          metadata: { reason: "throttled", identifier },
+        });
         return res.status(429).json({
           success: false,
           message: 'Too many login attempts. Try again in a few minutes.'
@@ -2354,6 +2441,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         employee = await storage.getEmployeeByEmail(email);
 
         if (!employee) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            metadata: { reason: "unknown_email", identifier },
+          });
           return res.status(401).json({
             success: false,
             message: 'Invalid email or password'
@@ -2362,6 +2454,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Verify password if it exists
         if (!employee.password) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            businessId: employee.businessId ?? null,
+            actorEmployeeId: employee.id,
+            targetEmployeeId: employee.id,
+            metadata: { reason: "password_not_configured", identifier },
+          });
           return res.status(401).json({
             success: false,
             message: 'Password authentication not configured for this account'
@@ -2372,6 +2472,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const passwordMatch = await bcrypt.compare(password, employee.password);
 
         if (!passwordMatch) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            businessId: employee.businessId ?? null,
+            actorEmployeeId: employee.id,
+            targetEmployeeId: employee.id,
+            metadata: { reason: "bad_password", identifier },
+          });
           return res.status(401).json({
             success: false,
             message: 'Invalid email or password'
@@ -2385,6 +2493,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (!allowEmployeeIdLogin) {
           console.warn(`[SECURITY] Attempted employeeId login blocked (employeeId: ${employeeId}, env: ${process.env.NODE_ENV})`);
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            metadata: { reason: "employee_id_login_blocked", identifier },
+          });
           return res.status(401).json({
             success: false,
             message: 'Invalid credentials'
@@ -2395,6 +2508,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         employee = await storage.getEmployee(employeeId);
 
         if (!employee) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            metadata: { reason: "invalid_employee_id", identifier },
+          });
           return res.status(401).json({
             success: false,
             message: 'Invalid employee ID'
@@ -2415,6 +2533,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (employee.businessId && !TREEMARKABLES_BUSINESS_IDS.includes(employee.businessId)) {
         const biz = await storage.getBusinessById(employee.businessId);
         if (biz?.status === 'suspended') {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.LOGIN_FAILURE,
+            success: false,
+            businessId: employee.businessId ?? null,
+            actorEmployeeId: employee.id,
+            targetEmployeeId: employee.id,
+            metadata: { reason: "suspended", identifier },
+          });
           return res.status(403).json({
             success: false,
             message: 'This account has been suspended. Please contact support.',
@@ -2422,86 +2548,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Mirror /api/auth/me's payload (permissions + plan entitlements) so the
-      // client's user object is complete from the first render — the login
-      // response is cached as the current user (and seeds the /me query), so a
-      // slimmer payload here left PlanGated nav (Safety, One Dashboard) hidden.
-      await ensureRoleTiersSeeded().catch(() => {});
-      const loginPermsSet = await getEmployeePermissions(employee).catch(() => new Set<string>());
-      let loginPlanKey = 'freemium';
-      let loginEntitlements: string[] = [];
-      if (employee.businessId) {
-        // resolveEntitlements handles the comped Treemarkables case (full
-        // Business tier + every add-on) — no special-casing here.
-        try {
-          const ent = await resolveEntitlements(employee.businessId);
-          loginPlanKey = ent.planKey;
-          loginEntitlements = Array.from(ent.entitlements);
-        } catch { /* fail-open: empty entitlements */ }
+      // Successful login: reset this identifier's throttle window.
+      if (identifier) await clearLoginIdentifierThrottle(identifier);
+
+      // Wave 2 MFA: enrolled users must enter a TOTP (or recovery) code.
+      // Unenrolled field users skip this unless the org has flipped
+      // mfa_enforcement to `required` (default is optional).
+      const mfaGate = await mfaLoginGate(employee);
+      if (mfaGate === "challenge" || mfaGate === "enroll") {
+        return beginPendingMfaSession(req, res, employee, mfaGate);
       }
 
-      // Successful login: reset this identifier's throttle window.
-      if (identifier) loginAttempts.delete(`id:${identifier}`);
-
-      // Regenerate session ID on login so any stale cookie in the browser
-      // is always replaced by a fresh Set-Cookie. Also defends against
-      // session fixation.
-      req.session.regenerate((regenErr) => {
-        if (regenErr) {
-          console.error('Session regenerate error:', regenErr);
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to create session'
-          });
-        }
-
-        req.session.employeeId = employee.id;
-        // Tenancy: stamp the session with the employee's business so requests can be
-        // tenant-scoped (single-tenant today → always the Treemarkables id).
-        req.session.businessId = employee.businessId ?? undefined;
-
-        req.session.save((err) => {
-          if (err) {
-            console.error('Session save error:', err);
-            return res.status(500).json({
-              success: false,
-              message: 'Failed to create session'
-            });
-          }
-
-          // Migration safety: kill any legacy domain-scoped session cookie
-          // (.treemarkables.co.nz) that may still be in the browser jar from
-          // before the host-only cookie migration. Without this, the browser
-          // sends both old and new cookies and the server can read the old
-          // (invalid) one first, returning 401 and forcing a second login.
-          res.clearCookie('treemarkables.sid', {
-            path: '/',
-            httpOnly: true,
-            secure: true,
-            sameSite: 'none',
-            domain: '.treemarkables.co.nz',
-          });
-
-          res.json({
-            success: true,
-            data: {
-              id: employee.id,
-              firstName: employee.firstName,
-              lastName: employee.lastName,
-              email: employee.email,
-              role: employee.role,
-              phone: employee.phone,
-              status: employee.status,
-              // Tenant discriminator — client-side tenant gating (e.g. the
-              // platform-operator Settings tiles) keys off this.
-              businessId: employee.businessId ?? null,
-              permissions: Array.from(loginPermsSet),
-              planKey: loginPlanKey,
-              entitlements: loginEntitlements,
-            }
-          });
-        });
-      });
+      return establishEmployeeSession(req, res, employee, { mfaVerified: false, mfaEnabled: false });
     } catch (error) {
       console.error('Login error:', error);
       res.status(500).json({
@@ -2552,6 +2610,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch { /* fail-open: empty entitlements */ }
       }
 
+      const mfaRow = await getMfaRow(employee.id).catch(() => undefined);
+
       res.json({
         success: true,
         data: {
@@ -2572,6 +2632,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           permissions: Array.from(permsSet),
           planKey,
           entitlements,
+          mfaEnabled: Boolean(mfaRow?.enabled),
         }
       });
     } catch (error) {
@@ -2603,22 +2664,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // cookie was set in server/index.ts, otherwise the browser ignores the
       // clear and the stale SID lingers into the next login. Host-only (no
       // domain attribute) — see comment in server/index.ts session config.
-      res.clearCookie('treemarkables.sid', {
-        path: '/',
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-      });
-      // Also clear the legacy domain-scoped variant so browsers that still
-      // have it from before the host-only migration don't send it on the
-      // next login and confuse the session lookup.
-      res.clearCookie('treemarkables.sid', {
-        path: '/',
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        domain: '.treemarkables.co.nz',
-      });
+      clearHostSessionCookie(res);
+      // Legacy domain cookie is sent first on app.treemarkables.co.nz and
+      // hides the host-only session. Clear both SameSite variants.
+      clearLegacyDomainSessionCookie(res);
       
       res.json({
         success: true,
@@ -2626,6 +2675,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     });
   });
+
+  registerMfaAndSessionRoutes(app, { requireSession });
 
   // DELETE /api/auth/account - Permanently delete the signed-in user's own account.
   // Required by App Store Guideline 5.1.1(v): an app that supports account creation
@@ -2647,6 +2698,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.anonymizeEmployeeForDeletion(employeeId);
+      await disableMfa(employeeId).catch(() => {});
       console.log('[ACCOUNT-DELETE] Scrubbed + deactivated employee:', employeeId, 'business:', employee.businessId);
 
       req.session.destroy((err) => {
@@ -2654,14 +2706,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('[ACCOUNT-DELETE] Session destroy error:', err);
           // The account is already gone; report success regardless.
         }
-        // Mirror logout's cookie clearing (attributes must match server/index.ts).
-        res.clearCookie('treemarkables.sid', {
-          path: '/', httpOnly: true, secure: true, sameSite: 'none',
-        });
-        res.clearCookie('treemarkables.sid', {
-          path: '/', httpOnly: true, secure: true, sameSite: 'none',
-          domain: '.treemarkables.co.nz',
-        });
+        clearHostSessionCookie(res);
+        clearLegacyDomainSessionCookie(res);
         res.json({ success: true, message: 'Account deleted' });
       });
     } catch (error) {
@@ -2673,6 +2719,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ── Server-Sent Events ────────────────────────────────────────────────────
   // Clients connect here and receive real-time invalidation signals.
   app.get('/api/sse', (req: Request, res: Response) => {
+    const businessId = req.session.businessId;
+    if (!req.session.employeeId || !businessId) {
+      return res.status(401).end();
+    }
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -2682,7 +2732,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const ping = setInterval(() => {
       try { res.write(': ping\n\n'); } catch { clearInterval(ping); }
     }, 25000);
-    addClient(res);
+    addClient(res, businessId);
     req.on('close', () => {
       clearInterval(ping);
       removeClient(res);
@@ -2690,27 +2740,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   // ─────────────────────────────────────────────────────────────────────────
 
-  // SEO routes - serve sitemap.xml and robots.txt
-  app.get('/sitemap.xml', (req: Request, res: Response) => {
-    try {
-      const sitemapPath = path.join(process.cwd(), 'sitemap.xml');
-      
-      if (fs.existsSync(sitemapPath)) {
-        res.set('Content-Type', 'application/xml');
-        res.sendFile(sitemapPath);
-      } else {
-        res.status(404).json({ 
-          success: false, 
-          message: 'Sitemap not found. Please generate sitemap using the included Python script.' 
-        });
-      }
-    } catch (error) {
+  // SEO routes - serve sitemap.xml and robots.txt.
+  // Built in memory. sendFile() on cwd/sitemap.xml reported stream and missing-file
+  // errors via next(err), which the process handler turned into HTTP 500, and the
+  // esbuild bundle does not include that file. A failed blog lookup still returns
+  // the static marketing URLs.
+  app.get('/sitemap.xml', (_req: Request, res: Response) => {
+    handleTreemarkablesSitemap(res).catch((error) => {
       console.error('Error serving sitemap:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Error serving sitemap' 
-      });
-    }
+      if (res.headersSent) return;
+      res.status(200);
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.send(renderTreemarkablesSitemap([]));
+    });
   });
 
   // Public route: SaaS subscriber onboarding guide (no auth required)
@@ -2755,115 +2797,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).send('# Error serving robots.txt');
     }
   });
-  // Facebook reviews endpoint
-  app.get('/api/reviews/facebook', async (req: Request, res: Response) => {
-    try {
-      // Use long-lived Page Access Token instead of user token
-      const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
-      const pageId = process.env.FACEBOOK_PAGE_ID;
-      
-      if (!pageAccessToken) {
-        return res.status(200).json({ 
-          success: true, 
-          reviews: [],
-          message: 'Facebook Page Access Token not configured. Please set FACEBOOK_PAGE_ACCESS_TOKEN with a long-lived page token.' 
-        });
-      }
-
-      if (!pageId) {
-        return res.status(200).json({ 
-          success: true, 
-          reviews: [],
-          message: 'Facebook Page ID not configured' 
-        });
-      }
-
-      // Use ratings endpoint with page access token
-      const url = `https://graph.facebook.com/v18.0/${pageId}/ratings?access_token=${pageAccessToken}&fields=reviewer{name},rating,review_text,created_time&limit=10`;
-      
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Handle authentication errors gracefully instead of throwing 500
-        if (data.error?.code === 190 || data.error?.type === 'OAuthException') {
-          console.error('Facebook authentication error - token may be expired:', data.error?.message);
-          return res.status(200).json({ 
-            success: true, 
-            reviews: [],
-            message: 'Facebook token expired or invalid. Please refresh your long-lived Page Access Token.' 
-          });
-        }
-        
-        console.error('Facebook API error:', data);
-        return res.status(200).json({ 
-          success: true, 
-          reviews: [],
-          message: 'Unable to fetch Facebook reviews at this time' 
-        });
-      }
-
-      // Transform Facebook data to match our review interface
-      const reviews = data.data?.map((review: any, index: number) => ({
-        id: `fb-${index}`,
-        name: review.reviewer?.name || 'Facebook User',
-        location: 'Facebook',
-        rating: review.rating || 5,
-        comment: review.review_text || '',
-        service: 'Service',
-        source: 'facebook',
-        date: review.created_time
-      })) || [];
-
-      res.json({ success: true, reviews });
-
-    } catch (error) {
-      console.error('Facebook reviews error:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Error fetching Facebook reviews' 
-      });
-    }
+  // Facebook reviews — the only registration of this path. A later duplicate
+  // used to be registered further down; Express kept this first handler, and
+  // that handler treated every OAuthException as an expired token.
+  app.get('/api/reviews/facebook', async (_req: Request, res: Response) => {
+    const payload = await loadFacebookPageReviews();
+    res.status(200).json(payload);
   });
 
   // Facebook status endpoint
-  app.get('/api/facebook/status', async (req: Request, res: Response) => {
-    try {
-      const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
-      const pageId = process.env.FACEBOOK_PAGE_ID;
-      
-      if (!pageAccessToken || !pageId) {
-        return res.json({ 
-          connected: false,
-          message: 'Facebook credentials not configured'
-        });
-      }
-
-      // Quick test to verify token is valid by fetching page info
-      const url = `https://graph.facebook.com/v18.0/${pageId}?access_token=${pageAccessToken}&fields=name`;
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        return res.json({ 
-          connected: false,
-          message: 'Facebook token invalid or expired'
-        });
-      }
-
-      return res.json({ 
-        connected: true,
-        pageName: data.name,
-        pageId: pageId
-      });
-
-    } catch (error) {
-      console.error('Facebook status check error:', error);
-      return res.json({ 
-        connected: false,
-        message: 'Error checking Facebook status'
-      });
-    }
+  app.get('/api/facebook/status', async (_req: Request, res: Response) => {
+    const payload = await checkFacebookConnection();
+    res.json(payload);
   });
 
   // Gmail status endpoint
@@ -2896,6 +2841,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Google Calendar — per-user OAuth + two-way sync (unified calendar Phase C)
   // ─────────────────────────────────────────────────────────────────────────────
 
+  const googleCalendarOAuthTarget = (req: Request) => {
+    const requestOrigin = `${req.protocol}://${req.get('host')}`;
+    const redirectUri = googleCalendarRedirectUri(
+      {
+        NODE_ENV: process.env.NODE_ENV,
+        GOOGLE_CALENDAR_REDIRECT_URI: process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+      },
+      requestOrigin,
+    );
+    return {
+      redirectUri,
+      appOrigin: googleCalendarBrowserOrigin(redirectUri, requestOrigin, process.env.NODE_ENV),
+    };
+  };
+
   // Status: returns connection info for the logged-in user.
   app.get('/api/google-calendar/status', async (req: Request, res: Response) => {
     try {
@@ -2908,6 +2868,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         calendarId: conn.calendarId,
         lastSynced: conn.lastSyncedAt,
         lastError: conn.lastError,
+        syncStatus: conn.syncStatus,
       });
     } catch (error) {
       console.error('Google Calendar status error:', error);
@@ -2922,11 +2883,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     if (!clientId || !clientSecret) {
       return res.status(503).json({ success: false, message: 'Google Calendar OAuth not configured' });
     }
-    const { google } = require('googleapis');
-    const origin = process.env.NODE_ENV === 'production'
-      ? 'https://app.treemarkables.co.nz'
-      : `${req.protocol}://${req.get('host')}`;
-    const redirectUri = `${origin}/api/google-calendar/callback`;
+    const { redirectUri } = googleCalendarOAuthTarget(req);
     const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     // State encodes the current session identifiers so the callback can associate
     // the connection with the right employee without trusting POST body.
@@ -2949,30 +2906,26 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   // OAuth callback: exchange code, upsert connection, redirect to /integrations.
   app.get('/api/google-calendar/callback', async (req: Request, res: Response) => {
-    const origin = process.env.NODE_ENV === 'production'
-      ? 'https://app.treemarkables.co.nz'
-      : `${req.protocol}://${req.get('host')}`;
+    const { redirectUri, appOrigin } = googleCalendarOAuthTarget(req);
     try {
       const code = typeof req.query.code === 'string' ? req.query.code : '';
       const stateRaw = typeof req.query.state === 'string' ? req.query.state : '';
       if (!code || !stateRaw) {
-        return res.redirect(`${origin}/integrations?gcal_error=missing_code`);
+        return res.redirect(`${appOrigin}/integrations?gcal_error=missing_code`);
       }
       let stateParsed: { businessId?: string; employeeId?: string } = {};
       try {
         stateParsed = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8'));
       } catch {
-        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+        return res.redirect(`${appOrigin}/integrations?gcal_error=bad_state`);
       }
       const { businessId, employeeId } = stateParsed;
       if (!businessId || !employeeId) {
-        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+        return res.redirect(`${appOrigin}/integrations?gcal_error=bad_state`);
       }
 
       const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID!;
       const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET!;
-      const redirectUri = `${origin}/api/google-calendar/callback`;
-      const { google } = require('googleapis');
       const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
       const { tokens } = await oauth2.getToken(code);
       oauth2.setCredentials(tokens);
@@ -3007,24 +2960,32 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 50 * 60 * 1000),
         scope: tokens.scope ?? null,
         isActive: true,
+        syncStatus: 'synced',
         lastError: null,
         updatedAt: new Date(),
       };
 
+      let connectionId: string | undefined;
       if (existing.length > 0) {
+        connectionId = existing[0].id;
         await db
           .update(googleCalendarConnections)
           .set(connData)
           .where(eq(googleCalendarConnections.id, existing[0].id));
       } else {
-        await db.insert(googleCalendarConnections).values(connData);
+        const inserted = await db.insert(googleCalendarConnections).values(connData).returning({ id: googleCalendarConnections.id });
+        connectionId = inserted[0]?.id;
+      }
+
+      if (connectionId) {
+        await backfillFutureScheduledWorkOrders(connectionId);
       }
 
       console.log(`✅ Google Calendar connected for employee ${employeeId} (${googleEmail})`);
-      res.redirect(`${origin}/integrations?gcal_connected=true`);
+      res.redirect(`${appOrigin}/integrations?gcal_connected=true`);
     } catch (error) {
       console.error('Google Calendar OAuth callback error:', error);
-      res.redirect(`${origin}/integrations?gcal_error=oauth_failed`);
+      res.redirect(`${appOrigin}/integrations?gcal_error=oauth_failed`);
     }
   });
 
@@ -3040,7 +3001,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
         const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
         if (clientId && clientSecret) {
-          const { google } = require('googleapis');
           const auth = new google.auth.OAuth2(clientId, clientSecret);
           auth.setCredentials({ refresh_token: conn.refreshToken });
           await auth.revokeCredentials();
@@ -3575,12 +3535,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
-  // Per-IP rate limit for the public contact form (in-memory, resets on deploy).
-  const contactFormRateLimit = new Map<string, { count: number; resetTime: number }>();
-  const CONTACT_FORM_MAX_PER_WINDOW = 5;
-  const CONTACT_FORM_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-
-  // Contact form submission endpoint
+  // Contact form submission endpoint.
+  // Per-IP rate limit is the shared Postgres limiter (`publicMutatingRateLimit`,
+  // 5 / 10 min, same budget as /api/public/mulch-order) — not an in-memory Map.
   app.post('/api/contact', async (req: Request, res: Response) => {
     try {
       const { name, email, phone, hearAbout, message, captchaToken, leadSource, website } = req.body;
@@ -3621,24 +3578,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           message: 'Thank you! We will contact you within 24 hours for your free quote.'
         });
       }
-
-      // Per-IP rate limit — a real customer never needs more than a few
-      // submissions; a spam blast from one IP gets cut off.
-      const rlNow = Date.now();
-      const rlEntry = contactFormRateLimit.get(clientIp);
-      if (rlEntry && rlNow < rlEntry.resetTime) {
-        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
-          console.log(`[contact-spam] Rate limit hit by ${clientIp}`);
-          return res.status(429).json({
-            success: false,
-            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
-          });
-        }
-        rlEntry.count++;
-      } else {
-        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
-      }
-      if (contactFormRateLimit.size > 10000) contactFormRateLimit.clear(); // memory backstop
 
       // Cloudflare Turnstile — enforced only when BOTH keys are configured, matching
       // /api/captcha/config so the widget and the server check turn on together
@@ -4046,22 +3985,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         return res.json({ success: true });
       }
 
-      // Shares the contact form's per-IP budget — same anonymous-visitor class.
-      const rlNow = Date.now();
-      const rlEntry = contactFormRateLimit.get(clientIp);
-      if (rlEntry && rlNow < rlEntry.resetTime) {
-        if (rlEntry.count >= CONTACT_FORM_MAX_PER_WINDOW) {
-          console.log(`[mulch-spam] Rate limit hit by ${clientIp}`);
-          return res.status(429).json({
-            success: false,
-            message: 'Too many requests. Please wait a few minutes and try again, or call us directly.'
-          });
-        }
-        rlEntry.count++;
-      } else {
-        contactFormRateLimit.set(clientIp, { count: 1, resetTime: rlNow + CONTACT_FORM_WINDOW_MS });
-      }
-
       const trimmedName = typeof name === 'string' ? name.trim() : '';
       const trimmedAddress = typeof address === 'string' ? address.trim() : '';
       const cleanPhone = (typeof phone === 'string' ? phone : '').trim().replace(/[-\s]/g, '');
@@ -4221,7 +4144,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         }
       }
       
-      // Create job with 'lead' status
+      // Create job with 'lead' status.
+      // Phone is split into mobile vs landline. Name and email from the
+      // conversation form (then the customer row) fill any job-contact
+      // columns still empty — a phone on its own is not a complete contact.
       const jobNumber = await storage.getNextJobNumber();
       const jobData = {
         customerId: customer.id,
@@ -4238,6 +4164,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         jobContactPhone: isMobileNumber ? '' : (phone || ''),
         jobContactMobile: isMobileNumber ? (phone || '') : '',
       };
+      Object.assign(jobData, fillEmptyJobContactFromSources(jobData, [
+        { name, email, phone },
+        { name: customer.name, email: customer.email, phone: customer.phone, mobile: customer.mobile },
+      ]));
       
       const job = await storage.createJob(jobData);
 
@@ -5722,6 +5652,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     try {
       // Preprocess date fields - convert strings to Date objects
       const processedBody = { ...req.body };
+      if ('equipment' in processedBody) {
+        processedBody.equipment = sanitizeJobEquipment(processedBody.equipment);
+      }
       if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
         processedBody.scheduledDate = new Date(processedBody.scheduledDate);
       }
@@ -5882,6 +5815,18 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
               console.log(`✅ Auto-set lead source to "repeat" — customer has ${priorJobs.length} prior job(s)`);
             }
           }
+          // Conversation create links an existing customer and used to copy
+          // only the phone onto the job. Fill name and email (and a phone,
+          // when the job has none) from that customer. Non-empty job fields
+          // are left as the client sent them.
+          Object.assign(processedBody, fillEmptyJobContactFromSources(processedBody, [
+            {
+              name: existingCustomer.name,
+              email: existingCustomer.email,
+              phone: existingCustomer.phone,
+              mobile: existingCustomer.mobile,
+            },
+          ]));
         }
       }
 
@@ -6220,7 +6165,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.get('/api/jobs', async (req: Request, res: Response) => {
     try {
-      const { customerId, status, limit, offset, excludeCompleted, excludeArchived } = req.query;
+      const { customerId, status, limit, offset, excludeCompleted, excludeArchived, sort } = req.query;
+      // Dispatch Unscheduled asks for this. Other list callers keep createdAt order.
+      const sortByRecentActivity = sort === "recentActivity";
 
       // Parse pagination params
       const parsedLimit = limit ? parseInt(limit as string) : 10;
@@ -6285,7 +6232,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         offset: parsedOffset,
         excludeCompleted: excludeCompleted === 'true',
         excludeArchived: excludeArchived === 'true',
-      });
+      }, sortByRecentActivity ? "recentActivity" : undefined);
 
       // Serialize timestamps to ISO UTC format
       const serializedJobs = await attachCustomerNames(result.jobs.map(serializeJobTimestamps));
@@ -6333,6 +6280,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             WHERE scheduled_date IS NOT NULL
               AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') <= ${date}::date
               AND DATE((COALESCE(scheduled_end_date, scheduled_date) AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') >= ${date}::date
+              -- Non-contiguous bookings (scheduled_dates set, e.g. Mon + Wed) only run on
+              -- their listed days — the span test alone paints phantom days in between.
+              AND CASE WHEN jsonb_typeof(scheduled_dates) = 'array'
+                    THEN (jsonb_array_length(scheduled_dates) = 0 OR scheduled_dates @> ${JSON.stringify([date])}::jsonb)
+                    ELSE TRUE END
               AND status NOT IN ('archived', 'unsuccessful')
             ORDER BY scheduled_date ASC`
       );
@@ -6637,7 +6589,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.get('/api/jobs/:id', async (req: Request, res: Response) => {
     try {
-      const job = await storage.getJob(req.params.id);
+      let job = await storage.getJob(req.params.id);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
@@ -6659,6 +6611,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           console.error('Error resolving customer for job payload:', custErr);
         }
       }
+      // Fill empty job-contact name/email from the customer (then diary or
+      // the conversation thread) the first time this job is opened. A later
+      // status-only save does not clear those columns.
+      try {
+        job = await backfillEmptyJobContact(job, customer ? {
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          mobile: customer.mobile,
+        } : null);
+      } catch (fillErr) {
+        console.error('Error filling empty job contact:', fillErr);
+      }
       // Display default for historical jobs: if a job has no lead source but its
       // customer has OTHER jobs on file, surface it as "repeat" so the job card
       // reflects returning business. Display-only — we don't write here. New jobs
@@ -6675,7 +6640,22 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           console.error('Error deriving repeat lead source for job:', ljErr);
         }
       }
-      res.json({ success: true, data: { ...job, leadSource, customerName, customer } });
+      let riskAssessmentStatus: "none" | "draft" | "completed" = "none";
+      let riskAssessmentId: string | null = null;
+      try {
+        const links = await loadEffectiveRiskLinksForJobs([job.id]);
+        const link = links.get(job.id);
+        if (link) {
+          riskAssessmentStatus = link.riskAssessmentStatus;
+          riskAssessmentId = link.riskAssessmentId;
+        }
+      } catch (riskErr) {
+        console.error("Error loading JHA status for job:", riskErr);
+      }
+      res.json({
+        success: true,
+        data: { ...job, leadSource, customerName, customer, riskAssessmentStatus, riskAssessmentId },
+      });
     } catch (error) {
       console.error('Error fetching job:', error);
       res.status(500).json({ success: false, message: 'Error fetching job' });
@@ -6785,6 +6765,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Preprocess date fields - convert strings to Date objects
       const processedBody = { ...req.body };
       delete processedBody.expectedUpdatedAt;
+      if ('equipment' in processedBody) {
+        processedBody.equipment = sanitizeJobEquipment(processedBody.equipment);
+      }
       if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
         processedBody.scheduledDate = new Date(processedBody.scheduledDate);
       }
@@ -7451,6 +7434,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     try {
       // Convert empty string customerId to null (fixes foreign key constraint error)
       const processedBody = { ...req.body };
+      if ('equipment' in processedBody) {
+        processedBody.equipment = sanitizeJobEquipment(processedBody.equipment);
+      }
       if (processedBody.customerId === '') {
         processedBody.customerId = null;
       }
@@ -7879,18 +7865,22 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           };
           
           // Extract proposalId from metadata if available (for proposal_sent notifications)
-          const proposalId = entry.metadata?.proposalId || null;
-          
+          const rawProposalId = entry.metadata?.proposalId;
+          const proposalId = typeof rawProposalId === "string" ? rawProposalId : null;
+          const requestUser = (req as Request & { user?: { id?: unknown } }).user;
+          const userId = typeof requestUser?.id === "string" ? requestUser.id : null;
+          const customerId = typeof job?.customerId === "string" ? job.customerId : null;
+
           const notificationData = {
             title: titleMap[entry.entryType] || 'Job Update',
-            message: messageMap[entry.entryType] || entry.content?.substring(0, 100),
+            message: messageMap[entry.entryType] || entry.content?.substring(0, 100) || "Job update",
             type: notificationType,
             priority: entry.entryType === 'proposal' ? 'high' : 'medium',
             isRead: false,
-            userId: req.user?.id,
+            userId,
             jobId: jobId,
-            customerId: job?.customerId || null,
-            proposalId: proposalId,
+            customerId,
+            proposalId,
             diaryEntryId: entry.id
           };
           
@@ -7939,9 +7929,38 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       res.json({ success: true, data: transformedEntries, mobile: true });
     } catch (error) {
       console.error('Error fetching mobile diary:', error);
-      res.status(500).json({ success: false, message: 'Error fetching diary entries' });
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: clientSafeErrorText(error, 'Error fetching diary entries') });
+      }
     }
   });
+
+  // A diary load is JSON with a real status, including when encoding fails.
+  // An empty 2xx is what Safari reports as a pattern error with no status.
+  const sendDiaryJson = (res: Response, status: number, body: unknown) => {
+    if (res.headersSent) return;
+    const failure = { success: false, message: "Error fetching diary entries" };
+    let httpStatus = status;
+    let encoded: string;
+    try {
+      const value = JSON.stringify(body);
+      if (typeof value !== "string" || value.length === 0) {
+        encoded = JSON.stringify(failure);
+        httpStatus = 500;
+      } else {
+        encoded = value;
+      }
+    } catch (error) {
+      encoded = JSON.stringify({
+        success: false,
+        message: clientSafeErrorText(error, "Error fetching diary entries"),
+      });
+      httpStatus = 500;
+    }
+    res.status(httpStatus);
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.send(encoded);
+  };
 
   // Get job diary entries
   app.get('/api/jobs/:jobId/diary', async (req: Request, res: Response) => {
@@ -7958,7 +7977,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Handle temporary job IDs
       if (jobId.startsWith('temp-')) {
         const tempEntries = (global as any).tempDiaryEntries?.get(jobId) || [];
-        res.json({ success: true, data: tempEntries });
+        sendDiaryJson(res, 200, { success: true, data: tempEntries });
         return;
       }
 
@@ -8001,10 +8020,15 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         return transformed;
       });
       
-      res.json({ success: true, data: transformedEntries });
+      sendDiaryJson(res, 200, { success: true, data: transformedEntries });
     } catch (error) {
       console.error('Error fetching job diary entries:', error);
-      res.status(500).json({ success: false, message: 'Error fetching diary entries' });
+      // The job card shows this message. Keep the real reason (timeout, bad
+      // column, JSON failure) and drop stacks and connection strings.
+      sendDiaryJson(res, 500, {
+        success: false,
+        message: clientSafeErrorText(error, 'Error fetching diary entries'),
+      });
     }
   });
 
@@ -8017,7 +8041,27 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         res.json({ success: true, data: [] });
         return;
       }
-      const completions = await storage.getJobChecklistCompletions(jobId);
+      let completions = await storage.getJobChecklistCompletions(jobId);
+      // A completed morning JHA is the Risk assessment role being done, even
+      // when nobody has opened the checklist since it was saved.
+      if (businessHasRoleChecklist(currentBusinessId())) {
+        try {
+          const today = getNZDateString(new Date());
+          const link = (await loadRiskLinksForJobs([jobId], today)).get(jobId);
+          if (link?.riskAssessmentStatus === "completed") {
+            await recordRiskAssessmentChecklistDone(jobId);
+            completions = await storage.getJobChecklistCompletions(jobId);
+          } else {
+            // A tick from an earlier day on this job does not cover this morning.
+            completions = completions.filter((row) =>
+              row.itemId !== RISK_ASSESSMENT_CHECKLIST_ITEM_ID
+              || checklistCompletionClearsRiskDue(row.completedAt, today),
+            );
+          }
+        } catch (riskErr) {
+          console.error("Error syncing risk assessment checklist:", riskErr);
+        }
+      }
       res.json({ success: true, data: completions });
     } catch (error) {
       console.error('Error fetching job checklist:', error);
@@ -8143,6 +8187,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         return res.status(400).json({ success: false, message: `Unknown checklist item: ${itemId}` });
       }
       if (completed === false) {
+        // The linked JHA is the done signal. Unticking the role must not
+        // bring the due nag back while that assessment is still completed.
+        if (itemId === RISK_ASSESSMENT_CHECKLIST_ITEM_ID && businessHasRoleChecklist(currentBusinessId())) {
+          try {
+            const link = (await loadRiskLinksForJobs([jobId])).get(jobId);
+            if (link?.riskAssessmentStatus === "completed") {
+              await recordRiskAssessmentChecklistDone(jobId);
+              const rows = await storage.getJobChecklistCompletions(jobId);
+              return res.json({ success: true, data: rows.find((row) => row.itemId === itemId) ?? null });
+            }
+          } catch (riskErr) {
+            console.error("Error keeping risk assessment checklist done:", riskErr);
+          }
+        }
         await storage.clearJobChecklistItem(jobId, itemId);
         return res.json({ success: true, data: null });
       }
@@ -8175,10 +8233,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       // Items live alongside the client whitelist — kept in sync by hand because
       // there are only 7 of them and they rarely change.
-      const ITEM_META: Array<{ id: string; label: string; role: 'A' | 'B' | 'C' }> = [
+      const ITEM_META: Array<{ id: string; label: string; role: RoleKey }> = [
         { id: 'time-tracking',       label: 'Time tracking',                role: 'C' },
         { id: 'review-request',      label: 'Request review from client',   role: 'C' },
-        { id: 'risk-assessment',     label: 'Risk assessment',              role: 'A' },
+        { id: 'risk-assessment',     label: 'Risk assessment',              role: 'R' },
         { id: 'content-creation',    label: 'Content creation',             role: 'A' },
         { id: 'alert-customer-late', label: 'Alert customer if running late', role: 'B' },
         { id: 'signs-out',           label: 'Signs out',                    role: 'B' },
@@ -9108,7 +9166,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
   // getJob rides the owner connection (hence the ownership check) and the videos
   // insert needs runWithBusiness to stamp the tenant.
-  app.post('/api/jobs/:jobId/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
+  // Legacy single-request upload. New clients use the resumable session routes
+  // registered below — a whole iPhone .mov through this path is what the edge
+  // drops. Auth runs before multer so an anonymous body is not written to GCS.
+  app.post('/api/jobs/:jobId/videos', requireSession, videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
       if (!req.session.employeeId) {
@@ -9208,6 +9269,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
           url: video.url,
           thumbnailUrl: video.thumbnailUrl,
           captionsStatus: video.captionsStatus,
+          // Status can read "ready" while captions_vtt is empty. The watch
+          // page only renders <track> when this is true.
+          hasCaptions:
+            video.captionsStatus === 'ready' &&
+            typeof video.captionsVtt === 'string' &&
+            video.captionsVtt.trim().length > 0,
           createdAt: video.createdAt,
         },
       });
@@ -9231,10 +9298,29 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   const isContentPublisher = (businessId: string | undefined): boolean =>
     !!businessId && CONTENT_PUBLISHER_BUSINESS_IDS.has(businessId);
 
+  registerDirectVideoUploadRoutes(app, {
+    getJob: (jobId) => storage.getJob(jobId),
+    createVideo: (businessId, data) => runWithBusiness(businessId, () => storage.createVideo(data)),
+    findByFilename: async (filename) => {
+      const [row] = await db.select().from(schema.videos).where(eq(schema.videos.filename, filename)).limit(1);
+      return row;
+    },
+    deleteObject: (objectPath) => videoStorage.deleteVideoObject(objectPath),
+    onReady: async (video, showToCustomer) => {
+      if (video.jobId && showToCustomer && video.kind !== "knowledge") {
+        await syncVideoLinkInJobDescription(video.jobId, video.id, true);
+      }
+      generateVideoThumbnail(video.id).catch(() => {});
+      generateVideoCaptions(video.id).catch(() => {});
+    },
+    canPublishKnowledge: (businessId) => isContentPublisher(businessId),
+    appUrl: APP_URL,
+  });
+
   // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
   // tenant identity comes from the session, reads ride the owner connection (hence
   // the job ownership check), and the insert is stamped via runWithBusiness.
-  app.post('/api/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
+  app.post('/api/videos', requireSession, videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -11047,26 +11133,13 @@ Return only the rewritten description, nothing else.`,
       // Create the invoice
       const invoice = await storage.createInvoice(invoiceData);
 
-      // Update job to store invoice reference AND sync total amount for revenue metrics
-      const jobUpdate: Record<string, unknown> = {
-        invoiceId: invoice.id,
-        invoiceBlocked: false,
-        totalAmount: amount.toString() // Sync invoice amount to job for revenue tracking
-      };
-      // Backfill the job description from the invoice when the job has none yet,
-      // so a description typed straight into the invoice surfaces on the job card.
-      // Only fill when empty — never clobber an existing job description.
-      const invoiceDescription = (customData.description || '').trim();
-      if (invoiceDescription && !(job.description || '').trim()) {
-        jobUpdate.description = invoiceDescription;
-      }
-      await storage.updateJob(id, jobUpdate);
-
-      // Compute exc-GST and inc-GST totals per line item so the diary entry
-      // can show both, clearly labelled. Without this, the diary dumped the
-      // raw `amount` sum (whose GST basis depends on each item's
+      // Compute exc-GST and inc-GST totals per line item so the job row and
+      // the diary entry share one pair of figures. Without this, the diary
+      // dumped the raw `amount` sum (whose GST basis depends on each item's
       // priceIncludesTax flag) while the job-card header always shows
       // exc-GST — producing confusing "$9,145 vs $7,952" discrepancies.
+      // subtotal and total_including_gst are stored here too, so later
+      // screens (Despatch) don't have to guess which column is ex-GST.
       type DiaryLineItem = {
         total?: number | string;
         amount?: number | string;
@@ -11112,6 +11185,29 @@ Return only the rewritten description, nothing else.`,
         exGstTotal *= pct;
         incGstTotal *= pct;
       }
+      const gstAmount = incGstTotal - exGstTotal;
+
+      // Update job to store invoice reference AND sync total amount for revenue metrics.
+      // total_amount stays the ex-GST invoice amount. subtotal and
+      // total_including_gst are written in the same update so a later screen
+      // can prefer subtotal instead of guessing from a zeroed GST column.
+      const jobUpdate: Record<string, unknown> = {
+        invoiceId: invoice.id,
+        invoiceBlocked: false,
+        totalAmount: amount.toString(),
+        subtotal: exGstTotal.toFixed(2),
+        totalIncludingGst: incGstTotal.toFixed(2),
+        gstAmount: gstAmount.toFixed(2),
+      };
+      // Backfill the job description from the invoice when the job has none yet,
+      // so a description typed straight into the invoice surfaces on the job card.
+      // Only fill when empty — never clobber an existing job description.
+      const invoiceDescription = (customData.description || '').trim();
+      if (invoiceDescription && !(job.description || '').trim()) {
+        jobUpdate.description = invoiceDescription;
+      }
+      await storage.updateJob(id, jobUpdate);
+
       const partialSuffix = invoiceType === 'partial' ? ' (partial)' : '';
       const diaryText = `Invoice ${invoiceNumber} created for $${exGstTotal.toFixed(2)} + GST — $${incGstTotal.toFixed(2)} total${partialSuffix}`;
 
@@ -11451,7 +11547,7 @@ Return only the rewritten description, nothing else.`,
         && s.content.trim().length > 0,
       );
       if (!hasIntroduction && !hasDescriptionSection) {
-        validationErrors.push('proposal has no description text — the customer would see an empty job description');
+        validationErrors.push('proposal has no saved description text — the customer would see an empty job description');
       }
 
       // No line-item / $0-total check here: pricing is sometimes written in the
@@ -11512,9 +11608,22 @@ Return only the rewritten description, nothing else.`,
       console.log('📧 EMAIL HTML CONTENT:', htmlContent);
       console.log('📧 EMAIL TEXT CONTENT:', `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our services.'}`);
 
+      const sendClaim = await beginProposalSend(proposalId, 'email', String(to));
+      if (sendClaim === 'duplicate') {
+        console.log(`📧 Suppressed duplicate proposal email for ${proposalId} → ${to}`);
+        return res.json({
+          success: true,
+          deduped: true,
+          message: 'Proposal email already sent',
+          data: { proposalId, proposalNumber, recipient: to, sentAt: new Date().toISOString() },
+        });
+      }
+
       // Send email using EmailService (photos are hosted URLs, no attachments needed)
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
-      const emailResult = await emailService.sendEmail({
+      let emailResult;
+      try {
+      emailResult = await emailService.sendEmail({
         to,
         cc,
         fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
@@ -11524,8 +11633,13 @@ Return only the rewritten description, nothing else.`,
         jobId: job?.id, // Reply-to = job-{uuid}@ — unambiguous across tenants
         jobNumber: job?.jobNumber // Fallback if no id (legacy numeric alias)
       });
+      } catch (sendError) {
+        await releaseProposalSend(proposalId, 'email', String(to));
+        throw sendError;
+      }
 
       if (!emailResult.success) {
+        await releaseProposalSend(proposalId, 'email', String(to));
         return res.status(500).json({
           success: false,
           message: emailResult.error || 'Failed to send proposal email'
@@ -11699,7 +11813,7 @@ Return only the rewritten description, nothing else.`,
         && s.content.trim().length > 0,
       );
       if (!hasIntroduction && !hasDescriptionSection) {
-        validationErrors.push('quote has no description text — the PDF would have an empty job description');
+        validationErrors.push('quote has no saved description text — the PDF would have an empty job description');
       }
 
       // No line-item / $0-total check here: pricing is sometimes written in the
@@ -11753,7 +11867,20 @@ Return only the rewritten description, nothing else.`,
         `The quote is attached as a PDF. Or reply to this email with: I accept quote ${quoteNumber}`,
       ].join('\n\n');
 
-      const emailResult = await emailService.sendEmail({
+      const sendClaim = await beginProposalSend(proposalId, 'email', String(to));
+      if (sendClaim === 'duplicate') {
+        console.log(`📧 Suppressed duplicate quote email for ${proposalId} → ${to}`);
+        return res.json({
+          success: true,
+          deduped: true,
+          message: 'Quote email already sent',
+          data: { proposalId, quoteNumber, recipient: to, sentAt: new Date().toISOString() },
+        });
+      }
+
+      let emailResult;
+      try {
+      emailResult = await emailService.sendEmail({
         to,
         cc,
         fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
@@ -11769,8 +11896,13 @@ Return only the rewritten description, nothing else.`,
           },
         ],
       });
+      } catch (sendError) {
+        await releaseProposalSend(proposalId, 'email', String(to));
+        throw sendError;
+      }
 
       if (!emailResult.success) {
+        await releaseProposalSend(proposalId, 'email', String(to));
         return res.status(500).json({
           success: false,
           message: emailResult.error || 'Failed to send quote email',
@@ -12102,7 +12234,8 @@ Return only the rewritten description, nothing else.`,
 
         // Per-invoice billing-name override (saved on the invoice) beats the job-level
         // billingNameOverride so "edit for this invoice only" sticks in the email too.
-        const invCustomerName = invoiceDetails?.contactName || job?.billingNameOverride || customer?.name || 'there';
+        // Org-only customers (e.g. Gisborne District Council) are never greeted by a person's name.
+        const invCustomerName = resolveBillingName(invoiceDetails?.contactName || job?.billingNameOverride || customer?.name || 'there', customer, job);
 
         // Review ask riding along with the invoice. Reuses the job's existing
         // review-request token (re-sent invoices don't mint new ones); otherwise
@@ -12112,7 +12245,7 @@ Return only the rewritten description, nothing else.`,
           if (job?.id && job?.customerId) {
             let reviewReq = await storage.getLatestReviewRequestForJob(job.id);
             if (!reviewReq) {
-              const reviewToken = require('crypto').randomBytes(32).toString('hex');
+              const reviewToken = randomBytes(32).toString('hex');
               reviewReq = await storage.createReviewRequest({
                 jobId: job.id,
                 customerId: job.customerId,
@@ -12133,6 +12266,13 @@ Return only the rewritten description, nothing else.`,
           console.warn('Invoice review link skipped:', reviewErr);
         }
 
+        // The email does not share the public-page card check. The pay label
+        // was hardcoded. Treemarkables production invoices are bank transfer
+        // only, so the button is "View invoice" and offerCardPayment forces
+        // that label even if ctaText is passed through.
+        const invoiceCardsOff = invoiceCardCheckoutDisabled(
+          invoice?.businessId ?? validatedInvoiceData?.businessId,
+        );
         invoiceHtml = renderInvoiceEmail({
           customerName: invCustomerName,
           intro: emailBody,
@@ -12146,7 +12286,8 @@ Return only the rewritten description, nothing else.`,
           paidAmount: 0,
           balanceDue: totalAmount,
           ctaUrl: onlineInvoiceUrl,
-          ctaText: 'View & pay invoice online',
+          ctaText: invoiceCardsOff ? 'View invoice' : 'View & pay invoice online',
+          offerCardPayment: !invoiceCardsOff,
           bank: {
             accountName: invBizSettings?.bankAccountName || undefined,
             accountNumber: invBizSettings?.bankAccountNumber || undefined,
@@ -12487,8 +12628,11 @@ Return only the rewritten description, nothing else.`,
         }
       }
 
-      // Save phone number to job contact and customer so reply matching works
-      if (jobId && job && !job.jobContactPhone) {
+      // Save phone number to job contact and customer so reply matching works.
+      // Skip when either phone column is already set — conversation create puts
+      // an NZ mobile in jobContactMobile and leaves jobContactPhone blank, and
+      // writing the same number into the blank column showed it in both inputs.
+      if (jobId && job && !job.jobContactPhone && !job.jobContactMobile) {
         try {
           await storage.updateJob(jobId, { jobContactPhone: phone });
           console.log(`📱 Saved phone ${phone} to job ${jobId} contact`);
@@ -12505,15 +12649,17 @@ Return only the rewritten description, nothing else.`,
       if (customerId || jobId) {
         try {
           await storage.createCommunication({
-            customerId: customerId || job?.customerId,
-            jobId: jobId,
+            platform: 'sms',
             type: 'sms',
+            from: 'system',
+            to: [String(phone)],
+            customerId: typeof (customerId || job?.customerId) === 'string' ? (customerId || job?.customerId) : null,
+            jobId: typeof jobId === 'string' ? jobId : null,
             direction: 'outbound',
             subject: 'Invoice SMS',
             content: message,
-            phoneNumber: phone,
-            timestamp: new Date().toISOString(),
-            status: 'sent'
+            sentAt: new Date(),
+            status: 'sent',
           });
         } catch (commError) {
           console.warn('Failed to log SMS communication:', commError);
@@ -12791,7 +12937,7 @@ Return only the rewritten description, nothing else.`,
       }
       
       // Respond to Twilio with TwiML (required)
-      broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary']);
+      broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary'], inboundBizId);
       res.type('text/xml');
       res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
       
@@ -12825,11 +12971,18 @@ Return only the rewritten description, nothing else.`,
         return res.status(400).json({ error: 'Invalid filename' });
       }
       const servingUrl = `/api/recordings/${filename}`;
+      const recordingBusinessId = currentBusinessId();
+      const callScope = recordingBusinessId
+        ? and(eq(schema.calls.recordingUrl, servingUrl), eq(schema.calls.businessId, recordingBusinessId))
+        : eq(schema.calls.recordingUrl, servingUrl);
       const [ownedCall] = await db.select({ id: schema.calls.id })
-        .from(schema.calls).where(eq(schema.calls.recordingUrl, servingUrl)).limit(1);
+        .from(schema.calls).where(callScope).limit(1);
       if (!ownedCall) {
+        const recordScope = recordingBusinessId
+          ? and(eq(schema.callRecords.recordingUrl, servingUrl), eq(schema.callRecords.businessId, recordingBusinessId))
+          : eq(schema.callRecords.recordingUrl, servingUrl);
         const [ownedRecord] = await db.select({ id: schema.callRecords.id })
-          .from(schema.callRecords).where(eq(schema.callRecords.recordingUrl, servingUrl)).limit(1);
+          .from(schema.callRecords).where(recordScope).limit(1);
         if (!ownedRecord) {
           return res.status(404).json({ error: 'Recording not found' });
         }
@@ -12853,7 +13006,8 @@ Return only the rewritten description, nothing else.`,
   // Create them at: Twilio Console → Account → API Keys & Tokens → Create API Key (Standard).
   app.post('/api/twilio/token', async (req: Request, res: Response) => {
     try {
-      if (!req.session.employeeId) {
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -12865,16 +13019,17 @@ Return only the rewritten description, nothing else.`,
           message: 'Twilio API Key not configured. Set TWILIO_API_KEY and TWILIO_API_SECRET secrets.',
         });
       }
-      // Identity isolation: only admins (the owner) get the shared inbound
-      // identity that the answer webhook dials. Other employees get a
-      // per-employee identity so their devices don't ring on inbound customer
-      // calls — twilio-answer only <Dial>s the owner identity.
-      const requestingEmployee = await storage.getEmployee(req.session.employeeId);
-      const ownerIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+      // One inbound identity per business. Every admin used to receive the
+      // shared `treemarkables-owner` identity, so another business's TestFlight
+      // app rang for Treemarkables calls. Crew still get a personal identity
+      // so their phones don't ring the business line.
+      const requestingEmployee = await storage.getEmployee(employeeId);
+      const businessId = requestingEmployee?.businessId || req.session.businessId;
+      if (!businessId) {
+        return res.status(403).json({ success: false, message: 'No business on this account' });
+      }
       const isAdmin = requestingEmployee?.role === 'admin';
-      const clientIdentity = isAdmin
-        ? ownerIdentity
-        : `treemarkables-emp-${req.session.employeeId}`;
+      const clientIdentity = voiceIdentityForEmployee(businessId, employeeId, isAdmin);
       const twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
       // Platform-aware push credential. iOS uses an APNs VoIP push credential;
       // Android uses an FCM push credential (a different SID registered in the
@@ -12895,7 +13050,7 @@ Return only the rewritten description, nothing else.`,
       });
       const accessToken = new AccessToken(accountSid, apiKey, apiSecret, {
         identity: clientIdentity,
-        ttl: 3600,
+        ttl: VOICE_TOKEN_TTL_SECONDS,
       });
       accessToken.addGrant(voiceGrant);
       if (!twimlAppSid) {
@@ -12905,11 +13060,43 @@ Return only the rewritten description, nothing else.`,
         const credEnv = platform === 'android' ? 'TWILIO_PUSH_CREDENTIAL_SID_ANDROID' : 'TWILIO_PUSH_CREDENTIAL_SID';
         console.warn(`⚠️  ${credEnv} not set — incoming call push notifications to the ${platform} app will not work. Create a Push Credential at Twilio Console → Voice → Push Credentials (${platform === 'android' ? 'FCM' : 'APNs'}) and set this secret.`);
       }
-      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (platform: ${platform}, outgoing: ${twimlAppSid ? 'enabled' : 'disabled'}, push: ${pushCredentialSid ? 'enabled' : 'disabled'})`);
-      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity, platform, outgoingEnabled: !!twimlAppSid, pushEnabled: !!pushCredentialSid });
+      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (platform: ${platform}, outgoing: ${twimlAppSid ? 'enabled' : 'disabled'}, push: ${pushCredentialSid ? 'enabled' : 'disabled'}, ttl: ${VOICE_TOKEN_TTL_SECONDS}s)`);
+      return res.json({
+        success: true,
+        token: accessToken.toJwt(),
+        identity: clientIdentity,
+        platform,
+        ttl: VOICE_TOKEN_TTL_SECONDS,
+        outgoingEnabled: !!twimlAppSid,
+        pushEnabled: !!pushCredentialSid,
+      });
     } catch (error: any) {
       console.error('❌ Error generating Twilio token:', error);
       return res.status(500).json({ success: false, message: 'Failed to generate token' });
+    }
+  });
+
+  // The iOS app calls this after TwilioVoiceSDK.register succeeds, and again
+  // each time it refreshes the access token. The answer webhook reads the row
+  // to decide whether <Client> is worth dialling.
+  app.post('/api/twilio/presence', async (req: Request, res: Response) => {
+    try {
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const requestingEmployee = await storage.getEmployee(employeeId);
+      const businessId = requestingEmployee?.businessId || req.session.businessId;
+      if (!businessId) {
+        return res.status(403).json({ success: false, message: 'No business on this account' });
+      }
+      const isAdmin = requestingEmployee?.role === 'admin';
+      const identity = voiceIdentityForEmployee(businessId, employeeId, isAdmin);
+      await recordVoiceClientPresence(identity, VOICE_TOKEN_TTL_SECONDS);
+      return res.json({ success: true, identity, ttl: VOICE_TOKEN_TTL_SECONDS });
+    } catch (error: any) {
+      console.error('❌ Error recording voice presence:', error);
+      return res.status(500).json({ success: false, message: 'Failed to record voice presence' });
     }
   });
 
@@ -12922,27 +13109,49 @@ Return only the rewritten description, nothing else.`,
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
 
-  // Builds the inner TwiML verbs (everything between <Response> and </Response>)
-  // for the original "ring the iOS app + owner's phone simultaneously, record,
-  // voicemail on no-answer" flow. Extracted verbatim from the answer webhook so
-  // the IVR menu can fall through to the exact same behaviour on timeout /
-  // press-2, and so the voice-agent failure fallback (?mode=dial) reproduces
-  // today's flow byte-for-byte.
+  // Rings the iOS app. The owner's mobile is added to the same Dial only
+  // while the app has a live registration. An expired registration still
+  // dials the app on its own (skipping it sent callers straight to voicemail
+  // once the heartbeat lapsed). The action URL then rings the mobile, and
+  // only then takes voicemail.
   const buildDialJulesTwimlBody = async (req: Request): Promise<string> => {
     const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER;
-    const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
-    const hasClient = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
-
-    // Must have at least one destination — Client app OR phone number
-    if (!hasClient && !ownerPhone) {
-      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or OWNER_PHONE_NUMBER)');
-      return `  <Say voice="alice">Sorry, we are unable to take your call right now. Please try again later.</Say>
-`;
+    // Dial the business that owns the line, not a shared identity every
+    // admin app registers for. An unmapped number falls back to the platform
+    // default business (the original single-tenant line), never to a name
+    // that other businesses' devices are still bound to.
+    const inboundToForIdentity = String(req.body?.To || '');
+    let dialBusinessId = await resolveBusinessIdByChannel('phone', inboundToForIdentity);
+    if (!dialBusinessId) {
+      try {
+        dialBusinessId = (await storage.getBusinessSettings())?.businessId ?? undefined;
+      } catch {
+        dialBusinessId = undefined;
+      }
     }
+    const clientIdentity = dialBusinessId
+      ? inboundVoiceIdentity(dialBusinessId)
+      : (process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner');
+    const clientConfigured = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
+    const presence = clientConfigured
+      ? await readVoiceClientPresence(clientIdentity)
+      : "unregistered";
+    const ring = planInboundRing({
+      clientConfigured,
+      presence,
+      hasOwnerPhone: !!ownerPhone,
+    });
 
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
+
+    // Nothing to ring — the no-answer route plays the saved voicemail greeting.
+    if (ring.leg === "none") {
+      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or OWNER_PHONE_NUMBER)');
+      return `  <Redirect method="POST">${escapeTwimlXml(`${baseUrl}/api/webhooks/twilio-no-answer?leg=none`)}</Redirect>
+`;
+    }
 
     // Twilio's recording-status callback (fired when the call's recording
     // completes) does NOT include From / ForwardedFrom / To — only the initial
@@ -13033,12 +13242,12 @@ Return only the rewritten description, nothing else.`,
 
     // Build the list of Dial targets. When we have a caller name, the <Client>
     // must use the <Identity> noun form so we can attach a <Parameter>.
-    const clientTarget = hasClient
+    const clientTarget = ring.dialClient
       ? callerName
         ? `    <Client>\n      <Identity>${clientIdentity}</Identity>\n      <Parameter name="callerName" value="${escapeXml(callerName)}"/>\n    </Client>`
         : `    <Client>${clientIdentity}</Client>`
       : '';
-    const phoneTarget = ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
+    const phoneTarget = ring.dialPhone && ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
 
     // Optional recorded-call disclosure played to the CALLER before we ring
     // through. OFF by default — playing any audio before the agent picks up
@@ -13078,7 +13287,7 @@ Return only the rewritten description, nothing else.`,
       connectingTwiml = `  <Say voice="alice">${escapeXml(connectingPromptRaw)}</Say>\n`;
     }
 
-    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, connecting=${connectingTwiml ? 'on' : 'off'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
+    console.log(`📞 Twilio answer webhook — client=${ring.dialClient ? clientIdentity : 'off'} (presence=${presence}), phone=${ring.dialPhone ? ownerPhone : 'off'}, leg=${ring.leg}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, connecting=${connectingTwiml ? 'on' : 'off'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
 
     return `${connectingTwiml}${disclosureTwiml}  <Dial
     record="record-from-answer"
@@ -13086,7 +13295,7 @@ Return only the rewritten description, nothing else.`,
     recordingStatusCallback="${recordingCallbackUrl}"
     recordingStatusCallbackEvent="completed"
     timeout="20"
-    action="${baseUrl}/api/webhooks/twilio-no-answer"
+    action="${escapeTwimlXml(`${baseUrl}/api/webhooks/twilio-no-answer?leg=${ring.leg}`)}"
   >
 ${clientTarget}
 ${phoneTarget}
@@ -13158,8 +13367,12 @@ ${phoneTarget}
     // calledTo = our own line for tenant resolution, direction=outbound flips
     // the stored direction and skips inbound-lead extraction. `&` between
     // query params must be `&amp;` inside an XML attribute.
+    const callerBusinessId = businessIdFromVoiceClient(from);
+    const callerBusinessQuery = isBusinessId(callerBusinessId)
+      ? `&amp;callerBusinessId=${encodeURIComponent(callerBusinessId)}`
+      : '';
     const recordingCallbackUrl =
-      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(dialTo)}&amp;calledTo=${encodeURIComponent(twilioLine)}&amp;direction=outbound`;
+      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(dialTo)}&amp;calledTo=${encodeURIComponent(twilioLine)}&amp;direction=outbound${callerBusinessQuery}`;
 
     console.log(`📞 Outgoing web call: ${from} → ${dialTo} (callerId ${callerId})`);
     return res.send(`<?xml version="1.0" encoding="UTF-8"?>
@@ -13479,6 +13692,28 @@ ${dialBody}</Response>`);
     }
   });
 
+  // Which party the <Dial> actually bridged. A 1-second "completed" call is
+  // the app dropping (31005) when `to` is client:, and a real hang-up when
+  // `to` is the owner's mobile. Failures return null and the follow-up
+  // treats that as "don't lose the caller".
+  const lookupDialedParty = async (dialCallSid: string): Promise<string | null> => {
+    if (!/^CA[0-9a-f]{32}$/i.test(dialCallSid)) return null;
+    try {
+      const client = await getTwilioClient();
+      const fetched = client.calls(dialCallSid).fetch().then(
+        (call) => (typeof call.to === "string" ? call.to : null),
+        () => null,
+      );
+      return await Promise.race([
+        fetched,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+      ]);
+    } catch (err) {
+      console.error("📞 dial leg lookup failed:", err);
+      return null;
+    }
+  };
+
   // TwiML: owner didn't answer → take a voicemail (still records and processes)
   app.post('/api/webhooks/twilio-no-answer', async (req: Request, res: Response) => {
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
@@ -13486,18 +13721,45 @@ ${dialBody}</Response>`);
     const baseUrl = `${protocol}://${host}`;
 
     // Twilio's <Dial action> fires when the Dial verb finishes for ANY reason —
-    // including a successfully connected call where one side hung up. We only
-    // want to fall through to voicemail when the dial actually failed to
-    // connect, not after a normal completed conversation. DialCallStatus is
-    // one of: completed, answered, busy, no-answer, failed, canceled.
+    // including a successfully connected call where one side hung up. A normal
+    // conversation hangs up. A few-second app-leg drop, or a <Dial> that
+    // failed before the mobile could ring, is forwarded to the mobile and
+    // then to voicemail. DialCallStatus is one of: completed, answered, busy,
+    // no-answer, failed, canceled.
     const dialStatus = String(req.body?.DialCallStatus || '').toLowerCase();
-    if (dialStatus === 'completed' || dialStatus === 'answered') {
-      console.log(`📞 Dial completed (status=${dialStatus}) — call ended naturally, skipping voicemail`);
+    const leg = parseDialLeg(req.query.leg);
+    const dialCallDuration = parseDialCallDuration(req.body?.DialCallDuration);
+    const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER || '';
+    const followupInput = {
+      leg,
+      dialStatus,
+      dialCallDuration,
+      hasOwnerPhone: !!ownerPhone,
+    };
+    let decision = decideInboundDialFollowup(followupInput);
+    if (decision.action === 'lookup') {
+      const answeredTo = await lookupDialedParty(String(req.body?.DialCallSid || ''));
+      decision = decideInboundDialFollowup({ ...followupInput, answeredTo });
+    }
+    if (decision.action === 'hangup') {
+      console.log(`📞 Dial completed (status=${dialStatus}, duration=${dialCallDuration ?? '?'}, leg=${leg}) — call ended naturally, skipping voicemail`);
       res.type('text/xml');
-      return res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>');
+      return res.send(HANGUP_TWIML);
+    }
+    if (decision.action === 'dial-phone' && ownerPhone) {
+      const inboundFrom = String(req.body?.From || req.body?.ForwardedFrom || '');
+      const inboundTo = String(req.body?.To || '');
+      console.log(`📞 In-app call unavailable (status=${dialStatus}, duration=${dialCallDuration ?? '?'}, leg=${leg}) — forwarding to ${ownerPhone}`);
+      res.type('text/xml');
+      return res.send(recoveryPhoneDialTwiml({
+        ownerPhone,
+        actionUrl: `${baseUrl}/api/webhooks/twilio-no-answer?leg=phone`,
+        recordingCallbackUrl:
+          `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&calledTo=${encodeURIComponent(inboundTo)}`,
+      }));
     }
 
-    console.log(`📞 Twilio no-answer (DialCallStatus=${dialStatus || 'unknown'}) — switching to voicemail`);
+    console.log(`📞 Twilio no-answer (DialCallStatus=${dialStatus || 'unknown'}, leg=${leg}) — switching to voicemail`);
 
     // Voicemail recording's status callback also needs callerFrom in the URL
     // (same reason as the answer webhook — recording callbacks don't include
@@ -13611,7 +13873,13 @@ ${dialBody}</Response>`);
         // defaulting to Treemarkables and matching customers across all tenants.
         // Unmapped number → undefined → unchanged prior (single-tenant) behaviour.
         const calledToRaw = String(req.query.calledTo || To || '');
-        const inboundBizId = await resolveBusinessIdByChannel('phone', calledToRaw);
+        // Outbound calls are placed by a signed-in Voice client. Log them on
+        // that client's business, not on whoever owns the shared caller-id line.
+        const callerBusinessQuery = String(req.query.callerBusinessId || '');
+        const callerBusinessId = isBusinessId(callerBusinessQuery) ? callerBusinessQuery : undefined;
+        const inboundBizId = (isOutbound && callerBusinessId)
+          ? callerBusinessId
+          : await resolveBusinessIdByChannel('phone', calledToRaw);
         if (inboundBizId) {
           console.log(`🏢 Inbound line ${calledToRaw} resolved to business ${inboundBizId}`);
         }
@@ -14631,10 +14899,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           customer: customer || null,
           job: job || null,
           company,
-          // Whether this business can take card payments online — Treemarkables (platform
-          // account) or a Connect tenant with charges enabled. Drives the "Pay now" button;
-          // everyone else shows bank-transfer details instead.
-          onlinePaymentEnabled: businessOwnsStripeAccount(invoice.businessId) || !!bizSettings?.stripeConnectChargesEnabled,
+          // Pay now on the public invoice. Treemarkables production is bank
+          // transfer only, even though businessOwnsStripeAccount is still true
+          // (deposits and job-card payments keep the platform account). Other
+          // businesses: platform account, or Connect charges enabled.
+          onlinePaymentEnabled: invoiceOnlinePaymentEnabled({
+            businessId: invoice.businessId,
+            ownsPlatformAccount: businessOwnsStripeAccount(invoice.businessId),
+            connectChargesEnabled: !!bizSettings?.stripeConnectChargesEnabled,
+          }),
           sections: sections.map(s => ({
             ...s,
             images: Array.isArray(s.images) ? s.images : [],
@@ -14773,8 +15046,18 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (invoice.status === 'cancelled') {
         return res.status(400).json({ success: false, message: 'This invoice has been cancelled' });
       }
-      // Card payments: Treemarkables (platform account) or a Connect tenant with charges
-      // enabled (direct charge → funds go to the tenant). Everyone else → bank transfer.
+      // Treemarkables production invoices are bank transfer only. Refuse before
+      // any Checkout session is created. businessOwnsStripeAccount is still true
+      // for this business; deposits and job-card payments do not use this route.
+      if (invoiceCardCheckoutDisabled(invoice.businessId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Online card payment is not available for this invoice. Please pay using the bank-transfer details on your invoice.',
+        });
+      }
+      // Card payments: a Connect tenant with charges enabled (direct charge →
+      // funds go to the tenant), or a business that still owns the platform
+      // account. Everyone else → bank transfer.
       const { canTakeCard: invoiceCanCard, connectedAccountId: invoiceConnectAccount } = await resolveCardPayment(invoice.businessId);
       if (!invoiceCanCard) {
         return res.status(403).json({
@@ -14876,25 +15159,40 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const total = subtotal + gst;
 
       const __emailIdentity = getBusinessIdentity(await storage.getBusinessSettings());
+      const invoiceCardsOff = invoiceCardCheckoutDisabled(invoice.businessId);
+      const bankSettings = invoiceCardsOff && invoice.businessId
+        ? await storage.getBusinessSettingsForBusiness(invoice.businessId)
+        : null;
+      const bankFineprint = invoiceCardsOff
+        ? invoiceBankTransferNote({
+            accountName: bankSettings?.bankAccountName,
+            accountNumber: bankSettings?.bankAccountNumber,
+            reference: `Invoice ${invoice.invoiceNumber}`,
+          })
+        : null;
       const htmlContent = renderBrandedEmail({
         company: { name: __emailIdentity.name, tagline: __emailIdentity.tagline, address: __emailIdentity.address, phone: __emailIdentity.phone, email: __emailIdentity.email, gstNumber: __emailIdentity.gstNumber },
         customerName,
-        intro: message || 'Your invoice is ready. Tap below to view the full breakdown and payment details — bank transfer instructions are on the invoice.',
+        intro: message || (invoiceCardsOff
+          ? 'Your invoice is ready. Please pay by bank transfer using the account details below.'
+          : 'Your invoice is ready. Tap below to view the full breakdown and payment details — bank transfer instructions are on the invoice.'),
         documentLabel: `Invoice #${invoice.invoiceNumber}`,
         totalAmount: total,
         totalLabel: 'due',
         ctaText: 'View Invoice',
         ctaUrl: invoiceViewUrl,
         ctaHint: 'Opens your invoice in the browser — no login required.',
+        fineprint: bankFineprint ?? undefined,
       });
 
+      const plainInvoice = `Invoice ${invoice.invoiceNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD.`;
       const emailResult = await emailService.sendEmail({
         to,
         cc,
         fromName: __emailIdentity.name || undefined, // From shows the tenant's business name; blank → platform default
         subject,
         html: htmlContent,
-        text: `Invoice ${invoice.invoiceNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD.`,
+        text: bankFineprint ? `${plainInvoice} ${bankFineprint}` : plainInvoice,
         jobNumber: job?.jobNumber,
       });
 
@@ -15125,36 +15423,55 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // jobs.staffTimeEntries entry so labour cost, back-costing and gross margin
   // reuse the exact recompute paths the manual RecordedTimeEntries flow uses.
 
-  // Stop a running timer: write the time entry, recompute labour + margin,
-  // diary-log, delete the timer row. Shared by /timer/stop and start-with-switch.
-  // Set one person's crew role for an NZ date. job_day_roles is the source of truth;
-  // the legacy job_staff_assignments.day_role is mirrored for one release.
-  async function upsertDayRole(employeeId: string, nzDate: string, roleKey: 'A' | 'B' | 'C', setBy: string | null) {
-    await db.insert(schema.jobDayRoles)
-      .values(withTenant({ employeeId, nzDate, roleKey, setByEmployeeId: setBy }))
-      .onConflictDoUpdate({
-        target: [schema.jobDayRoles.employeeId, schema.jobDayRoles.nzDate],
-        set: { roleKey, setByEmployeeId: setBy, updatedAt: new Date() },
-      });
+  // Replace one person's checklist roles for an NZ date. job_day_roles is the
+  // source of truth: one row per role, so the same person can hold several.
+  // The legacy job_staff_assignments.day_role column stores only the primary
+  // role of that set (or null when the set is empty).
+  async function setDayRoles(employeeId: string, nzDate: string, desired: RoleKey[], setBy: string | null) {
+    const wanted = sortRoles(desired);
+    const existing = await db.select().from(schema.jobDayRoles).where(and(
+      eq(schema.jobDayRoles.employeeId, employeeId),
+      eq(schema.jobDayRoles.nzDate, nzDate),
+    ));
+    const have = existing.map((row) => row.roleKey).filter(isRoleKey);
+    const remove = have.filter((role) => !wanted.includes(role));
+    const insert = wanted.filter((role) => !have.includes(role));
+    if (remove.length > 0) {
+      await db.delete(schema.jobDayRoles).where(and(
+        eq(schema.jobDayRoles.employeeId, employeeId),
+        eq(schema.jobDayRoles.nzDate, nzDate),
+        inArray(schema.jobDayRoles.roleKey, remove),
+      ));
+    }
+    for (const roleKey of insert) {
+      await db.insert(schema.jobDayRoles)
+        .values(withTenant({ employeeId, nzDate, roleKey, setByEmployeeId: setBy }))
+        .onConflictDoUpdate({
+          target: [schema.jobDayRoles.employeeId, schema.jobDayRoles.nzDate, schema.jobDayRoles.roleKey],
+          set: { setByEmployeeId: setBy, updatedAt: new Date() },
+        });
+    }
     const startUtc = fromZonedTime(`${nzDate}T00:00:00`, 'Pacific/Auckland');
     const endUtc = fromZonedTime(`${nzDate}T23:59:59.999`, 'Pacific/Auckland');
-    await db.update(schema.jobStaffAssignments)
-      .set({ dayRole: roleKey, updatedAt: new Date() })
+    const updated = await db.update(schema.jobStaffAssignments)
+      .set({ dayRole: primaryDayRole(wanted), updatedAt: new Date() })
       .where(and(
         eq(schema.jobStaffAssignments.employeeId, employeeId),
         gte(schema.jobStaffAssignments.startTime, startUtc),
         lte(schema.jobStaffAssignments.startTime, endUtc),
-      ));
+      ))
+      .returning();
+    return { dayRoles: wanted, dayRole: primaryDayRole(wanted), updatedCount: updated.length };
   }
 
   // Enabled checklist tasks grouped by role, in display order.
-  async function getRoleTaskLabels(): Promise<Record<'A' | 'B' | 'C', string[]>> {
+  async function getRoleTaskLabels(): Promise<Record<RoleKey, string[]>> {
     const rows = await db.select().from(schema.roleChecklistTasks)
       .orderBy(asc(schema.roleChecklistTasks.sortOrder), asc(schema.roleChecklistTasks.createdAt));
-    const byRole: Record<'A' | 'B' | 'C', string[]> = { A: [], B: [], C: [] };
+    const byRole: Record<RoleKey, string[]> = { A: [], B: [], C: [], R: [] };
     for (const r of rows) {
-      if (!r.isEnabled) continue;
-      if (r.roleKey === 'A' || r.roleKey === 'B' || r.roleKey === 'C') byRole[r.roleKey].push(r.label);
+      if (!r.isEnabled || !isRoleKey(r.roleKey)) continue;
+      byRole[r.roleKey].push(r.label);
     }
     return byRole;
   }
@@ -15171,23 +15488,26 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       )),
       getRoleTaskLabels(),
     ]);
-    const roleByEmployee = new Map(roleRows.map(r => [r.employeeId, r.roleKey as 'A' | 'B' | 'C']));
+    const rolesByEmployee = groupRolesByEmployee(roleRows);
     const jobRef = job?.jobNumber ? `Job ${job.jobNumber}` : 'this job';
     const withoutRole: string[] = [];
 
     for (const employeeId of employeeIds) {
-      const role = roleByEmployee.get(employeeId);
-      if (!role) {
+      const roles = rolesByEmployee.get(employeeId) ?? [];
+      if (roles.length === 0) {
         withoutRole.push(employeeId);
         continue;
       }
-      const tasks = taskLabels[role];
+      const tasks = roles.flatMap((role) => taskLabels[role]);
+      const label = joinRoleLabels(roles);
       await notificationHelper.notifyEmployee(employeeId, {
-        title: `You're ${ROLE_LABELS[role]} on ${jobRef}`,
-        body: tasks.length > 0 ? tasks.join(' · ') : 'No tasks set for this role.',
+        title: `You're ${label} on ${jobRef}`,
+        body: tasks.length > 0
+          ? tasks.join(' · ')
+          : roles.length === 1 ? 'No tasks set for this role.' : 'No tasks set for these roles.',
         clickAction: `/dispatch?job=${job.id}`,
         collapseId: `day-role-${job.id}-${employeeId}-${nzDate}`,
-        data: { jobId: job.id, roleKey: role },
+        data: { jobId: job.id, roleKey: primaryDayRole(roles), roleKeys: roles },
       });
     }
 
@@ -15230,8 +15550,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     ].filter((id): id is string => typeof id === 'string' && id.length > 0)));
     if (employeeIds.length === 0) return;
 
-    // Their role on the close date, falling back to the most recent role they held
-    // on any day this job ran — a multi-day job may close after they finished up.
+    // Every role they held on the close date, falling back to every role on the
+    // most recent day this job ran — a multi-day job may close after they finished.
     const jobDates = new Set<string>([closeDate]);
     for (const d of getJobScheduledNZDates(job)) jobDates.add(d);
     for (const a of assignments) {
@@ -15241,19 +15561,20 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       inArray(schema.jobDayRoles.employeeId, employeeIds),
       inArray(schema.jobDayRoles.nzDate, Array.from(jobDates)),
     ));
-    const roleByEmployee = new Map<string, { roleKey: string; nzDate: string }>();
-    for (const r of roleRows) {
-      const existing = roleByEmployee.get(r.employeeId);
-      if (r.nzDate === closeDate) {
-        roleByEmployee.set(r.employeeId, { roleKey: r.roleKey, nzDate: r.nzDate });
-        continue;
-      }
-      if (!existing || (existing.nzDate !== closeDate && r.nzDate > existing.nzDate)) {
-        roleByEmployee.set(r.employeeId, { roleKey: r.roleKey, nzDate: r.nzDate });
-      }
+    const rowsByEmployee = new Map<string, typeof roleRows>();
+    for (const row of roleRows) {
+      const list = rowsByEmployee.get(row.employeeId) ?? [];
+      list.push(row);
+      rowsByEmployee.set(row.employeeId, list);
     }
 
-    const doneIds = new Set(completions.map(c => c.itemId));
+    let linkedRisk: JobRiskAssessmentLink | undefined;
+    try {
+      linkedRisk = (await loadRiskLinksForJobs([jobId], closeDate)).get(jobId);
+    } catch (riskErr) {
+      console.error('Error loading JHA status for role snapshot:', riskErr);
+    }
+    const doneIds = doneIdsIncludingLinkedJha(completions, linkedRisk, closeDate);
     const expectedByRole = new Map<string, string[]>();
     for (const t of taskRows) {
       if (!t.isEnabled || !isRoleKey(t.roleKey)) continue;
@@ -15263,33 +15584,45 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
 
     for (const employeeId of employeeIds) {
-      const role = roleByEmployee.get(employeeId);
-      if (!role || !isRoleKey(role.roleKey)) continue; // no role = nothing to be a percentage of
-      const expected = expectedByRole.get(role.roleKey) ?? [];
-      if (expected.length === 0) continue;
-      const done = expected.filter(id => doneIds.has(id));
-      await db.insert(schema.jobRoleCompletions)
-        .values(withTenant({
-          jobId,
-          employeeId,
-          nzDate: closeDate,
-          roleKey: role.roleKey,
-          itemsDone: done.length,
-          itemsExpected: expected.length,
-          expectedItemIds: expected,
-          doneItemIds: done,
-        }))
-        .onConflictDoUpdate({
-          target: [schema.jobRoleCompletions.jobId, schema.jobRoleCompletions.employeeId],
-          set: {
+      const roles = selectRolesForDate(rowsByEmployee.get(employeeId) ?? [], closeDate);
+      const rolesWithTasks = roles.filter((roleKey) => (expectedByRole.get(roleKey) ?? []).length > 0);
+      // No role, or every role's list is empty: leave any previous snapshot. A
+      // one-role job still writes exactly one row.
+      if (rolesWithTasks.length === 0) continue;
+      await db.delete(schema.jobRoleCompletions).where(and(
+        eq(schema.jobRoleCompletions.jobId, jobId),
+        eq(schema.jobRoleCompletions.employeeId, employeeId),
+        notInArray(schema.jobRoleCompletions.roleKey, rolesWithTasks),
+      ));
+      for (const roleKey of rolesWithTasks) {
+        const expected = expectedByRole.get(roleKey) ?? [];
+        const done = expected.filter(id => doneIds.has(id));
+        await db.insert(schema.jobRoleCompletions)
+          .values(withTenant({
+            jobId,
+            employeeId,
             nzDate: closeDate,
-            roleKey: role.roleKey,
+            roleKey,
             itemsDone: done.length,
             itemsExpected: expected.length,
             expectedItemIds: expected,
             doneItemIds: done,
-          },
-        });
+          }))
+          .onConflictDoUpdate({
+            target: [
+              schema.jobRoleCompletions.jobId,
+              schema.jobRoleCompletions.employeeId,
+              schema.jobRoleCompletions.roleKey,
+            ],
+            set: {
+              nzDate: closeDate,
+              itemsDone: done.length,
+              itemsExpected: expected.length,
+              expectedItemIds: expected,
+              doneItemIds: done,
+            },
+          });
+      }
     }
   }
 
@@ -15297,22 +15630,29 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   // prompt before they walk off — the prompt NEVER gates the stop, because gating it
   // just moves when people press stop and the resulting time drift poisons back-costing.
   async function outstandingRoleItems(jobId: string, employeeId: string, nzDate: string) {
-    const [roleRow] = await db.select().from(schema.jobDayRoles).where(and(
+    const roleRows = await db.select().from(schema.jobDayRoles).where(and(
       eq(schema.jobDayRoles.employeeId, employeeId),
       eq(schema.jobDayRoles.nzDate, nzDate),
     ));
-    if (!roleRow || !isRoleKey(roleRow.roleKey)) return [];
+    const roles = groupRolesByEmployee(roleRows).get(employeeId) ?? [];
+    if (roles.length === 0) return [];
     const [tasks, completions] = await Promise.all([
       db.select().from(schema.roleChecklistTasks)
         .orderBy(asc(schema.roleChecklistTasks.sortOrder), asc(schema.roleChecklistTasks.createdAt)),
       storage.getJobChecklistCompletions(jobId),
     ]);
-    const done = new Set(completions.map(c => c.itemId));
-    return tasks
-      .filter(t => t.isEnabled && t.roleKey === roleRow.roleKey && !done.has(t.itemId))
-      .map(t => ({ itemId: t.itemId, label: t.label, roleKey: roleRow.roleKey as 'A' | 'B' | 'C' }));
+    let linkedRisk: JobRiskAssessmentLink | undefined;
+    try {
+      linkedRisk = (await loadRiskLinksForJobs([jobId], nzDate)).get(jobId);
+    } catch (riskErr) {
+      console.error('Error loading JHA status for outstanding roles:', riskErr);
+    }
+    const done = doneIdsIncludingLinkedJha(completions, linkedRisk, nzDate);
+    return outstandingForRoles(roles, tasks, done);
   }
 
+  // Stop a running timer: write the time entry, recompute labour + margin,
+  // diary-log, delete the timer row. Shared by /timer/stop and start-with-switch.
   async function finalizeTimer(timer: { id: string; jobId: string; employeeId: string; startedAt: Date | string }) {
     const elapsedMs = Date.now() - new Date(timer.startedAt).getTime();
     // Round to 2dp hours, minimum 1 minute so an accidental tap-tap still
@@ -15460,9 +15800,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       for (const employeeId of employeeIds) {
         const employee = await storage.getEmployee(employeeId);
         if (!employee) continue; // unknown/other-tenant id — skip
-        const requestedRole = roleInput[employeeId];
-        if (isRoleKey(requestedRole)) {
-          await upsertDayRole(employeeId, todayNZ, requestedRole, req.session.employeeId ?? null);
+        const requestedRoles = parseClockInRoles(roleInput[employeeId]);
+        if (requestedRoles && requestedRoles.length > 0) {
+          await setDayRoles(employeeId, todayNZ, requestedRoles, req.session.employeeId ?? null);
         }
         clockedIn.push(employeeId);
         const running = await storage.getActiveTimerForEmployee(employeeId);
@@ -15541,7 +15881,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // what to PROMPT about; none of it can fail the stop.
       const todayNZ = getNZDateString(new Date());
       const requesterId = req.session.employeeId;
-      let outstanding: Array<{ itemId: string; label: string; roleKey: 'A' | 'B' | 'C' }> = [];
+      let outstanding: Array<{ itemId: string; label: string; roleKey: RoleKey }> = [];
       let totalOutstanding = 0;
       try {
         for (const employeeId of stoppedEmployeeIds) {
@@ -17885,7 +18225,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       let link = await storage.getTimelineLinkForJob(job.id);
       if (!link) {
-        const token = require('crypto').randomBytes(32).toString('hex');
+        const token = randomBytes(32).toString('hex');
         link = await storage.createTimelineLink(job.id, token);
       }
       res.json({
@@ -18282,9 +18622,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         }
 
         // Composite the annotations onto the source via sharp + SVG overlay.
+        // stageWidth is the editor stage in CSS pixels so a 4px stroke is
+        // scaled onto the full-resolution photo instead of staying 4px tall.
+        const stageWidthRaw = Number(req.body?.stageWidth);
+        const stageWidth =
+          Number.isFinite(stageWidthRaw) && stageWidthRaw > 1 ? stageWidthRaw : undefined;
         const bakedBuffer = await bakeAnnotations(
           downloaded.buffer,
           annotations as AnnotationShape[],
+          { stageWidth },
         );
 
         // Write the baked PNG to GCS at a deterministic filename derived from
@@ -18315,24 +18661,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           'Unknown';
 
         // Upsert by sourceUrl — second-and-later saves update in place.
-        const [row] = await db
-          .insert(schema.photoAnnotations)
-          .values({
-            sourceUrl,
-            annotations: annotations as any,
-            annotatedUrl: servedUrl,
-            annotatedBy,
-          })
-          .onConflictDoUpdate({
-            target: schema.photoAnnotations.sourceUrl,
-            set: {
-              annotations: annotations as any,
-              annotatedUrl: servedUrl,
-              annotatedBy,
-              updatedAt: new Date(),
-            },
-          })
-          .returning();
+        // withTenant stamps business_id so RLS keeps the row (see photoAnnotationStore).
+        const row = await upsertPhotoAnnotation({
+          sourceUrl,
+          annotations,
+          annotatedUrl: servedUrl,
+          annotatedBy,
+        });
 
         console.log(`✅ Baked annotations for ${sourceUrl} → ${servedUrl} (by ${annotatedBy})`);
         return res.json({ success: true, annotation: row });
@@ -18354,11 +18689,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (!sourceUrl) {
         return res.status(400).json({ success: false, message: 'Missing sourceUrl' });
       }
-      const [row] = await db
-        .select()
-        .from(schema.photoAnnotations)
-        .where(eq(schema.photoAnnotations.sourceUrl, sourceUrl))
-        .limit(1);
+      const [row] = await findPhotoAnnotations([sourceUrl]);
       return res.json({ success: true, annotation: row ?? null });
     } catch (error) {
       console.error('Error fetching photo annotation:', error);
@@ -18382,10 +18713,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (sourceUrls.length === 0) {
         return res.json({ success: true, annotations: {} });
       }
-      const rows = await db
-        .select()
-        .from(schema.photoAnnotations)
-        .where(inArray(schema.photoAnnotations.sourceUrl, sourceUrls));
+      const rows = await findPhotoAnnotations(sourceUrls);
       const annotations: Record<string, typeof rows[number]> = {};
       for (const row of rows) {
         annotations[row.sourceUrl] = row;
@@ -18431,9 +18759,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         }
       }
 
-      await db
-        .delete(schema.photoAnnotations)
-        .where(eq(schema.photoAnnotations.sourceUrl, sourceUrl));
+      await deletePhotoAnnotation(sourceUrl);
 
       return res.json({ success: true });
     } catch (error) {
@@ -18889,7 +19215,43 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       delete dataToUpdate.createdAt;
       delete dataToUpdate.updatedAt;
 
+      const beforeEmployee = isAdmin ? await storage.getEmployee(req.params.id) : null;
       const employee = await storage.updateEmployee(req.params.id, dataToUpdate);
+      if (isAdmin) {
+        const roleChanged =
+          (dataToUpdate.role !== undefined && dataToUpdate.role !== beforeEmployee?.role) ||
+          (dataToUpdate.roleTierId !== undefined && dataToUpdate.roleTierId !== beforeEmployee?.roleTierId);
+        const permsChanged = dataToUpdate.permissionOverrides !== undefined;
+        if (roleChanged) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.ROLE_CHANGE,
+            success: true,
+            businessId: caller.businessId ?? beforeEmployee?.businessId ?? null,
+            actorEmployeeId: callerId,
+            targetEmployeeId: req.params.id,
+            metadata: {
+              via: "put_employee",
+              beforeRole: beforeEmployee?.role ?? null,
+              afterRole: employee.role ?? null,
+              beforeRoleTierId: beforeEmployee?.roleTierId ?? null,
+              afterRoleTierId: employee.roleTierId ?? null,
+            },
+          });
+        }
+        if (permsChanged) {
+          recordAuthEvent(req, {
+            action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+            success: true,
+            businessId: caller.businessId ?? beforeEmployee?.businessId ?? null,
+            actorEmployeeId: callerId,
+            targetEmployeeId: req.params.id,
+            metadata: {
+              via: "put_employee",
+              permissionOverrides: dataToUpdate.permissionOverrides,
+            },
+          });
+        }
+      }
       res.json({
         success: true,
         data: sanitizeEmployee(employee),
@@ -18952,6 +19314,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // Update employee with hashed password
       const employee = await storage.updateEmployee(req.params.id, {
         password: hashedPassword
+      });
+
+      recordAuthEvent(req, {
+        action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+        success: true,
+        businessId: caller.businessId ?? employee.businessId ?? null,
+        actorEmployeeId: callerId,
+        targetEmployeeId: req.params.id,
+        metadata: { via: "patch_password", self: req.params.id === callerId },
       });
       
       res.json({
@@ -19066,6 +19437,22 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       const updated = await storage.updateRoleTier(req.params.id, updates);
 
+      if (Array.isArray(body.permissions)) {
+        recordAuthEvent(req, {
+          action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+          success: true,
+          businessId: req.session.businessId ?? null,
+          actorEmployeeId: req.session.employeeId ?? null,
+          targetEmployeeId: null,
+          metadata: {
+            via: "put_role_tier",
+            tierId: req.params.id,
+            tierName: updated.name,
+            permissions: body.permissions,
+          },
+        });
+      }
+
       if (body.isDefault === true) {
         const all = await storage.getAllRoleTiers();
         await Promise.all(
@@ -19117,7 +19504,20 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         const tier = await storage.getRoleTier(roleTierId);
         if (!tier) return res.status(404).json({ success: false, message: 'Tier not found' });
       }
+      const before = await storage.getEmployee(req.params.id);
       const updated = await storage.updateEmployee(req.params.id, { roleTierId } as any);
+      recordAuthEvent(req, {
+        action: AUDIT_ACTIONS.ROLE_CHANGE,
+        success: true,
+        businessId: req.session.businessId ?? before?.businessId ?? updated.businessId ?? null,
+        actorEmployeeId: req.session.employeeId ?? null,
+        targetEmployeeId: req.params.id,
+        metadata: {
+          via: "patch_role_tier",
+          beforeRoleTierId: before?.roleTierId ?? null,
+          afterRoleTierId: roleTierId ?? null,
+        },
+      });
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error setting employee tier:', error);
@@ -19137,7 +19537,20 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (!check.ok) {
         return res.status(400).json({ success: false, message: `Unknown permission keys: ${check.bad.join(', ')}` });
       }
+      const before = await storage.getEmployee(req.params.id);
       const updated = await storage.updateEmployee(req.params.id, { permissionOverrides: overrides } as any);
+      recordAuthEvent(req, {
+        action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+        success: true,
+        businessId: req.session.businessId ?? before?.businessId ?? updated.businessId ?? null,
+        actorEmployeeId: req.session.employeeId ?? null,
+        targetEmployeeId: req.params.id,
+        metadata: {
+          via: "patch_permissions",
+          before: before?.permissionOverrides ?? null,
+          after: overrides,
+        },
+      });
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error updating employee permission overrides:', error);
@@ -19235,6 +19648,15 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // Update employee with new password
       await storage.updateEmployee(employee.id, {
         password: hashedPassword
+      });
+
+      recordAuthEvent(req, {
+        action: AUDIT_ACTIONS.PASSWORD_CHANGE,
+        success: true,
+        businessId: req.session.businessId ?? employee.businessId ?? null,
+        actorEmployeeId: req.session.employeeId ?? null,
+        targetEmployeeId: employee.id,
+        metadata: { via: "emergency_password_reset", identifier: email.toLowerCase() },
       });
       
       res.json({
@@ -19468,15 +19890,19 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           inArray(schema.jobDayRoles.employeeId, employeeIds),
           eq(schema.jobDayRoles.nzDate, todayNZ),
         ));
-      const roleByEmployee = new Map(roleRows.map(r => [r.employeeId, r.roleKey]));
+      const rolesByEmployee = groupRolesByEmployee(roleRows);
 
       const crew = employeeIds
         .map(id => {
           const employee = employeeMap.get(id)!;
+          const dayRoles = rolesByEmployee.get(id) ?? [];
           return {
             employeeId: id,
             employeeName: `${employee.firstName} ${employee.lastName}`.trim(),
-            dayRole: (roleByEmployee.get(id) ?? null) as 'A' | 'B' | 'C' | null,
+            dayRoles,
+            // Primary role only. Older clients that still read a single dayRole
+            // keep seeing one role; dayRoles is the full set.
+            dayRole: primaryDayRole(dayRoles),
             source: source.get(id)!,
             isClockedIn: source.get(id) === 'clocked_in',
           };
@@ -19655,9 +20081,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // Delete existing staff assignments for this job to prevent duplicates when rescheduling
       // Skip deletion when addOnly=true (e.g. drag-drop onto a specific employee row)
       const existingAssignments = await storage.getJobStaffAssignmentsByJob(jobId);
+      const removedAssignmentIds: string[] = [];
       if (!addOnly) {
         for (const existing of existingAssignments) {
           await storage.deleteJobStaffAssignment(existing.id);
+          removedAssignmentIds.push(existing.id);
         }
         console.log(`🗑️ Deleted ${existingAssignments.length} existing staff assignment(s) for job ${jobId}`);
       } else {
@@ -19668,9 +20096,18 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           const timeMatch = existing.startTime && Math.abs(new Date(existing.startTime).getTime() - newStart) < 60000;
           if (empMatch && timeMatch) {
             await storage.deleteJobStaffAssignment(existing.id);
+            removedAssignmentIds.push(existing.id);
           }
         }
       }
+      // Full save: the submitted crew replaces the booking.
+      // addOnly: everyone whose row survived, plus the people just submitted.
+      const finalEmployeeIds = crewIdsAfterSave({
+        addOnly: !!addOnly,
+        existing: existingAssignments.map(a => ({ id: a.id, employeeId: a.employeeId })),
+        removedAssignmentIds,
+        submittedEmployeeIds: uniqueEmployeeIds.filter((id): id is string => typeof id === "string"),
+      });
 
       // Inherit dayRole: if this employee already has any assignment that NZ-day,
       // the new row inherits their existing 'A' / 'B'. Cached per (employeeId, NZ date).
@@ -19703,14 +20140,19 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         created.push(newAssignment);
       }
 
-      // Update job's assignedTeam (deduplicated)
-      const employeeIds = uniqueEmployeeIds;
+      // Keep both crew fields in step. A later edit reads either one, and
+      // writing only assignedTeam made the other go stale.
+      // Built as a typed patch: two string[] fields plus a spread makes
+      // TypeScript invent an index signature that Partial<InsertJob> rejects.
+      const employeeIds = finalEmployeeIds;
       if (job) {
         const next = statusAfterBooking(job.status);
-        await storage.updateJob(jobId, {
+        const crewPatch: Partial<schema.InsertJob> = {
           assignedTeam: employeeIds,
-          ...(next ? { status: next } : {}),
-        });
+          assignedTo: employeeIds,
+        };
+        if (next) crewPatch.status = next;
+        await storage.updateJob(jobId, crewPatch);
       }
 
       // Calculate and update estimated man-hours based on staff assignments
@@ -19722,8 +20164,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const deferredPushNotifications = sendNotifications
         ? async () => {
             // Multi-day bookings create one assignment per day per employee —
-            // notify each employee once, not once per day.
-            const employeeIdsToNotify = [...new Set(created.map(a => a.employeeId))];
+            // notify each newly added employee once, not once per day, and
+            // not again if they were already on this job.
+            const employeeIdsToNotify = newlyAddedCrewIds(
+              existingAssignments.map(a => a.employeeId),
+              created.map(a => a.employeeId),
+            );
             for (const employeeId of employeeIdsToNotify) {
               try {
                 const employee = await storage.getEmployee(employeeId);
@@ -19975,30 +20421,23 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         itemsExpected: number;
         taskRate: number;
       }
+      const knownRows = rows.filter(r => employeeMap.has(r.employeeId));
+      const aggregated = aggregateRoleSnapshots(knownRows);
       const byEmployee = new Map<string, Agg>();
-      for (const r of rows) {
-        const employee = employeeMap.get(r.employeeId);
-        if (!employee) continue; // left the company / other tenant — RLS already hid those
-        let agg = byEmployee.get(r.employeeId);
-        if (!agg) {
-          agg = {
-            employeeId: r.employeeId,
-            employeeName: `${employee.firstName} ${employee.lastName}`.trim(),
-            roleKeys: [],
-            jobsCounted: 0,
-            jobsFullyComplete: 0,
-            completionRate: 0,
-            itemsDone: 0,
-            itemsExpected: 0,
-            taskRate: 0,
-          };
-          byEmployee.set(r.employeeId, agg);
-        }
-        agg.jobsCounted += 1;
-        if (r.itemsExpected > 0 && r.itemsDone >= r.itemsExpected) agg.jobsFullyComplete += 1;
-        agg.itemsDone += r.itemsDone;
-        agg.itemsExpected += r.itemsExpected;
-        if (!agg.roleKeys.includes(r.roleKey)) agg.roleKeys.push(r.roleKey);
+      for (const [employeeId, agg] of Array.from(aggregated.entries())) {
+        const employee = employeeMap.get(employeeId);
+        if (!employee) continue;
+        byEmployee.set(employeeId, {
+          employeeId,
+          employeeName: `${employee.firstName} ${employee.lastName}`.trim(),
+          roleKeys: agg.roleKeys,
+          jobsCounted: agg.jobsCounted,
+          jobsFullyComplete: agg.jobsFullyComplete,
+          completionRate: 0,
+          itemsDone: agg.itemsDone,
+          itemsExpected: agg.itemsExpected,
+          taskRate: 0,
+        });
       }
 
       const employees = Array.from(byEmployee.values()).map(a => ({
@@ -20036,9 +20475,14 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         ? req.query.date
         : getNZDateString(new Date());
       const rows = await db.select().from(schema.jobDayRoles).where(eq(schema.jobDayRoles.nzDate, date));
+      const grouped = groupRolesByEmployee(rows);
       res.json({
         success: true,
-        data: rows.map(r => ({ employeeId: r.employeeId, dayRole: r.roleKey })),
+        data: Array.from(grouped.entries()).map(([employeeId, dayRoles]) => ({
+          employeeId,
+          dayRoles,
+          dayRole: primaryDayRole(dayRoles),
+        })),
         date,
       });
     } catch (error) {
@@ -20047,24 +20491,28 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
-  // Set the day-level crew role (Kaitiaki / Kaiwhangai / Kaitirotiro) for one person
-  // on one NZ date. Setting null clears it for the day.
+  // Set the checklist roles (Kaitiaki / Kaiwhangai / Kaitirotiro) one person holds
+  // on one NZ date. A person can hold more than one. dayRoles replaces the set
+  // (the job-card chips send every chip that is on, including a second role).
+  // addRoles adds without removing. A lone dayRole still replaces the set with
+  // that one role, or clears it when null.
   //
   // job_day_roles is the source of truth — a role is a fact about a PERSON on a DAY,
-  // so someone who is clocked in without any assignment row can still hold one (that
-  // gap is what blocked allocating roles from the job card). The legacy
-  // job_staff_assignments.day_role is still mirrored for one release so existing
-  // readers keep working; drop that write once nothing reads the column.
+  // so someone who is clocked in without any assignment row can still hold one.
+  // The legacy job_staff_assignments.day_role mirror stores the primary role only.
   //
   // Must be registered BEFORE /api/staff-assignments/:id so Express doesn't match :id="day-role".
   app.put('/api/staff-assignments/day-role', async (req: Request, res: Response) => {
     try {
-      const { employeeId, date, dayRole } = req.body as { employeeId?: string; date?: string; dayRole?: 'A' | 'B' | 'C' | null };
+      const { employeeId, date, dayRole, dayRoles, addRoles } = req.body as {
+        employeeId?: string;
+        date?: string;
+        dayRole?: unknown;
+        dayRoles?: unknown;
+        addRoles?: unknown;
+      };
       if (!employeeId || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ success: false, message: 'employeeId and date (YYYY-MM-DD) required' });
-      }
-      if (dayRole !== null && dayRole !== 'A' && dayRole !== 'B' && dayRole !== 'C') {
-        return res.status(400).json({ success: false, message: "dayRole must be 'A', 'B', 'C', or null" });
       }
 
       // Reject ids from another tenant outright — RLS hides them from the read, and
@@ -20074,39 +20522,21 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         return res.status(404).json({ success: false, message: 'Employee not found' });
       }
 
-      if (dayRole === null) {
-        await db.delete(schema.jobDayRoles)
-          .where(and(
-            eq(schema.jobDayRoles.employeeId, employeeId),
-            eq(schema.jobDayRoles.nzDate, date),
-          ));
-      } else {
-        await db.insert(schema.jobDayRoles)
-          .values(withTenant({
-            employeeId,
-            nzDate: date,
-            roleKey: dayRole,
-            setByEmployeeId: req.session.employeeId ?? null,
-          }))
-          .onConflictDoUpdate({
-            target: [schema.jobDayRoles.employeeId, schema.jobDayRoles.nzDate],
-            set: { roleKey: dayRole, setByEmployeeId: req.session.employeeId ?? null, updatedAt: new Date() },
-          });
+      let existing: RoleKey[] = [];
+      if (addRoles !== undefined) {
+        const rows = await db.select().from(schema.jobDayRoles).where(and(
+          eq(schema.jobDayRoles.employeeId, employeeId),
+          eq(schema.jobDayRoles.nzDate, date),
+        ));
+        existing = groupRolesByEmployee(rows).get(employeeId) ?? [];
+      }
+      const resolved = resolveDesiredDayRoles({ dayRole, dayRoles, addRoles, existing });
+      if (!resolved.ok) {
+        return res.status(400).json({ success: false, message: resolved.message });
       }
 
-      // Transitional mirror onto the legacy column (see note above).
-      const startUtc = fromZonedTime(`${date}T00:00:00`, 'Pacific/Auckland');
-      const endUtc = fromZonedTime(`${date}T23:59:59.999`, 'Pacific/Auckland');
-      const updated = await db.update(schema.jobStaffAssignments)
-        .set({ dayRole, updatedAt: new Date() })
-        .where(and(
-          eq(schema.jobStaffAssignments.employeeId, employeeId),
-          gte(schema.jobStaffAssignments.startTime, startUtc),
-          lte(schema.jobStaffAssignments.startTime, endUtc),
-        ))
-        .returning();
-
-      res.json({ success: true, data: { dayRole, updatedCount: updated.length } });
+      const saved = await setDayRoles(employeeId, date, resolved.roles, req.session.employeeId ?? null);
+      res.json({ success: true, data: saved });
     } catch (error) {
       console.error('Error setting day role:', error);
       res.status(500).json({ success: false, message: 'Error setting day role' });
@@ -20390,9 +20820,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       if (eventId) {
         // If jobId provided, add a diary entry about the booking AND advance
-        // the job's status if booking implies a transition. Without this, a
-        // lead with a confirmed quote-visit appointment stayed as 'lead' even
-        // though the next step (the on-site quote) was locked in.
+        // the job's status when this Book implies a transition. A lead booked
+        // from the diary (quoting visit) becomes 'quote'. Other statuses use
+        // the shared booking rule (quote → work_order only).
         if (jobId) {
           try {
             await storage.createJobDiaryEntry({
@@ -20409,7 +20839,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
           try {
             const job = await storage.getJob(jobId);
-            const nextStatus = statusAfterBooking(job?.status);
+            const nextStatus = statusAfterDiaryBook(job?.status);
             if (job && nextStatus && nextStatus !== job.status) {
               await storage.updateJob(jobId, { status: nextStatus });
               console.log(`📊 Quick-book advanced job ${job.jobNumber} status: ${job.status} → ${nextStatus}`);
@@ -21125,6 +21555,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             WHERE scheduled_date IS NOT NULL
               AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') <= ${date}::date
               AND DATE((COALESCE(scheduled_end_date, scheduled_date) AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') >= ${date}::date
+              -- Non-contiguous bookings (scheduled_dates set, e.g. Mon + Wed) only run on
+              -- their listed days — the span test alone paints phantom days in between.
+              AND CASE WHEN jsonb_typeof(scheduled_dates) = 'array'
+                    THEN (jsonb_array_length(scheduled_dates) = 0 OR scheduled_dates @> ${JSON.stringify([date])}::jsonb)
+                    ELSE TRUE END
               AND status NOT IN ('archived', 'unsuccessful')
             ORDER BY scheduled_date ASC, scheduled_start_time ASC NULLS LAST`
       );
@@ -21185,142 +21620,51 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
-      // Use the real current instant; getNZDateString converts it to the NZ
-      // calendar day exactly once. (Do NOT use getNZNow() here — it returns a
-      // tz-shifted Date, and converting that to NZ again double-shifts and rolls
-      // "today" to tomorrow during NZ afternoon/evening on a UTC server.)
-      const todayStr = getNZDateString(new Date());
-      const MS_PER_DAY = 1000 * 60 * 60 * 24;
-      const HORIZON_DAYS = 30; // how far ahead a compliance date surfaces
-
-      // Whole-day difference in the NZ calendar. Negative = overdue.
-      const daysUntil = (d: Date) => {
-        const a = new Date(`${todayStr}T00:00:00Z`).getTime();
-        const b = new Date(`${getNZDateString(d)}T00:00:00Z`).getTime();
-        return Math.round((b - a) / MS_PER_DAY);
-      };
-      const severityFor = (days: number) =>
-        days < 0 ? 'overdue' : days <= 7 ? 'critical' : days <= 14 ? 'warning' : 'info';
-
-      const allEquipment = await storage.getAllEquipment();
-      const fleet: Array<{
-        equipmentId: string; name: string; type: string | null;
-        registrationNumber: string | null; kind: string; label: string;
-        dueDate: string; daysUntil: number; severity: string;
-      }> = [];
-
-      for (const e of allEquipment) {
-        if (e.isActive === false || e.status === 'retired') continue;
-        const checks = [
-          { kind: 'rego', label: 'Registration (rego)', date: e.registrationExpiryDate },
-          { kind: 'cof', label: 'Certificate of Fitness', date: e.cofExpiryDate },
-          { kind: 'service', label: 'Scheduled service', date: e.nextMaintenanceDate },
-        ];
-        for (const c of checks) {
-          if (!c.date) continue;
-          const d = new Date(c.date);
-          if (isNaN(d.getTime())) continue;
-          const days = daysUntil(d);
-          if (days > HORIZON_DAYS) continue; // not due yet
-          fleet.push({
-            equipmentId: e.id,
-            name: e.name,
-            type: e.type ?? null,
-            registrationNumber: e.registrationNumber ?? null,
-            kind: c.kind,
-            label: c.label,
-            dueDate: d.toISOString(),
-            daysUntil: days,
-            severity: severityFor(days),
-          });
-        }
-      }
-      fleet.sort((a, b) => a.daysUntil - b.daysUntil);
-
-      // Jobs running today on the NZ calendar — honours multi-day date sets.
-      // SQL prefilter first: this endpoint is polled every 60s per open /today
-      // tab and used to pull EVERY non-archived job in the tenant each time.
-      const jobs = await storage.getJobsScheduledAroundNZDate(todayStr);
-      const jobsToday = jobs
-        .filter((j: any) => jobRunsOnNZDate(j, todayStr))
-        .map((j: any) => ({
-          id: j.id,
-          title: j.title || j.jobNumber || 'Job',
-          status: j.status,
-          scheduledStartTime: j.scheduledStartTime ?? null,
-          customerName: j.customerName ?? null,
-          address: j.address ?? null,
-        }))
-        .sort((a, b) =>
-          (a.scheduledStartTime || '99:99').localeCompare(b.scheduledStartTime || '99:99')
-        );
-
-      // Everything diaried on today's jobs since NZ midnight, in one query.
-      // Diary rows are the de-facto activity log (photo uploads, notes, timer
-      // stops, milestones all write one) with a denormalized authorName.
-      const jobIds = jobsToday.map(j => j.id);
-      const nzMidnightUtc = nzTimeToUTC(todayStr, '00:00');
-      const diaryToday = (await storage.getJobDiaryEntriesForJobsSince(jobIds, nzMidnightUtc))
-        .filter(e => e.createdAt && getNZDateString(e.createdAt) === todayStr);
-
-      const activityByJob = new Map<string, Array<{
-        id: string; type: string; timestamp: string; actorName: string;
-        title: string; summary: string | null; photos: string[]; timeSpent: number | null;
-      }>>();
-      for (const e of diaryToday) {
-        const photos = [...(e.photos ?? [])];
-        if (e.photoUrl && !photos.includes(e.photoUrl)) photos.push(e.photoUrl);
-        const list = activityByJob.get(e.jobId) ?? [];
-        list.push({
-          id: e.id,
-          type: e.entryType,
-          timestamp: e.createdAt!.toISOString(),
-          actorName: e.authorName,
-          title: e.title,
-          summary: e.description ? e.description.slice(0, 140) : null,
-          photos,
-          timeSpent: e.timeSpent ?? null,
-        });
-        activityByJob.set(e.jobId, list);
-      }
-
-      // Live clock-ins on today's jobs — drives the "on site now" badges.
-      const jobIdSet = new Set(jobIds);
-      const runningTimers = (await storage.getAllActiveTimers()).filter(t => jobIdSet.has(t.jobId));
-      const enrichedTimers = await enrichTimers(runningTimers);
-      const timersByJob = new Map<string, Array<{ employeeId: string; employeeName: string; startedAt: string }>>();
-      for (const t of enrichedTimers) {
-        const list = timersByJob.get(t.jobId) ?? [];
-        list.push({
-          employeeId: t.employeeId,
-          employeeName: t.employeeName,
-          startedAt: t.startedAt instanceof Date ? t.startedAt.toISOString() : String(t.startedAt),
-        });
-        timersByJob.set(t.jobId, list);
-      }
-
-      const jobsTodayWithActivity = jobsToday.map(j => ({
-        ...j,
-        activity: (activityByJob.get(j.id) ?? []).slice(0, 30),
-        liveTimers: timersByJob.get(j.id) ?? [],
-      }));
-
-      res.json({
-        success: true,
-        data: {
-          date: todayStr,
-          fleet,
-          jobsToday: jobsTodayWithActivity,
-          counts: {
-            needsAttention: fleet.filter(f => f.severity === 'overdue' || f.severity === 'critical').length,
-            dueSoon: fleet.filter(f => f.severity === 'warning' || f.severity === 'info').length,
-            jobsToday: jobsToday.length,
-          },
-        },
-      });
+      const data = await buildTodayOverview(req.session.employeeId);
+      res.json({ success: true, data });
     } catch (error) {
       console.error('Error building today overview:', error);
       res.status(500).json({ success: false, message: 'Error building today overview' });
+    }
+  });
+
+  app.post('/api/today-extra-instructions', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const scope = req.body?.scope === 'crew' ? 'crew' : req.body?.scope === 'person' ? 'person' : null;
+      if (!scope) {
+        return res.status(400).json({ success: false, message: 'scope must be person or crew' });
+      }
+      const row = await createTodayExtraInstruction({
+        employeeId: req.session.employeeId,
+        date: typeof req.body?.date === 'string' ? req.body.date : undefined,
+        scope,
+        personId: typeof req.body?.personId === 'string' ? req.body.personId : undefined,
+        crewId: typeof req.body?.crewId === 'string' ? req.body.crewId : undefined,
+        note: typeof req.body?.note === 'string' ? req.body.note : '',
+      });
+      res.json({ success: true, data: row });
+    } catch (error) {
+      const status = error instanceof HttpError ? error.status : 500;
+      const message = error instanceof Error ? error.message : "Failed to save extra instruction";
+      if (status >= 500) console.error('Error saving extra instruction:', error);
+      res.status(status).json({ success: false, message });
+    }
+  });
+
+  app.delete('/api/today-extra-instructions/:id', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const removed = await deleteTodayExtraInstruction(req.params.id);
+      if (!removed) return res.status(404).json({ success: false, message: 'Extra instruction not found' });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error removing extra instruction:', error);
+      res.status(500).json({ success: false, message: 'Failed to remove extra instruction' });
     }
   });
 
@@ -21640,6 +21984,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (typeof rawBody.defaultGrossMarginPct === 'number') {
         rawBody.defaultGrossMarginPct = String(rawBody.defaultGrossMarginPct);
       }
+      // Per-business Despatch KPI (NZD exc. GST). Bundling must read the stored row.
       if (typeof rawBody.dailyRevenueTarget === 'number') {
         rawBody.dailyRevenueTarget = String(rawBody.dailyRevenueTarget);
       }
@@ -21856,11 +22201,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
   app.get('/api/admin/subscribers', requirePlatformAdmin, async (_req: Request, res: Response) => {
     try {
-      const businesses = await storage.listBusinesses();
-      const data = await Promise.all(businesses.map(async (b) => {
-        const cl = await buildOnboardingChecklist(b.id);
-        return { id: b.id, name: b.name, slug: b.slug, status: b.status, comped: !!b.compedAt, createdAt: b.createdAt, requiredDone: cl.requiredDone, requiredTotal: cl.requiredTotal };
-      }));
+      const data = await listSubscriberSummaries((id) => buildOnboardingChecklist(id));
       res.json({ success: true, data });
     } catch (error) {
       console.error('Error listing subscribers:', error);
@@ -21887,7 +22228,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
             stripeManaged: !!sub.stripeSubscriptionId,
           }
         : null;
-      res.json({ success: true, data: { business, comped: !!business.compedAt, settings: settings ?? null, channels, checklist, plans: plans.map((p) => ({ id: p.id, key: p.key, name: p.name })), subscription } });
+      const owner = await getSubscriberOwnerContact(businessId);
+      res.json({ success: true, data: { business, comped: !!business.compedAt, settings: settings ?? null, channels, checklist, plans: plans.map((p) => ({ id: p.id, key: p.key, name: p.name })), subscription, ownerEmail: owner.ownerEmail, ownerName: owner.ownerName } });
     } catch (error) {
       console.error('Error loading subscriber:', error);
       res.status(500).json({ success: false, message: 'Error loading subscriber' });
@@ -22372,16 +22714,37 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       }
 
       console.log('📱 Sending SMS via diary:', { to, message: message.substring(0, 50) + '...' });
-      
+
+      if (proposalId) {
+        const sendClaim = await beginProposalSend(String(proposalId), 'sms', String(to));
+        if (sendClaim === 'duplicate') {
+          console.log(`📱 Suppressed duplicate proposal SMS for ${proposalId} → ${to}`);
+          return res.json({
+            success: true,
+            deduped: true,
+            message: 'SMS already sent',
+          });
+        }
+      }
+
       // Send SMS using the service
-      const success = await smsService.sendSMS({ to, message });
+      let success = false;
+      try {
+        success = await smsService.sendSMS({ to, message });
+      } catch (sendError) {
+        if (proposalId) await releaseProposalSend(String(proposalId), 'sms', String(to));
+        throw sendError;
+      }
+      if (!success && proposalId) {
+        await releaseProposalSend(String(proposalId), 'sms', String(to));
+      }
       
       if (success) {
         // Save phone number to job contact and customer so reply matching works
         if (jobId) {
           try {
             const job = await storage.getJob(jobId);
-            if (job && !job.jobContactPhone) {
+            if (job && !job.jobContactPhone && !job.jobContactMobile) {
               await storage.updateJob(jobId, { jobContactPhone: to });
               console.log(`📱 Saved phone ${to} to job ${jobId} contact`);
             }
@@ -22413,6 +22776,35 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           authorName: 'System',
           metadata: { phoneNumber: to, ...(proposalId ? { proposalId, proposalNumber } : {}) }
         });
+
+        // Email sends stamp the proposal. SMS used to leave it as a draft, so
+        // follow-up detection never saw it. Match the email path.
+        if (proposalId) {
+          try {
+            const sentProposal = await storage.getProposal(proposalId);
+            const closed = sentProposal && ['accepted', 'accepted_pending_deposit', 'rejected', 'declined'].includes(sentProposal.status);
+            if (sentProposal && !closed) {
+              await storage.updateProposal(proposalId, {
+                status: 'sent',
+                sentDate: sentProposal.sentDate ?? new Date(),
+                deliveryMethod: 'sms',
+              });
+              if (sentProposal.jobId) {
+                const smsJob = await storage.getJob(sentProposal.jobId);
+                // Same shape as the proposal email send above: the jobs update
+                // type is a loose partial, so this matches that caller.
+                const jobUpdate: any = {
+                  lastActivityAt: new Date(),
+                  quotePresentedDate: smsJob?.quotePresentedDate ?? new Date(),
+                };
+                if (smsJob && smsJob.status === 'lead') jobUpdate.status = 'quote';
+                await storage.updateJob(sentProposal.jobId, jobUpdate);
+              }
+            }
+          } catch (stampError) {
+            console.error('Proposal SMS sent, but the sent status was not saved:', stampError);
+          }
+        }
         
         res.json({ 
           success: true, 
@@ -24557,16 +24949,16 @@ Transcription: ${transcriptText}`;
               isRead: false,
               diaryEntryId: diaryEntry?.id,
               actionUrl: `/dispatch?job=${job.id}&tab=diary${diaryEntry?.id ? `&entry=${diaryEntry.id}` : ''}`,
-              entityType: 'job',
-              entityId: job.id,
-              relatedEntityType: 'job',
-              relatedEntityId: job.id,
               jobId: job.id,
               metadata: {
                 preview: previewText,
                 senderEmail: actualFromEmail || actualFrom,
                 senderName: actualFromName,
                 emailMessageId: inboundMessageId,
+                entityType: 'job',
+                entityId: job.id,
+                relatedEntityType: 'job',
+                relatedEntityId: job.id,
               },
             });
             console.log(`🔔 Notification created for email reply on job ${job.jobNumber} (UUID path)`);
@@ -25267,11 +25659,11 @@ Transcription: ${transcriptText}`;
               
               // Fetch sender's name from Facebook Graph API
               let senderName = 'Facebook Messenger Enquiry';
+              const pageAccessToken = readFacebookPageAccessToken().token;
               try {
-                const PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
-                if (PAGE_ACCESS_TOKEN) {
+                if (pageAccessToken) {
                   const userInfoResponse = await fetch(
-                    `https://graph.facebook.com/v18.0/${senderId}?fields=name&access_token=${PAGE_ACCESS_TOKEN}`
+                    facebookGraphUrl(`${senderId}?fields=name&access_token=${pageAccessToken}`)
                   );
                   if (userInfoResponse.ok) {
                     const userInfo = await userInfoResponse.json();
@@ -25281,7 +25673,8 @@ Transcription: ${transcriptText}`;
                   }
                 }
               } catch (error) {
-                console.error('Error fetching Facebook user info:', error);
+                const detail = error instanceof Error ? error.message : String(error);
+                console.error('Error fetching Facebook user info:', redactFacebookSecrets(detail, pageAccessToken));
               }
               
               // Find existing conversation for this Facebook sender
@@ -25561,11 +25954,11 @@ Transcription: ${transcriptText}`;
       } else if (messagePlatform === 'facebook_messenger') {
         // Send Facebook message
         try {
-          const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+          const pageAccessToken = readFacebookPageAccessToken().token;
           
           if (pageAccessToken) {
             const response = await fetch(
-              `https://graph.facebook.com/v18.0/me/messages?access_token=${pageAccessToken}`,
+              facebookGraphUrl(`me/messages?access_token=${pageAccessToken}`),
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -27415,7 +27808,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       if (!proposal) {
         return res.status(404).json({
           success: false,
-          message: 'Proposal not found'
+          message: 'This proposal is no longer available'
         });
       }
       
@@ -27831,6 +28224,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const validatedData = updateProposalSchema.parse(req.body);
       const proposal = await storage.updateProposal(req.params.id, validatedData);
       
+      // One save at a time. Overlapping saves each used to insert a full copy
+      // of the lines (the second delete only removed the sections it had read).
+      await withProposalContentLock(proposal.id, async () => {
       // Delete existing sections and recreate them (simpler than updating)
       if (req.body.sections && Array.isArray(req.body.sections)) {
         console.log('📝 PUT proposal - updating sections:', {
@@ -27843,11 +28239,15 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           }))
         });
         
-        // First, delete all existing sections for this proposal
-        const existingSections = await storage.getProposalSectionsByProposal(proposal.id);
-        for (const section of existingSections) {
-          await storage.deleteProposalSection(section.id);
-        }
+        // Delete every current section and line (including ones another save
+        // just inserted, and lines whose section is already gone) before insert.
+        await clearProposalContent(proposal.id, {
+          listSections: (id) => storage.getProposalSectionsByProposal(id),
+          deleteSection: (id) => storage.deleteProposalSection(id),
+          listItems: (id) => storage.getProposalLineItemsByProposal(id),
+          deleteItemChoices: (id) => storage.deleteProposalLineItemChoicesByLineItem(id),
+          deleteItem: (id) => storage.deleteProposalLineItem(id),
+        });
 
         // NOTE: Do NOT write section[0].description back into job.description here —
         // see matching comment in POST /api/proposals. Job description is the source
@@ -27966,7 +28366,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       } catch (error) {
         console.error('❌ Error recomputing/syncing job prices (PUT):', error);
       }
-      
+      });
+
       res.json({
         success: true,
         data: proposal,
@@ -28595,6 +28996,19 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         return res.json({ received: true });
       }
 
+      // Payout events are optional. An unknown business is acknowledged inside
+      // ingest so Stripe stops retrying; a Stripe or database failure is 500.
+      if (typeof event.type === "string" && event.type.startsWith("payout.")) {
+        try {
+          await ingestStripePayoutWebhook(event);
+        } catch (payoutErr: unknown) {
+          const message = payoutErr instanceof Error ? payoutErr.message : "payout webhook failed";
+          console.error("Stripe payout webhook failed:", message);
+          return res.status(500).json({ received: false });
+        }
+        return res.json({ received: true });
+      }
+
       // ── Subscription billing events (Inflow — Phase 4) ──
       // Keep each business's `subscriptions` row in sync with Stripe. Runs outside any
       // request (owner connection), so businessId comes from the event metadata.
@@ -28654,87 +29068,99 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const amountPaid = Math.round(amountTotalCents) / 100;
         const invoiceId: string | undefined = session?.metadata?.invoiceId;
 
-        // Invoice payment (kind='payment'). Record the payment and mark the
-        // invoice paid — we always charge the full outstanding balance, so a
-        // succeeded session settles it.
+        // Invoice payment (kind='payment'). Record the payment, then roll the
+        // job's paid amount and balance up from the payments ledger. A retry
+        // still reconciles: the old path returned as a duplicate before the
+        // job was updated, which left paid amount at 0.
         if (kind === 'payment' && invoiceId) {
           const existingInvoicePay = await storage.getPaymentBySessionId(session.id);
-          if (existingInvoicePay) {
-            console.log(`Stripe webhook: session ${session.id} already processed`);
-            return res.json({ received: true, duplicate: true });
-          }
           const invoice = await storage.getInvoice(invoiceId);
           if (!invoice) {
             console.error('Stripe webhook: invoice not found for session', { invoiceId, sessionId: session.id });
             // 200 so Stripe stops retrying — the invoice isn't coming back.
             return res.json({ received: true, missingInvoice: true });
           }
+          const intent = session.payment_intent;
+          const providerPaymentId = typeof intent === "string" ? intent : intent?.id ?? null;
           // Stripe webhook runs as owner (no session) → bind the matched invoice's
-          // tenant so the payment-ledger row + invoice update stamp the owning
+          // tenant so the payment-ledger row + job update stamp the owning
           // business, not the DEFAULT (Treemarkables).
           await runWithBusiness(invoice.businessId ?? undefined, async () => {
-            await storage.createPayment({
-              jobId: (invoice.jobId || null) as any,
-              invoiceId: invoice.id,
-              customerId: invoice.customerId,
-              amount: amountPaid as any,
-              currency: 'NZD',
-              provider: 'stripe',
-              providerSessionId: session.id,
-              providerPaymentId: session.payment_intent || null,
-              kind: 'payment',
-              status: 'succeeded',
-              paidAt: new Date(),
-            } as any);
-            if (invoice.status !== 'paid') {
-              await storage.updateInvoice(invoice.id, { status: 'paid', paidAt: new Date() } as any);
+            if (!existingInvoicePay) {
+              try {
+                await storage.createPayment({
+                  jobId: invoice.jobId || null,
+                  invoiceId: invoice.id,
+                  customerId: invoice.customerId,
+                  amount: amountPaid.toFixed(2),
+                  currency: "NZD",
+                  provider: "stripe",
+                  providerSessionId: session.id,
+                  providerPaymentId,
+                  kind: "payment",
+                  status: "succeeded",
+                  paidAt: new Date(),
+                });
+              } catch (insertErr: unknown) {
+                const raced = await storage.getPaymentBySessionId(session.id);
+                if (!raced) throw insertErr;
+              }
+            }
+            const jobId = invoice.jobId || existingInvoicePay?.jobId || null;
+            if (jobId) {
+              await reconcileJobPaidFromPayments(jobId);
+            } else {
+              const status = (invoice.status ?? "").toLowerCase();
+              const closed = status === "paid" || status === "cancelled" || status === "canceled" || status === "void" || status === "voided";
+              if (!closed) {
+                await storage.updateInvoice(invoice.id, { status: "paid", paidAt: invoice.paidAt ?? new Date() });
+              }
             }
           });
-          console.log(`✅ Stripe webhook: payment of $${amountPaid} captured for invoice ${invoice.invoiceNumber}; marked paid`);
+          console.log(`Stripe webhook: payment of $${amountPaid} captured for invoice ${invoice.invoiceNumber}`);
           return res.json({ received: true });
         }
 
         // Job payment (kind='payment' + jobId) — staff "Take payment" on the
-        // job card. Record the payment and roll the job's paid/balance forward.
+        // job card. Record the payment, then set paid/balance from the ledger
+        // so a retried webhook cannot add the same amount twice.
         const jobIdMeta: string | undefined = session?.metadata?.jobId;
         if (kind === 'payment' && jobIdMeta) {
           const existingJobPay = await storage.getPaymentBySessionId(session.id);
-          if (existingJobPay) {
-            console.log(`Stripe webhook: session ${session.id} already processed`);
-            return res.json({ received: true, duplicate: true });
-          }
           const job = await storage.getJob(jobIdMeta);
           if (!job) {
             console.error('Stripe webhook: job not found for session', { jobIdMeta, sessionId: session.id });
             return res.json({ received: true, missingJob: true });
           }
-          const jobTotal = parseFloat((job as any).totalAmount?.toString() || '0') || 0;
-          const prevPaid = parseFloat((job as any).paidAmount?.toString() || '0') || 0;
-          const newPaid = Math.round((prevPaid + amountPaid) * 100) / 100;
-          const newBalance = Math.max(0, Math.round((jobTotal - newPaid) * 100) / 100);
+          const intent = session.payment_intent;
+          const providerPaymentId = typeof intent === "string" ? intent : intent?.id ?? null;
           // Stripe webhook runs as owner (no session) → bind the matched job's tenant
           // so the payment-ledger row + job update stamp the owning business, not the
           // DEFAULT (Treemarkables).
           await runWithBusiness(job.businessId ?? undefined, async () => {
-            await storage.createPayment({
-              jobId: job.id,
-              customerId: (job as any).customerId || null,
-              amount: amountPaid as any,
-              currency: 'NZD',
-              provider: 'stripe',
-              providerSessionId: session.id,
-              providerPaymentId: session.payment_intent || null,
-              kind: 'payment',
-              status: 'succeeded',
-              paidAt: new Date(),
-            } as any);
-            await storage.updateJob(job.id, {
-              paidAmount: String(newPaid),
-              balanceDue: String(newBalance),
-            } as any);
+            if (!existingJobPay) {
+              try {
+                await storage.createPayment({
+                  jobId: job.id,
+                  customerId: job.customerId || null,
+                  amount: amountPaid.toFixed(2),
+                  currency: "NZD",
+                  provider: "stripe",
+                  providerSessionId: session.id,
+                  providerPaymentId,
+                  kind: "payment",
+                  status: "succeeded",
+                  paidAt: new Date(),
+                });
+              } catch (insertErr: unknown) {
+                const raced = await storage.getPaymentBySessionId(session.id);
+                if (!raced) throw insertErr;
+              }
+            }
+            await reconcileJobPaidFromPayments(job.id);
           });
 
-          console.log(`✅ Stripe webhook: payment of $${amountPaid} captured for job ${(job as any).jobNumber}; paid ${newPaid}/${jobTotal}`);
+          console.log(`Stripe webhook: payment of $${amountPaid} captured for job ${job.jobNumber}`);
           return res.json({ received: true });
         }
 
@@ -28822,43 +29248,32 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Delete proposal
+  // Delete proposal. Admin only, and only a proposal that belongs to the
+  // signed-in company. Accepted proposals (and any that already took a
+  // payment) are refused. The job and its quote row are not touched.
   app.delete('/api/proposals/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
-      // Forensic snapshot. There is no soft-delete on proposals and the
-      // delete cascades to proposal_sections + proposal_line_items, so once
-      // the row is gone this log is the only trace. Logged at warn level so
-      // it surfaces in the DO production log retention.
-      const snapshot = await storage.getProposal(req.params.id).catch(() => null);
-      if (snapshot) {
-        let sectionCount = 0;
-        try {
-          const sections = await storage.getProposalSectionsByProposal(req.params.id);
-          sectionCount = sections?.length ?? 0;
-        } catch { /* best-effort, snapshot is still useful */ }
-        console.warn(
-          `🛑 PROPOSAL_DELETE_AUDIT id=${req.params.id} ts=${new Date().toISOString()} session=${req.session?.employeeId ?? 'anon'} ua=${req.headers['user-agent'] ?? 'n/a'} snapshot=${JSON.stringify({
-            jobId: snapshot.jobId,
-            customerId: snapshot.customerId,
-            proposalNumber: snapshot.proposalNumber,
-            status: snapshot.status,
-            title: snapshot.title,
-            totalAmount: snapshot.totalAmount,
-            sentDate: snapshot.sentDate,
-            viewedDate: snapshot.viewedDate,
-            responseDate: snapshot.responseDate,
-            createdAt: snapshot.createdAt,
-            updatedAt: snapshot.updatedAt,
-            sectionCount,
-          })}`
-        );
-      } else {
-        console.warn(`🛑 PROPOSAL_DELETE_AUDIT id=${req.params.id} ts=${new Date().toISOString()} (no snapshot — proposal already missing) session=${req.session?.employeeId ?? 'anon'}`);
+      const employeeId = req.session.employeeId;
+      const employee = employeeId ? await storage.getEmployee(employeeId) : undefined;
+      const actorBusinessId = employee?.businessId || req.session.businessId || null;
+      if (!actorBusinessId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account is not linked to a company.',
+        });
       }
-      await storage.deleteProposal(req.params.id);
+
+      const userAgent = req.headers['user-agent'];
+      const result = await deleteProposalDocument(req.params.id, actorBusinessId, {
+        employeeId: req.session.employeeId ?? null,
+        userAgent: typeof userAgent === 'string' ? userAgent : null,
+      });
+      if (!result.ok) {
+        return res.status(result.status).json({ success: false, message: result.message });
+      }
       res.json({
         success: true,
-        message: 'Proposal deleted successfully'
+        message: 'Proposal deleted successfully',
       });
     } catch (error) {
       console.error('Error deleting proposal:', error);
@@ -28921,91 +29336,96 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Approve and send a pending message
+  // Approve and send a pending message.
+  // The notification bell and the job-diary button both hit this route.
+  // claimPendingOutboundMessage flips pending → sending in one update, so a
+  // second request (double tap, or bell + diary together) cannot send again.
   app.post('/api/pending-messages/:id/approve', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const msg = await storage.getPendingOutboundMessage(req.params.id);
-      if (!msg) return res.status(404).json({ success: false, message: 'Message not found' });
-      if (msg.status !== 'pending') return res.status(400).json({ success: false, message: 'Message is not pending' });
+      let updated: Awaited<ReturnType<typeof storage.updatePendingOutboundMessage>> | undefined;
+      const result = await runPendingMessageApproval(req.params.id, {
+        claim: async (id) => (await storage.claimPendingOutboundMessage(id)) ?? null,
+        lookup: async (id) => (await storage.getPendingOutboundMessage(id)) ?? null,
+        send: async (msg) => {
+          // Same transports as before: SMS, else email, else SMS when a phone
+          // is on file. sent stays false only when neither channel can be used.
+          let sent = false;
+          if (msg.channel === 'sms' && msg.recipientPhone) {
+            await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
+            sent = true;
+          } else if (msg.channel === 'email' && msg.recipientEmail) {
+            // Authed admin route → getBusinessSettings() is RLS-scoped to this tenant.
+            const __updBiz = (await storage.getBusinessSettings())?.businessName || '';
+            await emailService.sendEmail({
+              to: msg.recipientEmail,
+              fromName: __updBiz || undefined, // From shows the tenant's business name; blank → platform default
+              subject: __updBiz ? `Update from ${__updBiz}` : 'Update',
+              html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
+              text: msg.message,
+            });
+            sent = true;
+          } else if (msg.recipientPhone) {
+            // Fallback to SMS if phone available
+            await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
+            sent = true;
+          }
+          return { sent };
+        },
+        markSent: async (msg) => {
+          updated = await storage.updatePendingOutboundMessage(msg.id, {
+            status: 'sent',
+            sentAt: new Date(),
+          });
+        },
+        release: async (msg) => {
+          await storage.releasePendingOutboundMessageClaim(msg.id);
+        },
+        afterSent: async (msg) => {
+          // Log to job diary. A diary failure must not undo the send.
+          if (!msg.jobId) return;
+          try {
+            await storage.createJobDiaryEntry({
+              jobId: msg.jobId,
+              entryType: msg.channel === 'email' ? 'email' : 'sms',
+              title: 'Holding message sent to customer',
+              description: msg.message,
+              content: msg.message,
+              authorName: (req as any).user?.name || 'System',
+              authorRole: (req as any).user?.role || 'system',
+              metadata: {
+                channel: msg.channel,
+                recipientName: msg.recipientName,
+                eventType: 'holding_message_sent',
+              },
+            });
+          } catch (diaryErr) {
+            console.error('Failed to log diary entry after pending-message approve:', diaryErr);
+          }
 
-      // Send via SMS or email
-      let sent = false;
-      if (msg.channel === 'sms' && msg.recipientPhone) {
-        await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
-        sent = true;
-      } else if (msg.channel === 'email' && msg.recipientEmail) {
-        // Authed admin route → getBusinessSettings() is RLS-scoped to this tenant.
-        const __updBiz = (await storage.getBusinessSettings())?.businessName || '';
-        await emailService.sendEmail({
-          to: msg.recipientEmail,
-          fromName: __updBiz || undefined, // From shows the tenant's business name; blank → platform default
-          subject: __updBiz ? `Update from ${__updBiz}` : 'Update',
-          html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
-          text: msg.message,
-        });
-        sent = true;
-      } else if (msg.recipientPhone) {
-        // Fallback to SMS if phone available
-        await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
-        sent = true;
-      }
-
-      // Only mark as sent and log if a transport actually succeeded
-      if (!sent) {
-        return res.status(422).json({
-          success: false,
-          message: 'No deliverable channel: message has no phone number or email address. Please edit the message details and try again.',
-        });
-      }
-
-      const updated = await storage.updatePendingOutboundMessage(req.params.id, {
-        status: 'sent',
-        sentAt: new Date(),
+          // Auto-upgrade lead → quote once the customer has been sent a booking
+          // confirmation for a job that's already booked in the diary. The
+          // dispatch-board staff-assignment flow does this inline; this branch
+          // catches the AI-Smart-Dispatch draft → approve-and-send path so the
+          // job drops out of the lead list as soon as the customer is told a date.
+          try {
+            const linkedJob = await storage.getJob(msg.jobId);
+            if (linkedJob?.scheduledDate) {
+              const next = statusAfterBooking(linkedJob.status);
+              if (next) {
+                await storage.updateJob(msg.jobId, { status: next });
+                console.log(`📊 Auto-upgraded job ${linkedJob.jobNumber} status '${linkedJob.status}' → '${next}' after customer booking message`);
+              }
+            }
+          } catch (statusErr) {
+            console.error('Failed to auto-upgrade job status after pending-message approve:', statusErr);
+          }
+        },
       });
 
-      // Log to job diary. Wrapped in try/catch so a diary failure can't
-      // surface as a 500 to the UI after the SMS/email has already gone out
-      // and the message is already marked sent.
-      if (msg.jobId) {
-        try {
-          await storage.createJobDiaryEntry({
-            jobId: msg.jobId,
-            entryType: msg.channel === 'email' ? 'email' : 'sms',
-            title: 'Holding message sent to customer',
-            description: msg.message,
-            content: msg.message,
-            authorName: (req as any).user?.name || 'System',
-            authorRole: (req as any).user?.role || 'system',
-            metadata: {
-              channel: msg.channel,
-              recipientName: msg.recipientName,
-              eventType: 'holding_message_sent',
-            },
-          });
-        } catch (diaryErr) {
-          console.error('Failed to log diary entry after pending-message approve:', diaryErr);
-        }
-
-        // Auto-upgrade lead → quote once the customer has been sent a booking
-        // confirmation for a job that's already booked in the diary. The
-        // dispatch-board staff-assignment flow does this inline; this branch
-        // catches the AI-Smart-Dispatch draft → approve-and-send path so the
-        // job drops out of the lead list as soon as the customer is told a date.
-        try {
-          const linkedJob = await storage.getJob(msg.jobId);
-          if (linkedJob?.scheduledDate) {
-            const next = statusAfterBooking(linkedJob.status);
-            if (next) {
-              await storage.updateJob(msg.jobId, { status: next });
-              console.log(`📊 Auto-upgraded job ${linkedJob.jobNumber} status '${linkedJob.status}' → '${next}' after customer booking message`);
-            }
-          }
-        } catch (statusErr) {
-          console.error('Failed to auto-upgrade job status after pending-message approve:', statusErr);
-        }
+      if (!result.ok) {
+        return res.status(result.status).json({ success: false, message: result.message });
       }
-
-      res.json({ success: true, data: updated, sent });
+      res.json({ success: true, data: updated, sent: true });
     } catch (error) {
       console.error('Error approving pending message:', error);
       res.status(500).json({ success: false, message: 'Error approving pending message' });
@@ -30995,7 +31415,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       }
 
       // Generate unique token
-      const token = require('crypto').randomBytes(32).toString('hex');
+      const token = randomBytes(32).toString('hex');
       
       // Create review request
       const reviewRequest = await storage.createReviewRequest({
@@ -32344,6 +32764,35 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Today's scheduled jobs for the morning JHA picker (address + customer).
+  app.get("/api/jha/today-jobs", async (req, res) => {
+    try {
+      const todayStr = getNZDateString(new Date());
+      const jobs = await storage.getJobsScheduledAroundNZDate(todayStr);
+      const today = jobs
+        .filter((job) => jobRunsOnNZDate(job, todayStr))
+        .sort((a, b) =>
+          (a.scheduledStartTime || "99:99").localeCompare(b.scheduledStartTime || "99:99"),
+        );
+      res.json({
+        success: true,
+        data: today.map((job) => ({
+          id: job.id,
+          jobNumber: job.jobNumber,
+          title: job.title,
+          address: job.address,
+          customerName: job.customerName,
+          scheduledStartTime: job.scheduledStartTime,
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to fetch today's jobs",
+      });
+    }
+  });
+
   // JHA Assessments
   app.get("/api/jha/assessments", async (req, res) => {
     try {
@@ -32395,6 +32844,23 @@ Transcription: ${transcriptText}`;
 
       const validated = jhaPayloadSchema.parse(req.body);
       const { selectedHazards, sharedSignature, photos, ...assessmentData } = validated;
+
+      // Completing a morning JHA attaches it to a job card. Drafts are not
+      // created on this path — POST always stores status completed.
+      const linkedJobId = normalizeJhaJobId(assessmentData.jobId);
+      if (!linkedJobId) {
+        return res.status(400).json({
+          success: false,
+          message: "Select today's job before completing the risk assessment",
+        });
+      }
+      const linkedJob = await storage.getJob(linkedJobId);
+      if (!linkedJob) {
+        return res.status(400).json({
+          success: false,
+          message: "That job could not be found. Pick a job from today's list.",
+        });
+      }
       
       // Calculate overall risk rating safely
       const overallRiskRating = selectedHazards.length > 0 
@@ -32406,12 +32872,12 @@ Transcription: ${transcriptText}`;
         activityDescription: assessmentData.activityDescription,
         ppeRequired: assessmentData.ppeRequired || [],
         teamLeader: assessmentData.teamLeader || null,
-        location: assessmentData.location || null,
+        location: assessmentData.location || linkedJob.address || null,
         comments: assessmentData.comments || null,
         photos: photos || [],
         status: 'completed',
         overallRiskRating,
-        jobId: assessmentData.jobId || null,
+        jobId: linkedJobId,
         date: new Date(),
         gpsCoordinates: null,
         teamLeaderId: null,
@@ -32467,6 +32933,16 @@ Transcription: ${transcriptText}`;
         });
       }
 
+      if (businessHasRoleChecklist(currentBusinessId())) {
+        try {
+          await recordRiskAssessmentChecklistDone(linkedJobId, {
+            employeeId: (req as Request).session?.employeeId ?? null,
+          });
+        } catch (riskErr) {
+          console.error("Error marking risk assessment checklist done:", riskErr);
+        }
+      }
+
       res.json({ success: true, data: assessment });
     } catch (error) {
       console.error('JHA Assessment creation error:', error);
@@ -32507,6 +32983,23 @@ Transcription: ${transcriptText}`;
 
       const validated = jhaPayloadSchema.parse(req.body);
       const { selectedHazards, sharedSignature, photos, ...assessmentData } = validated;
+
+      const linkedJobId = normalizeJhaJobId(assessmentData.jobId);
+      if (jhaCompletionRequiresJob(existing.status) && !linkedJobId) {
+        return res.status(400).json({
+          success: false,
+          message: "Select today's job before completing the risk assessment",
+        });
+      }
+      if (linkedJobId) {
+        const linkedJob = await storage.getJob(linkedJobId);
+        if (!linkedJob) {
+          return res.status(400).json({
+            success: false,
+            message: "That job could not be found. Pick a job from today's list.",
+          });
+        }
+      }
       
       // Recalculate overall risk rating
       const overallRiskRating = selectedHazards.length > 0 
@@ -32527,7 +33020,7 @@ Transcription: ${transcriptText}`;
           comments: assessmentData.comments || null,
           photos: photos || [],
           overallRiskRating,
-          jobId: assessmentData.jobId || null,
+          jobId: linkedJobId,
           updatedAt: new Date()
         })
         .where(eq(schema.jhaAssessments.id, req.params.id));
@@ -32588,6 +33081,20 @@ Transcription: ${transcriptText}`;
       const updatedAssessment = await storage.getJhaAssessment(req.params.id);
       if (!updatedAssessment) {
         throw new Error('Assessment not found after update');
+      }
+
+      if (
+        businessHasRoleChecklist(currentBusinessId())
+        && updatedAssessment.status === "completed"
+        && updatedAssessment.jobId
+      ) {
+        try {
+          await recordRiskAssessmentChecklistDone(updatedAssessment.jobId, {
+            employeeId: (req as Request).session?.employeeId ?? null,
+          });
+        } catch (riskErr) {
+          console.error("Error marking risk assessment checklist done:", riskErr);
+        }
       }
 
       res.json({ success: true, data: updatedAssessment });
@@ -32830,18 +33337,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  // Reviews API - Facebook only here; Google is registered earlier in this file (cached).
-  const { fetchFacebookReviews } = await import("./services/reviewsService");
-
-  app.get("/api/reviews/facebook", async (req, res) => {
-    try {
-      const reviews = await fetchFacebookReviews();
-      res.json({ success: true, reviews });
-    } catch (error) {
-      console.error('Error fetching Facebook reviews:', error);
-      res.json({ success: false, reviews: [], message: error instanceof Error ? error.message : 'Failed to fetch Facebook reviews' });
-    }
-  });
+  // GET /api/reviews/facebook is registered once, with the other public routes.
 
   // Marketing Campaigns API
   const { metaMarketingService } = await import("./services/metaMarketingService");
@@ -33962,7 +34458,7 @@ Transcription: ${transcriptText}`;
       const body = req.body;
       if (body.object !== 'page') return;
 
-      const PAGE_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+      const PAGE_TOKEN = readFacebookPageAccessToken().token;
       if (!PAGE_TOKEN) {
         console.warn('⚠️ FACEBOOK_PAGE_ACCESS_TOKEN not set — cannot process Messenger webhook');
         return;
@@ -33983,14 +34479,15 @@ Transcription: ${transcriptText}`;
           // Fetch sender's name from Graph API
           let senderName = '';
           try {
-            const profileUrl = `https://graph.facebook.com/v18.0/${senderId}?fields=name&access_token=${PAGE_TOKEN}`;
+            const profileUrl = facebookGraphUrl(`${senderId}?fields=name&access_token=${PAGE_TOKEN}`);
             const profileRes = await fetch(profileUrl);
             if (profileRes.ok) {
               const profile = await profileRes.json() as { name?: string };
               senderName = profile.name || '';
             }
           } catch (err) {
-            console.warn('Could not fetch Facebook sender profile:', err);
+            const detail = err instanceof Error ? err.message : String(err);
+            console.warn('Could not fetch Facebook sender profile:', redactFacebookSecrets(detail, PAGE_TOKEN));
           }
 
           // Use AI to extract job details from the message
@@ -34039,7 +34536,7 @@ Transcription: ${transcriptText}`;
 
               // Auto-reply to the sender
               try {
-                const replyUrl = `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_TOKEN}`;
+                const replyUrl = facebookGraphUrl(`me/messages?access_token=${PAGE_TOKEN}`);
                 await fetch(replyUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -34449,17 +34946,17 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // ─── Role Checklist Tasks ────────────────────────────────────────────────
-  // The seven built-in tasks rendered by JobChecklistPanel today, seeded on
+  // The built-in tasks rendered by JobChecklistPanel, seeded on
   // first GET so existing tenants see the same checklist as before but can now
   // disable/edit/reorder them and add their own from Settings.
   const BUILT_IN_ROLE_CHECKLIST_TASKS: Array<{
-    roleKey: 'A' | 'B' | 'C';
+    roleKey: RoleKey;
     itemId: string;
     label: string;
     iconName: string;
     sortOrder: number;
   }> = [
-    { roleKey: 'A', itemId: 'risk-assessment',     label: 'Risk assessment',                iconName: 'Shield',         sortOrder: 0 },
+    { roleKey: 'R', itemId: 'risk-assessment',     label: 'Risk assessment',                iconName: 'Shield',         sortOrder: 0 },
     { roleKey: 'A', itemId: 'content-creation',    label: 'Content creation',               iconName: 'Camera',         sortOrder: 1 },
     { roleKey: 'B', itemId: 'alert-customer-late', label: 'Alert customer if running late', iconName: 'PhoneCall',      sortOrder: 0 },
     { roleKey: 'B', itemId: 'signs-out',           label: 'Signs out',                      iconName: 'TriangleAlert',  sortOrder: 1 },
@@ -34474,12 +34971,21 @@ If you cannot find a value, use null. Do not guess.`
   const ensureRoleChecklistTasksSeeded = async () => {
     const { db } = await import('./db');
     const { roleChecklistTasks } = await import('../shared/schema');
-    const existing = await db.select().from(roleChecklistTasks).limit(1);
+    const { eq, and, ne } = await import('drizzle-orm');
+    const existing = await db.select({ id: roleChecklistTasks.id }).from(roleChecklistTasks).limit(1);
     if (existing.length === 0) {
       await db.insert(roleChecklistTasks).values(withTenant(
         BUILT_IN_ROLE_CHECKLIST_TASKS.map(t => ({ ...t, isBuiltIn: true })),
       )).onConflictDoNothing();
     }
+    // Move the built-in morning JHA task onto its own role. Custom tasks stay put.
+    await db.update(roleChecklistTasks)
+      .set({ roleKey: 'R', updatedAt: new Date() })
+      .where(and(
+        eq(roleChecklistTasks.itemId, 'risk-assessment'),
+        eq(roleChecklistTasks.isBuiltIn, true),
+        ne(roleChecklistTasks.roleKey, 'R'),
+      ));
   };
 
   // GET /api/role-checklist-tasks — returns all tasks (enabled and disabled),
@@ -34503,7 +35009,7 @@ If you cannot find a value, use null. Do not guess.`
   });
 
   // POST /api/role-checklist-tasks — adds a user-defined custom task.
-  // Required: roleKey (A|B|C), label. Optional: iconName, sortOrder, itemId.
+  // Required: roleKey (A|B|C|R), label. Optional: iconName, sortOrder, itemId.
   // If itemId omitted, derive a slug from the label.
   app.post('/api/role-checklist-tasks', async (req: Request, res: Response) => {
     if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
@@ -34513,8 +35019,8 @@ If you cannot find a value, use null. Do not guess.`
       const { roleChecklistTasks } = await import('../shared/schema');
       const { eq, max, and } = await import('drizzle-orm');
       const { roleKey, label, iconName, sortOrder, itemId } = req.body ?? {};
-      if (!['A', 'B', 'C'].includes(roleKey)) {
-        return res.status(400).json({ success: false, message: 'roleKey must be A, B, or C' });
+      if (!isRoleKey(roleKey)) {
+        return res.status(400).json({ success: false, message: "roleKey must be A, B, C, or R" });
       }
       if (!label || typeof label !== 'string' || !label.trim()) {
         return res.status(400).json({ success: false, message: 'label is required' });

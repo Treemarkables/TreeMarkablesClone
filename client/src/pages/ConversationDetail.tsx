@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useSelectAllOnFocus } from "@/lib/selectAllOnFocus";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Conversation, ConversationMessage, Job } from "@shared/schema";
+import { fillEmptyJobContact } from "@shared/jobContactFill";
 import {
   ArrowLeft,
   Send,
@@ -105,6 +107,7 @@ function parseContactForm(content: string) {
 }
 
 export default function ConversationDetail() {
+  const selectAllAddress = useSelectAllOnFocus();
   const [, params] = useRoute("/conversation/:id");
   const [, setLocation] = useLocation();
   const conversationId = params?.id;
@@ -510,6 +513,17 @@ export default function ConversationDetail() {
         jobContactMobile: isMobileNumber ? formValues.phone || "" : "",
         conversationId: conversationId,
       };
+      // Phone alone was stored on the job; name and email stayed on the
+      // customer, so Job Contact rendered blank while diary mail still had
+      // an address. Copy the dialog's name and email onto the empty columns.
+      Object.assign(
+        jobData,
+        fillEmptyJobContact(jobData, {
+          name: formValues.name,
+          email: formValues.email,
+          phone: formValues.phone,
+        }),
+      );
 
       const jobRes = await apiRequest("POST", "/api/jobs", jobData);
       const jobResponseData = (await jobRes.json()) as { data: Job };
@@ -621,9 +635,9 @@ export default function ConversationDetail() {
   }
 
   return (
-    <div className="flex flex-col absolute top-0 left-0 right-0 bottom-20 bg-white dark:bg-gray-950 w-full overflow-hidden">
+    <div className="flex flex-col absolute top-0 left-0 right-0 bottom-20 bg-background w-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-start justify-between px-3 sm:px-4 py-3 sm:py-4 border-b bg-white dark:bg-gray-950 flex-shrink-0 w-full gap-2 sm:gap-4">
+      <div className="flex items-start justify-between px-3 sm:px-4 py-3 sm:py-4 border-b bg-card flex-shrink-0 w-full gap-2 sm:gap-4">
         <div className="flex items-start gap-1.5 sm:gap-3 flex-1 min-w-0">
           <Button
             variant="ghost"
@@ -823,7 +837,7 @@ export default function ConversationDetail() {
       </ScrollArea>
 
       {/* Message Input */}
-      <div className="border-t bg-white dark:bg-gray-950 px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0 mb-4 w-full">
+      <div className="border-t bg-card px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0 mb-4 w-full">
         <div className="flex items-end gap-1.5 sm:gap-2 w-full">
           <Textarea
             placeholder="Type a message..."
@@ -1058,6 +1072,7 @@ export default function ConversationDetail() {
                 onChange={(e) =>
                   setLeadForm({ ...leadForm, address: e.target.value })
                 }
+                {...selectAllAddress}
                 placeholder="Property address"
                 data-testid="input-job-address"
               />

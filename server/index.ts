@@ -8,6 +8,8 @@ import http from "http";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.ts";
 import { APP_URL } from "./config/appUrl";
+import { createHelmetMiddleware } from "./security/helmetConfig";
+import { publicMutatingRateLimit } from "./security/publicWriteRateLimit";
 import { tenantContextMiddleware } from "./tenancy/tenantMiddleware";
 import { requireApiAuth } from "./tenancy/requireApiAuth";
 import { setupTimeTrackingRoutes } from "./timeTrackingRoutes";
@@ -15,16 +17,28 @@ import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
 import {
   createTreemarkablesDocumentBrandMiddleware,
-  requestIsTreemarkablesDocumentHost,
   applyTreemarkablesDocumentHead,
+  htmlForSpaRequest,
 } from "./treemarkablesDocumentBrand";
+import {
+  applyHashedAssetCacheHeaders,
+  applyHtmlCacheHeaders,
+  assertBuiltPrerenderDir,
+  isMissingStaticAsset,
+  writeMissingAsset,
+} from "./staticAssetPolicy";
+import { createTreemarkablesApexRedirectMiddleware } from "./treemarkablesApexRedirect";
+import { createTreemarkablesAppHostSeoMiddleware } from "./treemarkablesAppHostSeo";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import { clearLegacyDomainSessionCookie } from "./security/authSession";
+import { preferEmployeeSessionCookie, SESSION_COOKIE_NAME, SESSION_COOKIE_SAMESITE } from "./security/sessionCookie";
 import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
+import { warnIfGoogleCalendarTablesMissing } from "./services/googleCalendarTables";
 import { sweepStaleInboundDocuments } from "./services/supplierInvoiceIngest";
 import { attachVoiceAgentWss } from "./services/voiceAgent";
 
@@ -100,14 +114,31 @@ const app = express();
 // Trust proxy - needed for secure cookies behind Replit's proxy
 app.set('trust proxy', 1);
 
+// App-wide security headers (HSTS / CSP / frameguard / Referrer-Policy / nosniff).
+// Must sit before routes so /login and the SPA shell are covered, not just a few
+// media endpoints. See server/security/helmetConfig.ts for CSP notes.
+app.use(createHelmetMiddleware());
+
 // Health check endpoint — registered first, outside session middleware
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
 });
 
+// Bare treemarkables.co.nz → https://www.treemarkables.co.nz (path kept).
+// DNS for the apex is not in this repo; until it points here the redirect
+// never runs. /health is exempt. www and the app hosts are not redirected.
+app.use(createTreemarkablesApexRedirectMiddleware());
+
+// app.treemarkables.co.nz: public marketing paths 301 to www. `/` stays,
+// because the iOS shell and a logged-in session enter the app there.
+// http://www → https://www is DigitalOcean's edge, not this process.
+app.use(createTreemarkablesAppHostSeoMiddleware());
+
 // www.treemarkables.co.nz / treemarkables.co.nz: first HTML byte is Treemarkables
-// branded (title/meta/icons/og). Does not change the React UI, does not 301 app
-// paths, and is a no-op on Inflow hosts. See server/treemarkablesDocumentBrand.ts.
+// branded (title/meta/icons/og). Public marketing routes also include a static
+// page snapshot plus LocalBusiness JSON-LD. /login, /dashboard, /dispatch and
+// the other staff routes keep the Inflow boot shell. No 301 of those off www.
+// App hosts (app.inflowapp.co.nz, app.treemarkables.co.nz) never get the snapshot.
 app.use(createTreemarkablesDocumentBrandMiddleware());
 
 // Legacy-domain redirect. Customer document links already sent out (invoices,
@@ -167,6 +198,10 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
+// Shared Postgres rate limit on unauthenticated write endpoints (contact, signup,
+// proposal-accept, …). Skips login + AI (those have their own throttles).
+app.use(publicMutatingRateLimit);
+
 // Serve root-level public/ folder as static files (PDFs, guides, etc.)
 app.use(express.static(path.join(process.cwd(), 'public')));
 
@@ -182,9 +217,29 @@ if (!isDevelopment && !process.env.SESSION_SECRET) {
   throw new Error('SESSION_SECRET must be set in production — refusing to start with a default signing secret');
 }
 
+const sessionSecret = process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production';
+
+// Before express-session reads the cookie. A duplicate legacy sid must not
+// hide the signed-in employee (see sessionCookie.ts).
+app.use(preferEmployeeSessionCookie({
+  secrets: [sessionSecret],
+  hasEmployee: async (sid) => {
+    const result = await pool.query(
+      `SELECT 1 FROM session
+        WHERE sid = $1
+          AND expire > NOW()
+          AND COALESCE(sess->>'employeeId', '') <> ''
+        LIMIT 1`,
+      [sid],
+    );
+    return result.rows.length > 0;
+  },
+  onPreferred: clearLegacyDomainSessionCookie,
+}));
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'treemarkables-dev-secret-change-in-production',
+    secret: sessionSecret,
     // resave:false — connect-pg-simple implements `touch`, so express-session
     // keeps the session fresh (and rolling expiry works) without rewriting the
     // whole row when nothing changed. resave:true forced a session-table WRITE to
@@ -193,7 +248,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     rolling: true,
-    name: 'treemarkables.sid',
+    name: SESSION_COOKIE_NAME,
     store: new PgSession({
       pool: pool as any,
       tableName: 'session',
@@ -202,16 +257,16 @@ app.use(
     }),
     cookie: {
       // Local dev runs over http://localhost, where browsers silently drop a
-      // `Secure` cookie — and `SameSite=None` *requires* Secure, so the session
-      // cookie would never persist and every post-login /api/auth/me would 401,
-      // bouncing the user back to /login. Use lax + non-secure in dev. Production
-      // (https, PWA/iOS webview cross-site context) keeps secure + sameSite:none.
+      // `Secure` cookie. Production stays Secure. SameSite is Lax in both:
+      // None was stored and then dropped by the iOS WKWebView, so the shell
+      // kept showing the cached user while Add Staff arrived with no session.
+      // The webview's document is the app host, so Lax is sent on these fetches.
       secure: !isDevelopment,
       httpOnly: true,
       maxAge: isDevelopment
         ? 1000 * 60 * 60 * 24 * 90
         : 1000 * 60 * 60 * 24 * 30,
-      sameSite: isDevelopment ? 'lax' : 'none',
+      sameSite: SESSION_COOKIE_SAMESITE,
       // Host-only cookie: omit domain so it scopes to app.treemarkables.co.nz
       // exactly. Domain-scoped cookies (.treemarkables.co.nz) caused PWA users
       // to lose sessions on Chrome's installed-PWA storage partition.
@@ -244,6 +299,7 @@ function resolveAndServeStatic(appInstance: express.Express) {
     const indexPath = path.join(staticDirOverride, "index.html");
     if (fs.existsSync(indexPath)) {
       log(`Verified index.html exists at override path: ${indexPath}`, "static");
+      assertBuiltPrerenderDir(staticDirOverride, (html) => applyTreemarkablesDocumentHead(html, "/"));
       setupStaticServing(appInstance, staticDirOverride);
       return;
     } else {
@@ -271,6 +327,7 @@ function resolveAndServeStatic(appInstance: express.Express) {
     if (exists) {
       log(`Selected static directory: ${candidatePath}`, "static");
       log(`Verified index.html at: ${indexPath}`, "static");
+      assertBuiltPrerenderDir(candidatePath, (html) => applyTreemarkablesDocumentHead(html, "/"));
       setupStaticServing(appInstance, candidatePath);
       return;
     }
@@ -288,10 +345,7 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
   appInstance.use((req, res, next) => {
     const noCacheFiles = ['/sw.js', '/manifest.webmanifest', '/index.html'];
     if (noCacheFiles.some(file => req.path === file || req.path.endsWith(file))) {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Surrogate-Control', 'no-store');
+      applyHtmlCacheHeaders(res);
     }
     next();
   });
@@ -309,7 +363,7 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
       // imported module" crash. index.html / sw.js / manifest are NOT under
       // /assets/ and keep their no-store headers from the middleware above.
       if (filePath.includes(`${path.sep}assets${path.sep}`)) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        applyHashedAssetCacheHeaders(res);
       }
     },
   }));
@@ -319,44 +373,38 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
       return next();
     }
 
-    if (req.originalUrl.startsWith('/assets/') || req.originalUrl.match(/\.(js|css|map|woff|woff2|ttf|png|jpg|svg|ico)(\?.*)?$/)) {
-      return res.status(404).send('Asset not found');
+    if (isMissingStaticAsset(req.originalUrl)) {
+      // Express res.send(string) is text/html. A browser then refuses the
+      // module and the visitor is left on the prerender. Keep the 404, but
+      // as JavaScript or CSS, and do not let the edge cache the miss.
+      writeMissingAsset(res, req.originalUrl);
+      return;
     }
 
     const indexPath = path.join(staticPath, "index.html");
 
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    applyHtmlCacheHeaders(res);
 
     log(`Serving SPA fallback: ${req.originalUrl} -> index.html`, "static");
 
-    if (requestIsTreemarkablesDocumentHost(req)) {
-      try {
-        const html = fs.readFileSync(indexPath, "utf8");
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.send(applyTreemarkablesDocumentHead(html, req.path || "/"));
-        return;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        log(`Error serving branded index.html: ${message}`, "error");
+    try {
+      // Read from this image's disk every time. Asset hashes stay the ones
+      // Vite wrote for this build. Do not cache the document in memory.
+      // req.path is "/" inside this "*" mount — htmlForSpaRequest uses
+      // originalUrl so /login does not receive the homepage snapshot.
+      const html = fs.readFileSync(indexPath, "utf8");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(htmlForSpaRequest(html, req));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log(`Error serving index.html: ${message}`, "error");
+      if (!res.headersSent) {
         res.status(500).json({
           error: "Failed to serve application",
           details: message
         });
-        return;
       }
     }
-
-    res.sendFile(indexPath, (err) => {
-      if (err) {
-        log(`Error serving index.html: ${err.message}`, "error");
-        res.status(500).json({
-          error: "Failed to serve application",
-          details: err.message
-        });
-      }
-    });
   });
 
   log(`Static file serving setup completed successfully`, "static");
@@ -569,6 +617,13 @@ function startNotificationQueueWorker() {
       console.error("[schema] boot migrations failed (continuing):", e);
     }
 
+    try {
+      const calendarTablesWarning = await warnIfGoogleCalendarTablesMissing();
+      if (calendarTablesWarning) log(calendarTablesWarning, "startup");
+    } catch (e) {
+      log(`⚠️ Google Calendar table check failed: ${(e as Error).message}`, "startup");
+    }
+
     // Tenant-isolation backstop: any business_id table without an RLS policy is
     // cross-tenant readable under the app_tenant grant. Logs loudly; hard-fails
     // only under TENANT_RLS_STRICT (then the outer catch exits). Runs AFTER the
@@ -619,10 +674,7 @@ function startNotificationQueueWorker() {
     app.use((req, res, next) => {
       const noCacheFiles = ['/sw.js', '/manifest.webmanifest', '/index.html'];
       if (noCacheFiles.some(file => req.path === file || req.path.endsWith(file))) {
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-        res.setHeader('Surrogate-Control', 'no-store');
+        applyHtmlCacheHeaders(res);
       }
       next();
     });
@@ -978,7 +1030,7 @@ The {businessName} Team';
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         INSERT INTO role_checklist_tasks (role_key, item_id, label, icon_name, sort_order, is_built_in) VALUES
-          ('A', 'risk-assessment',     'Risk assessment',                'Shield',         0, true),
+          ('R', 'risk-assessment',     'Risk assessment',                'Shield',         0, true),
           ('A', 'content-creation',    'Content creation',               'Camera',         1, true),
           ('B', 'alert-customer-late', 'Alert customer if running late', 'PhoneCall',      0, true),
           ('B', 'signs-out',           'Signs out',                      'TriangleAlert',  1, true),
@@ -987,6 +1039,11 @@ The {businessName} Team';
           ('C', 'time-tracking',       'Time tracking',                  'Clock',          0, true),
           ('C', 'review-request',      'Request review from client',     'Star',           1, true)
         ON CONFLICT (item_id) DO NOTHING;
+        -- Morning JHA is its own checklist role. Seeds from before that stored
+        -- the built-in task under Kaiwhangai (A); move that one row.
+        UPDATE role_checklist_tasks
+           SET role_key = 'R', updated_at = CURRENT_TIMESTAMP
+         WHERE item_id = 'risk-assessment' AND is_built_in = true AND role_key <> 'R';
       `);
 
       // --- Safety module (Tier 1) tables — idempotent create + seed ---

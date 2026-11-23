@@ -344,16 +344,16 @@ export default function Tasks() {
 
   // ── Render ───────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-background">
       {/* Page header */}
       <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Tasks</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Tasks</h1>
           <p className="text-xs text-gray-500 mt-0.5">
             Internal work — gear, admin, follow-ups, maintenance
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-md border border-gray-200 p-0.5 bg-gray-50">
+        <div className="flex items-center gap-1 rounded-full border border-border p-0.5 bg-muted">
           {(["list", "board", "calendar", "mine"] as View[]).map((v) => {
             const labels: Record<View, string> = {
               list: "List",
@@ -366,7 +366,7 @@ export default function Tasks() {
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`px-3 py-1.5 text-xs rounded transition-colors ${
+                className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
                   isActive ? "bg-black text-[#39FF14]" : "text-gray-700 hover:bg-gray-100"
                 }`}
                 data-testid={`task-view-${v}`}
@@ -486,7 +486,7 @@ export default function Tasks() {
         <ListView tasks={allTasks} employeeById={employeeById} onOpen={setOpenTaskId} />
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-          <div className="flex-1 overflow-x-auto px-4 sm:px-6 py-3 bg-white">
+          <div className="flex-1 overflow-x-auto px-4 sm:px-6 py-3 bg-background">
             <div className="flex gap-3 min-w-max h-full">
               {COLUMNS.map((col) => (
                 <Column
@@ -651,8 +651,8 @@ function Column({
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col w-[280px] shrink-0 rounded-md border border-gray-200 ${
-        isOver ? "bg-[#39FF14]/10" : "bg-[#F7F7F4]"
+      className={`flex flex-col w-[280px] shrink-0 rounded-2xl border border-border ${
+        isOver ? "bg-[#39FF14]/10" : "bg-muted/60"
       }`}
     >
       <div className="px-3 py-2 flex items-center justify-between border-b border-gray-200">
@@ -719,7 +719,7 @@ function TaskCard({
       // dragging-overlay variant gets no handler so the overlay clone can't
       // re-open the panel.
       onClick={dragging ? undefined : () => onOpen(task.id)}
-      className={`bg-white rounded-md border border-gray-200 p-2.5 cursor-pointer hover:border-gray-300 ${
+      className={`bg-card rounded-2xl border border-border p-2.5 cursor-pointer ${
         dragging ? "shadow-none" : ""
       }`}
       style={{ borderLeft: `3px solid ${catColor}` }}

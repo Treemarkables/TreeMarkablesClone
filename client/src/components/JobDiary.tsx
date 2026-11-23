@@ -39,6 +39,7 @@ interface JobDiaryEntry {
   entryType: string;
   title: string;
   description: string;
+  content?: string | null;
   authorName: string;
   authorRole?: string;
   photos?: string[];
@@ -729,8 +730,8 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
             
             // Detect document type and extract number
             const detectDocument = () => {
-              const title = entry.title.toLowerCase();
-              const desc = entry.description.toLowerCase();
+              const title = (entry.title || "").toLowerCase();
+              const desc = (entry.description || entry.content || "").toLowerCase();
               
               // Extract quote number (e.g., "QTE-3326")
               const quoteMatch = (entry.title + ' ' + entry.description).match(/QTE-\d+/i);
@@ -763,7 +764,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
               
               // Extract the message text from description
               // Description format: "SMS sent to NAME\n\nMessage: TEXT" or "SMS reply from NAME:\n\nTEXT"
-              let messageText = entry.description;
+              let messageText = entry.description || entry.content || "";
               if (isSent && messageText.includes('Message:')) {
                 messageText = messageText.split('Message:')[1].trim();
               } else if (isReceived && messageText.includes(':\n\n')) {
