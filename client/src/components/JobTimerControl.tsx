@@ -109,6 +109,9 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   const [riskPromptOpen, setRiskPromptOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [roles, setRoles] = useState<Record<string, RoleKey[]>>({});
+  // True once a chip in this dialog is tapped. Prefill from today's roles must
+  // not by itself enable "Save roles" — only an actual change should.
+  const [rolesDirty, setRolesDirty] = useState(false);
   const [outstanding, setOutstanding] = useState<OutstandingItem[] | null>(null);
   // Backdated clock-in — "we started at 7:30 but forgot to press the button".
   const [useCustomTime, setUseCustomTime] = useState(false);
@@ -184,6 +187,7 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
     const existing: Record<string, RoleKey[]> = {};
     for (const r of dayRolesResp?.data ?? []) existing[r.employeeId] = rolesFromDayRolePayload(r);
     setRoles(existing);
+    setRolesDirty(false);
     setUseCustomTime(false);
     setCustomTime("");
     setPickerOpen(true);
@@ -312,6 +316,11 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
   });
 
   const anyPending = startMutation.isPending || stopMutation.isPending || stopAllMutation.isPending;
+  const lockedOnJob = timers.filter((t) => t.jobId === jobId).map((t) => t.employeeId);
+  // Chips for people already clocked in are not in selectedIds. A tap that
+  // leaves a role set is a real save; clearing every chip is "leave their
+  // role alone" and must not leave a live button that does nothing.
+  const canSaveLockedRoles = rolesDirty && lockedOnJob.some((id) => (roles[id]?.length ?? 0) > 0);
 
   const { data: jobResp } = useQuery<{
     data?: { riskAssessmentStatus?: RiskAssessmentStatus; riskAssessmentId?: string | null };
@@ -491,7 +500,10 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
                 <RoleChips
                   size="sm"
                   value={roles[emp.id] ?? []}
-                  onChange={(next) => setRoles((r) => ({ ...r, [emp.id]: next }))}
+                  onChange={(next) => {
+                    setRolesDirty(true);
+                    setRoles((r) => ({ ...r, [emp.id]: next }));
+                  }}
                   disabled={startMutation.isPending}
                   testIdPrefix={`picker-role-${emp.id}`}
                 />
@@ -557,16 +569,26 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
                   startedAt = d.toISOString();
                 }
                 const employeeIds = Array.from(selectedIds);
-                // Only send roles for people actually being clocked in, and only
-                // where one is set — an empty chip row means "leave their role alone".
+                // Role chips also render for people already clocked in on this job.
+                // They are locked out of selectedIds, so a role picked on that row
+                // used to be dropped on Start — the timer request succeeded and the
+                // checklist still showed the role empty. Send every chip that is set.
+                // An empty chip still means "leave their role alone".
                 const pickedRoles: Record<string, RoleKey[]> = {};
-                for (const id of employeeIds) {
+                for (const id of [...employeeIds, ...lockedOnJob]) {
                   const role = parseClockInRoles(roles[id]);
                   if (role) pickedRoles[id] = role;
                 }
-                startMutation.mutate({ employeeIds, startedAt, roles: pickedRoles });
+                // Role-only save when everyone is already clocked in: the server
+                // skips a second timer for people already running here, and still
+                // writes the roles above.
+                const startIds = employeeIds.length > 0
+                  ? employeeIds
+                  : lockedOnJob.filter((id) => pickedRoles[id]);
+                if (startIds.length === 0) return;
+                startMutation.mutate({ employeeIds: startIds, startedAt, roles: pickedRoles });
               }}
-              disabled={selectedIds.size === 0 || startMutation.isPending}
+              disabled={startMutation.isPending || (selectedIds.size === 0 && !canSaveLockedRoles)}
               data-testid="button-picker-start"
             >
               {startMutation.isPending ? (
@@ -574,8 +596,12 @@ export function JobTimerControl({ jobId }: { jobId: string }) {
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   Starting...
                 </>
+              ) : selectedIds.size > 0 ? (
+                `Start ${selectedIds.size}`
+              ) : canSaveLockedRoles ? (
+                "Save roles"
               ) : (
-                `Start ${selectedIds.size || ""}`.trim()
+                "Start"
               )}
             </Button>
           </DialogFooter>

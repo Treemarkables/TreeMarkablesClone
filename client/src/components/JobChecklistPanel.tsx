@@ -198,7 +198,6 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
   // Already collapsed to one row per person and sorted by name server-side.
   const crew = crewResp?.data?.crew;
   const staffOnJob = useMemo(() => crew ?? [], [crew]);
-  const crewDate = crewResp?.data?.date ?? getNZDateString(new Date());
   const crewIds = useMemo(
     () => new Set(staffOnJob.map((s) => s.employeeId)),
     [staffOnJob],
@@ -222,8 +221,15 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
   const setDayRole = useMutation({
     mutationFn: async (vars: { employeeId: string; date: string; dayRoles: RoleKey[] }) => {
       const res = await apiRequest("PUT", "/api/staff-assignments/day-role", vars);
-      return res.json();
+      const json = await res.json();
+      if (json?.success === false) {
+        throw new Error(json?.message || "Couldn't save role");
+      }
+      return json;
     },
+    // The chip is controlled by the crew-today cache. Without this, the tap
+    // does nothing until a refetch lands — and a slower refetch from an
+    // earlier tap can land last and wipe the roles that did save.
     onMutate: async (vars) => {
       const key = ["/api/jobs", jobId, "crew-today"] as const;
       await queryClient.cancelQueries({ queryKey: key });
@@ -511,7 +517,10 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
                 onChange={(dayRoles) =>
                   setDayRole.mutate({
                     employeeId: s.employeeId,
-                    date: crewDate,
+                    // Auckland date at tap time, not a crew-today payload that
+                    // may still be yesterday's (cached across midnight, or
+                    // computed on a UTC server before the date fix).
+                    date: getNZDateString(new Date()),
                     dayRoles,
                   })
                 }
