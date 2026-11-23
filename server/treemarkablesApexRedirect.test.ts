@@ -90,6 +90,7 @@ describe("public marketing first byte", () => {
     "/blog",
     "/blog/hazardous-tree-removal-gisborne-5-signs-dangerous-tree",
     "/blog/why-regular-tree-pruning-protects-your-home-gisborne",
+    "/blog/flying-fox-branch-lowering-gisborne",
     "/contact",
     "/privacy-policy",
   ];
@@ -115,11 +116,31 @@ describe("public marketing first byte", () => {
     });
   }
 
-  it("adds BlogPosting on the two posts only", () => {
+  it("adds BlogPosting on published posts only", () => {
     const post = applyTreemarkablesDocumentHead(html, "/blog/hazardous-tree-removal-gisborne-5-signs-dangerous-tree");
     assert.match(post, /"@type":"BlogPosting"/);
     assert.match(post, /5 Signs Your Tree Is a Hazard/);
+    const fox = applyTreemarkablesDocumentHead(html, "/blog/flying-fox-branch-lowering-gisborne");
+    assert.match(fox, /<title>Flying Fox Branch Lowering in Gisborne \| Treemarkables<\/title>/);
+    assert.match(fox, /Need a big branch lowered past a house, fence or garden in Gisborne\?/);
+    assert.match(fox, /<h1>How We Lower Big Branches Over Tight Spaces with a Flying Fox<\/h1>/);
+    assert.match(fox, /tensioned line from the tree to a safe landing zone/);
+    assert.match(fox, /<a href="\/tree-pruning">tree pruning<\/a>/);
+    assert.match(fox, /<a href="\/tree-removal">tree removal<\/a>/);
+    assert.match(fox, /<a href="\/emergency-tree-removal">emergency tree removal<\/a>/);
+    assert.match(fox, /<a href="\/wairoa">Wairoa<\/a> page/);
+    assert.match(fox, /<a href="\/east-coast">East Coast<\/a> page/);
+    assert.match(fox, /<a href="\/contact">request a free quote<\/a>/);
+    assert.match(fox, /"@type":"BlogPosting"/);
+    assert.match(fox, /"datePublished":"2026-10-11"/);
+    assert.match(fox, /"name":"Treemarkables"/);
+    assert.match(fox, /TODO: Jullian, add the Facebook video URL/);
+    assert.doesNotMatch(fox, /facebook\.com|youtube\.com|youtu\.be/);
     const home = applyTreemarkablesDocumentHead(html, "/");
     assert.doesNotMatch(home, /BlogPosting/);
+    const missing = applyTreemarkablesDocumentHead(html, "/blog/not-a-real-post");
+    assert.doesNotMatch(missing, /BlogPosting/);
+    const index = applyTreemarkablesDocumentHead(html, "/blog");
+    assert.match(index, /href="\/blog\/flying-fox-branch-lowering-gisborne"/);
   });
 });

@@ -7,7 +7,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
 
-const blogPosts = [
+const blogPosts: Array<{
+  slug: string;
+  title: string;
+  excerpt: string;
+  date: string;
+  author: string;
+  readTime: string;
+  image?: string;
+}> = [
+  {
+    slug: "flying-fox-branch-lowering-gisborne",
+    title: "How We Lower Big Branches Over Tight Spaces with a Flying Fox",
+    excerpt: "Need a big branch lowered past a house, fence or garden in Gisborne? See how a flying fox keeps the drop controlled. Call 027 216 6882 for a free quote.",
+    date: "October 11, 2026",
+    author: "Treemarkables",
+    readTime: "5 min read"
+  },
   {
     slug: "hazardous-tree-removal-gisborne-5-signs-dangerous-tree",
     title: "5 Signs Your Tree Is a Hazard and Needs Removing",
@@ -60,14 +76,16 @@ export default function Blog() {
           <div className="grid lg:grid-cols-2 xl:grid-cols-3 gap-8">
             {blogPosts.map((post) => (
               <Card key={post.slug} className="hover-elevate group">
-                <div className="aspect-video bg-muted rounded-t-lg overflow-hidden">
-                  <img 
-                    src={post.image} 
-                    alt={post.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    data-testid={`img-blog-${post.slug}`}
-                  />
-                </div>
+                {post.image ? (
+                  <div className="aspect-video bg-muted rounded-t-lg overflow-hidden">
+                    <img 
+                      src={post.image} 
+                      alt={post.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      data-testid={`img-blog-${post.slug}`}
+                    />
+                  </div>
+                ) : null}
                 <CardContent className="p-6">
                   <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
                     <div className="flex items-center gap-1">
