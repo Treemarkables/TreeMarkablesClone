@@ -30,6 +30,7 @@ import {
   Loader2,
   X,
 } from "lucide-react";
+import { PaidStatusBadge } from "@/components/PaidStatusBadge";
 
 interface InvoiceSection {
   id: string;
@@ -308,6 +309,11 @@ export default function InvoiceView() {
               <p className="text-sm font-semibold text-gray-900">
                 #{invoice.invoiceNumber}
               </p>
+              {invoice.status === "paid" && (
+                <div className="mt-1 flex justify-end">
+                  <PaidStatusBadge label="Paid" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -322,9 +328,7 @@ export default function InvoiceView() {
                     {invoice.status === "paid" ? "Amount paid" : "Amount due"}
                   </span>
                   {invoice.status === "paid" ? (
-                    <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                      Paid
-                    </span>
+                    <PaidStatusBadge label="Paid" />
                   ) : justPaid ? (
                     <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
                       Payment received

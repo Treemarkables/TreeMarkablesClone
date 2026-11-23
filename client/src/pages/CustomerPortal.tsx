@@ -837,11 +837,13 @@ export function CustomerPortal() {
                         <Badge
                           className={
                             invoice.status === "paid"
-                              ? "bg-green-500"
+                              ? "bg-emerald-600 text-white font-bold"
                               : "bg-orange-500"
                           }
                         >
-                          {invoice.status}
+                          {invoice.status === "paid"
+                            ? "Paid"
+                            : invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
                         </Badge>
                         <div className="flex gap-2 mt-2">
                           <Button
@@ -1526,8 +1528,11 @@ export function CustomerPortal() {
             <div className="space-y-6">
               {/* Header */}
               <div className="border-b-[3px] border-black pb-5">
-                <DialogTitle className="text-3xl font-bold text-black">
+                <DialogTitle className="text-3xl font-bold text-black flex items-center gap-3">
                   Invoice #{selectedInvoice.invoiceNumber}
+                  {selectedInvoice.status === "paid" && (
+                    <Badge className="bg-emerald-600 text-white font-bold">Paid</Badge>
+                  )}
                 </DialogTitle>
                 <DialogDescription className="text-sm text-gray-600 mt-2">
                   {portal?.customer?.name || "Customer"} -{" "}

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Receipt, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 import { composeCustomerAddress } from "@shared/customerAddress";
+import { jobShowsPaidBadge } from "@shared/jobPaymentDisplay";
+import { PaidStatusBadge } from "@/components/PaidStatusBadge";
 
 interface InvoiceViewerProps {}
 
@@ -118,7 +120,15 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
     }
   };
 
-  const isOverdue = invoice.dueDate && new Date(invoice.dueDate) < new Date() && invoice.status !== 'paid';
+  const invoiceIsPaid = jobShowsPaidBadge({
+    invoiceStatuses: [invoice.status],
+    xeroStatus: job?.xeroStatus,
+    paidAmount: job?.paidAmount,
+    totalIncludingGst: job?.totalIncludingGst,
+    totalAmount: job?.totalAmount ?? job?.totalIncludingGst,
+    exGstValue: invoice.amount,
+  });
+  const isOverdue = invoice.dueDate && new Date(invoice.dueDate) < new Date() && !invoiceIsPaid;
 
   return (
     <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
@@ -134,9 +144,12 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                 </Button>
               </Link>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">
-                  Invoice #{invoice.invoiceNumber || invoice.id}
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-semibold text-gray-900">
+                    Invoice #{invoice.invoiceNumber || invoice.id}
+                  </h1>
+                  {invoiceIsPaid && <PaidStatusBadge label="Paid" />}
+                </div>
                 <p className="text-sm text-gray-600">
                   {customer?.name || 'Customer'} - {new Date(invoice.createdAt).toLocaleDateString()}
                 </p>
@@ -195,11 +208,12 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             </div>
 
             {/* Status Banner */}
-            {invoice.status === 'paid' && (
+            {invoiceIsPaid && (
               <div className="bg-green-100 border border-green-300 rounded-lg p-2 mb-3">
-                <div className="flex items-center text-sm">
-                  <Receipt className="w-4 h-4 text-green-600 mr-2" />
-                  <span className="text-green-800 font-medium">Payment Received - Thank you!</span>
+                <div className="flex items-center text-sm gap-2">
+                  <Receipt className="w-4 h-4 text-green-600" />
+                  <PaidStatusBadge label="Paid" />
+                  <span className="text-green-800 font-medium">Payment received. Thank you.</span>
                 </div>
               </div>
             )}
@@ -234,8 +248,8 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Status:</span>
-                    <span className={`font-medium ${getStatusColor(invoice.status)}`}>
-                      {getStatusText(invoice.status)}
+                    <span className={`font-medium ${invoiceIsPaid ? "text-green-600" : getStatusColor(invoice.status)}`}>
+                      {invoiceIsPaid ? "Paid" : getStatusText(invoice.status)}
                     </span>
                   </div>
                 </div>
