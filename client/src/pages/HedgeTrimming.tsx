@@ -5,7 +5,7 @@ import RedesignReviews from "@/components/RedesignReviews";
 import SEO from "@/components/SEO";
 import InquiryForm from "@/components/InquiryForm";
 import ContactFormModal from "@/components/ContactFormModal";
-import { HEDGE_PAGE } from "@shared/treemarkablesPageCopy";
+import { GISBORNE_SERVICE_AREA, HEDGE_PAGE } from "@shared/treemarkablesPageCopy";
 import {
   Phone,
   Mail,
@@ -52,14 +52,7 @@ const areas: [string, string][] = [
   ["Makorori", "Coastal properties"],
 ];
 
-const faqs: [string, string][] = [
-  ["How often should hedges be trimmed?", "Most hedges do best with two trims a year — late spring and early autumn. Fast growers or formal shapes may need a little more."],
-  ["When should I trim a flowering hedge?", "Always just after it finishes flowering, never before — trimming early cuts off next season's blooms."],
-  ["Can you do tall or hard-to-reach hedges?", "Yes — we've got the gear to safely trim tall hedges and shelter belts, even in tight spots."],
-  ["Do you offer regular maintenance?", "Yes — we can set up a scheduled program so your hedges stay sharp without you having to think about it."],
-  ["Do you clean up the clippings?", "Always — we clear and tidy, leaving your section clean and ready to enjoy."],
-  ["Are you insured and qualified?", "Yes — NZ-qualified arborists with $5M public liability cover."],
-];
+const faqs: [string, string][] = (HEDGE_PAGE.faqs ?? []).map((item) => [item.q, item.a] as [string, string]);
 
 const galleryImages: [string, string][] = [
   [sliderPhoto1, "Trimmed hedge driveway in Gisborne"],
@@ -206,6 +199,9 @@ export default function HedgeTrimming() {
             <p className="text-mute mt-5 text-lg leading-relaxed">
               Whether it's a low boundary hedge or a towering shelter belt, we trim, shape and maintain it with sharp, clean tools — for healthy growth and crisp, even lines.
             </p>
+            <p className="text-mute mt-4 text-lg leading-relaxed">
+              If the trees beside the hedge need work too, see <a href="/tree-pruning" className="text-forest font-semibold">tree pruning</a>.
+            </p>
             <ul className="mt-7 space-y-3.5">
               {introList.map((item) => (
                 <li key={item} className="flex gap-3.5">
@@ -291,6 +287,7 @@ export default function HedgeTrimming() {
               </div>
             ))}
           </div>
+          <p className="text-mute text-center mt-8 max-w-3xl mx-auto leading-relaxed">{GISBORNE_SERVICE_AREA}</p>
         </div>
       </section>
 

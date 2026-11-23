@@ -22,7 +22,7 @@ import sliderPhoto1 from "@assets/generated_images/E0AAF8BC-CFB4-4F84-ABE2-2B149
 import sliderPhoto2 from "@assets/generated_images/C145D020-049C-4424-9E2F-A852B84FCA59_1_102_o.jpeg";
 import sliderPhoto3 from "@assets/generated_images/59A2C278-76AD-4BB7-A475-408D758C5760_1_102_a.jpeg";
 import worriedTreeImage from "@assets/generated_images/DCF3191F-E513-401F-AC8B-FF6F329C4A83_1_102_o.jpeg";
-import { GISBORNE_REMOVAL_FAQS, TREE_REMOVAL_PAGE } from "@shared/treemarkablesPageCopy";
+import { GISBORNE_REMOVAL_FAQS, GISBORNE_SERVICE_AREA, TREE_REMOVAL_PAGE } from "@shared/treemarkablesPageCopy";
 
 declare global {
   interface Window {
@@ -339,6 +339,9 @@ export default function TreeRemoval() {
               </div>
             ))}
           </div>
+          <p className="text-mute text-center mt-8 max-w-3xl mx-auto leading-relaxed">
+            {GISBORNE_SERVICE_AREA} See also <a href="/tree-pruning" className="text-forest font-semibold">tree pruning</a>, <a href="/stump-grinding" className="text-forest font-semibold">stump grinding</a> and <a href="/hedge-trimming" className="text-forest font-semibold">hedge trimming</a>.
+          </p>
         </div>
       </section>
 

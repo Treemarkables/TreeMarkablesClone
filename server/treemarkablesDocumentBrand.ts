@@ -23,6 +23,8 @@ import type { IncomingHttpHeaders } from "http";
 import type { Request, RequestHandler, Response } from "express";
 import fs from "fs";
 import { injectTreemarkablesPublicHtml, removeTreemarkablesPublicHtml, treemarkablesJsonLd } from "./treemarkablesPublicHtml";
+import { treemarkablesAdsSnippet } from "@shared/marketingAnalytics";
+import { isTreemarkablesPublicPath, normalisePublicPath } from "@shared/treemarkablesMarketingPaths";
 import { applyHtmlCacheHeaders } from "./staticAssetPolicy";
 import {
   EAST_COAST_PAGE,
@@ -337,12 +339,19 @@ function replaceOrInsertMeta(
   return html;
 }
 
+function shouldLoadMarketingAds(pathname: string): boolean {
+  const path = normalisePublicPath(pathname);
+  if (isTreemarkablesPublicPath(path)) return true;
+  return path === "/mulch" || path.startsWith("/mulch/");
+}
+
 function brandHeadBlock(meta: DocumentBrandMeta, pathname: string): string {
   const canonical = canonicalUrl(meta.canonicalPath);
   const ogTitle = meta.ogTitle || meta.title;
   const ogDescription = meta.ogDescription || meta.description;
   const jsonLd = treemarkablesJsonLd(pathname);
   const schema = jsonLd ? `\n    ${jsonLd}` : "";
+  const ads = shouldLoadMarketingAds(pathname) ? `\n    ${treemarkablesAdsSnippet()}` : "";
   return `${BRAND_START}
     <link rel="canonical" href="${escapeAttr(canonical)}" />
     <meta property="og:type" content="website" />
@@ -359,7 +368,7 @@ function brandHeadBlock(meta: DocumentBrandMeta, pathname: string): string {
     <meta name="twitter:description" content="${escapeAttr(ogDescription)}" />
     <meta name="twitter:image" content="${escapeAttr(meta.ogImage)}" />
     <meta name="author" content="Treemarkables" />
-    <meta name="robots" content="index, follow" />${schema}
+    <meta name="robots" content="index, follow" />${schema}${ads}
     ${BRAND_END}`;
 }
 

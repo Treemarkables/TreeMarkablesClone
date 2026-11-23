@@ -6,6 +6,7 @@ import { type LeadSource } from "@shared/schema";
 import TurnstileCaptcha, {
   useCaptchaConfig,
 } from "@/components/TurnstileCaptcha";
+import { trackGenerateLead } from "@/lib/marketingTracking";
 
 // Declare gtag for TypeScript
 declare global {
@@ -210,19 +211,9 @@ export default function ContactSection() {
             gclid: leadSource.gclid,
           };
 
-          window.gtag("event", "generate_lead", {
-            event_category: "Contact",
-            event_label: "Contact Form",
-          });
+          trackGenerateLead("Contact Form");
 
           window.gtag("event", "form_submit", gaEventParams);
-
-          // Track as conversion with enhanced data
-          window.gtag("event", "conversion", {
-            send_to: "G-V7RHX2EL6B",
-            ...gaEventParams,
-            event_label: "Quote Request",
-          });
 
           console.log(
             "Google Analytics: Enhanced form submission tracked with lead source:",

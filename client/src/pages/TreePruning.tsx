@@ -5,7 +5,7 @@ import RedesignReviews from "@/components/RedesignReviews";
 import SEO from "@/components/SEO";
 import InquiryForm from "@/components/InquiryForm";
 import ContactFormModal from "@/components/ContactFormModal";
-import { GISBORNE_PRUNING_FAQS, TREE_PRUNING_PAGE } from "@shared/treemarkablesPageCopy";
+import { GISBORNE_PRUNING_FAQS, GISBORNE_SERVICE_AREA, TREE_PRUNING_PAGE } from "@shared/treemarkablesPageCopy";
 import {
   Phone,
   Mail,
@@ -177,6 +177,9 @@ export default function TreePruning() {
             <p className="text-mute mt-5 text-lg leading-relaxed">
               Our first priority is always preservation through expert pruning and care. Done well, pruning solves most tree problems while keeping the tree healthy, safe and beautiful.
             </p>
+            <p className="text-mute mt-4 text-lg leading-relaxed">
+              The same crew also does <a href="/hedge-trimming" className="text-forest font-semibold">hedge trimming</a> and <a href="/stump-grinding" className="text-forest font-semibold">stump grinding</a>.
+            </p>
             <div className="mt-6 rounded-2xl border-l-4 border-neon bg-white p-5 shadow-sm">
               <p className="text-ink/80 leading-relaxed">
                 We only recommend <strong className="text-ink">removal</strong> when it's genuinely necessary for safety — never as the easy option.
@@ -251,6 +254,7 @@ export default function TreePruning() {
               </div>
             ))}
           </div>
+          <p className="text-mute text-center mt-8 max-w-3xl mx-auto leading-relaxed">{GISBORNE_SERVICE_AREA}</p>
         </div>
       </section>
 

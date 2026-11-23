@@ -18,6 +18,7 @@ import { isTreemarkablesPublicPath, normalisePublicPath } from "@shared/treemark
 import {
   EAST_COAST_PAGE,
   EMERGENCY_PAGE,
+  GISBORNE_SERVICE_AREA,
   HEDGE_PAGE,
   HOME_PAGE,
   STUMP_PAGE,
@@ -52,6 +53,8 @@ const NAV: Array<[string, string]> = [
 interface PageCopy {
   h1: string;
   lede: string;
+  /** HTML appended inside the first paragraph, after the escaped lede. */
+  ledeHtml?: string;
   extra?: string;
   faqs?: FaqItem[];
 }
@@ -93,7 +96,7 @@ const PAGES: Record<string, PageCopy> = {
     extra: `
       <h2>Full-service tree care across Tairāwhiti</h2>
       <ul>
-        <li><a href="/tree-removal">Tree removal</a> — safe, controlled removals, from hazardous trees to tight-access sections. 24/7 emergency callouts.</li>
+        <li><a href="/tree-removal">Tree removal in Gisborne</a> — safe, controlled removals, from hazardous trees to tight-access sections. 24/7 emergency callouts.</li>
         <li><a href="/emergency-tree-removal">Emergency tree removal</a> — storm damage and fallen trees, day or night.</li>
         <li><a href="/tree-pruning">Tree pruning</a> — healthier structure, better light, and a tidier canopy.</li>
         <li><a href="/stump-grinding">Stump grinding</a> — ground out below the surface so you can reclaim the space.</li>
@@ -101,6 +104,7 @@ const PAGES: Record<string, PageCopy> = {
         <li><a href="/wairoa">Arborist in Wairoa</a> — homes and farms, travelling from Gisborne.</li>
         <li><a href="/east-coast">East Coast arborist</a> — tree care along the Tairāwhiti East Coast.</li>
       </ul>
+      <p>${escapeHtml(GISBORNE_SERVICE_AREA)}</p>
       <p>Free, no-obligation quotes. We visit, assess the job in person, and leave a clear itemised price before any work begins. Fully insured. Yard: ${ADDRESS_LINE}.</p>
     `,
   },
@@ -109,6 +113,7 @@ const PAGES: Record<string, PageCopy> = {
     lede: `${TREE_REMOVAL_PAGE.lede} Homes and farms across Gisborne, Wairoa and the East Coast.`,
     extra: `
       <p>We remove trees close to houses, powerlines and tight driveways, and we respond to storm damage day or night. You'll get a clear quote before we start, and the site is raked and blown down when we leave. For a tree that has already come down, see <a href="/emergency-tree-removal">emergency tree removal</a>.</p>
+      <p>${escapeHtml(GISBORNE_SERVICE_AREA)}</p>
       <p>See also <a href="/tree-pruning">tree pruning</a>, <a href="/stump-grinding">stump grinding</a> and <a href="/hedge-trimming">hedge trimming</a>.</p>
       ${faqHtml(TREE_REMOVAL_PAGE.faqs, TREE_REMOVAL_PAGE.faqHeading)}
     `,
@@ -119,7 +124,8 @@ const PAGES: Record<string, PageCopy> = {
     lede: TREE_PRUNING_PAGE.lede,
     extra: `
       <p>We prune to preserve the tree. Crown reduction, shaping and deadwood removal keep weight off roofs and let light and air through the canopy. Removal only if it is truly needed.</p>
-      <p>See also <a href="/tree-removal">tree removal</a>, <a href="/stump-grinding">stump grinding</a>, <a href="/wairoa">Wairoa</a>, the <a href="/east-coast">East Coast</a>, and our <a href="/blog/why-regular-tree-pruning-protects-your-home-gisborne">guide to regular pruning</a>.</p>
+      <p>${escapeHtml(GISBORNE_SERVICE_AREA)}</p>
+      <p>See also <a href="/tree-removal">tree removal</a>, <a href="/hedge-trimming">hedge trimming</a>, <a href="/stump-grinding">stump grinding</a>, <a href="/wairoa">Wairoa</a>, the <a href="/east-coast">East Coast</a>, and our <a href="/blog/why-regular-tree-pruning-protects-your-home-gisborne">guide to regular pruning</a>.</p>
       ${faqHtml(TREE_PRUNING_PAGE.faqs, TREE_PRUNING_PAGE.faqHeading)}
     `,
     faqs: TREE_PRUNING_PAGE.faqs,
@@ -136,9 +142,12 @@ const PAGES: Record<string, PageCopy> = {
   "/hedge-trimming": {
     h1: HEDGE_PAGE.h1,
     lede: HEDGE_PAGE.lede,
+    faqs: HEDGE_PAGE.faqs,
     extra: `
-      <p>We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Big or small.</p>
+      <p>We trim, shape and maintain hedges for homes, lifestyle blocks and coastal properties in Gisborne. Big or small. Tall hedges and tight access are included, and the green waste is taken away. Most hedges do best with two trims a year, late spring and early autumn.</p>
+      <p>${escapeHtml(GISBORNE_SERVICE_AREA)}</p>
       <p>See also <a href="/tree-pruning">tree pruning</a> and <a href="/tree-removal">tree removal</a>.</p>
+      ${faqHtml(HEDGE_PAGE.faqs, HEDGE_PAGE.faqHeading)}
     `,
   },
   "/summer-offer": {
@@ -198,6 +207,7 @@ const PAGES: Record<string, PageCopy> = {
     h1: "5 Signs Your Tree Is a Hazard and Needs Removing",
     lede:
       "Worried a tree on your Gisborne property is a hazard? These five signs — dead branches, trunk damage, leaning and root problems, included bark, and proximity to a target — mean it is time for a professional look.",
+    ledeHtml: ` See <a href="/tree-removal">tree removal in Gisborne</a> if it has to come out.`,
     extra: `
       <p>As a homeowner in Gisborne, your trees are a valuable asset. A hazardous tree has structural defects that make it likely to fail, posing a risk to people or property. Recognising the warning signs early matters. Ignoring them can damage a home or vehicle, or injure someone.</p>
       <h2>1. Large, dead or hanging branches (widow-makers)</h2>
@@ -217,6 +227,7 @@ const PAGES: Record<string, PageCopy> = {
     h1: "Why Regular Tree Pruning Protects Your Home in Gisborne",
     lede:
       "Gisborne's mild climate and coastal winds help trees thrive, and they also grow heavy limbs that fail in a nor'easter. Regular pruning is preventive maintenance for the house, the people under the tree, and the tree itself.",
+    ledeHtml: ` The work is <a href="/tree-pruning">tree pruning</a>.`,
     extra: `
       <p>We are often called after high winds or heavy rain to deal with broken limbs that a scheduled prune would have taken off while they were still small. Pruning is not only about the look of the tree.</p>
       <h2>Promote tree health</h2>
@@ -296,7 +307,7 @@ function pageHtml(pathname: string): string {
     </header>
     <main>
       <h1>${escapeHtml(copy.h1)}</h1>
-      <p>${escapeHtml(copy.lede)}</p>
+      <p>${escapeHtml(copy.lede)}${copy.ledeHtml || ""}</p>
       ${copy.extra || ""}
       <p>
         <a class="tm-cta" href="/contact">Get a free quote</a>
@@ -377,6 +388,20 @@ function localBusiness(): Record<string, unknown> {
       { "@type": "AdministrativeArea", name: "Tairāwhiti" },
       { "@type": "City", name: "Wairoa" },
       { "@type": "AdministrativeArea", name: "East Coast" },
+    ],
+    // Same hours already published on the service pages (Mo-Su 07:00-18:00).
+    // 24/7 emergency callouts are a service, not the yard hours.
+    openingHoursSpecification: [
+      {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        opens: "07:00",
+        closes: "18:00",
+      },
+    ],
+    // Place id already used for Treemarkables review requests in client/src/pages/Reviews.tsx.
+    sameAs: [
+      "https://www.google.com/maps/search/?api=1&query=Treemarkables&query_place_id=ChIJyW5ncp55Zm0R3_iU47Axcn8",
     ],
     hasOfferCatalog: {
       "@type": "OfferCatalog",
