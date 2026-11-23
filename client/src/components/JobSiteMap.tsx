@@ -613,57 +613,68 @@ export function JobSiteMap({
       </div>
 
       <div className="relative">
-        <div className="absolute top-2 right-2 z-[1000] flex gap-2">
-          {/* Floats over photo/satellite imagery, so it needs a solid fill —
-              the theme's outline variant is transparent and primary is near
-              black, both of which vanish against dark trees. */}
-          {isAddingMarker && pendingMarkers.length > 0 && (
-            <Button
-              size="sm"
-              onClick={() => setDetailsOpen(true)}
-              className="shadow-lg"
+        {isAddingMarker ? (
+          // The hint used to float over the top of the imagery (z-index above
+          // Leaflet). On a phone-width card it stretched across the map and
+          // covered zoom, Done, and Cancel, so a tap never reached them.
+          // Keep the hint and the actions in a bar above the map instead.
+          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
+            <p
+              className="flex min-w-0 flex-1 basis-full items-start gap-2 text-sm leading-snug text-foreground sm:basis-[12rem] sm:min-w-[12rem]"
+              data-testid="site-map-add-hint"
             >
-              <Save className="h-4 w-4 mr-1" />
-              Done ({pendingMarkers.length})
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant={isAddingMarker ? "destructive" : "outline"}
-            onClick={() => {
-              setIsAddingMarker(!isAddingMarker);
-              setPendingMarkers([]);
-            }}
-            className={
-              isAddingMarker
-                ? "shadow-lg"
-                : "shadow-lg bg-white text-gray-900 border-gray-300"
-            }
-          >
-            {isAddingMarker ? (
-              <>
-                <X className="h-4 w-4 mr-1" />
-                Cancel
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4 mr-1" />
-                Add Markers
-              </>
-            )}
-          </Button>
-        </div>
-
-        {isAddingMarker && (
-          <div className="absolute top-2 left-2 z-[1000] bg-white/95 border border-gray-200 px-3 py-2 rounded-lg shadow-lg text-sm text-gray-900">
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-green-600" />
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
               <span>
                 {pendingMarkers.length === 0
                   ? `Click on the ${view === "photo" ? "photo" : "map"} to place markers`
                   : "Keep clicking to add more, then press Done to describe them"}
               </span>
+            </p>
+            <div className="flex w-full gap-2 sm:ml-auto sm:w-auto sm:shrink-0">
+              {pendingMarkers.length > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setDetailsOpen(true)}
+                  className="h-11 flex-1 sm:h-9 sm:flex-none"
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  Done ({pendingMarkers.length})
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  setIsAddingMarker(false);
+                  setPendingMarkers([]);
+                }}
+                className="h-11 flex-1 sm:h-9 sm:flex-none"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Cancel
+              </Button>
             </div>
+          </div>
+        ) : (
+          <div className="absolute top-2 right-2 z-[1000] flex gap-2">
+            {/* Floats over photo/satellite imagery, so it needs a solid fill —
+                the theme's outline variant is transparent and primary is near
+                black, both of which vanish against dark trees. */}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setIsAddingMarker(true);
+                setPendingMarkers([]);
+              }}
+              className="shadow-lg bg-white text-gray-900 border-gray-300"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Markers
+            </Button>
           </div>
         )}
 
