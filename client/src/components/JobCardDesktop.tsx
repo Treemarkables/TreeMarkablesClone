@@ -112,6 +112,7 @@ import { ProgressRecapDialog } from "@/components/ProgressRecapDialog";
 import { ShareTimelineDialog } from "@/components/ShareTimelineDialog";
 import { openPhotoReport } from "@/lib/openPhotoReport";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
+import { moreMenuPress } from "@/components/jobCardMoreMenu";
 
 export type JobCardDesktopTab =
   | "details"
@@ -301,6 +302,13 @@ export function JobCardDesktop({
   const [showOnMyWay, setShowOnMyWay] = useState(false);
   const [showProgressRecap, setShowProgressRecap] = useState(false);
   const [showShareTimeline, setShowShareTimeline] = useState(false);
+  // More is controlled so a mouse click can open it after pointerup.
+  // See moreMenuPress. The ref is read from pointerdown, which runs before
+  // the click and before React re-renders.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreOpenRef = useRef(false);
+  moreOpenRef.current = moreOpen;
+  const moreToggleOnClickRef = useRef(false);
   const { toast } = useToast();
   const { webCallAvailable, startCall } = useWebCall();
 
@@ -742,13 +750,29 @@ export function JobCardDesktop({
             {/* More menu — items render only if their handler is supplied,
                 so the menu shrinks gracefully if the parent doesn't wire
                 everything. Three blocks separated by dividers: parent-
-                supplied tooling, job-lifecycle, then destructive Delete. */}
-            <DropdownMenu>
+                supplied tooling, job-lifecycle, then destructive Delete.
+                Mouse opens on click, not Radix's pointerdown toggle: that
+                press was closing the menu before it could be seen. Touch
+                still uses Radix. */}
+            <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
                   className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-secondary text-sm font-semibold text-foreground"
                   data-testid="job-card-desktop-action-more"
+                  onPointerDown={(event) => {
+                    const press = moreMenuPress(event.pointerType, moreOpenRef.current);
+                    moreToggleOnClickRef.current = press.toggleOnClick;
+                    if (press.preventRadixToggle) event.preventDefault();
+                  }}
+                  onClick={(event) => {
+                    const toggle = moreToggleOnClickRef.current;
+                    moreToggleOnClickRef.current = false;
+                    // detail 0 is a keyboard click. Enter/Space already
+                    // toggled via Radix onKeyDown.
+                    if (event.detail === 0 || !toggle) return;
+                    setMoreOpen((open) => !open);
+                  }}
                 >
                   <span className="w-8 h-8 rounded-xl bg-secondary text-muted-foreground grid place-items-center">
                     <MoreHorizontal className="w-4 h-4" />
