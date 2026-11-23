@@ -15,7 +15,7 @@ import {
 import { Check, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { CalendarJob } from "./calendarMath";
-import { effectiveGanttMins, jobRevenue, formatNZD } from "./calendarMath";
+import { effectiveGanttMins, jobRevenue, formatNZD, revenueChipClass } from "./calendarMath";
 import type { CalendarData } from "./useCalendarData";
 import type { CalendarDnD } from "./useCalendarDnD";
 
@@ -101,7 +101,7 @@ export function WeekView({
                 </div>
                 {rev > 0 && (
                   <div
-                    className={`mt-1 text-[10px] font-medium px-1 py-0.5 rounded ${rev >= DAY_TARGET ? "text-green-700 bg-green-50" : rev >= DAY_TARGET * 0.7 ? "text-amber-700 bg-amber-50" : "text-red-700 bg-red-50"}`}
+                    className={`mt-1 text-[10px] font-medium px-1 py-0.5 rounded ${revenueChipClass(rev, DAY_TARGET)}`}
                   >
                     {formatNZD(rev)}
                   </div>

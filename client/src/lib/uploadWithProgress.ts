@@ -73,7 +73,14 @@ export function uploadFileWithProgress<T = any>(opts: UploadOptions): Promise<T>
         reject(new Error(body?.message || `Upload failed (${xhr.status})`));
       }
     };
-    xhr.onerror = () => reject(new Error("Network error during upload"));
+    // status 0: the browser never got a response. On the iPhone shell that is
+    // usually the hosting edge resetting a large body, not a bug in this XHR.
+    xhr.onerror = () =>
+      reject(
+        new Error(
+          "The connection dropped while uploading. Check your signal and try again.",
+        ),
+      );
     xhr.ontimeout = () => reject(new Error("Upload timed out"));
     xhr.onabort = () => reject(new Error("Upload cancelled"));
 

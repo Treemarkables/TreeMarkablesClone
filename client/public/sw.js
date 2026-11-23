@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v16-mutation-bypass';
-const STATIC_CACHE = 'treemarkables-static-v16-mutation-bypass';
-const API_CACHE = 'treemarkables-api-v16-mutation-bypass';
+const CACHE_NAME = 'treemarkables-v18-ios-boot';
+const STATIC_CACHE = 'treemarkables-static-v18-ios-boot';
+const API_CACHE = 'treemarkables-api-v18-ios-boot';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -10,36 +10,60 @@ const urlsToCache = [
 
 // Install event - cache critical assets
 self.addEventListener('install', function(event) {
-  console.log('[SW v16] Installing - forcing immediate activation');
+  console.log('[SW v18] Installing - forcing immediate activation');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('[SW v16] Installed - skipping waiting');
+        console.log('[SW v18] Installed - skipping waiting');
         return self.skipWaiting();
       })
   );
 });
 
+// Pages running the current boot script announce themselves so activate
+// does not reload a healthy (or in-call) client when this worker updates.
+var readyClients = {};
+self.addEventListener('message', function(event) {
+  var data = event.data || {};
+  if (data.type !== 'inflow-client-ready') return;
+  if (event.source && event.source.id) readyClients[event.source.id] = true;
+});
+
 // Activate event - clean up ALL old caches
 self.addEventListener('activate', function(event) {
-  console.log('[SW v16] Activating - deleting ALL old caches');
+  console.log('[SW v18] Activating - deleting ALL old caches');
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
-      console.log('[SW v16] Found caches:', cacheNames);
+      console.log('[SW v18] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          if (!cacheName.includes('v16-mutation-bypass')) {
-            console.log('[SW v16] DELETING old cache:', cacheName);
+          if (!cacheName.includes('v18-ios-boot')) {
+            console.log('[SW v18] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => {
-      console.log('[SW v16] Taking control of all clients');
+    }).then(function() {
+      console.log('[SW v18] Taking control of all clients');
       return self.clients.claim();
+    }).then(function() {
+      // A page that loaded this worker's HTML posts inflow-client-ready.
+      // A client still on an older shell (deleted chunk hashes, white root)
+      // never does. Reload that client once.
+      return new Promise(function(resolve) {
+        setTimeout(function() {
+          self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+            clientList.forEach(function(client) {
+              if (readyClients[client.id]) return;
+              if (typeof client.navigate === 'function') client.navigate(client.url);
+            });
+            resolve();
+          }).catch(function() { resolve(); });
+        }, 1500);
+      });
     })
   );
 });
@@ -115,7 +139,10 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Navigation requests - ALWAYS fetch fresh HTML (never cache index.html)
+  // Navigation requests - ALWAYS fetch fresh HTML (never cache index.html).
+  // A cached SPA shell that points at deleted /assets/index-HASH.js is the
+  // classic PWA/WKWebView white screen. No offline document fallback that
+  // looks like a successful app load.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request, { cache: 'reload' })
@@ -129,8 +156,15 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // JS and CSS files - ALWAYS network first so code changes appear immediately
-  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.ts') || url.pathname.endsWith('.css') || url.pathname.includes('/assets/')) {
+  // Hashed Vite assets — network only. Cache-fallback here is how a deploy
+  // leaves the shell running a deleted chunk (white screen until force quit).
+  if (url.pathname.includes('/assets/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Other JS/CSS — network first, cache only as a last resort
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.ts') || url.pathname.endsWith('.css')) {
     event.respondWith(
       fetch(event.request)
         .then(function(response) {
@@ -185,7 +219,7 @@ self.addEventListener('push', function(event) {
       var data = payload.data || {};
       title = notif.title || payload.title || title;
       body = notif.body || payload.body || body;
-      clickUrl = data.clickAction || notif.click_action || clickUrl;
+      clickUrl = resolvePushClickUrl(data, notif) || clickUrl;
       tag = data.type || tag;
     } catch (e) {
       // Plain text fallback
@@ -198,7 +232,7 @@ self.addEventListener('push', function(event) {
     icon: '/tree-icon-192.png',
     badge: '/tree-icon-192.png',
     tag: tag,
-    data: { clickUrl: clickUrl },
+    data: { clickUrl: clickUrl, clickAction: clickUrl },
     vibrate: [100, 50, 100],
   };
 
@@ -207,16 +241,42 @@ self.addEventListener('push', function(event) {
   );
 });
 
+function resolvePushClickUrl(data, notif) {
+  data = data || {};
+  notif = notif || {};
+  var nested = (data.FCM_MSG && data.FCM_MSG.data) || data.data || {};
+  var click = data.clickAction || data.click_action || data.clickUrl || data.url
+    || nested.clickAction || nested.clickUrl || notif.click_action;
+  var jobId = data.jobId || nested.jobId;
+  var type = data.type || nested.type;
+  var conversationId = data.conversationId || nested.conversationId;
+  if (click && !(jobId && (click === '/dispatch' || click === '/dispatch/'))) {
+    return click;
+  }
+  if (jobId) {
+    var diary = type === 'email_reply' || type === 'sms_reply' || type === 'new_lead'
+      || type === 'proposal_sent' || type === 'photo_added' || type === 'note_added';
+    return '/dispatch?job=' + encodeURIComponent(jobId) + (diary ? '&tab=diary' : '');
+  }
+  if (conversationId) return '/conversation/' + conversationId;
+  if (type === 'invoice_payment') return '/invoices';
+  if (type === 'quote_accepted') return '/quotes';
+  if (type === 'new_conversation' || type === 'conversation_reply' || type === 'new_lead') return '/inbox';
+  return click || null;
+}
+
 // Open the app when a notification is tapped
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  var clickUrl = (event.notification.data && event.notification.data.clickUrl) || '/dispatch';
+  var data = event.notification.data || {};
+  var clickUrl = resolvePushClickUrl(data, {}) || data.clickUrl || '/dispatch';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
       for (var i = 0; i < clientList.length; i++) {
         var client = clientList[i];
         if (client.url.indexOf(self.location.origin) === 0 && 'focus' in client) {
-          client.navigate(clickUrl);
+          client.postMessage({ type: 'NOTIFICATION_CLICKED', url: clickUrl, data: data });
+          if (client.navigate) client.navigate(clickUrl);
           return client.focus();
         }
       }

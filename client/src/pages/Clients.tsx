@@ -459,8 +459,8 @@ export default function Clients() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
-          <p className="text-gray-600">Manage your customer database</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Customers</h1>
+          <p className="text-muted-foreground">Manage your customer database</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -623,7 +623,7 @@ export default function Clients() {
 
             {/* Bulk Actions */}
             {selectedCustomers.size > 0 && (
-              <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-2xl">
                 <div className="flex items-center gap-4">
                   <span className="text-sm font-medium text-blue-800">
                     {selectedCustomers.size} selected
@@ -704,7 +704,7 @@ export default function Clients() {
               <div className="space-y-4">
                 {/* Select All Header */}
                 {customers.length > 0 && (
-                  <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
+                  <div className="flex items-center gap-4 p-4 bg-muted/60 rounded-2xl border">
                     <Checkbox
                       checked={
                         customers.length > 0 &&

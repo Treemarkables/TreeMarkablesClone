@@ -10,6 +10,8 @@
 // Matches the existing composeBeforeAfter pattern in photoStorage.ts.
 
 import sharp from "sharp";
+import { annotationTextFrame } from "@shared/annotationTextWrap";
+import { annotationMarkStrokePx } from "./photoAnnotationStroke";
 
 type ShapeBase = { id: string; color: string };
 type StrokedBase = ShapeBase & { strokeWidth: number };
@@ -37,6 +39,8 @@ export type AnnotationShape =
       y: number;
       text: string;
       fontSize: number;
+      boxWidth?: number;
+      boxHeight?: number;
     });
 
 const XML_ENTITIES: Record<string, string> = {
@@ -53,8 +57,17 @@ const escapeXml = (s: string): string =>
 // client's convention — see PhotoAnnotator's coord-helper comment). So both
 // x and y multiply by `W`, not separate width/height. Distances and radii
 // likewise scale with W.
-function shapeToSvg(s: AnnotationShape, W: number): string {
+function shapeToSvg(
+  s: AnnotationShape,
+  W: number,
+  H: number,
+  stageWidth?: number,
+): string {
   const px = (n: number) => n * W;
+  const stroke =
+    "strokeWidth" in s
+      ? annotationMarkStrokePx(s.strokeWidth, W, stageWidth)
+      : 1;
 
   switch (s.type) {
     case "pen": {
@@ -65,7 +78,7 @@ function shapeToSvg(s: AnnotationShape, W: number): string {
       }
       return (
         `<polyline points="${pts.join(" ")}" stroke="${s.color}" ` +
-        `stroke-width="${s.strokeWidth}" fill="none" ` +
+        `stroke-width="${stroke}" fill="none" ` +
         `stroke-linecap="round" stroke-linejoin="round"/>`
       );
     }
@@ -80,9 +93,11 @@ function shapeToSvg(s: AnnotationShape, W: number): string {
       const len = Math.hypot(dx, dy);
       if (len < 1) return "";
 
-      // Match the Konva arrowhead geometry from the client.
-      const headLen = Math.max(10, s.strokeWidth * 3);
-      const headW = Math.max(10, s.strokeWidth * 3);
+      // Match the Konva arrowhead geometry from the client (screen pixels),
+      // then scale with the stroke so the head survives the full-resolution bake.
+      const head = annotationMarkStrokePx(Math.max(10, s.strokeWidth * 3), W, stageWidth);
+      const headLen = head;
+      const headW = head;
       const ux = dx / len;
       const uy = dy / len;
       const baseX = x2 - ux * headLen;
@@ -98,7 +113,7 @@ function shapeToSvg(s: AnnotationShape, W: number): string {
       // Line stops at the head's base so it doesn't poke through the triangle.
       return (
         `<line x1="${x1}" y1="${y1}" x2="${baseX}" y2="${baseY}" ` +
-        `stroke="${s.color}" stroke-width="${s.strokeWidth}" stroke-linecap="round"/>` +
+        `stroke="${s.color}" stroke-width="${stroke}" stroke-linecap="round"/>` +
         `<polygon points="${x2},${y2} ${leftX},${leftY} ${rightX},${rightY}" fill="${s.color}"/>`
       );
     }
@@ -114,33 +129,47 @@ function shapeToSvg(s: AnnotationShape, W: number): string {
       const ny = h < 0 ? y + h : y;
       return (
         `<rect x="${nx}" y="${ny}" width="${Math.abs(w)}" height="${Math.abs(h)}" ` +
-        `stroke="${s.color}" stroke-width="${s.strokeWidth}" fill="none"/>`
+        `stroke="${s.color}" stroke-width="${stroke}" fill="none"/>`
       );
     }
 
     case "circle": {
       return (
         `<circle cx="${px(s.x)}" cy="${px(s.y)}" r="${px(s.r)}" ` +
-        `stroke="${s.color}" stroke-width="${s.strokeWidth}" fill="none"/>`
+        `stroke="${s.color}" stroke-width="${stroke}" fill="none"/>`
       );
     }
 
     case "text": {
-      const fontSize = px(s.fontSize);
+      const frame = annotationTextFrame({
+        xNorm: s.x,
+        yNorm: s.y,
+        fontSizeNorm: s.fontSize,
+        text: s.text,
+        imageWidthPx: W,
+        imageHeightPx: H,
+        boxWidthNorm: s.boxWidth,
+        boxHeightNorm: s.boxHeight,
+      });
+      if (frame.visibleLines.length === 0) return "";
       // Konva strokes glyph outlines when stroke + strokeWidth are set; SVG
       // equivalent uses paint-order="stroke fill" so the fill sits on top of
       // a thin black outline — keeps text legible on any background.
-      const strokeW = Math.max(1, fontSize * 0.04);
-      const x = px(s.x);
-      // Konva positions text by top-left; SVG <text> uses the baseline. Shift
-      // down by ~fontSize so the rendered text appears in the same place the
-      // user typed.
-      const y = px(s.y) + fontSize;
+      const strokeW = Math.max(1, frame.fontSizePx * 0.04);
+      // Konva positions text by top-left; SVG <text> uses the baseline. The
+      // first line shifts down by ~fontSize so it stays where a short label
+      // used to sit. Further lines step by the same line height the editor uses.
+      const tspans = frame.visibleLines
+        .map((line, i) => {
+          const baseline = frame.yPx + frame.fontSizePx + i * frame.lineHeightPx;
+          return `<tspan x="${frame.xPx}" y="${baseline}">${escapeXml(line)}</tspan>`;
+        })
+        .join("");
       return (
-        `<text x="${x}" y="${y}" font-family="Inter, Arial, sans-serif" ` +
-        `font-size="${fontSize}" font-weight="bold" fill="${s.color}" ` +
+        `<text font-family="Arial, sans-serif" ` +
+        `font-size="${frame.fontSizePx}" font-weight="bold" fill="${s.color}" ` +
         `stroke="black" stroke-width="${strokeW}" paint-order="stroke fill">` +
-        `${escapeXml(s.text)}</text>`
+        `${tspans}</text>`
       );
     }
   }
@@ -153,6 +182,7 @@ function shapeToSvg(s: AnnotationShape, W: number): string {
 export async function bakeAnnotations(
   sourceBuffer: Buffer,
   shapes: AnnotationShape[],
+  options?: { stageWidth?: number },
 ): Promise<Buffer> {
   if (shapes.length === 0) {
     return sharp(sourceBuffer).png().toBuffer();
@@ -169,7 +199,7 @@ export async function bakeAnnotations(
 
   const overlaySvg =
     `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">` +
-    shapes.map((s) => shapeToSvg(s, width)).join("") +
+    shapes.map((s) => shapeToSvg(s, width, height, options?.stageWidth)).join("") +
     `</svg>`;
 
   return sharp(rotated)

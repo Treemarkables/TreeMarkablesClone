@@ -68,6 +68,7 @@ import {
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
 import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
 import { Button } from "@/components/ui/button";
+import { JobRiskAssessmentBar, riskStatusFromUnknown } from "@/components/JobRiskStatusChip";
 import {
   Dialog,
   DialogContent,
@@ -151,6 +152,8 @@ export interface JobCardDesktopProps {
     schedule?: () => void;
     timeTracking?: () => void;
     profitTracker?: () => void;
+    /** One-button complete → invoice → email → "send to Xero too?" flow. */
+    completeAndInvoice?: () => void;
     sendToXero?: () => void;
     /** True while the send-to-Xero request is in flight — drives the
      *  menu item's "Sending…" state so a click gives visible feedback. */
@@ -525,7 +528,8 @@ export function JobCardDesktop({
       <div className="bg-background rounded-2xl shadow-xl border border-border w-full max-w-[1480px] h-[92vh] flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
-        <div className="bg-card px-6 py-4 border-b border-border flex items-center justify-between gap-4 flex-shrink-0">
+        <div className="bg-card border-b border-border flex-shrink-0">
+        <div className="px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <h2 className="text-[22px] font-extrabold tracking-tight text-foreground truncate">
               Job {jobNumber ?? ""}
@@ -562,6 +566,18 @@ export function JobCardDesktop({
               <XIcon className="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        {job && (
+          <div className="px-6 pb-3" data-testid="job-card-desktop-risk">
+            <JobRiskAssessmentBar
+              jobId={jobId}
+              status={riskStatusFromUnknown(job.riskAssessmentStatus)}
+              assessmentId={typeof job.riskAssessmentId === "string" ? job.riskAssessmentId : null}
+              onOpenChecklist={roleChecklistEnabled ? () => setActiveTab("checklist") : undefined}
+            />
+          </div>
+        )}
         </div>
 
         {/* ── Split-screen body ── */}
@@ -631,7 +647,9 @@ export function JobCardDesktop({
                 no duplicate fetches. */}
             <div className="flex-1 overflow-y-auto min-h-0">
               {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
-              {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
+              {activeTab === "billing" && (
+                <JobBillingPanel jobId={jobId} onOpenInvoice={actions?.invoice} />
+              )}
               {activeTab === "backcosting" && <BackCostingPanel jobId={jobId} />}
               {activeTab === "checklist" && roleChecklistEnabled && <JobChecklistPanel jobId={jobId} />}
               {activeTab === "quoting" && <JobQuotingPanel jobId={jobId} />}
@@ -695,6 +713,10 @@ export function JobCardDesktop({
             {actionBtn("Quote", FileText, "bg-brand-lime", "text-brand-lime-foreground", handleQuote)}
             {actionBtn("Invoice", CreditCard, "bg-brand-lime", "text-brand-lime-foreground", handleInvoice)}
             {actionBtn("Proposal", FilePen, "bg-brand-lime", "text-brand-lime-foreground", handleProposal)}
+            {/* One click when the job's done: complete → invoice → email, then
+                the dialog asks whether to push it to Xero too. */}
+            {actions?.completeAndInvoice &&
+              actionBtn("Complete & Invoice", CheckCircle, "bg-brand-lime", "text-brand-lime-foreground", actions.completeAndInvoice)}
 
             {/* More menu — items render only if their handler is supplied,
                 so the menu shrinks gracefully if the parent doesn't wire

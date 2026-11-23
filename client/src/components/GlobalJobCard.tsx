@@ -91,6 +91,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilderV2 } from "./ProposalBuilderV2";
 import { InvoiceBuilder } from "./InvoiceBuilder";
+import { CompleteAndInvoiceDialog } from "./CompleteAndInvoiceDialog";
 import { JobDiarySection } from "./JobDiarySection";
 import { JobVideos } from "./JobVideos";
 import { JobChecklistPanel } from "./JobChecklistPanel";
@@ -188,6 +189,10 @@ import {
 } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import {
+  DISPATCH_JOBS_QUERY_KEY,
+  patchDispatchJobInCache,
+} from "@/lib/dispatchJobsCache";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import {
   insertJobSchema,
@@ -198,10 +203,19 @@ import {
 import { cn } from "@/lib/utils";
 import { registerReloadGuard } from "@/lib/foregroundReloadGuard";
 import { formatTime12Hour, nzTimeToUTC, utcToNZTime, getNZDateString, getJobScheduledNZDates } from "@shared/dateUtils";
+import {
+  buildCrewAssignmentRows,
+  crewIdsForScheduleEdit,
+  formatScheduleStartLabel,
+  scheduleStartTimes,
+  snapScheduleDuration,
+} from "@shared/scheduleCrew";
 import { Calendar as DayCalendar } from "@/components/ui/calendar";
 import { statusAfterBooking } from "@shared/jobStatus";
 import { Linkify, LinkifyMultiline } from "@/lib/linkify";
 import { invoicedJobValueExGst } from "@/lib/invoicedJobValue";
+import { readJobDescriptionDraft } from "@/lib/jobDescriptionDraft";
+import { invoiceJobDescriptionFromDraft } from "@/lib/invoiceJobDescription";
 import { Link } from "wouter";
 
 // Lead jobs auto-created on the server land with a literal
@@ -210,6 +224,38 @@ import { Link } from "wouter";
 // on `!form.getValues("address")`, otherwise the customer-pick auto-fill
 // silently no-ops because the form field already holds the placeholder.
 const PLACEHOLDER_ADDRESS_RE = /^\s*address not specified\s*$/i;
+
+// The five job-level contact fields, as a group. While a job has none of them
+// set, the form displays the customer record's details instead (see
+// jobHasOwnContact in the load effect). That fallback is display-only: the
+// instant ONE of these fields is persisted the job counts as having its own
+// contact and the fallback is suppressed, so the other four go blank. Saving
+// the whole visible group together keeps the screen and the database in step.
+const JOB_CONTACT_FIELDS = [
+  "jobContactFirstName",
+  "jobContactLastName",
+  "jobContactEmail",
+  "jobContactPhone",
+  "jobContactMobile",
+] as const;
+
+// Add the still-unsaved siblings of any edited jobContact* field to the
+// outgoing patch, so promoting the customer-record fallback onto the job
+// doesn't blank the values the user can see. Mutates and returns `patch`.
+function promoteFallbackJobContact(
+  patch: Record<string, any>,
+  formValues: Record<string, any>,
+): Record<string, any> {
+  if (!JOB_CONTACT_FIELDS.some((f) => f in patch)) return patch;
+  for (const field of JOB_CONTACT_FIELDS) {
+    if (field in patch) continue;
+    const value = formValues[field];
+    if (typeof value === "string" && value.trim() !== "") {
+      patch[field] = value;
+    }
+  }
+  return patch;
+}
 function isMeaningfulAddress(value: string | null | undefined): boolean {
   if (!value) return false;
   const trimmed = value.trim();
@@ -360,6 +406,8 @@ interface GlobalJobCardProps {
   onJobUpdated?: (job: any) => void;
   renderInline?: boolean; // For split-screen panel rendering (desktop)
   initialSidebarTab?: SidebarTab; // Deep-link from push notifications
+  /** Despatch → New → Invoice. Open the invoice builder once a customer is on the job. */
+  initialOpenInvoice?: boolean;
 }
 
 export function GlobalJobCard({
@@ -374,6 +422,7 @@ export function GlobalJobCard({
   onJobUpdated,
   renderInline = false,
   initialSidebarTab,
+  initialOpenInvoice = false,
 }: GlobalJobCardProps) {
   const [checklist, setChecklist] = useState<ChecklistItem[]>(
     Array.isArray(job?.checklist) ? job.checklist : [],
@@ -710,6 +759,7 @@ export function GlobalJobCard({
   // Booking cancellation state
   const [cancelBookingDialogOpen, setCancelBookingDialogOpen] = useState(false);
   const [showXeroResetConfirm, setShowXeroResetConfirm] = useState(false);
+  const [showCompleteAndInvoice, setShowCompleteAndInvoice] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState<string | null>(null);
 
   // Call picker state — shown when both job contact and tenant have a number
@@ -746,6 +796,9 @@ export function GlobalJobCard({
   const [isSMSComposerOpen, setIsSMSComposerOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  // Frozen at the moment Invoice is clicked so the builder does not init from
+  // a form snapshot that is still "" or only the last saved paragraph.
+  const [carriedInvoiceDescription, setCarriedInvoiceDescription] = useState<string | null>(null);
   const [paidNotesValue, setPaidNotesValue] = useState("");
   const [paidNotesSaving, setPaidNotesSaving] = useState(false);
 
@@ -777,6 +830,10 @@ export function GlobalJobCard({
   // a second icon next to their staff row. Kept distinct from staffAvailabilityFor
   // so the two modals don't fight over the same "isOpen" flag.
   const [myGoogleCalendarOpen, setMyGoogleCalendarOpen] = useState(false);
+  // The staff block, so reopening a booking can scroll it into view. On a
+  // phone the calendar sits above it and the dialog used to not pan.
+  const staffListRef = useRef<HTMLDivElement>(null);
+  const didScrollStaffRef = useRef(false);
 
   // Time tracking modal state
   const [isTimeTrackingOpen, setIsTimeTrackingOpen] = useState(false);
@@ -812,6 +869,11 @@ export function GlobalJobCard({
   const hasUserChangedRef = useRef(false);
   const lastLoadedJobIdRef = useRef<string | null>(null); // Track which job was loaded to prevent isDirty blocking initial load
   const originalLoadedDataRef = useRef<Record<string, any>>({}); // Store original loaded values to detect real changes on manual save
+  // True while the job carries NO jobContact* of its own and the form is
+  // therefore showing the customer record's details as a display-only
+  // fallback (see the load effect below). Used to promote that fallback onto
+  // the job the first time the user edits any contact field.
+  const jobContactIsFallbackRef = useRef(false);
   const currentJobIdRef = useRef<string | null>(null); // For clipboard paste handler
   const replaceLineItemsRef = useRef<typeof replaceLineItems | null>(null); // Stable ref to avoid dep-array re-fires
 
@@ -891,7 +953,7 @@ export function GlobalJobCard({
   }, [searchQuery]);
 
   // Fetch employees for scheduling assignment (needed upfront)
-  const { data: employeesData } = useQuery({
+  const { data: employeesData, isLoading: employeesLoading } = useQuery({
     queryKey: ["/api/employees"],
     enabled: isOpen || isSchedulingModalOpen,
     staleTime: 5 * 60 * 1000,
@@ -1276,6 +1338,7 @@ export function GlobalJobCard({
       setIsSMSComposerOpen(false);
       setIsQuoteModalOpen(false);
       setIsInvoiceModalOpen(false);
+      setCarriedInvoiceDescription(null);
       setIsProposalViewerOpen(false);
       setIsProposalBuilderOpen(false);
       setIsProfitTrackerOpen(false);
@@ -1706,6 +1769,7 @@ export function GlobalJobCard({
         editingJob.jobContactPhone ||
         editingJob.jobContactMobile
       );
+      jobContactIsFallbackRef.current = !jobHasOwnContact;
 
       const resetData = {
         // Core job data
@@ -2117,6 +2181,19 @@ export function GlobalJobCard({
           }
           if (clearFields.length > 0) {
             changedData._clearFields = clearFields;
+          }
+
+          // Job had no contact of its own, so the contact fields on screen came
+          // from the customer record. Persist them alongside the edited field —
+          // otherwise the first contact edit flips the job to "has own contact",
+          // the fallback stops applying, and the rest of the contact appears to
+          // wipe itself (typing an email blanked the name and phone).
+          if (jobContactIsFallbackRef.current) {
+            const before = Object.keys(changedData).length;
+            promoteFallbackJobContact(changedData, formData as any);
+            if (Object.keys(changedData).length !== before) {
+              jobContactIsFallbackRef.current = false;
+            }
           }
 
           console.log("💾 Auto-saving ONLY changed fields...", {
@@ -3273,22 +3350,20 @@ export function GlobalJobCard({
           Math.round(Number(editingJob.estimatedDuration) * 60),
         );
       }
+      if (baseDuration) {
+        baseDuration = snapScheduleDuration(Number(baseDuration)) || baseDuration;
+      }
     }
 
-    // Crew can live in any of three fields depending on the path that
-    // scheduled the job (modal save → assignedTo, drag-drop/older flows →
-    // assignedTeam/assignedStaffIds). Take the first non-empty one.
-    const baseAssignedTo: string[] =
-      Array.isArray(editingJob?.assignedTo) &&
-      (editingJob.assignedTo as string[]).length > 0
-        ? (editingJob.assignedTo as string[])
-        : Array.isArray(editingJob?.assignedTeam) &&
-            (editingJob.assignedTeam as string[]).length > 0
-          ? (editingJob.assignedTeam as string[])
-          : Array.isArray((editingJob as any)?.assignedStaffIds) &&
-              (editingJob as any).assignedStaffIds.length > 0
-            ? ((editingJob as any).assignedStaffIds as string[])
-            : [];
+    // Crew can live on the job (assignedTo / assignedTeam / assignedStaffIds)
+    // or only on assignment rows. Union them — taking the first non-empty
+    // field dropped people when a later drop overwrote assignedTeam.
+    const baseAssignedTo = crewIdsForScheduleEdit({
+      assignedTo: editingJob?.assignedTo,
+      assignedTeam: editingJob?.assignedTeam,
+      assignedStaffIds: (editingJob as { assignedStaffIds?: unknown })?.assignedStaffIds,
+      days: existingSelectedDates,
+    });
 
     // Always reset to job-derived defaults first so stale state from a
     // previous modal session can never leak in.
@@ -3340,21 +3415,6 @@ export function GlobalJobCard({
 
         const startNZ = utcToNZTime(startDateUTC);
 
-        // Only include employees whose assignment shares the chosen start
-        // time — keeps stale rows at other times out of the form.
-        const chosenStartMs = startDateUTC.getTime();
-        const uniqueEmployeeIds = [
-          ...new Set(
-            data.data
-              .filter(
-                (a: any) =>
-                  Math.abs(new Date(a.startTime).getTime() - chosenStartMs) <
-                  60_000,
-              )
-              .map((a: any) => a.employeeId),
-          ),
-        ] as string[];
-
         // Distinct NZ days across all assignment rows — the precise day set the
         // crew is actually booked on (covers non-contiguous multi-day jobs).
         const assignmentDays = [
@@ -3364,18 +3424,26 @@ export function GlobalJobCard({
             ),
           ),
         ].sort() as string[];
+        const bookedDays =
+          assignmentDays.length > 0 ? assignmentDays : nextData.selectedDates;
+        // Tick every person on those days. Matching the chosen start to the
+        // minute hid anyone booked earlier or later the same day, so reopening
+        // looked like the crew list had forgotten them.
+        const bookedCrew = crewIdsForScheduleEdit({
+          assignedTo: editingJob?.assignedTo,
+          assignedTeam: editingJob?.assignedTeam,
+          assignedStaffIds: (editingJob as { assignedStaffIds?: unknown })?.assignedStaffIds,
+          assignments: data.data,
+          days: bookedDays,
+        });
 
         nextData = {
           ...nextData,
           date: startNZ.date,
-          selectedDates:
-            assignmentDays.length > 0 ? assignmentDays : nextData.selectedDates,
+          selectedDates: bookedDays,
           startTime: startNZ.time,
-          duration: durationMinutes.toString(),
-          assignedTo:
-            uniqueEmployeeIds.length > 0
-              ? uniqueEmployeeIds
-              : nextData.assignedTo,
+          duration: snapScheduleDuration(durationMinutes) || nextData.duration,
+          assignedTo: bookedCrew.length > 0 ? bookedCrew : nextData.assignedTo,
           notes: chosenAssignment.notes || "",
         };
       }
@@ -3505,8 +3573,26 @@ export function GlobalJobCard({
     }
   };
 
-  // Handle invoice click
+  // Handle invoice click.
+  // JobDetailsPanel (the description field on a new work order) does not write
+  // the form until blur, and the form's "" then hides the saved job
+  // description. Read the field's current text, including an unsaved
+  // paragraph, and freeze it for InvoiceBuilder.
   const handleInvoiceClick = () => {
+    const jobKey = editingJob?.id;
+    const live = jobKey ? readJobDescriptionDraft(jobKey) : null;
+    if (descriptionPopupOpen && live == null) {
+      form.setValue("description", descriptionDraft, { shouldDirty: true });
+    }
+    setCarriedInvoiceDescription(
+      invoiceJobDescriptionFromDraft(
+        live,
+        descriptionPopupOpen && live == null
+          ? descriptionDraft
+          : form.getValues("description"),
+        editingJob?.description,
+      ),
+    );
     if (!selectedCustomer?.id) {
       toast({
         title: "Customer Required",
@@ -3515,15 +3601,22 @@ export function GlobalJobCard({
       });
       return;
     }
-    // Commit any open description-popup draft so form state holds the latest
-    // typed value before InvoiceBuilder reads it. Without this, text entered
-    // via the popup (which doesn't touch form state until the popup closes)
-    // would be missed when the user clicks Invoice before dismissing it.
-    if (descriptionPopupOpen) {
-      form.setValue("description", descriptionDraft, { shouldDirty: true });
-    }
     setIsInvoiceModalOpen(true);
   };
+
+  const openInvoiceRef = useRef(handleInvoiceClick);
+  openInvoiceRef.current = handleInvoiceClick;
+  const autoOpenedInvoiceRef = useRef(false);
+  useEffect(() => {
+    if (!initialOpenInvoice) {
+      autoOpenedInvoiceRef.current = false;
+      return;
+    }
+    if (autoOpenedInvoiceRef.current) return;
+    if (!selectedCustomer?.id) return;
+    autoOpenedInvoiceRef.current = true;
+    openInvoiceRef.current();
+  }, [initialOpenInvoice, selectedCustomer?.id]);
 
   // Handle print click
   const handlePrintClick = () => {};
@@ -3667,6 +3760,27 @@ The Treemarkables Team`;
     }
   };
 
+  // Reopening a booking: bring Assign Staff into view. The day calendar is
+  // tall, and on a phone the dialog did not pan, so the list sat off screen.
+  useEffect(() => {
+    if (!isSchedulingModalOpen) {
+      didScrollStaffRef.current = false;
+      return;
+    }
+    if (!editingJob?.scheduledDate || didScrollStaffRef.current) return;
+    const node = staffListRef.current;
+    if (!node) return;
+    didScrollStaffRef.current = true;
+    const scroller = node.closest(".schedule-job-dialog__body");
+    if (scroller instanceof HTMLElement) {
+      const top =
+        node.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      scroller.scrollTop += top;
+    } else {
+      node.scrollIntoView({ block: "start" });
+    }
+  }, [isSchedulingModalOpen, editingJob?.scheduledDate, employees.length]);
+
   // Staff conflict checking - DISABLED to allow double booking
   // Conflicts are now allowed - staff can be scheduled on multiple jobs at the same time
   useEffect(() => {
@@ -3774,31 +3888,20 @@ The Treemarkables Team`;
       const endTimeNZ = utcToNZTime(endTimeUTC);
       const [endHours, endMinutes] = endTimeNZ.time.split(":").map(Number);
 
-      // Create staff assignments - remove duplicates first
+      // Full crew for the selected days — one row per person per day. The
+      // server deletes this job's existing assignment rows and inserts these,
+      // so adding someone updates the booking instead of stacking a copy.
       const uniqueEmployeeIds = [...new Set(schedulingData.assignedTo)];
-
-      // One assignment per employee per selected day — last day uses day2DurationMs if set
-      const staffAssignments: Array<{
-        employeeId: string;
-        startTime: string;
-        endTime: string;
-        notes: string;
-      }> = [];
-      for (const dayStr of allDays) {
-        const isLastDay = dayStr === endDateStr;
-        const thisDurationMs =
-          isMultiDay && isLastDay ? day2DurationMs : durationMs;
-        const dayStartUTC = nzTimeToUTC(dayStr, timeStr);
-        const dayEndUTC = new Date(dayStartUTC.getTime() + thisDurationMs);
-        for (const employeeId of uniqueEmployeeIds) {
-          staffAssignments.push({
-            employeeId,
-            startTime: dayStartUTC.toISOString(),
-            endTime: dayEndUTC.toISOString(),
-            notes: schedulingData.notes,
-          });
-        }
-      }
+      const staffAssignments = buildCrewAssignmentRows({
+        employeeIds: uniqueEmployeeIds,
+        days: allDays,
+        startTime: timeStr,
+        durationMinutes: parseInt(schedulingData.duration, 10),
+        lastDayDurationMinutes: Math.round(
+          (isMultiDay ? day2DurationMs : durationMs) / 60_000,
+        ),
+        notes: schedulingData.notes,
+      });
 
       // Calculate scheduledEndDate if multi-day (timestamp = start of last day + day2Duration)
       let scheduledEndDateISO: string | null = null;
@@ -3836,17 +3939,26 @@ The Treemarkables Team`;
       });
       setStaffConflicts([]);
 
+      // Same fields the rail's hasUpcomingBookingNZ reads. Patch the dispatch
+      // list now so an Unscheduled card leaves that pile before the requests
+      // return. Single-day clears scheduledDates; multi-day sends the day set.
+      // Status is only included when statusAfterBooking advances a quote.
+      const schedulePatch: Record<string, unknown> = {
+        scheduledDate: startTimeISO,
+        scheduledEndDate: scheduledEndDateISO,
+        scheduledDates: isMultiDay ? allDays : null,
+        scheduledStartTime: timeStr,
+        scheduledEndTime: endTimeNZ.time,
+        ...(nextStatus ? { status: nextStatus } : {}),
+      };
+      await patchDispatchJobInCache(editingJob.id, schedulePatch);
+
       const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scheduledDate: startTimeISO, // Send full UTC ISO string (first day)
-          scheduledEndDate: scheduledEndDateISO, // null for single-day jobs (last day)
-          scheduledDates: isMultiDay ? allDays : null, // explicit day set (may skip days); null clears it for single-day
-          scheduledStartTime: timeStr, // NZ local time (HH:MM format)
-          scheduledEndTime: endTimeNZ.time, // NZ local time (HH:MM format)
+          ...schedulePatch,
           assignedTo: uniqueEmployeeIds,
-          ...(nextStatus ? { status: nextStatus } : {}),
         }),
       });
 
@@ -4040,7 +4152,7 @@ The Treemarkables Team`;
         // Refresh job data and staff assignments for the calendar, dispatch
         // board, and staff schedule. The calendar grid and dispatch board
         // use parameterised keys like ["/api/jobs?limit=10000&offset=0"] and
-        // ["/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true"],
+        // DISPATCH_JOBS_QUERY_KEY (the Unscheduled list, sorted by recent activity),
         // so a plain ["/api/jobs"] invalidation won't match them (TanStack
         // compares array elements, not string prefixes). Use a predicate to
         // catch every /api/jobs* variant so those views refetch immediately
@@ -4058,6 +4170,7 @@ The Treemarkables Team`;
       }
     } catch (error) {
       console.error("Error scheduling job:", error);
+      queryClient.invalidateQueries({ queryKey: [DISPATCH_JOBS_QUERY_KEY] });
       toast({
         title: "Scheduling Error",
         description:
@@ -4100,7 +4213,7 @@ The Treemarkables Team`;
 
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs?limit=10000&offset=0"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true"] });
+      queryClient.invalidateQueries({ queryKey: [DISPATCH_JOBS_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
@@ -4526,6 +4639,15 @@ The Treemarkables Team`;
         }
         if (clearFields.length > 0) {
           changedData._clearFields = clearFields;
+        }
+
+        // Same fallback promotion as the auto-save path above.
+        if (jobContactIsFallbackRef.current) {
+          const before = Object.keys(changedData).length;
+          promoteFallbackJobContact(changedData, formData as any);
+          if (Object.keys(changedData).length !== before) {
+            jobContactIsFallbackRef.current = false;
+          }
         }
 
         if (formData.isNewCustomer) {
@@ -6761,6 +6883,7 @@ The Treemarkables Team`;
                         {mode === "edit" && editingJob?.address && (
                           <JobLocationMap
                             jobAddress={editingJob.address}
+                            businessId={currentUser?.businessId}
                             className="mt-2"
                           />
                         )}
@@ -10559,10 +10682,12 @@ The Treemarkables Team`;
     // re-opened booking looked like it had "no recollection" of its details.
     schedule: () => handleScheduleClick(),
     quote: () => setIsQuoteModalOpen(true),
-    invoice: () => setIsInvoiceModalOpen(true),
+    invoice: () => handleInvoiceClick(),
     proposal: () => setIsProposalBuilderOpen(true),
     timeTracking: () => setIsTimeTrackingOpen(true),
     profitTracker: () => setIsProfitTrackerOpen(true),
+    // One-button "job's done": complete → invoice → email → ask about Xero.
+    completeAndInvoice: () => setShowCompleteAndInvoice(true),
     sendToXero: handleSendToXeroClick,
     // Lets the cards render a live "Sending…" state on their Xero buttons —
     // previously a tap gave zero feedback until the toast (or nothing at all
@@ -10581,7 +10706,7 @@ The Treemarkables Team`;
   // one. Pulled out so the desktop card mirrors what GlobalJobCard's
   // own diary panel already wires.
   const handleDiaryQuoteClick = () => setIsQuoteModalOpen(true);
-  const handleDiaryInvoiceClick = () => setIsInvoiceModalOpen(true);
+  const handleDiaryInvoiceClick = () => handleInvoiceClick();
   const handleDiaryProposalClick = (proposalNumber: string) => {
     const proposals = (jobProposalResponse as any)?.data || [];
     const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
@@ -10738,10 +10863,19 @@ The Treemarkables Team`;
             // missed by InvoiceBuilder's initializer.
             job={{
               ...editingJob,
-              // `??` (not `||`) so an intentional user clear ("") isn't
-              // silently replaced by the stale cached value.
+              // Carried at click time. The form value is often still "" (or
+              // only the last saved paragraph) when Invoice is clicked in the
+              // same gesture as typing. Null means the builder was opened
+              // without that snapshot; read the live field, then the form,
+              // then the saved job description.
               description:
-                form.getValues("description") ?? editingJob.description,
+                carriedInvoiceDescription !== null
+                  ? carriedInvoiceDescription
+                  : invoiceJobDescriptionFromDraft(
+                      readJobDescriptionDraft(editingJob.id),
+                      form.getValues("description"),
+                      editingJob.description,
+                    ),
               notes: form.getValues("notes") ?? editingJob.notes,
               address: form.getValues("address") ?? editingJob.address,
               billingAddress:
@@ -10840,18 +10974,23 @@ The Treemarkables Team`;
         open={isSchedulingModalOpen}
         onOpenChange={setIsSchedulingModalOpen}
       >
-        <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-2 flex-shrink-0">
+        <DialogContent className="schedule-job-dialog sm:max-w-md max-h-[85vh] flex flex-col p-0">
+          <DialogHeader className="schedule-job-dialog__header px-6 pt-6 pb-2 flex-shrink-0">
             <h2 className="text-lg font-semibold">Schedule Job</h2>
           </DialogHeader>
-          <div className="space-y-4 px-6 py-2 overflow-y-auto flex-1 min-h-0">
+          {/* Body is the only scrollport on a phone. stopPropagation keeps
+              Radix's document touch lock from cancelling the swipe. */}
+          <div
+            className="schedule-job-dialog__body space-y-4 px-6 py-2 overflow-y-auto flex-1 min-h-0"
+            onTouchMove={(e) => e.stopPropagation()}
+          >
             <div>
               <label className="text-sm font-medium">Select Days</label>
               <p className="text-xs text-muted-foreground">
                 Tap each day this job runs. Tap a day again to remove it — skip
                 the weekend or any other days you don't want.
               </p>
-              <div className="mt-2 rounded-md border flex justify-center">
+              <div className="schedule-job-dialog__calendar mt-2 rounded-md border flex justify-center">
                 <DayCalendar
                   mode="multiple"
                   selected={schedulingData.selectedDates.map(
@@ -10927,18 +11066,11 @@ The Treemarkables Team`;
                     <SelectValue placeholder="Select time" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60">
-                    {Array.from({ length: 23 }, (_, i) => {
-                      const actualIndex = i + 12;
-                      const hours = Math.floor(actualIndex / 2);
-                      const minutes = (actualIndex % 2) * 30;
-                      const time = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-                      const display = `${hours === 0 ? 12 : hours > 12 ? hours - 12 : hours}:${String(minutes).padStart(2, "0")} ${hours < 12 ? "AM" : "PM"}`;
-                      return (
-                        <SelectItem key={time} value={time}>
-                          {display}
-                        </SelectItem>
-                      );
-                    })}
+                    {scheduleStartTimes(schedulingData.startTime).map((time) => (
+                      <SelectItem key={time} value={time}>
+                        {formatScheduleStartLabel(time)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -11029,7 +11161,7 @@ The Treemarkables Team`;
                   </Select>
                 </div>
               )}
-            <div>
+            <div ref={staffListRef} data-testid="schedule-staff-section">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium">
                   Assign Staff Members
@@ -11050,8 +11182,21 @@ The Treemarkables Team`;
                   <Calendar className="h-4 w-4 text-green-600" />
                 </Button>
               </div>
-              <div className="mt-2 space-y-2 border rounded-md p-3 max-h-60 overflow-y-auto">
-                {employees.length === 0 ? (
+              {editingJob?.scheduledDate && (
+                <p
+                  className="text-xs text-muted-foreground mt-1"
+                  data-testid="text-schedule-staff-hint"
+                >
+                  People already on this job are ticked. Tick to add someone, untick to remove them.
+                </p>
+              )}
+              <div
+                className="schedule-job-dialog__staff mt-2 space-y-2 border rounded-md p-3 max-h-60 overflow-y-auto"
+                data-testid="schedule-staff-list"
+              >
+                {employeesLoading && employees.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Loading staff…</p>
+                ) : employees.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No staff members available
                   </p>
@@ -11251,7 +11396,7 @@ The Treemarkables Team`;
               />
             </div>
           </div>
-          <div className="flex justify-between gap-2 px-6 py-4 border-t flex-wrap flex-shrink-0">
+          <div className="schedule-job-dialog__footer flex justify-between gap-2 px-6 py-4 border-t flex-wrap flex-shrink-0">
             {/* Unschedule button — only shown when job already has a scheduled date */}
             <div>
               {editingJob?.scheduledDate && (
@@ -11844,6 +11989,19 @@ The Treemarkables Team`;
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Complete & Invoice — opens ON TOP of the mobile actions sheet, same
+          as the Xero reset dialog below (closing the sheet first races Radix's
+          pointer-events cleanup). */}
+      {editingJob?.id && (
+        <CompleteAndInvoiceDialog
+          jobId={editingJob.id}
+          open={showCompleteAndInvoice}
+          onOpenChange={setShowCompleteAndInvoice}
+          onOpenInvoiceBuilder={() => setIsInvoiceModalOpen(true)}
+          sendToXero={() => sendToXeroMutation.mutateAsync()}
+        />
+      )}
 
       {/* Xero Re-send Confirmation Dialog */}
       <AlertDialog

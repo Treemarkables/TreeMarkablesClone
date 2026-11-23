@@ -1,4 +1,5 @@
 import { useState, forwardRef } from 'react';
+import { orgOnlyBillingName } from "@shared/orgOnlyBilling";
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -97,7 +98,10 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   const displayContactName = contactName || invoice.contactName || '';
   // Treat the contact-name override as the billing name when no separate billing name is set,
   // so per-invoice "Billing Name" edits surface as the primary Bill To line instead of "c/o ...".
-  const effectiveBillingName = billingName
+  // Org-only customers (e.g. Gisborne District Council): Bill To is always the
+  // organisation and no "c/o <person>" line is shown.
+  const forcedOrgName = orgOnlyBillingName(customer, { name: billingName }, { name: displayContactName });
+  const effectiveBillingName = forcedOrgName || billingName
     || (displayContactName && displayContactName !== customer?.name ? displayContactName : '');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -162,7 +166,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     issueDate,
     dueDate,
     billingName: effectiveBillingName || customer?.name || 'Customer',
-    displayContactName: displayContactName || undefined,
+    displayContactName: forcedOrgName ? undefined : (displayContactName || undefined),
     jobAddress: jobAddress || undefined,
     customerAddress: customer?.address || undefined,
     customerEmail: contactEmail || customer?.email || undefined,
@@ -407,7 +411,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                   <div key="footer" className="mt-4 pt-3 border-t border-gray-200 text-center">
                     <p className="text-xs text-gray-500 break-words">
                       {template.companyName || 'Treemarkables LTD'}
-                      {template.companyAddress ? ` | ${template.companyAddress.replace(/\n/g, ', ')}` : ' | 213 Stanley Road, Gisborne'}
+                      {co.address ? ` | ${co.address.replace(/\n/g, ', ')}` : ''}
                       {template.companyPhone ? ` | Phone: ${template.companyPhone}` : ' | Phone: 027 216 6882'}
                       {template.companyEmail ? ` | Email: ${template.companyEmail}` : ' | Email: quotes@treemarkables.nz'}
                     </p>

@@ -383,17 +383,17 @@ export default function Invoices() {
         onValueChange={(value) => setActiveTab(value as any)}
       >
         <TabsList
-          className="grid w-full grid-cols-3 max-w-full"
+          className="grid h-auto w-full grid-cols-3 max-w-full"
           data-testid="tabs-invoice-filter"
         >
-          <TabsTrigger value="all" data-testid="tab-all-invoices">
+          <TabsTrigger value="all" className="h-auto min-h-11 whitespace-normal px-2 text-center leading-tight" data-testid="tab-all-invoices">
             All ({invoices.length})
           </TabsTrigger>
-          <TabsTrigger value="pending" data-testid="tab-pending-invoices">
+          <TabsTrigger value="pending" className="h-auto min-h-11 whitespace-normal px-2 text-center leading-tight" data-testid="tab-pending-invoices">
             Pending ({invoices.filter((inv) => inv.status === "pending").length}
             )
           </TabsTrigger>
-          <TabsTrigger value="notInXero" data-testid="tab-not-in-xero">
+          <TabsTrigger value="notInXero" className="h-auto min-h-11 whitespace-normal px-2 text-center leading-tight" data-testid="tab-not-in-xero">
             Not in Xero ({invoices.filter(isSentNotInXero).length})
           </TabsTrigger>
         </TabsList>

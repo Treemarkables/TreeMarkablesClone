@@ -9,11 +9,14 @@ import {
 export class ApiError extends Error {
   status: number;
   body: unknown;
-  constructor(message: string, status: number, body: unknown) {
+  /** Server-provided reason, without replacing it with a generic client string. */
+  serverMessage: string;
+  constructor(message: string, status: number, body: unknown, serverMessage?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.body = body;
+    this.serverMessage = serverMessage ?? message;
   }
 }
 
@@ -22,23 +25,36 @@ async function throwIfResNotOk(res: Response) {
     const text = (await res.text()) || res.statusText;
 
     let parsed: unknown = null;
+    // `message` is what existing toasts show — leave that selection as it was.
+    // `serverMessage` keeps the server's own text (JSON message, `error`, or
+    // the raw body) and `status` stays on the error, so a diary card can show
+    // both instead of a generic stand-in.
     let message = `${res.status}: ${text}`;
+    let serverMessage = text;
     try {
       parsed = JSON.parse(text);
-      const errorData = parsed as { message?: string; errors?: Array<{ message?: string; path?: string[] }> };
+      const errorData = parsed as {
+        message?: string;
+        error?: string;
+        errors?: Array<{ message?: string; path?: string[] }>;
+      };
       if (errorData?.message) {
         message = errorData.message;
+        serverMessage = typeof errorData.message === "string" ? errorData.message : text;
+      } else if (typeof errorData?.error === "string" && errorData.error.trim()) {
+        serverMessage = errorData.error.trim();
       } else if (errorData?.errors && Array.isArray(errorData.errors)) {
         const errorMessages = errorData.errors
           .map((e) => e.message || (e.path?.join('.') + ': ' + (e.message ?? '')))
           .join(', ');
         message = errorMessages || text;
+        serverMessage = message;
       }
     } catch {
       // Non-JSON body — keep raw text message
     }
 
-    throw new ApiError(message, res.status, parsed);
+    throw new ApiError(message, res.status, parsed, serverMessage);
   }
 }
 

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, TreePine } from "lucide-react";
+import { readSignupPrefill } from "@/lib/signupPrefill";
 
 interface Plan {
   key: string;
@@ -18,10 +19,10 @@ export default function Signup() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
-  const params = new URLSearchParams(window.location.search);
-  // The plan can arrive from the pricing page (?plan=crew) but is also selectable
-  // here so someone landing on /signup directly can choose. Paid → Stripe; free → app.
-  const [planKey, setPlanKey] = useState(params.get("plan") || "freemium");
+  // Prefill arrives from the commercial site (?businessName=&firstName=&lastName=&email=&plan=).
+  // The plan is also selectable here. Paid → Stripe; free → app.
+  const prefill = readSignupPrefill(window.location.search);
+  const [planKey, setPlanKey] = useState(prefill.planKey);
   const planLabel = planKey === "crew" ? "Crew" : planKey === "business" ? "Business" : "Free";
 
   // Live plans so the picker shows the current prices (never hardcoded).
@@ -104,21 +105,21 @@ export default function Signup() {
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div>
               <Label htmlFor="businessName">Business name</Label>
-              <Input id="businessName" name="businessName" required autoComplete="organization" />
+              <Input id="businessName" name="businessName" required autoComplete="organization" defaultValue={prefill.businessName} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="firstName">First name</Label>
-                <Input id="firstName" name="firstName" required autoComplete="given-name" />
+                <Input id="firstName" name="firstName" required autoComplete="given-name" defaultValue={prefill.firstName} />
               </div>
               <div>
                 <Label htmlFor="lastName">Last name</Label>
-                <Input id="lastName" name="lastName" required autoComplete="family-name" />
+                <Input id="lastName" name="lastName" required autoComplete="family-name" defaultValue={prefill.lastName} />
               </div>
             </div>
             <div>
               <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required autoComplete="email" />
+              <Input id="email" name="email" type="email" required autoComplete="email" defaultValue={prefill.email} />
             </div>
             <div>
               <Label htmlFor="password">Password</Label>

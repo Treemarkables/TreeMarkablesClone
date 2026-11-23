@@ -651,7 +651,7 @@ export default function JobDashboard({
                       {displayJobs.slice(0, 5).map((job) => (
                         <div
                           key={job.id}
-                          className="flex items-center justify-between p-3 border rounded-lg hover-elevate cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="flex items-center justify-between p-3 border rounded-2xl hover-elevate cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           data-testid={`job-item-${job.id}`}
                           onClick={() => handleJobClick(job.id)}
                           role="button"
@@ -715,7 +715,7 @@ export default function JobDashboard({
                       {displayLeads.slice(0, 5).map((lead) => (
                         <div
                           key={lead.id}
-                          className="flex items-center justify-between p-3 border rounded-lg"
+                          className="flex items-center justify-between p-3 border rounded-2xl"
                           data-testid={`lead-item-${lead.id}`}
                         >
                           <div className="flex-1">
@@ -805,7 +805,7 @@ export default function JobDashboard({
 
               {/* Bulk Actions */}
               {selectedJobs.size > 0 && (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg w-full max-w-full min-w-0">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-blue-50 border border-blue-200 rounded-2xl w-full max-w-full min-w-0">
                   <div className="flex items-center gap-4">
                     <span className="text-sm font-medium text-blue-800">
                       {selectedJobs.size} selected
@@ -834,7 +834,7 @@ export default function JobDashboard({
 
               {/* Select All Header */}
               {paginatedJobs.length > 0 && (
-                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
+                <div className="flex items-center gap-4 p-4 bg-muted/60 rounded-2xl border">
                   <Checkbox
                     checked={
                       selectedJobs.size === paginatedJobs.length &&

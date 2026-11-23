@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { FileText, Download, Mail, Copy, CheckCircle } from 'lucide-react';
 import type { DocumentTemplate, Quote, Customer } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
+import { fallbackCompanyAddress } from '@shared/treemarkablesYard';
 
 interface LineItem {
   id: string;
@@ -194,7 +195,7 @@ export const QuoteTemplate = forwardRef<HTMLDivElement, QuoteTemplateProps>(({
               </h1>
               <p className="text-xs sm:text-lg opacity-90">Professional Tree Services</p>
               <div className="mt-1 sm:mt-4 space-y-0 sm:space-y-1 text-[10px] sm:text-sm opacity-90">
-                <p data-testid="text-company-address" className="whitespace-pre-line">{template.companyAddress || 'Hauroa rd\nGisborne, 4010'}</p>
+                <p data-testid="text-company-address" className="whitespace-pre-line">{fallbackCompanyAddress(template.companyName || 'Treemarkables LTD', template.companyAddress)}</p>
                 <p data-testid="text-company-contact" className="break-all">
                   Phone: {template.companyPhone || '027 216 6882'} | Email: {template.companyEmail || 'quotes@treemarkables.nz'}
                 </p>

@@ -4,7 +4,12 @@ import { useState, useEffect } from "react";
 // Multi-select: an empty array means "All". Multiple values are OR-combined by
 // the Dispatch Board (e.g. ["work_order", "scheduled"] shows both tabs' jobs at
 // once — needed when rescheduling, so booked and bookable jobs sit side by side).
-let _jobFilters: string[] = [];
+//
+// A fresh load starts on Unscheduled so a work order leaves this list the moment
+// it is booked (it then lives under Scheduled). The choice is session memory
+// only — these chips are not written to localStorage. "All" still clears to [].
+export const DEFAULT_DISPATCH_JOB_FILTERS: string[] = ["work_order"];
+let _jobFilters: string[] = [...DEFAULT_DISPATCH_JOB_FILTERS];
 const _filterListeners = new Set<() => void>();
 
 function notifyFilter() {

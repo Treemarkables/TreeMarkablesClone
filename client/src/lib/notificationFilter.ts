@@ -17,6 +17,7 @@ export const NOTIFICATION_TYPES = [
   "proposal_sent",
   "proposal_accepted",
   "reminder_stale_quote",
+  "quote_followup_waiting",
   "job_status_change",
   "job_scheduled",
   "job_completed",

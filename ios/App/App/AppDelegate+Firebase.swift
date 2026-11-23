@@ -63,6 +63,31 @@ enum FirebaseSetup {
     }
 }
 
+enum NotificationDeepLinkStore {
+    static let pathKey = "pendingNotificationPath"
+    static let tsKey = "pendingNotificationPathTs"
+    static let ttl: TimeInterval = 60
+
+    static func store(_ path: String) {
+        UserDefaults.standard.set(path, forKey: pathKey)
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: tsKey)
+    }
+
+    static func current() -> String? {
+        guard let path = UserDefaults.standard.string(forKey: pathKey), !path.isEmpty else {
+            return nil
+        }
+        let ts = UserDefaults.standard.double(forKey: tsKey)
+        if Date().timeIntervalSince1970 - ts > ttl { return nil }
+        return path
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: pathKey)
+        UserDefaults.standard.removeObject(forKey: tsKey)
+    }
+}
+
 final class NotificationHandler: NSObject {
     static let shared = NotificationHandler()
     private override init() {}
@@ -118,14 +143,32 @@ final class NotificationHandler: NSObject {
         }
     }
 
-    // Recursively search the view hierarchy for a WKWebView
+    // Recursively search the view hierarchy for a WKWebView. Notification
+    // taps can arrive while the scene is still .foregroundInactive, so we
+    // must not require .foregroundActive + keyWindow.
     private func findCapacitorWebView() -> WKWebView? {
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-              let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
-            return nil
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let ranked = scenes.sorted { a, b in
+            func rank(_ state: UIScene.ActivationState) -> Int {
+                switch state {
+                case .foregroundActive: return 0
+                case .foregroundInactive: return 1
+                default: return 2
+                }
+            }
+            return rank(a.activationState) < rank(b.activationState)
         }
-        return findWebView(in: rootVC.view)
+        for scene in ranked {
+            for window in scene.windows {
+                if let root = window.rootViewController, let found = findWebView(in: root.view) {
+                    return found
+                }
+                if let found = findWebView(in: window) {
+                    return found
+                }
+            }
+        }
+        return nil
     }
 
     private func findWebView(in view: UIView) -> WKWebView? {
@@ -211,6 +254,7 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
         let path = pathFromUserInfo(userInfo)
         if let path = path {
             print("📲 Push tap — navigating WebView to: \(path)")
+            NotificationDeepLinkStore.store(path)
             navigateWebView(to: path)
         } else {
             print("📲 Push tap — could not resolve a navigation target; userInfo=\(userInfo)")
@@ -218,31 +262,85 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
         completionHandler()
     }
 
+    private func flattenUserInfo(_ userInfo: [AnyHashable: Any]) -> [String: String] {
+        var flat: [String: String] = [:]
+        func put(_ key: String, _ value: Any, overwrite: Bool) {
+            let stringValue: String?
+            if let s = value as? String { stringValue = s }
+            else if let n = value as? NSNumber { stringValue = n.stringValue }
+            else { stringValue = nil }
+            guard let stringValue else { return }
+            if overwrite || flat[key] == nil { flat[key] = stringValue }
+        }
+        func ingest(_ dict: [AnyHashable: Any], overwrite: Bool) {
+            for (keyRaw, value) in dict {
+                let key = String(describing: keyRaw)
+                if let nested = value as? [AnyHashable: Any] {
+                    if key == "FCM_MSG", let data = nested["data"] as? [AnyHashable: Any] {
+                        ingest(data, overwrite: overwrite)
+                    } else if key == "data" || key == "FCM_MSG" {
+                        ingest(nested, overwrite: overwrite)
+                    }
+                    continue
+                }
+                put(key, value, overwrite: overwrite)
+            }
+        }
+        // Nested envelopes first, top-level keys win (matches flattenNotificationPayload).
+        if let data = userInfo["data"] as? [AnyHashable: Any] {
+            ingest(data, overwrite: false)
+        }
+        if let fcm = userInfo["FCM_MSG"] as? [AnyHashable: Any] {
+            ingest(fcm, overwrite: false)
+        }
+        ingest(userInfo, overwrite: true)
+        return flat
+    }
+
     private func pathFromUserInfo(_ userInfo: [AnyHashable: Any]) -> String? {
-        if let clickAction = userInfo["clickAction"] as? String, !clickAction.isEmpty {
-            return clickAction
+        let flat = flattenUserInfo(userInfo)
+        let clickAction = flat["clickAction"] ?? flat["click_action"] ?? flat["clickUrl"] ?? flat["url"] ?? ""
+        let type = flat["type"] ?? ""
+        let jobId = flat["jobId"] ?? ""
+        let conversationId = flat["conversationId"] ?? ""
+
+        func jobPath(_ id: String, diary: Bool) -> String {
+            if diary { return "/dispatch?job=\(id)&tab=diary" }
+            return "/dispatch?job=\(id)"
         }
 
-        let type = (userInfo["type"] as? String) ?? ""
-        let jobId = (userInfo["jobId"] as? String) ?? ""
-        let conversationId = (userInfo["conversationId"] as? String) ?? ""
+        if !clickAction.isEmpty {
+            if !jobId.isEmpty && (clickAction == "/dispatch" || clickAction == "/dispatch/") {
+                return jobPath(jobId, diary: type == "email_reply" || type == "sms_reply" || type == "new_lead")
+            }
+            if clickAction.hasPrefix("/") { return clickAction }
+            if let url = URL(string: clickAction),
+               let host = url.host,
+               host.contains("app.inflowapp.co.nz") || host.contains("app.treemarkables.co.nz") {
+                return url.path + (url.query.map { "?\($0)" } ?? "")
+            }
+        }
 
         switch type {
         case "job_assignment", "schedule_change":
-            return jobId.isEmpty ? "/dispatch" : "/dispatch?job=\(jobId)"
+            return jobId.isEmpty ? "/dispatch" : jobPath(jobId, diary: false)
+        case "email_reply", "sms_reply", "new_lead":
+            if !jobId.isEmpty { return jobPath(jobId, diary: true) }
+            return type == "new_lead" ? "/inbox" : "/dispatch"
         case "new_conversation", "conversation_reply":
             // Conversation notifications open the conversation. (The server sets
             // clickAction for these, so this fallback rarely runs — but the real
             // list route is /inbox, not the non-existent /conversations.)
             if !conversationId.isEmpty { return "/conversation/\(conversationId)" }
+            if !jobId.isEmpty { return jobPath(jobId, diary: true) }
             return "/inbox"
-        case "new_lead":
-            return jobId.isEmpty ? "/inbox" : "/dispatch?job=\(jobId)&tab=diary"
         case "invoice_payment":
             return "/invoices"
         case "quote_accepted":
             return "/quotes"
         default:
+            if !jobId.isEmpty { return jobPath(jobId, diary: false) }
+            if !conversationId.isEmpty { return "/conversation/\(conversationId)" }
             return nil
         }
     }
@@ -252,9 +350,9 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
         // fires this before the WebView has even loaded the app origin, so we
         // can't just deliver once — we retry until the document is actually on
         // the app origin (app.inflowapp.co.nz), otherwise the localStorage write below would
-        // land on about:blank and be lost. The window must cover a full cold boot
-        // over cellular (remote index.html + JS boot) — the old ~6s window expired
-        // on slow launches and the tap silently fell to the default dispatch board.
+        // land on about:blank and be lost. Keep retrying until React acks
+        // `nativeNotificationTapHandled` so a boot-recovery reload in between
+        // still gets the path.
         guard attempt < 100 else {
             print("⚠️ Navigation: gave up delivering deep link after 100 attempts: \(path)")
             return
@@ -277,11 +375,9 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
             //     persist the target in localStorage; the web app consumes it on
             //     mount (see App.tsx). This is the same persist-and-replay pattern
             //     the FCM-token bridge already uses.
-            // We return a status so Swift can retry until the document is on the
-            // app origin (localStorage is per-origin; writing at about:blank is
-            // useless). The window.location.assign fallback is gated on a fully
-            // loaded document so it can NEVER race the cold-boot render — that
-            // race is exactly what used to dump every tap onto the dashboard.
+            // Do NOT location.assign here — that raced the cold-boot render and
+            // dumped taps onto the dashboard. Persist + retry until React
+            // marks the nav handled.
             let js = """
             (function() {
               if (location.origin.indexOf('app.inflowapp.co.nz') === -1 && location.origin.indexOf('app.treemarkables.co.nz') === -1) return 'wrong-origin';
@@ -289,17 +385,20 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
               try {
                 localStorage.setItem('pendingNotificationNav', JSON.stringify({ path: path, ts: Date.now() }));
               } catch (e) {}
-              window.__pendingNotificationPath = path;
-              var handled = false;
-              var ack = function() { handled = true; };
-              window.addEventListener('nativeNotificationTapAck', ack, { once: true });
-              window.dispatchEvent(new CustomEvent('nativeNotificationTap', { detail: path }));
-              setTimeout(function() {
-                window.removeEventListener('nativeNotificationTapAck', ack);
-                if (!handled && document.readyState === 'complete') {
-                  try { window.location.assign(path); } catch (e) {}
+              try {
+                var params = new URLSearchParams(path.split('?')[1] || '');
+                var jobId = params.get('job');
+                if (jobId) {
+                  sessionStorage.setItem('dispatch_open_job', jobId);
+                  var tab = params.get('tab');
+                  if (tab) sessionStorage.setItem('dispatch_open_tab', tab);
+                  var entry = params.get('entry');
+                  if (entry) sessionStorage.setItem('dispatch_open_entry', entry);
                 }
-              }, 150);
+              } catch (e) {}
+              window.__pendingNotificationPath = path;
+              window.dispatchEvent(new CustomEvent('nativeNotificationTap', { detail: path }));
+              if (window.__notificationNavHandled === true) return 'handled';
               return 'ok';
             })();
             """
@@ -310,12 +409,21 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
                     self.navigateWebView(to: path, attempt: attempt + 1)
                     return
                 }
-                if let status = result as? String, status == "ok" {
-                    print("✅ Deep link delivered to WebView: \(path)")
-                } else {
-                    // Document not yet on the app origin (about:blank / mid-load).
-                    self.navigateWebView(to: path, attempt: attempt + 1)
+                if let status = result as? String, status == "handled" {
+                    print("✅ Deep link handled by WebView: \(path)")
+                    NotificationDeepLinkStore.clear()
+                    return
                 }
+                if let status = result as? String, status == "ok" {
+                    print("✅ Deep link delivered to WebView (waiting for React): \(path)")
+                    // Keep retrying until React acks handled, or the attempt
+                    // budget runs out. A single 'ok' used to stop retries
+                    // before React mounted, then boot recovery reloaded to /.
+                    self.navigateWebView(to: path, attempt: attempt + 1)
+                    return
+                }
+                // Document not yet on the app origin (about:blank / mid-load).
+                self.navigateWebView(to: path, attempt: attempt + 1)
             }
         }
     }
