@@ -367,8 +367,94 @@ export const quotes = pgTable("quotes", {
   followUpNotes: text("follow_up_notes"),
   // Presentation method tracking for conversion rate analysis
   presentationMethod: text("presentation_method"), // on-site, sent-later, phone
+  // Set on a re-quote draft. The original sent quote is never overwritten.
+  revisedFromQuoteId: varchar("revised_from_quote_id"),
 }, (table) => ({
   businessQuoteNumberUniq: uniqueIndex("quotes_business_quote_number_uniq").on(table.businessId, table.quoteNumber),
+}));
+
+// Quote follow-ups — one row per quote and nudge step (3, 7, 14, or the
+// tenant's own days). Step 0 is the expiry re-quote. Drafts wait in the
+// queue until someone presses Approve & Send. Nothing is sent by the detector.
+export const quoteFollowUps = pgTable("quote_follow_ups", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quoteId: varchar("quote_id").notNull(),
+  // quote = quotes table, proposal = the document customers actually receive, job = proposal_sent with no quote or proposal row.
+  sourceType: text("source_type").notNull().default("quote"),
+  jobId: varchar("job_id"),
+  customerId: varchar("customer_id"),
+  kind: text("kind").notNull(), // check_in | requote
+  nudgeStep: integer("nudge_step").notNull(), // 0 = expiry re-quote, else the day threshold
+  channel: text("channel").notNull().default("sms"), // sms | email
+  status: text("status").notNull().default("draft"), // draft, snoozed, sending, sent, dismissed, skipped, cancelled
+  subject: text("subject"),
+  message: text("message").notNull().default(""),
+  // Set when someone saves a change to the draft text. Boot refresh rewrites
+  // only rows still equal to the generated default (this stays null).
+  draftEditedAt: timestamp("draft_edited_at"),
+  recipientName: text("recipient_name"),
+  recipientPhone: text("recipient_phone"),
+  recipientEmail: text("recipient_email"),
+  requoteId: varchar("requote_id"),
+  snoozeUntil: timestamp("snooze_until"),
+  sentAt: timestamp("sent_at"),
+  diaryEntryId: varchar("diary_entry_id"),
+  cancelReason: text("cancel_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  quoteStepUniq: uniqueIndex("quote_follow_ups_quote_step_uniq").on(table.businessId, table.quoteId, table.nudgeStep),
+  statusIdx: index("quote_follow_ups_business_status_idx").on(table.businessId, table.status),
+}));
+
+// Invoices sent to the customer that are not in Xero yet. One row per invoice.
+// The hourly detector only inserts a draft. Approve & Sync is the only path
+// that calls Xero, and it uses the same send as the Invoices page.
+export const invoiceXeroFollowUps = pgTable("invoice_xero_follow_ups", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").notNull(),
+  jobId: varchar("job_id"),
+  customerId: varchar("customer_id"),
+  status: text("status").notNull().default("draft"), // draft, snoozed, syncing, synced, dismissed, cancelled
+  snoozeUntil: timestamp("snooze_until"),
+  lastError: text("last_error"),
+  syncedAt: timestamp("synced_at"),
+  diaryEntryId: varchar("diary_entry_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  invoiceUniq: uniqueIndex("invoice_xero_follow_ups_invoice_uniq").on(table.businessId, table.invoiceId),
+  statusIdx: index("invoice_xero_follow_ups_business_status_idx").on(table.businessId, table.status),
+}));
+
+// Completed jobs that still need an invoice or a send. One row per job.
+// A sent invoice that is not in Xero stays on invoice_xero_follow_ups only.
+// The detector never creates, sends, or syncs.
+export const jobBillingFollowUps = pgTable("job_billing_follow_ups", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(),
+  customerId: varchar("customer_id"),
+  invoiceId: varchar("invoice_id"),
+  step: text("step").notNull(), // create_invoice | send_invoice
+  channel: text("channel").notNull().default("sms"),
+  status: text("status").notNull().default("draft"), // draft, snoozed, working, done, dismissed, cancelled
+  subject: text("subject"),
+  message: text("message").notNull().default(""),
+  recipientName: text("recipient_name"),
+  recipientPhone: text("recipient_phone"),
+  recipientEmail: text("recipient_email"),
+  snoozeUntil: timestamp("snooze_until"),
+  lastError: text("last_error"),
+  completedAt: timestamp("completed_at"),
+  diaryEntryId: varchar("diary_entry_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  jobUniq: uniqueIndex("job_billing_follow_ups_job_uniq").on(table.businessId, table.jobId),
+  statusIdx: index("job_billing_follow_ups_business_status_idx").on(table.businessId, table.status),
 }));
 
 // Job Management
@@ -403,7 +489,7 @@ export const jobs = pgTable("jobs", {
   scheduledStartTime: text("scheduled_start_time"), // e.g., "08:00"
   scheduledEndTime: text("scheduled_end_time"), // e.g., "10:00"
   completedDate: timestamp("completed_date"),
-  workOrderAt: timestamp("work_order_at"), // Timestamp set when the job first transitions to status 'work_order' (i.e. quote accepted). Used by the Dispatch Board to FIFO-sort work orders by acceptance time; stable across subsequent edits.
+  workOrderAt: timestamp("work_order_at"), // Timestamp set when the job first transitions to status 'work_order' (i.e. quote accepted). The Dispatch "Work Order" chip still FIFO-sorts by this. The Unscheduled rail sorts by recent activity (see shared/dispatchJobOrder.ts).
   status: text("status").notNull().default('quote'), // lead, quote, mulch, scheduled, work_order, completed, unsuccessful
   priority: text("priority"), // low, medium, high, urgent
   assignedTeam: text("assigned_team").array(),
@@ -1413,6 +1499,10 @@ export const businessSettings = pgTable("business_settings", {
   autoQuoteFollowupEnabled: boolean("auto_quote_followup_enabled").default(false),
   quoteFollowupChannel: text("quote_followup_channel").default("sms"), // sms, email
   quoteFollowupMaxAttempts: integer("quote_followup_max_attempts").default(2),
+  // Approval-gated follow-up queue. On by default: the detector only drafts.
+  // Nothing goes to the customer until Approve & Send.
+  quoteFollowupWorkflowEnabled: boolean("quote_followup_workflow_enabled").default(true),
+  quoteFollowupNudgeDays: jsonb("quote_followup_nudge_days").$type<number[]>().default(sql`'[3, 7, 14]'::jsonb`),
   quotePricingModel: text("quote_pricing_model").default("standard"), // standard, dynamic, competitive
   quoteValidityDays: integer("quote_validity_days").default(30),
   autoQuoteApproval: boolean("auto_quote_approval").default(false),
@@ -1469,7 +1559,10 @@ export const businessSettings = pgTable("business_settings", {
   // Analytics Defaults
   defaultGrossMarginPct: decimal("default_gross_margin_pct", { precision: 5, scale: 2 }).notNull().default("0"),
 
-  // AI Dispatch Settings
+  // Despatch daily revenue KPI, NZD exclusive of GST ("exc. GST" in the UI).
+  // Per business. The column default (3500) applies to tenants that have not
+  // set one. Treemarkables is seeded once to 4000 — see schemaMigrations.
+  // Bundling and the schedule bar must read this column, never a constant.
   dailyRevenueTarget: decimal("daily_revenue_target", { precision: 10, scale: 2 }).default("3500"),
 
   // Invoice Settings
@@ -1560,6 +1653,8 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
   sessionTimeout: z.number().int().min(30).max(1440).optional(), // 30 minutes to 24 hours
   passwordExpiration: z.number().int().min(30).max(365).optional(), // 30 days to 1 year
   quoteFollowupMaxAttempts: z.number().int().min(1).max(5).optional(),
+  quoteFollowupWorkflowEnabled: z.boolean().optional(),
+  quoteFollowupNudgeDays: z.array(z.number().int().min(1).max(90)).min(1).max(5).optional(),
   // Add enum constraints for select fields
   leadAssignmentMethod: z.enum(['round_robin', 'skill_based', 'manual']).optional(),
   quoteFollowupChannel: z.enum(['sms', 'email']).optional(),
@@ -1590,7 +1685,17 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
 });
 
 // Business Settings Update Schema - partial with same constraints
-export const updateBusinessSettingsSchema = insertBusinessSettingsSchema.partial();
+export const updateBusinessSettingsSchema = insertBusinessSettingsSchema.partial().superRefine((data, ctx) => {
+  if (data.dailyRevenueTarget == null) return;
+  const amount = Number(data.dailyRevenueTarget);
+  if (data.dailyRevenueTarget === "" || !Number.isFinite(amount) || amount <= 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["dailyRevenueTarget"],
+      message: "Daily revenue target must be a positive NZD amount (exc. GST)",
+    });
+  }
+});
 
 // Log of compliance-expiry reminders already sent, so the daily scan fires each
 // (vehicle, kind, expiry-date, lead-time) combination exactly once. When a vehicle
@@ -1626,6 +1731,7 @@ export const notificationTypes = [
   'quote_sent',         // Quote sent to customer
   'quote_accepted',     // Quote accepted by customer
   'quote_expired',      // Quote expired
+  'quote_followup_waiting', // Daily reminder that quote follow-ups are waiting
   'follow_up_due',      // Follow-up is due
   'follow_up_overdue',  // Follow-up is overdue
   'job_scheduled',      // Job scheduled
@@ -2037,7 +2143,11 @@ export const jobStaffAssignments = pgTable("job_staff_assignments", {
   
   // Assignment details
   role: text("role"), // lead, operator, ground_crew, driver
-  dayRole: text("day_role"), // 'A' | 'B' | null — set once per (employeeId, NZ-date), propagated to every assignment row that day
+  // Legacy single value. job_day_roles is the source of truth and can hold
+  // several checklist roles for one person on one day; this column stores the
+  // primary of that set (Kaitiaki, else Kaiwhangai, else Kaitirotiro, else
+  // Risk assessment) so older readers still see a role. Null when they hold none.
+  dayRole: text("day_role"),
   status: text("status").notNull().default("assigned"), // assigned, confirmed, in_progress, completed, cancelled
   notificationSent: boolean("notification_sent").notNull().default(false),
   notificationSentAt: timestamp("notification_sent_at"),
@@ -2062,30 +2172,33 @@ export type JobStaffAssignment = typeof jobStaffAssignments.$inferSelect;
 export type InsertJobStaffAssignment = z.infer<typeof insertJobStaffAssignmentSchema>;
 export type UpdateJobStaffAssignment = z.infer<typeof updateJobStaffAssignmentSchema>;
 
-// Per-person, per-day crew role (Kaitiaki / Kaiwhangai / Kaitirotiro) driving the
-// role checklist sections on the job card. This is a fact about a PERSON on a DAY,
-// not about one job booking, which is why it lives here rather than on
-// jobStaffAssignments.dayRole: that column had to be copied onto every assignment
-// row for the day and inherited onto newly created ones, and it left anyone who was
-// clocked in WITHOUT an assignment row with nowhere to hold a role — which is what
-// blocked allocating roles from the job card at all.
+// Checklist roles a person holds on one NZ day (Kaitiaki / Kaiwhangai /
+// Kaitirotiro / Risk assessment). One row per role, so the same person can cover several
+// roles when the crew is smaller than the role list. This is a fact about a
+// PERSON on a DAY, not about one job booking, which is why it lives here rather
+// than on jobStaffAssignments.dayRole: that column had to be copied onto every
+// assignment row for the day and inherited onto newly created ones, and it left
+// anyone who was clocked in WITHOUT an assignment row with nowhere to hold a role.
 //
-// dayRole is still written for one release so existing readers keep working; this
-// table is the read source. nzDate is the Pacific/Auckland calendar date
-// (YYYY-MM-DD) — see shared/dateUtils.getNZDateString.
+// dayRole is still written as the primary role of the set so existing readers
+// keep working; this table is the read source. nzDate is the Pacific/Auckland
+// calendar date (YYYY-MM-DD) — see shared/dateUtils.getNZDateString.
+//
+// Rows that were stored under the old one-role unique (employee, date) remain
+// valid: they are a set of one.
 export const jobDayRoles = pgTable("job_day_roles", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: varchar("employee_id").notNull(),
   nzDate: text("nz_date").notNull(),
-  roleKey: text("role_key").notNull(), // 'A' Kaiwhangai | 'B' Kaitirotiro | 'C' Kaitiaki
+  roleKey: text("role_key").notNull(), // 'A' Kaiwhangai | 'B' Kaitirotiro | 'C' Kaitiaki | 'R' Risk assessment
   setByEmployeeId: varchar("set_by_employee_id"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   // employeeId is already tenant-scoped, so this stays clear of the nullable-
-  // businessId NULL-distinct trap a three-column unique would hit.
-  employeeDateUnique: unique("job_day_roles_employee_date_uniq").on(table.employeeId, table.nzDate),
+  // businessId NULL-distinct trap a unique including businessId would hit.
+  employeeDateRoleUnique: unique("job_day_roles_employee_date_role_uniq").on(table.employeeId, table.nzDate, table.roleKey),
   dateIdx: index("job_day_roles_date_idx").on(table.nzDate),
 }));
 
@@ -2106,16 +2219,16 @@ export type InsertJobDayRole = z.infer<typeof insertJobDayRoleSchema>;
 // make them all jump. Freezing itemsExpected (and the ids behind it) at close is
 // what keeps a completion-rate trend honest.
 //
-// One row per (jobId, employeeId) — checklist completions are per job, not per
-// day, so a multi-day job snapshots once. roleKey is the role that person held on
-// the job's completion date.
+// One row per (jobId, employeeId, roleKey). A person who held one role still has
+// one row. A person who held two roles has one row per role, frozen separately
+// so a later edit to the task list cannot move either percentage.
 export const jobRoleCompletions = pgTable("job_role_completions", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
   employeeId: varchar("employee_id").notNull(),
   nzDate: text("nz_date").notNull(), // NZ calendar date the job closed on
-  roleKey: text("role_key").notNull(), // 'A' Kaiwhangai | 'B' Kaitirotiro | 'C' Kaitiaki
+  roleKey: text("role_key").notNull(), // 'A' Kaiwhangai | 'B' Kaitirotiro | 'C' Kaitiaki | 'R' Risk assessment
   itemsDone: integer("items_done").notNull(),
   itemsExpected: integer("items_expected").notNull(),
   // The enabled item ids at close, so a later audit can see WHICH task was skipped
@@ -2124,7 +2237,7 @@ export const jobRoleCompletions = pgTable("job_role_completions", {
   doneItemIds: jsonb("done_item_ids").$type<string[]>(),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
-  jobEmployeeUnique: unique("job_role_completions_job_employee_uniq").on(table.jobId, table.employeeId),
+  jobEmployeeRoleUnique: unique("job_role_completions_job_employee_role_uniq").on(table.jobId, table.employeeId, table.roleKey),
   employeeIdx: index("job_role_completions_employee_idx").on(table.employeeId),
   dateIdx: index("job_role_completions_date_idx").on(table.nzDate),
 }));
@@ -3239,6 +3352,72 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 
+// Stripe payouts pulled from the business's own Stripe account. Lines are the
+// balance transactions inside one payout, matched to payments rows by charge
+// or payment-intent id. Xero ids on the row are what stop a second post.
+export const stripePayouts = pgTable("stripe_payouts", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stripePayoutId: text("stripe_payout_id").notNull(),
+  stripeAccountId: text("stripe_account_id"),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("NZD"),
+  status: text("status").notNull(),
+  arrivalDate: timestamp("arrival_date"),
+  createdStripe: timestamp("created_stripe"),
+  description: text("description"),
+  feeTotal: decimal("fee_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  chargeTotal: decimal("charge_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  refundTotal: decimal("refund_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  xeroFeeId: text("xero_fee_id"),
+  xeroFeeKind: text("xero_fee_kind"),
+  xeroFeeMessage: text("xero_fee_message"),
+  xeroPostedAt: timestamp("xero_posted_at"),
+  xeroPostingAt: timestamp("xero_posting_at"),
+  xeroSummary: jsonb("xero_summary"),
+  fetchedAt: timestamp("fetched_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  businessPayoutUniq: uniqueIndex("stripe_payouts_business_payout_uniq").on(table.businessId, table.stripePayoutId),
+  businessArrivalIdx: index("stripe_payouts_business_arrival_idx").on(table.businessId, table.arrivalDate),
+}));
+
+export const stripePayoutLines = pgTable("stripe_payout_lines", {
+  businessId: varchar("business_id"),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  payoutId: varchar("payout_id").notNull().references(() => stripePayouts.id, { onDelete: "cascade" }),
+  balanceTransactionId: text("balance_transaction_id").notNull(),
+  stripeType: text("stripe_type"),
+  kind: text("kind").notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  fee: decimal("fee", { precision: 12, scale: 2 }).notNull().default("0"),
+  net: decimal("net", { precision: 12, scale: 2 }).notNull().default("0"),
+  currency: text("currency").notNull().default("NZD"),
+  description: text("description"),
+  stripeSourceId: text("stripe_source_id"),
+  stripeChargeId: text("stripe_charge_id"),
+  stripePaymentId: text("stripe_payment_id"),
+  matchStatus: text("match_status").notNull().default("unmatched"),
+  paymentId: varchar("payment_id"),
+  jobId: varchar("job_id"),
+  invoiceId: varchar("invoice_id"),
+  customerId: varchar("customer_id"),
+  xeroPaymentId: text("xero_payment_id"),
+  xeroCreditNoteId: text("xero_credit_note_id"),
+  xeroRefundPaymentId: text("xero_refund_payment_id"),
+  xeroStatus: text("xero_status"),
+  xeroMessage: text("xero_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  payoutBtUniq: uniqueIndex("stripe_payout_lines_payout_bt_uniq").on(table.payoutId, table.balanceTransactionId),
+  payoutIdx: index("stripe_payout_lines_payout_idx").on(table.payoutId),
+}));
+
+export type StripePayout = typeof stripePayouts.$inferSelect;
+export type StripePayoutLine = typeof stripePayoutLines.$inferSelect;
+
 // Xero OAuth2 Integration
 export const xeroConnections = pgTable("xero_connections", {
   businessId: varchar("business_id"),
@@ -3270,6 +3449,7 @@ export const googleCalendarConnections = pgTable("google_calendar_connections", 
   syncToken: text("sync_token"), // incremental events.list cursor (pull side)
   isActive: boolean("is_active").default(true),
   lastSyncedAt: timestamp("last_synced_at"),
+  syncStatus: text("sync_status").notNull().default("synced"), // synced | error
   lastError: text("last_error"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -3323,6 +3503,9 @@ export const xeroSettings = pgTable("xero_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   salesAccountCode: text("sales_account_code").notNull().default("200"), // Default sales account code
   taxType: text("tax_type").notNull().default("OUTPUT2"), // Default tax type (OUTPUT2 = 15% GST for NZ)
+  // Stripe payout posting. 640 is the clearing account the bank deposit is coded to.
+  stripeClearingAccountCode: text("stripe_clearing_account_code").notNull().default("640"),
+  stripeFeesAccountCode: text("stripe_fees_account_code"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -5062,7 +5245,7 @@ export type InsertChecklistTemplate = z.infer<typeof insertChecklistTemplateSche
 export const roleChecklistTasks = pgTable("role_checklist_tasks", {
   businessId: varchar("business_id"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  roleKey: varchar("role_key").notNull(), // 'A' | 'B' | 'C'
+  roleKey: varchar("role_key").notNull(), // 'A' | 'B' | 'C' | 'R' Risk assessment
   itemId: text("item_id").notNull().unique(), // slug used by completions table
   label: text("label").notNull(),
   iconName: text("icon_name").notNull().default("Check"), // lucide icon name

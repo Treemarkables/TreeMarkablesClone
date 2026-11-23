@@ -1,4 +1,9 @@
 import { useJobFilters, useLaneFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
+import {
+  dispatchNewInvoiceRequest,
+  shouldStartDispatchInvoiceCreate,
+} from "@/lib/dispatchNewInvoice";
+import { QuoteFollowUpBanner } from "@/components/QuoteFollowUpBanner";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -96,9 +101,16 @@ import {
   formatTime12Hour,
 } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
+import { crewIdsForScheduleEdit } from "@shared/scheduleCrew";
+import { compareByRecentActivity } from "@shared/dispatchJobOrder";
+import { dispatchJobTotalExGst } from "@shared/dispatchJobTotal";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import {
+  DISPATCH_JOBS_QUERY_KEY,
+  patchDispatchJobInCache,
+} from "@/lib/dispatchJobsCache";
 import { useLocation } from "wouter";
 import {
   entryFromNotificationPath,
@@ -132,6 +144,7 @@ interface ApiResponse<T> {
 import { GrossMarginCalculator } from "@/components/GrossMarginCalculator";
 import { StaffTimeTracker } from "@/components/StaffTimeTracker";
 import { CalendarGrid } from "@/components/CalendarGrid";
+import { DailyRevenueTargetControl } from "@/components/DailyRevenueTargetControl";
 import {
   DndContext,
   DragEndEvent,
@@ -205,8 +218,14 @@ interface JobAssignment {
   notes?: string;
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
   lastActivityAt?: string; // For activity-based sorting
-  workOrderAt?: string; // Timestamp stamped once when the job first became a work order — used for FIFO sorting on the Work Order tab
-  createdAt?: string; // Immutable job-creation timestamp — fallback for FIFO sorting when workOrderAt is NULL (legacy jobs)
+  // Server greatest of updated_at, diary, proposal sent/accepted, and created_at.
+  // Unscheduled sorts by compareByRecentActivity, which also reads the fields below.
+  recentActivityAt?: string;
+  updatedAt?: string;
+  proposalSentDate?: string;
+  quotePresentedDate?: string;
+  workOrderAt?: string; // Timestamp stamped once when the job first became a work order — FIFO on the Work Order chip only
+  createdAt?: string; // Immutable job-creation timestamp — fallback when no activity stamp exists
   totalAmount?: string; // Job price for display on dispatch board (exc-GST normalised)
   subtotal?: string; // Exc-GST subtotal from job record (preferred price source)
   scheduledDate?: string; // The job's scheduled start date from the API. Used by the "Scheduled" filter post-2026-05 ('scheduled' status retired — date presence is the new signal).
@@ -799,6 +818,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
+  // Set when New → Invoice creates the draft. The card opens the invoice
+  // builder for this job id only, once a customer is on it.
+  const [invoiceLaunchJobId, setInvoiceLaunchJobId] = useState<string | null>(null);
   const [globalJobCardMode, setGlobalJobCardMode] = useState<"create" | "edit">(
     "create",
   );
@@ -892,8 +914,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   });
 
   // Fetch all active jobs — excludes completed and archived; limit 500 (far more than needed)
-  const JOBS_QUERY_KEY =
-    "/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true";
+  const JOBS_QUERY_KEY = DISPATCH_JOBS_QUERY_KEY;
   const {
     data: jobsData,
     isLoading: jobsLoading,
@@ -1042,9 +1063,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             return;
           }
           setInitialSidebarTab(tabParam);
+          setInvoiceLaunchJobId(null);
           setShowGlobalJobCard(true);
           setGlobalJobCardMode("edit");
           setJobToEdit(jobData as JobAssignment);
+          // A card that is already open on a different job does not remount,
+          // so its tab state stays wherever the user left it (usually
+          // Details). The same-job branch above fires this event; this
+          // branch has to as well, or an email-reply tap changes the job
+          // and still shows the previous tab.
+          if (tabParam) {
+            window.dispatchEvent(
+              new CustomEvent("job-card-switch-tab", { detail: tabParam }),
+            );
+          }
           // Card is mounting fresh — park the highlight target so the diary
           // picks it up from the module bus the moment it mounts.
           if (entryId) requestDiaryHighlight(entryId);
@@ -1131,16 +1163,25 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // falls back to reading window.location (which is what we want for
     // back/forward navigation).
     const handlePopState = () => handleUrlChange();
+    // Wouter v3's location hook is the pathname only. A bell tap that
+    // setLocation("/dispatch?job=&tab=diary") while Despatch is already
+    // open does not change `location`, so this effect would not re-read
+    // the search. pushState/replaceState still fire (wouter patches them).
+    const handleHistory = () => handleUrlChange();
     window.addEventListener("notification-navigation", handleNotificationNav);
     window.addEventListener("popstate", handlePopState);
+    window.addEventListener("pushState", handleHistory);
+    window.addEventListener("replaceState", handleHistory);
     window.addEventListener("dispatch-new-job", handleNewJobEvent);
 
     const handleNewLeadEvent = () => handleCreateLead();
     const handleNewQuoteEvent = () => handleCreateQuote();
+    const handleNewMulchEvent = () => handleCreateMulch();
     const handleNewInvoiceEvent = () => handleCreateInvoice();
     const handlePasteEvent = () => setShowCreateFromMessageDialog(true);
     window.addEventListener("dispatch-new-lead", handleNewLeadEvent);
     window.addEventListener("dispatch-new-quote", handleNewQuoteEvent);
+    window.addEventListener("dispatch-new-mulch", handleNewMulchEvent);
     window.addEventListener("dispatch-new-invoice", handleNewInvoiceEvent);
     window.addEventListener("dispatch-paste", handlePasteEvent);
 
@@ -1150,9 +1191,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         handleNotificationNav,
       );
       window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("pushState", handleHistory);
+      window.removeEventListener("replaceState", handleHistory);
       window.removeEventListener("dispatch-new-job", handleNewJobEvent);
       window.removeEventListener("dispatch-new-lead", handleNewLeadEvent);
       window.removeEventListener("dispatch-new-quote", handleNewQuoteEvent);
+      window.removeEventListener("dispatch-new-mulch", handleNewMulchEvent);
       window.removeEventListener("dispatch-new-invoice", handleNewInvoiceEvent);
       window.removeEventListener("dispatch-paste", handlePasteEvent);
     };
@@ -1167,6 +1211,34 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const { data: staffAssignmentsData } = useQuery({
     queryKey: ["/api/staff-assignments"],
   });
+
+  // Crew already on the job being dropped, so Quick Assign opens with them ticked.
+  const pendingBookedIds = useMemo(() => {
+    if (!pendingDrop) return [] as string[];
+    const job = (jobsData as { data?: Array<Record<string, unknown>> } | undefined)?.data?.find(
+      (j) => j.id === pendingDrop.jobId,
+    );
+    const rows = ((staffAssignmentsData as { data?: Array<{ jobId?: string; employeeId?: string; startTime?: string }> } | undefined)?.data ?? [])
+      .filter((a) => a?.jobId === pendingDrop.jobId);
+    const scheduledDates = Array.isArray(job?.scheduledDates)
+      ? job.scheduledDates.filter((d): d is string => typeof d === "string")
+      : null;
+    const dateValue = (value: unknown): string | Date | null =>
+      typeof value === "string" || value instanceof Date ? value : null;
+    return crewIdsForScheduleEdit({
+      assignedTo: job?.assignedTo,
+      assignedTeam: job?.assignedTeam,
+      assignedStaffIds: job?.assignedStaffIds,
+      assignments: rows,
+      days: job
+        ? getJobScheduledNZDates({
+            scheduledDate: dateValue(job.scheduledDate),
+            scheduledEndDate: dateValue(job.scheduledEndDate),
+            scheduledDates,
+          })
+        : [],
+    });
+  }, [pendingDrop, jobsData, staffAssignmentsData]);
 
   // Email templates — feed the Quick Assign dialog's proposal-email option so
   // drop-scheduling sends the same "Proposed Booking" template as the job-card
@@ -1325,6 +1397,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: staffId,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
+          recentActivityAt: apiJob.recentActivityAt,
+          updatedAt: apiJob.updatedAt,
+          proposalSentDate: apiJob.proposalSentDate,
+          quotePresentedDate: apiJob.quotePresentedDate,
           workOrderAt: apiJob.workOrderAt,
           createdAt: apiJob.createdAt,
           scheduledDate: apiJob.scheduledDate || undefined,
@@ -1338,21 +1414,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
-          totalAmount:
-            apiJob.subtotal && Number(apiJob.subtotal) > 0
-              ? apiJob.subtotal
-              : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
-                ? String(
-                    Math.round(
-                      (Number(apiJob.totalIncludingGst) / 1.15) * 100,
-                    ) / 100,
-                  )
-                : apiJob.totalAmount && Number(apiJob.totalAmount) > 0
-                  ? String(
-                      Math.round((Number(apiJob.totalAmount) / 1.15) * 100) /
-                        100,
-                    )
-                  : "0",
+          totalAmount: dispatchJobTotalExGst(apiJob),
         });
       });
     }
@@ -1422,6 +1484,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: undefined,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
+          recentActivityAt: apiJob.recentActivityAt,
+          updatedAt: apiJob.updatedAt,
+          proposalSentDate: apiJob.proposalSentDate,
+          quotePresentedDate: apiJob.quotePresentedDate,
           workOrderAt: apiJob.workOrderAt,
           createdAt: apiJob.createdAt,
           scheduledDate: apiJob.scheduledDate || undefined,
@@ -1435,21 +1501,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
-          totalAmount:
-            apiJob.subtotal && Number(apiJob.subtotal) > 0
-              ? apiJob.subtotal
-              : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
-                ? String(
-                    Math.round(
-                      (Number(apiJob.totalIncludingGst) / 1.15) * 100,
-                    ) / 100,
-                  )
-                : apiJob.totalAmount && Number(apiJob.totalAmount) > 0
-                  ? String(
-                      Math.round((Number(apiJob.totalAmount) / 1.15) * 100) /
-                        100,
-                    )
-                  : "0",
+          totalAmount: dispatchJobTotalExGst(apiJob),
         });
       });
     }
@@ -1536,6 +1588,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return "WO";
       case "quote":
         return "Q";
+      case "mulch":
+        return "M";
       case "lead":
         return "L";
       default:
@@ -1905,19 +1959,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         if (diff !== 0) return diff;
       }
 
-      // Work Order tab: FIFO by when the job first became a work order (oldest conversion at top),
-      // then priority as tiebreaker. Falls back to createdAt (not lastActivityAt) for legacy
-      // jobs that predate the workOrderAt column — lastActivityAt gets bumped on every email,
-      // note, or edit, which caused those jobs to reshuffle whenever they were touched.
-      // createdAt is immutable so positions stay stable.
-      // FIFO only applies when Unscheduled or Work Order is the sole active
-      // filter — mixed selections (e.g. Unscheduled + Scheduled) fall through
-      // to the activity sort below. On the Work Order view, oldest-accepted
-      // first surfaces the work that has waited longest to be invoiced.
-      if (
-        jobFilters.length === 1 &&
-        (jobFilters[0] === "work_order" || jobFilters[0] === "work_order_all")
-      ) {
+      // Work Order chip only (every accepted job, booked or not): FIFO by when
+      // the job first became a work order, oldest first, then priority. That
+      // view is the not-yet-invoiced pool — oldest accepted surfaces work that
+      // has waited longest to invoice. Falls back to createdAt for legacy rows
+      // with no workOrderAt. Mixed filters do not use this.
+      if (jobFilters.length === 1 && jobFilters[0] === "work_order_all") {
         const getAcceptedTime = (job: JobAssignment): number => {
           if (job.workOrderAt) return new Date(job.workOrderAt).getTime();
           if (job.createdAt) return new Date(job.createdAt).getTime();
@@ -1934,6 +1981,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const pa = priorityRank[a.priority] ?? 4;
         const pb = priorityRank[b.priority] ?? 4;
         return pa - pb; // urgent first on ties
+      }
+
+      // Unscheduled (sole filter): most recently active first. Do not use
+      // startTime here — cards with no booking are given a synthetic "now",
+      // which would tie every unbooked job. Awaiting-confirmation is a filter
+      // toggle, not a sort group.
+      if (jobFilters.length === 1 && jobFilters[0] === "work_order") {
+        return compareByRecentActivity(a, b);
       }
 
       // Default: sort by most recently active (descending) — jobs with recent messages or changes appear at top
@@ -2209,6 +2264,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     localStorage.setItem(lastViewedKey, new Date().toISOString());
 
     setJobToEdit(job);
+    setInvoiceLaunchJobId(null);
     setGlobalJobCardMode("edit");
     setShowGlobalJobCard(true);
     setSelectedJob(null); // Close the job details dialog
@@ -2273,12 +2329,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // stale scheduledEndDate (and pin the new time-of-day) so the job doesn't
     // keep an old end date — a leftover scheduledDate..scheduledEndDate span
     // makes the job show on every day in the range and splits its price per day.
-    const updates: any = {
+    // scheduledDates must be cleared too: hasUpcomingBookingNZ prefers that set
+    // over scheduledDate, so a past day list would leave the job in Unscheduled
+    // after this booking. Status stays work_order (statusAfterBooking only
+    // advances a quote).
+    const assignmentsKnown = Array.isArray((staffAssignmentsData as any)?.data);
+    const updates: Record<string, unknown> = {
       scheduledDate: startDateTime.toISOString(),
       scheduledEndDate: null,
+      scheduledDates: null,
       scheduledStartTime: startTimeStr,
       scheduledEndTime: utcToNZTime(endDateTime).time,
       estimatedDuration: fractionalDurationHours,
+      // The dialog is the full crew (existing people start ticked). Write
+      // that set onto the job so the schedule form reopens with them selected.
+      assignedTo: result.employeeIds,
+      assignedTeam: result.employeeIds,
     };
     const next = statusAfterBooking(job.status);
     if (next && next !== job.status) {
@@ -2294,25 +2360,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // card moves out of the Unscheduled pile the instant the drop is
     // confirmed. Invalidating ["/api/jobs"] alone doesn't touch this list —
     // its key is the full parameterized JOBS_QUERY_KEY — so without this the
-    // card lingered until the 30s poll.
-    queryClient.setQueryData([JOBS_QUERY_KEY], (prev: any) =>
-      prev?.data
-        ? {
-            ...prev,
-            data: prev.data.map((j: any) =>
-              j.id === jobId ? { ...j, ...updates } : j,
-            ),
-          }
-        : prev,
-    );
+    // card lingered until the 30s poll. cancelQueries inside the helper stops
+    // an in-flight poll from painting the pre-booking row back over the patch.
+    await patchDispatchJobInCache(jobId, updates);
 
     (async () => {
       try {
-        await fetch(`/api/jobs/${jobId}`, {
+        const jobRes = await fetch(`/api/jobs/${jobId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(updates),
         });
+        if (!jobRes.ok) {
+          throw new Error("Failed to update job schedule");
+        }
 
         // Same flags as GlobalJobCard.saveSchedule — the dialog's automation
         // checkboxes drive the booking-confirmation email and reminders;
@@ -2330,7 +2391,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             sendNotifications: true,
             sendClientNotification: result.sendClientNotification,
             scheduleBookingReminders: result.scheduleBookingReminders,
-            addOnly: true,
+            // Replace the booking when we know who is already on it, so a
+            // second drop updates the crew instead of leaving a duplicate row.
+            // If assignments have not loaded yet, add only — don't wipe people
+            // the dialog could not show.
+            addOnly: !assignmentsKnown,
           }),
         });
         const assignData = await assignRes.json().catch(() => ({}));
@@ -2465,7 +2530,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         }
 
         queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
-        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            const first = query.queryKey[0];
+            return typeof first === "string" && first.startsWith("/api/jobs");
+          },
+        });
         queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
       } catch {
         // Refetch rolls the optimistic patch back to server truth.
@@ -2490,7 +2560,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const createDraftMutation = useMutation<
     { success?: boolean; data?: { id?: string } },
     Error,
-    { status: string; afterOpen?: () => void }
+    { status: string; afterOpen?: () => void; openInvoice?: boolean }
   >({
     mutationFn: async ({ status }) => {
       const res = await apiRequest("POST", "/api/jobs", { status });
@@ -2516,6 +2586,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       setJobToEdit({ jobId: newId, id: newId } as JobAssignment);
       setInitialJobData(null);
       setGlobalJobCardMode("edit");
+      setInvoiceLaunchJobId(vars.openInvoice ? newId : null);
       setShowGlobalJobCard(true);
       vars.afterOpen?.();
     },
@@ -2546,8 +2617,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     });
   };
 
+  // Mulch is a job status (shared/schema.ts JobStatus) — the same value the
+  // despatch Mulch chip filters on. Select that chip so the new draft is in view.
+  const handleCreateMulch = () => {
+    createDraftMutation.mutate({
+      status: "mulch",
+      afterOpen: () => setJobFilters(["mulch"]),
+    });
+  };
+
   const handleCreateInvoice = () => {
-    createDraftMutation.mutate({ status: "invoiced" });
+    // "invoiced" is not a job status — insertJobSchema rejects it and the
+    // card never opens. Create a work order and open the invoice builder.
+    if (!shouldStartDispatchInvoiceCreate(createDraftMutation.isPending)) return;
+    const request = dispatchNewInvoiceRequest();
+    createDraftMutation.mutate({
+      status: request.status,
+      openInvoice: request.openInvoice,
+    });
   };
 
   const saveSchedule = () => {
@@ -2734,6 +2821,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <QuoteFollowUpBanner testId="dispatch-summary-quote-followups" />
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -2822,10 +2910,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     );
   }
 
-  // Show loading state for full dispatch board
+  // Show loading state for full dispatch board. data-boot-chrome: this card
+  // has no words (pulse bars only). It must not count as the app having opened.
   if (jobsLoading) {
     return (
-      <div className="flex flex-col flex-1 min-h-0 p-4">
+      <div className="flex flex-col flex-1 min-h-0 p-4" data-boot-chrome="">
         <Card className="flex-1">
           <CardContent className="pt-6">
             <div className="animate-pulse space-y-3">
@@ -2863,6 +2952,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   return (
     <>
       <div className="flex flex-col flex-1 min-h-0">
+        <QuoteFollowUpBanner testId="dispatch-quote-followups" />
         {/* Desktop Layout: Split Screen with Resizable Panels */}
         <div
           className="hidden lg:flex flex-1 min-h-0 p-2 overflow-hidden"
@@ -3316,7 +3406,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             <div className="p-8 text-center text-gray-500">
                               <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
                               <p className="text-sm">
-                                No jobs scheduled for this date
+                                {jobFilters.length === 1 && jobFilters[0] === "work_order"
+                                  ? "No unscheduled work orders. Booked jobs are under Scheduled."
+                                  : "No jobs scheduled for this date"}
                               </p>
                               <Button
                                 size="sm"
@@ -3350,6 +3442,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           onTouchStart={handleSwipeTouchStart}
           onTouchEnd={handleSwipeTouchEnd}
         >
+          {/* Daily revenue target — same per-business setting as Settings and the desktop day bar. */}
+          <div className="flex-shrink-0 border-b bg-background px-3 py-1.5">
+            <DailyRevenueTargetControl />
+          </div>
           {/* Search strip — pinned below main header */}
           <div className="flex-shrink-0 z-50">
           {showMobileSearch && (
@@ -3718,9 +3814,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               {getTodaysJobs().length === 0 && (
                 <div className="p-8 text-center text-gray-500 bg-white">
                   <Calendar className="h-10 w-10 mx-auto mb-3 text-gray-300" />
-                  <p className="text-base mb-1">No jobs found</p>
+                  <p className="text-base mb-1">
+                    {jobFilters.length === 1 && jobFilters[0] === "work_order"
+                      ? "No unscheduled work orders"
+                      : "No jobs found"}
+                  </p>
                   <p className="text-sm text-gray-400 mb-4">
-                    Create your first job to get started
+                    {jobFilters.length === 1 && jobFilters[0] === "work_order"
+                      ? "Booked jobs are under Scheduled."
+                      : "Create your first job to get started"}
                   </p>
                   <Button size="default" onClick={handleCreateJob}>
                     <Plus className="h-4 w-4 mr-2" />
@@ -3741,7 +3843,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           through GlobalJobCard's layout gate: mobile gets JobCardMobile,
           desktop gets JobCardDesktop. */}
       {showGlobalJobCard && (
-        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); }}>
+        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); setInvoiceLaunchJobId(null); }}>
           <GlobalJobCard
             isOpen={true}
             mode={globalJobCardMode}
@@ -3753,7 +3855,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               setJobToEdit(null);
               setInitialJobData(null);
               setInitialSidebarTab(undefined);
+              setInvoiceLaunchJobId(null);
             }}
+            initialOpenInvoice={
+              invoiceLaunchJobId != null &&
+              invoiceLaunchJobId === (jobToEdit?.jobId || jobToEdit?.id)
+            }
           />
         </JobCardErrorBoundary>
       )}
@@ -3921,6 +4028,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           droppedEmployeeId={pendingDrop.employeeId}
           employees={employees}
           staffAssignments={(staffAssignmentsData as any)?.data ?? []}
+          bookedEmployeeIds={pendingBookedIds}
           defaultDurationHours={pendingDrop.defaultDurationHours}
           isSubmitting={isConfirmingDrop}
           onCancel={() => {

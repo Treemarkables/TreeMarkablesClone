@@ -29,6 +29,8 @@ interface BusinessSettings {
   autoFollowUpDays?: number | null;
   quoteFollowupChannel?: "sms" | "email" | null;
   quoteFollowupMaxAttempts?: number | null;
+  quoteFollowupWorkflowEnabled?: boolean | null;
+  quoteFollowupNudgeDays?: number[] | null;
 }
 
 interface SettingsResponse {
@@ -49,6 +51,8 @@ export default function SettingsQuoteFollowup() {
   const [days, setDays] = useState(3);
   const [channel, setChannel] = useState<"sms" | "email">("sms");
   const [maxAttempts, setMaxAttempts] = useState(2);
+  const [workflowEnabled, setWorkflowEnabled] = useState(true);
+  const [nudgeDays, setNudgeDays] = useState("3, 7, 14");
 
   useEffect(() => {
     if (!settings) return;
@@ -56,6 +60,9 @@ export default function SettingsQuoteFollowup() {
     setDays(settings.autoFollowUpDays ?? 3);
     setChannel((settings.quoteFollowupChannel ?? "sms") as "sms" | "email");
     setMaxAttempts(settings.quoteFollowupMaxAttempts ?? 2);
+    setWorkflowEnabled(settings.quoteFollowupWorkflowEnabled !== false);
+    const stored = settings.quoteFollowupNudgeDays;
+    setNudgeDays(Array.isArray(stored) && stored.length > 0 ? stored.join(", ") : "3, 7, 14");
   }, [settings]);
 
   const saveMutation = useMutation({
@@ -76,11 +83,26 @@ export default function SettingsQuoteFollowup() {
   });
 
   const handleSave = () => {
+    const parsedDays = nudgeDays
+      .split(/[^0-9]+/)
+      .map((part) => parseInt(part, 10))
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 90);
+    const uniqueDays = Array.from(new Set(parsedDays)).sort((a, b) => a - b).slice(0, 5);
+    if (workflowEnabled && uniqueDays.length === 0) {
+      toast({
+        title: "Couldn't save settings",
+        description: "Enter at least one nudge day between 1 and 90.",
+        variant: "destructive",
+      });
+      return;
+    }
     saveMutation.mutate({
       autoQuoteFollowupEnabled: enabled,
       autoFollowUpDays: days,
       quoteFollowupChannel: channel,
       quoteFollowupMaxAttempts: maxAttempts,
+      quoteFollowupWorkflowEnabled: workflowEnabled,
+      quoteFollowupNudgeDays: uniqueDays.length > 0 ? uniqueDays : [3, 7, 14],
     });
   };
 
@@ -97,12 +119,71 @@ export default function SettingsQuoteFollowup() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quote Follow-up Automation</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Quote follow-ups</h1>
           <p className="text-sm text-gray-600">
-            Auto-draft a follow-up message when a customer hasn't responded to a quote.
+            Draft a check-in when a sent quote goes quiet, and a fresh quote when it passes its valid date. Nothing is sent until you approve it.
           </p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Follow-up queue</CardTitle>
+          <CardDescription>
+            Waiting drafts show on Today, Despatch, and Quote follow-ups. You can edit the message, snooze it, or mark the quote lost.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-base">Draft follow-ups automatically</Label>
+              <p className="text-sm text-muted-foreground">
+                On by default. Turning this off stops new drafts. It never sends on its own.
+              </p>
+            </div>
+            <Switch
+              checked={workflowEnabled}
+              onCheckedChange={setWorkflowEnabled}
+              data-testid="switch-quote-followup-workflow"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="nudge-days">Nudge after these days</Label>
+            <Input
+              id="nudge-days"
+              value={nudgeDays}
+              onChange={(e) => setNudgeDays(e.target.value)}
+              disabled={!workflowEnabled}
+              className="max-w-[240px]"
+              data-testid="input-nudge-days"
+            />
+            <p className="text-xs text-muted-foreground">
+              Default is 3, 7 and 14. A quote only gets one draft per step, and a customer reply, accept, or decline stops the rest.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="queue-channel">Preferred channel</Label>
+            <Select
+              value={channel}
+              onValueChange={(v) => setChannel(v as "sms" | "email")}
+              disabled={!workflowEnabled}
+            >
+              <SelectTrigger id="queue-channel" className="max-w-[200px]" data-testid="select-queue-channel">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sms">SMS</SelectItem>
+                <SelectItem value="email">Email</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Uses the job contact, then the customer. Falls back if that detail isn't on file.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -195,17 +276,18 @@ export default function SettingsQuoteFollowup() {
             </p>
           </div>
 
-          <div className="pt-2">
-            <Button
-              onClick={handleSave}
-              disabled={saveMutation.isPending}
-              data-testid="button-save-followup-settings"
-            >
-              {saveMutation.isPending ? "Saving…" : "Save"}
-            </Button>
-          </div>
         </CardContent>
       </Card>
+
+      <div>
+        <Button
+          onClick={handleSave}
+          disabled={saveMutation.isPending}
+          data-testid="button-save-followup-settings"
+        >
+          {saveMutation.isPending ? "Saving…" : "Save"}
+        </Button>
+      </div>
     </div>
   );
 }

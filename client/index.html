@@ -12,7 +12,7 @@
     <meta charset="UTF-8" />
     <title>Inflow</title>
     <meta name="description" content="Inflow — job management for field-services teams." />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover, interactive-widget=resizes-content" />
     
     <!-- PWA Configuration -->
     <meta name="theme-color" content="#FBFBF7">
@@ -76,6 +76,14 @@
         font-size: 0.95rem;
       }
       #inflow-boot[data-stuck="1"] .boot-retry { display: inline-block; }
+      /* Tailwind's paper --background must not show through before the app
+         has painted. An opaque WKWebView with that body and an empty #root
+         is the cold-start white screen. */
+      html.inflow-app:not([data-inflow-booted]) body {
+        background: #1a1a1a !important;
+      }
+      /* App hosts set class="inflow-app". A leaked marketing snapshot stays hidden. */
+      html.inflow-app #tm-prerender { display: none !important; }
     </style>
     <!-- Event snippet for Click to call conversion page -->
     <script>
@@ -186,22 +194,167 @@
       });
     </script>
     <script>
-      // Capacitor TestFlight cold-start watchdog. Runs BEFORE the React
-      // bundle. If main.tsx never marks window.__INFLOW_BOOTED (hung first
-      // load, dead JS, failed chunk), reload once so the user does not have
-      // to force-quit. CSP already allows this inline script (Wave 1).
+      // Capacitor cold-start watchdog. Runs BEFORE the React bundle. A
+      // text-less white card must not count as opened: that hid this cover
+      // and the installed native probe reloaded the WebView white. If the
+      // bundle never starts, cache-bust once. If there is still no real
+      // screen, this cover becomes the error / Retry UI no matter what.
       (function () {
         window.__INFLOW_BOOTED = window.__INFLOW_BOOTED === true;
+        window.__ENTRY_STARTED = window.__ENTRY_STARTED === true;
         window.__INFLOW_HEARTBEAT_MS = Date.now();
+        window.__INFLOW_BOOT_ERROR = window.__INFLOW_BOOT_ERROR || '';
         var KEY = 'inflowBootReloadAttempts';
+        var ASSET_KEY = 'assetMismatchReloads';
+        var assetReloadScheduled = false;
+        function assetAttempts() {
+          try {
+            var parsed = JSON.parse(sessionStorage.getItem(ASSET_KEY) || 'null');
+            if (!parsed || typeof parsed.count !== 'number' || typeof parsed.at !== 'number') return 0;
+            if (Date.now() - parsed.at > 180000) return 0;
+            return parsed.count;
+          } catch (e) { return 0; }
+        }
+        // A 404 on /assets/*.js (or the entry CSS) never runs the React bundle.
+        // The marketing snapshot still has text, so the boot watchdog used to
+        // treat that as a painted page and leave visitors on the unstyled HTML.
+        function reloadAssetMismatch(force) {
+          if (window.__INFLOW_CALL_ACTIVE) return;
+          if (assetReloadScheduled) return;
+          if (window.__ENTRY_STARTED && !force) return;
+          var n = assetAttempts();
+          if (n >= 2) return;
+          assetReloadScheduled = true;
+          try { sessionStorage.setItem(ASSET_KEY, JSON.stringify({ count: n + 1, at: Date.now() })); } catch (e) {}
+          setTimeout(function () {
+            if (window.__ENTRY_STARTED && !force) return;
+            cacheBust();
+          }, 400);
+        }
+        window.addEventListener('error', function (event) {
+          var target = event.target;
+          if (!target || target === window || !target.tagName) return;
+          var url = String(target.src || target.href || '');
+          if (url.indexOf('/assets/') === -1) return;
+          var tag = target.tagName;
+          var css = tag === 'LINK' && String(target.rel || '').toLowerCase().indexOf('stylesheet') !== -1;
+          if (tag === 'SCRIPT') reloadAssetMismatch(false);
+          else if (css) reloadAssetMismatch(true);
+        }, true);
+        try {
+          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'inflow-client-ready' });
+          }
+          if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+            navigator.serviceWorker.ready.then(function (reg) {
+              if (reg && reg.active) reg.active.postMessage({ type: 'inflow-client-ready' });
+            }).catch(function () {});
+          }
+        } catch (e) {}
+        // A controlling service worker can keep serving a cached shell whose
+        // hashed chunks 404. Unregister it from this HTML (the bundle may
+        // never run). Do not reload here: web-push users would reload on
+        // every cold start. A stale worker that served old HTML never runs
+        // this script; sw.js reloads that client once it activates.
+        if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all((regs || []).map(function (reg) { return reg.unregister(); }));
+          }).then(function () {
+            if (!window.caches || !caches.keys) return;
+            return caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+            });
+          }).catch(function () {});
+        }
         var overlay = document.getElementById('inflow-boot');
         var retry = document.getElementById('inflow-boot-retry');
+        var title = overlay ? overlay.querySelector('.boot-title') : null;
+        var sub = overlay ? overlay.querySelector('.boot-sub') : null;
         function hideBoot() {
           window.__INFLOW_BOOTED = true;
           window.__INFLOW_HEARTBEAT_MS = Date.now();
-          if (overlay) overlay.setAttribute('data-booted', '1');
+          if (overlay) {
+            overlay.setAttribute('data-booted', '1');
+            overlay.removeAttribute('data-stuck');
+          }
+          try {
+            window.webkit.messageHandlers.inflowBoot.postMessage({ type: 'appReady' });
+          } catch (e) {}
         }
         window.addEventListener('inflow-booted', hideBoot);
+        function realScreen() {
+          var root = document.getElementById('root');
+          if (!root) return false;
+          // Marketing pages ship a static snapshot outside #root. That copy is
+          // the page until React paints; don't reload it as a failed boot.
+          var prerender = document.getElementById('tm-prerender');
+          if (prerender) {
+            var preText = ((prerender.innerText || '') + '').replace(/\s+/g, ' ').trim();
+            if (preText) return true;
+          }
+          var main = root.querySelector('main');
+          var scope = main || root;
+          var text = ((scope.innerText || '') + '').replace(/\s+/g, ' ').trim();
+          if (text && text !== 'Opening Inflow' && text.indexOf('Opening Inflow ') !== 0) return true;
+          if (scope.querySelector('video, canvas, iframe, audio')) return true;
+          var img = scope.querySelector('img');
+          if (!img || !img.getBoundingClientRect) return false;
+          var box = img.getBoundingClientRect();
+          return box.width >= 2 && box.height >= 2;
+        }
+        function revealFailure(message) {
+          if (realScreen()) {
+            hideBoot();
+            return;
+          }
+          window.__INFLOW_BOOTED = false;
+          var text = message || window.__INFLOW_BOOT_ERROR || 'Inflow did not finish opening. Check your connection and try again.';
+          if (overlay) {
+            overlay.removeAttribute('data-booted');
+            overlay.setAttribute('data-stuck', '1');
+          }
+          if (title) title.textContent = "Inflow didn't open";
+          if (sub) sub.textContent = text;
+          try {
+            window.webkit.messageHandlers.inflowBoot.postMessage({ type: 'bootFailed', message: text });
+          } catch (e) {}
+        }
+        function postClientError(message, stack) {
+          try {
+            fetch('/api/client-errors', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: message,
+                stack: stack || '',
+                componentStack: 'boot',
+                url: location.href,
+                userAgent: navigator.userAgent
+              })
+            });
+          } catch (e) {}
+        }
+        function noteError(message, stack) {
+          var text = message || 'Script error';
+          window.__INFLOW_BOOT_ERROR = text;
+          if (realScreen()) return;
+          if (sub) sub.textContent = text;
+          if (overlay) overlay.setAttribute('data-error', '1');
+          postClientError(text, stack);
+          try {
+            window.webkit.messageHandlers.inflowBoot.postMessage({ type: 'bootError', message: text });
+          } catch (e) {}
+        }
+        window.addEventListener('error', function (event) {
+          var msg = (event && event.message) || 'Script error';
+          if (msg.indexOf('Script error') === 0 && !(event && event.filename)) return;
+          noteError(msg, event && event.error && event.error.stack);
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event && event.reason;
+          var msg = (reason && reason.message) || String(reason || 'Unhandled rejection');
+          noteError(msg, reason && reason.stack);
+        });
         function attempts() {
           try {
             var parsed = JSON.parse(sessionStorage.getItem(KEY) || 'null');
@@ -210,20 +363,70 @@
             return parsed.count;
           } catch (e) { return 0; }
         }
+        function cacheBust() {
+          var url = new URL(location.href);
+          url.searchParams.set('inflow_boot', String(Date.now()));
+          location.replace(url.toString());
+        }
         function reloadOnce() {
-          if (window.__INFLOW_BOOTED) return;
+          if (window.__INFLOW_CALL_ACTIVE) return;
+          if (realScreen()) {
+            hideBoot();
+            return;
+          }
           var n = attempts();
-          if (n >= 2) {
-            if (overlay) overlay.setAttribute('data-stuck', '1');
+          if (n >= 1) {
+            revealFailure(window.__INFLOW_BOOT_ERROR);
             return;
           }
           try { sessionStorage.setItem(KEY, JSON.stringify({ count: n + 1, at: Date.now() })); } catch (e) {}
-          window.location.reload();
+          cacheBust();
         }
-        if (retry) retry.addEventListener('click', function () { window.location.reload(); });
+        if (retry) retry.addEventListener('click', function () { cacheBust(); });
+        function bootCoverShowing() {
+          if (!overlay) return false;
+          if (overlay.getAttribute('data-booted') === '1') return false;
+          try {
+            var style = window.getComputedStyle(overlay);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+          } catch (e) {}
+          return true;
+        }
+        function heartbeatAge() {
+          var hb = window.__INFLOW_HEARTBEAT_MS || 0;
+          if (!hb) return 999999;
+          return Date.now() - hb;
+        }
+        // Cover already gone and nothing real on screen: paper-white body.
+        // A live heartbeat must not skip this — that was the force-quit loop.
+        // A cover that is still up is a slow chunk and is left to the timers
+        // below.
         setTimeout(function () {
-          if (!window.__INFLOW_BOOTED) reloadOnce();
-        }, 18000);
+          if (window.__INFLOW_CALL_ACTIVE) return;
+          if (realScreen()) return;
+          if (bootCoverShowing()) return;
+          reloadOnce();
+        }, 8000);
+        // 12s with a stale heartbeat means the entry bundle never started
+        // (stale index, missing chunk). A fresh heartbeat means JS is alive
+        // and a slow route must not be cancelled.
+        setTimeout(function () {
+          if (!window.__ENTRY_STARTED) {
+            reloadAssetMismatch(false);
+            return;
+          }
+          if (realScreen()) return;
+          if (heartbeatAge() < 8000) return;
+          reloadOnce();
+        }, 12000);
+        // No matter the booted flag or a live heartbeat: if nothing real is
+        // on screen, stop saying "Opening Inflow".
+        setTimeout(function () {
+          if (!realScreen()) revealFailure(window.__INFLOW_BOOT_ERROR);
+        }, 20000);
+        setInterval(function () {
+          if (overlay && overlay.getAttribute('data-stuck') === '1' && realScreen()) hideBoot();
+        }, 500);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

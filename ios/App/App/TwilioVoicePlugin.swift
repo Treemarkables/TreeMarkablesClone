@@ -475,8 +475,13 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         guard let token = self.accessToken, let deviceToken = self.deviceToken else { return }
         TwilioVoiceSDK.register(accessToken: token, deviceToken: deviceToken) { error in
             if let error = error {
-                NSLog("[TwilioVoice] Registration error: \(error)")
-                self.notifyListeners("registrationError", data: ["message": error.localizedDescription])
+                let nsError = error as NSError
+                NSLog("[TwilioVoice] Registration error: \(error) code=\(nsError.code)")
+                self.notifyListeners("registrationError", data: [
+                    "message": error.localizedDescription,
+                    "errorCode": String(nsError.code),
+                    "errorDomain": nsError.domain,
+                ])
             } else {
                 let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
                 NSLog("[TwilioVoice] Registered — device token: \(hex.prefix(8))...")
@@ -774,9 +779,7 @@ extension TwilioVoicePlugin: CallDelegate {
         lastRouteError = ""
         answerRequestedAt = nil
         audioActivatedAt = nil
-        notifyListeners("callDisconnected", data: [
-            "error": error?.localizedDescription ?? "",
-        ], retainUntilConsumed: true)
+        notifyListeners("callDisconnected", data: twilioErrorPayload(error), retainUntilConsumed: true)
     }
 
     public func callDidFailToConnect(call: Call, error: Error) {
@@ -789,8 +792,21 @@ extension TwilioVoicePlugin: CallDelegate {
         lastRouteError = ""
         answerRequestedAt = nil
         audioActivatedAt = nil
-        notifyListeners("callFailed", data: ["error": error.localizedDescription], retainUntilConsumed: true)
+        notifyListeners("callFailed", data: twilioErrorPayload(error), retainUntilConsumed: true)
     }
+}
+
+/// localizedDescription of Twilio 31005 is just "Connection error". The code
+/// is what tells a screenshot apart from a token expiry (20104) or a media
+/// failure. Web-only builds can't see this until the next TestFlight.
+private func twilioErrorPayload(_ error: Error?) -> [String: Any] {
+    guard let error = error else { return ["error": ""] }
+    let nsError = error as NSError
+    return [
+        "error": error.localizedDescription,
+        "errorCode": String(nsError.code),
+        "errorDomain": nsError.domain,
+    ]
 }
 
 // MARK: - Bridge View Controller
@@ -808,9 +824,11 @@ class MainViewController: CAPBridgeViewController {
         // VoIP push handling at launch, so JS bridge calls and the live push
         // registry share one plugin instance.
         bridge?.registerPluginInstance(TwilioVoicePlugin.shared)
-        // Cold-start / process-death recovery for the remote server.url webview.
-        // Without this, a hung first load or a dead WK content process stays
-        // white until the user force-quits.
+        // Cold open recovery for the remote server.url web view.
+        // attach() keeps the WKWebView opaque and covers it with a dark
+        // placeholder until the first page commits. Setting isOpaque = false
+        // here (before Capacitor snapshots it in willLoadWebview) left cold
+        // opens composited black until force quit.
         view.backgroundColor = UIColor(red: 26 / 255, green: 26 / 255, blue: 26 / 255, alpha: 1)
         WebViewBootRecovery.shared.attach(webView: webView)
     }

@@ -50,6 +50,7 @@ import {
 import { Link } from "wouter";
 import { toast } from "@/hooks/use-toast";
 import type { DocumentTemplate, InsertDocumentTemplate, InvoiceSectionConfig } from "@shared/schema";
+import { TREEMARKABLES_YARD_ADDRESS } from "@shared/treemarkablesYard";
 import { InvoiceTemplate } from "@/components/InvoiceTemplate";
 
 const MOCK_INVOICE = {
@@ -106,7 +107,7 @@ const templateFormSchema = z.object({
   isDefault: z.boolean().default(false),
   isActive: z.boolean().default(true),
   companyName: z.string().default("Treemarkables LTD"),
-  companyAddress: z.string().default("Hauroa rd\nGisborne, 4010"),
+  companyAddress: z.string().default(TREEMARKABLES_YARD_ADDRESS),
   companyEmail: z.string().default("quotes@treemarkables.nz"),
   companyPhone: z.string().default("027 216 6882"),
   gstNumber: z.string().default("131-047-592-GST004"),
@@ -138,7 +139,7 @@ export default function TemplateManagement() {
       isDefault: false,
       isActive: true,
       companyName: "Treemarkables LTD",
-      companyAddress: "Hauroa rd\nGisborne, 4010",
+      companyAddress: TREEMARKABLES_YARD_ADDRESS,
       companyEmail: "quotes@treemarkables.nz",
       companyPhone: "027 216 6882",
       gstNumber: "131-047-592-GST004",
@@ -241,7 +242,7 @@ export default function TemplateManagement() {
     isDefault: watchedValues.isDefault ?? false,
     isActive: watchedValues.isActive ?? true,
     companyName: watchedValues.companyName || "Treemarkables LTD",
-    companyAddress: watchedValues.companyAddress || "213 Stanley Road, Gisborne",
+    companyAddress: watchedValues.companyAddress || TREEMARKABLES_YARD_ADDRESS,
     companyEmail: watchedValues.companyEmail || "quotes@treemarkables.nz",
     companyPhone: watchedValues.companyPhone || "027 216 6882",
     gstNumber: watchedValues.gstNumber || "131-047-592",
@@ -278,7 +279,7 @@ export default function TemplateManagement() {
       isDefault: template.isDefault,
       isActive: template.isActive,
       companyName: template.companyName || "Treemarkables LTD",
-      companyAddress: template.companyAddress || "Hauroa rd\nGisborne, 4010",
+      companyAddress: template.companyAddress || TREEMARKABLES_YARD_ADDRESS,
       companyEmail: template.companyEmail || "quotes@treemarkables.nz",
       companyPhone: template.companyPhone || "027 216 6882",
       gstNumber: template.gstNumber || "131-047-592-GST004",
@@ -303,7 +304,7 @@ export default function TemplateManagement() {
       isDefault: false,
       isActive: true,
       companyName: "Treemarkables LTD",
-      companyAddress: "Hauroa rd\nGisborne, 4010",
+      companyAddress: TREEMARKABLES_YARD_ADDRESS,
       companyEmail: "quotes@treemarkables.nz",
       companyPhone: "027 216 6882",
       gstNumber: "131-047-592-GST004",

@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useSelectAllOnFocus } from "@/lib/selectAllOnFocus";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Conversation, ConversationMessage, Job } from "@shared/schema";
+import { fillEmptyJobContact } from "@shared/jobContactFill";
 import {
   ArrowLeft,
   Send,
@@ -105,6 +107,7 @@ function parseContactForm(content: string) {
 }
 
 export default function ConversationDetail() {
+  const selectAllAddress = useSelectAllOnFocus();
   const [, params] = useRoute("/conversation/:id");
   const [, setLocation] = useLocation();
   const conversationId = params?.id;
@@ -510,6 +513,17 @@ export default function ConversationDetail() {
         jobContactMobile: isMobileNumber ? formValues.phone || "" : "",
         conversationId: conversationId,
       };
+      // Phone alone was stored on the job; name and email stayed on the
+      // customer, so Job Contact rendered blank while diary mail still had
+      // an address. Copy the dialog's name and email onto the empty columns.
+      Object.assign(
+        jobData,
+        fillEmptyJobContact(jobData, {
+          name: formValues.name,
+          email: formValues.email,
+          phone: formValues.phone,
+        }),
+      );
 
       const jobRes = await apiRequest("POST", "/api/jobs", jobData);
       const jobResponseData = (await jobRes.json()) as { data: Job };
@@ -1058,6 +1072,7 @@ export default function ConversationDetail() {
                 onChange={(e) =>
                   setLeadForm({ ...leadForm, address: e.target.value })
                 }
+                {...selectAllAddress}
                 placeholder="Property address"
                 data-testid="input-job-address"
               />

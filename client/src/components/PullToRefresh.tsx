@@ -26,6 +26,7 @@ export function PullToRefresh({ onRefresh, children, enabled = true, className, 
           drives opacity/position/rotation and sets data-armed past the threshold */}
       <div
         ref={indicatorRef as React.MutableRefObject<HTMLDivElement | null>}
+        data-boot-chrome=""
         className="group absolute inset-x-0 top-0 z-50 flex justify-center pointer-events-none"
         style={{ opacity: 0, transform: 'translate3d(0, -44px, 0) scale(0.6)' }}
       >

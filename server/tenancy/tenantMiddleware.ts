@@ -79,6 +79,11 @@ const OWNER_PATH_PATTERNS: RegExp[] = [
   // without this the empty-GUC connection reads zero rows → 404 for customers.
   /^\/api\/invoices\/[^/]+\/request-service$/,
   /^\/api\/videos\/[^/]+\/public$/,
+  // Captions for the public /watch page. Same unguessable-UUID access as
+  // /public. Without this, RLS pins an empty GUC for a logged-out visitor
+  // and getVideo matches zero rows — captions.vtt 404s even when
+  // captions_status is 'ready' and captions_vtt is stored.
+  /^\/api\/videos\/[^/]+\/captions\.vtt$/,
   /^\/api\/jobs\/[^/]+\/videos\/public$/,
   /^\/api\/photos\/public$/,
   /^\/api\/reviews\/request\/[^/]+$/,

@@ -2,7 +2,14 @@
 // (/calendar views, CalendarGrid on /dispatch). Extracted verbatim from
 // CalendarGrid.tsx so both render paths stay pixel- and logic-identical.
 import { toZonedTime } from "date-fns-tz";
-import { getJobScheduledNZDates } from "@shared/dateUtils";
+import {
+  REVENUE_EXCLUDE,
+  jobDayCount,
+  jobQuoteExGst,
+  jobRevenue,
+} from "@shared/dispatchRevenue";
+
+export { REVENUE_EXCLUDE, jobDayCount, jobQuoteExGst, jobRevenue };
 
 export const NZ_TZ = "Pacific/Auckland";
 
@@ -212,65 +219,34 @@ export function effectiveGanttMins(
   return { startMins: 8 * 60, endMins: 9 * 60, fromAssignment: false };
 }
 
-// ── Revenue helpers ───────────────────────────────────────────────────────────
-// Statuses that don't represent confirmed revenue (quotes/leads aren't booked work)
-export const REVENUE_EXCLUDE = new Set(['archived', 'unsuccessful', 'cancelled', 'quote', 'lead']);
-
-// Number of day cells a job renders in (minimum 1). Honours a non-contiguous
-// scheduledDates set so per-day price division matches the cells actually drawn.
-export function jobDayCount(job: CalendarJob): number {
-  if (!job.scheduledDate) return 1;
-  return Math.max(1, getJobScheduledNZDates(job).length);
-}
-
-// Per-day share of a job's exc-GST price. Multi-day jobs render in N day cells
-// across week/2week views, so the price MUST be divided by jobDayCount or the
-// same total double-counts in every cell. Use this for any per-day price label
-// — do not introduce a separate "full price" helper for cell rendering.
-//
-// Hierarchy mirrors the canonical desktop GlobalJobCard header (lines 4582-
-// 4613) and the Live Roster `getJobPrice` fixed in PR #28: line items
-// (ex-GST) → job.subtotal → job.totalIncludingGst / 1.15 → job.totalAmount
-// / 1.15. Jobs created from accepted proposals carry `lineItems` populated
-// but no rolled-up `subtotal`, so without the lineItems check those jobs
-// contribute $0 to the day's revenue bar even though they're worth real
-// money — same blank-price symptom that surfaced on the Live Roster.
-export function jobRevenue(job: CalendarJob): number {
-  const toNum = (v: unknown): number => {
-    if (v == null) return 0;
-    const n = typeof v === "string" ? parseFloat(v) : (v as number);
-    return Number.isFinite(n) ? n : 0;
-  };
-  const raw = (() => {
-    const lineItems = job.lineItems;
-    if (Array.isArray(lineItems) && lineItems.length > 0) {
-      const lineItemsTotal = lineItems.reduce((sum, li) => {
-        const exGst =
-          toNum(li.totalExGst) ||
-          (li.priceExGst != null ? toNum(li.priceExGst) * toNum(li.quantity || 1) : 0);
-        return sum + (exGst || toNum(li.total));
-      }, 0);
-      if (lineItemsTotal > 0) return Math.round(lineItemsTotal * 100) / 100;
-    }
-    const sub = parseFloat(job.subtotal || "0");
-    if (sub > 0) return sub;
-    const incGst = parseFloat(job.totalIncludingGst || "0");
-    if (incGst > 0) return Math.round((incGst / 1.15) * 100) / 100;
-    const total = parseFloat(job.totalAmount || "0");
-    if (total > 0) return Math.round((total / 1.15) * 100) / 100;
-    return 0;
-  })();
-  return raw / jobDayCount(job);
-}
-
 export function formatNZD(amount: number): string {
   return amount === 0
     ? "$0"
     : `$${amount >= 1000 ? (amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1) + "k" : Math.round(amount).toLocaleString()}`;
 }
 
-export function revenueColor(amount: number, target: number): string {
+export function revenueColor(amount: number, target: number | null): string {
+  if (target == null || target <= 0) return "text-foreground bg-muted border-border";
   if (amount >= target) return "text-green-700 bg-green-50 border-green-200";
   if (amount >= target * 0.7) return "text-amber-700 bg-amber-50 border-amber-200";
   return "text-red-700 bg-red-50 border-red-200";
+}
+
+export function revenueBarClass(amount: number, target: number | null): string {
+  if (target == null || target <= 0) return "bg-muted-foreground/30";
+  if (amount >= target) return "bg-green-500";
+  if (amount >= target * 0.7) return "bg-amber-400";
+  return "bg-red-400";
+}
+
+export function revenueBarPercent(amount: number, target: number | null): number {
+  if (target == null || target <= 0) return 0;
+  return Math.min(100, (amount / target) * 100);
+}
+
+export function revenueChipClass(amount: number, target: number | null): string {
+  if (target == null || target <= 0) return "text-muted-foreground bg-muted";
+  if (amount >= target) return "text-green-700 bg-green-50";
+  if (amount >= target * 0.7) return "text-amber-700 bg-amber-50";
+  return "text-red-700 bg-red-50";
 }

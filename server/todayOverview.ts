@@ -28,6 +28,11 @@ import {
   type TodayPerson,
   type TodayScope,
 } from "@shared/todayPage";
+import { loadEffectiveRiskLinksForJobs } from "./jhaJobRisk";
+import { countWaitingQuoteFollowUps } from "./quoteFollowUpService";
+import { countWaitingInvoiceXeroFollowUps } from "./invoiceXeroService";
+import { countWaitingJobsNotBilled } from "./jobsNotBilledService";
+import type { JobRiskAssessmentLink } from "@shared/jhaJobRisk";
 
 export class HttpError extends Error {
   readonly status: number;
@@ -96,6 +101,16 @@ export async function buildTodayOverview(employeeId: string): Promise<TodayOverv
       (a.scheduledStartTime || "99:99").localeCompare(b.scheduledStartTime || "99:99"),
     );
 
+  let riskLinks = new Map<string, JobRiskAssessmentLink>();
+  try {
+    riskLinks = await loadEffectiveRiskLinksForJobs(
+      jobsToday.map((job) => job.id),
+      todayStr,
+    );
+  } catch (err) {
+    console.error("Error loading morning risk status for today:", err);
+  }
+
   const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
   const firstNameCounts = countFirstNames(employees);
   const personFor = (id: string): TodayPerson | null => {
@@ -134,6 +149,8 @@ export async function buildTodayOverview(employeeId: string): Promise<TodayOverv
       kit: kitLabels(job.equipment),
       bookedLabel: formatBookedAmount(bookedAmount),
       bookedAmount,
+      riskAssessmentStatus: riskLinks.get(job.id)?.riskAssessmentStatus ?? "none",
+      riskAssessmentId: riskLinks.get(job.id)?.riskAssessmentId ?? null,
     });
   }
 
@@ -225,11 +242,22 @@ export async function buildTodayOverview(employeeId: string): Promise<TodayOverv
     .map((team) => ({ id: team.id, name: team.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  let quoteFollowUpsWaiting = 0;
+  try {
+    const quoteWaiting = await countWaitingQuoteFollowUps();
+    const xeroWaiting = await countWaitingInvoiceXeroFollowUps();
+    const notBilled = await countWaitingJobsNotBilled();
+    quoteFollowUpsWaiting = quoteWaiting + xeroWaiting + notBilled.count;
+  } catch (error) {
+    console.error("Today overview: quote follow-up count failed:", error);
+  }
+
   const overview: TodayOverviewData = {
     date: todayStr,
     dateLabel: formatTodayHeading(todayStr),
     businessName: settings.businessName?.trim() || "",
     currentEmployeeId: employeeId,
+    quoteFollowUpsWaiting,
     counts: {
       jobsToday: allJobs.length,
       crewsLive: crews.length,

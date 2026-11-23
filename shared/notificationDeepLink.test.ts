@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   flattenNotificationPayload,
   jobIdFromNotificationPath,
+  foregroundDeployReloadUrl,
   parseStoredNotificationNav,
+  resolveBellNotificationPath,
   resolveNotificationPath,
   serializeStoredNotificationNav,
   tabFromNotificationPath,
@@ -126,6 +128,99 @@ describe("resolveNotificationPath — payload → route", () => {
   });
 });
 
+describe("resolveBellNotificationPath — in-app bell tap", () => {
+  it("opens the job diary for an email reply whose actionUrl is bare despatch", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "email_reply",
+        jobId: "job-1",
+        diaryEntryId: "entry-9",
+        actionUrl: "/dispatch",
+      }),
+      "/dispatch?job=job-1&tab=diary&entry=entry-9",
+    );
+  });
+
+  it("adds the diary tab when an SMS reply actionUrl names the job but not the thread", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "sms_reply",
+        jobId: "job-2",
+        actionUrl: "/dispatch?job=job-2",
+      }),
+      "/dispatch?job=job-2&tab=diary",
+    );
+  });
+
+  it("reads the job out of actionUrl when the jobId column is empty", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "email_reply",
+        actionUrl: "/dispatch?job=job-3&entry=e-3",
+      }),
+      "/dispatch?job=job-3&tab=diary&entry=e-3",
+    );
+  });
+
+  it("opens the conversation for a reply that is not filed on a job", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "new_conversation",
+        actionUrl: "/conversation/c-1",
+        metadata: { conversationId: "c-1" },
+      }),
+      "/conversation/c-1",
+    );
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "new_conversation",
+        actionUrl: "/dispatch",
+        metadata: { conversationId: "c-2" },
+      }),
+      "/conversation/c-2",
+    );
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "conversation_reply",
+        metadata: { conversationId: "c-3" },
+      }),
+      "/conversation/c-3",
+    );
+  });
+
+  it("keeps a non-diary job notification on the job card", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "job_status_change",
+        jobId: "job-4",
+        actionUrl: "/dispatch",
+      }),
+      "/dispatch?job=job-4",
+    );
+  });
+
+  it("returns null when the row has no target", () => {
+    assert.equal(resolveBellNotificationPath({ type: "system_alert" }), null);
+  });
+
+  it("opens the quote follow-up queue from the daily reminder", () => {
+    assert.equal(
+      resolveBellNotificationPath({
+        type: "quote_followup_waiting",
+        actionUrl: "/quote-follow-ups?id=fu-1",
+      }),
+      "/quote-follow-ups?id=fu-1",
+    );
+    assert.equal(
+      resolveNotificationPath({
+        type: "quote_followup_waiting",
+        clickAction: "/quote-follow-ups",
+      }),
+      "/quote-follow-ups",
+    );
+  });
+});
+
 describe("flatten + path helpers", () => {
   it("lets top-level keys win over nested copies", () => {
     const flat = flattenNotificationPayload({
@@ -145,5 +240,38 @@ describe("flatten + path helpers", () => {
     const raw = serializeStoredNotificationNav("/dispatch?job=late", 1_000);
     assert.equal(parseStoredNotificationNav(raw, 1_000 + 10_000), "/dispatch?job=late");
     assert.equal(parseStoredNotificationNav(raw, 1_000 + 61_000), null);
+  });
+});
+
+describe("foregroundDeployReloadUrl", () => {
+  it("reloads onto the pending job diary instead of the page already open", () => {
+    assert.equal(
+      foregroundDeployReloadUrl(
+        "https://app.inflowapp.co.nz/dispatch",
+        "/dispatch?job=job-1&tab=diary&entry=e-1",
+      ),
+      "/dispatch?job=job-1&tab=diary&entry=e-1",
+    );
+  });
+
+  it("keeps a plain reload when the address bar already has the deep link", () => {
+    assert.equal(
+      foregroundDeployReloadUrl(
+        "https://app.inflowapp.co.nz/dispatch?job=job-1&tab=diary",
+        "/dispatch?job=job-1&tab=diary",
+      ),
+      null,
+    );
+  });
+
+  it("does nothing special when no notification is pending", () => {
+    assert.equal(
+      foregroundDeployReloadUrl("https://app.inflowapp.co.nz/today", null),
+      null,
+    );
+    assert.equal(
+      foregroundDeployReloadUrl("https://app.inflowapp.co.nz/today", "https://evil.example/dispatch"),
+      null,
+    );
   });
 });
