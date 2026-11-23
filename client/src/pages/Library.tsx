@@ -2,7 +2,7 @@
 // keyword (q), date range, and tag, then switch between a grid view and a Leaflet
 // map view that pins anything with GPS coords. Powered by POST /api/photos/search
 // and POST /api/videos/search.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
@@ -22,6 +22,7 @@ import {
 import { Image as ImageIcon, Video as VideoIcon, MapPin, Grid3x3, Map as MapIcon, Search, Download, Loader2, Check } from "lucide-react";
 import { formatNZTime } from "@shared/dateUtils";
 import { useToast } from "@/hooks/use-toast";
+import { JobPhotoViewer } from "@/components/JobPhotoViewer";
 import { saveToPhotos, isPhotosPermissionError } from "@/lib/mediaLibrary";
 import {
   canShareFiles,
@@ -49,7 +50,24 @@ type MediaItem = {
   gpsAddress?: string | null;
   tags?: string[] | null;
   jobId?: string | null;
+  /** photos.type — before-after composites are one wide side-by-side JPEG. */
+  photoType?: string | null;
 };
+
+function isBeforeAfterShot(item: MediaItem | undefined): boolean {
+  if (!item) return false;
+  return (
+    item.photoType === "before-after" ||
+    item.tags?.includes("composite") === true ||
+    item.tags?.includes("before-after-pair") === true
+  );
+}
+
+function libraryPhotoTitle(item: MediaItem | undefined): string {
+  if (!item) return "Photo";
+  if (isBeforeAfterShot(item)) return "Before / After";
+  return item.notes || item.title || item.filename || "Photo";
+}
 
 type View = "grid" | "map";
 type Kind = "all" | "photos" | "videos";
@@ -158,6 +176,7 @@ export default function Library() {
       gpsAddress: p.gpsAddress,
       tags: p.tags,
       jobId: p.jobId,
+      photoType: p.type,
     }));
     const videos: MediaItem[] = (videosQuery.data?.videos || []).map((v: any) => ({
       id: v.id,
@@ -184,6 +203,23 @@ export default function Library() {
     });
     return merged;
   }, [photosQuery.data, videosQuery.data]);
+
+  const photoItems = useMemo(
+    () => items.filter((item) => item.kind === "photo"),
+    [items],
+  );
+  const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(null);
+  const viewingPhoto = viewingPhotoIndex != null ? photoItems[viewingPhotoIndex] : undefined;
+
+  useEffect(() => {
+    if (viewingPhotoIndex == null) return;
+    if (!photoItems[viewingPhotoIndex]) setViewingPhotoIndex(null);
+  }, [photoItems, viewingPhotoIndex]);
+
+  const openLibraryPhoto = (item: MediaItem) => {
+    const index = photoItems.findIndex((photo) => photo.id === item.id);
+    if (index >= 0) setViewingPhotoIndex(index);
+  };
 
   const [saveState, setSaveState] = useState<SaveState | null>(null);
 
@@ -389,23 +425,16 @@ export default function Library() {
       </div>
 
       {view === "grid" ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {items.map((item) => (
-            <a
-              key={`${item.kind}-${item.id}`}
-              href={item.kind === "video" ? `/watch/${item.id}` : item.url}
-              target={item.kind === "video" ? undefined : "_blank"}
-              rel="noreferrer"
-              className="block"
-              data-testid={`library-item-${item.id}`}
-            >
+        <div className="grid min-w-0 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {items.map((item) => {
+            const card = (
               <Card className="overflow-hidden hover:ring-2 hover:ring-primary transition-shadow">
-                <div className="aspect-square bg-muted relative">
+                <div className="aspect-square bg-muted relative min-w-0 overflow-hidden">
                   {item.thumbnailUrl || item.kind === "photo" ? (
                     <img
                       src={item.thumbnailUrl || item.url}
                       alt={item.notes || item.title || item.filename || ""}
-                      className="w-full h-full object-cover"
+                      className="absolute inset-0 h-full w-full object-cover"
                       loading="lazy"
                     />
                   ) : (
@@ -429,7 +458,7 @@ export default function Library() {
                     className="absolute bottom-1 right-1 h-7 px-2"
                     disabled={saveState?.phase === "saving"}
                     onClick={(e) => {
-                      // The whole card is a link — keep the tap on the button.
+                      // The card opens the photo (or the watch page). Keep this tap.
                       e.preventDefault();
                       e.stopPropagation();
                       saveItem(item);
@@ -459,8 +488,39 @@ export default function Library() {
                   <div className="text-xs text-muted-foreground">{item.capturedAt || item.createdAt ? formatNZTime(new Date(item.capturedAt || item.createdAt!), "datetime") : ""}</div>
                 </CardContent>
               </Card>
-            </a>
-          ))}
+            );
+            if (item.kind === "video") {
+              return (
+                <a
+                  key={`${item.kind}-${item.id}`}
+                  href={`/watch/${item.id}`}
+                  className="block min-w-0"
+                  data-testid={`library-item-${item.id}`}
+                >
+                  {card}
+                </a>
+              );
+            }
+            return (
+              <div
+                key={`${item.kind}-${item.id}`}
+                role="button"
+                tabIndex={0}
+                className="block min-w-0 cursor-pointer text-left"
+                data-testid={`library-item-${item.id}`}
+                onClick={() => openLibraryPhoto(item)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openLibraryPhoto(item);
+                  }
+                }}
+              >
+                {card}
+              </div>
+            );
+          })}
           {!isLoading && items.length === 0 && (
             <div className="col-span-full text-center text-sm text-muted-foreground py-12">
               No media found. Try a different keyword or date range.
@@ -493,14 +553,23 @@ export default function Library() {
                       <div className="text-sm font-medium">{item.title || item.notes || item.filename || "Untitled"}</div>
                       {item.gpsAddress && <div className="text-xs text-muted-foreground">{item.gpsAddress}</div>}
                       <div className="text-xs text-muted-foreground">{item.capturedAt || item.createdAt ? formatNZTime(new Date(item.capturedAt || item.createdAt!), "datetime") : ""}</div>
-                      <a
-                        href={item.kind === "video" ? `/watch/${item.id}` : item.url}
-                        target={item.kind === "video" ? undefined : "_blank"}
-                        rel="noreferrer"
-                        className="text-xs text-primary underline mt-1 inline-block"
-                      >
-                        Open
-                      </a>
+                      {item.kind === "video" ? (
+                        <a
+                          href={`/watch/${item.id}`}
+                          className="text-xs text-primary underline mt-1 inline-block"
+                        >
+                          Open
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-xs text-primary underline mt-1 inline-block"
+                          onClick={() => openLibraryPhoto(item)}
+                          data-testid={`button-library-open-${item.id}`}
+                        >
+                          Open
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => saveItem(item)}
@@ -529,6 +598,16 @@ export default function Library() {
           </CardContent>
         </Card>
       )}
+
+      <JobPhotoViewer
+        open={viewingPhotoIndex !== null && viewingPhoto != null}
+        photos={photoItems.map((photo) => photo.url)}
+        index={viewingPhotoIndex ?? 0}
+        onIndexChange={setViewingPhotoIndex}
+        src={viewingPhoto?.url}
+        title={libraryPhotoTitle(viewingPhoto)}
+        onClose={() => setViewingPhotoIndex(null)}
+      />
     </div>
   );
 }

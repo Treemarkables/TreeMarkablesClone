@@ -13,6 +13,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useOverlayHistory } from "@/hooks/useOverlayHistory";
 import { useJobActions } from "@/hooks/useJobActions";
 import { useToast } from "@/hooks/use-toast";
 import { getJobStatusBadge } from "@/lib/jobStatusColors";
@@ -196,6 +197,15 @@ export function JobCardMobile({
 }: JobCardMobileProps) {
   const [activeTab, setActiveTab] = useState<JobCardMobileTab>(initialTab);
 
+  // initialTab is only read by useState on the first mount. A later
+  // notification updates the prop (and DispatchBoard fires
+  // job-card-switch-tab) but this card stays mounted, so without this the
+  // phone stays on Details and the email never appears. A manual tab press
+  // does not change the prop.
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
   // When a notification arrives for the job that's already open, DispatchBoard
   // fires `job-card-switch-tab` so the card jumps to the right tab (e.g. diary)
   // without remounting. GlobalJobCard handles this for desktop; the mobile card
@@ -348,6 +358,10 @@ export function JobCardMobile({
     handleClose,
   } = jobActions;
 
+  // Android hardware back closes the card (history entry) instead of leaving
+  // the app. The X button still goes through the empty-draft prompt.
+  useOverlayHistory(true, handleClose);
+
   // Mobile-only: tap "Open Full Dispatch" in the More sheet to bail out of
   // the modal and land on the full dispatch board. No desktop equivalent.
   const onOpenFull = () => {
@@ -455,7 +469,9 @@ export function JobCardMobile({
       <div className="flex-1 min-h-0 overflow-y-auto bg-muted" data-testid="job-card-mobile-body">
         <div className="pb-[110px]">
           {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
-          {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
+          {activeTab === "billing" && (
+            <JobBillingPanel jobId={jobId} onOpenInvoice={actions?.invoice} />
+          )}
           {activeTab === "backcosting" && (
             <div className="bg-white">
               <BackCostingPanel jobId={jobId} />

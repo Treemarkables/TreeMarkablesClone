@@ -23,7 +23,9 @@ import {
   shouldReloadUnbootedDespiteHeartbeat,
   shouldReloadUnbootedPage,
   shouldRevealBootFailure,
+  shouldRecoverBlankRoot,
   BOOT_FAILURE_REVEAL_MS,
+  EMPTY_ROOT_RELOAD_MS,
 } from "./nativeBootRecovery.ts";
 
 describe("native boot recovery — origin / blank webview", () => {
@@ -632,6 +634,60 @@ describe("native boot recovery — media counts as a painted page", () => {
         mainText: "",
       }),
       "empty",
+    );
+  });
+
+  it("reloads a dismissed cover with an empty root, and leaves a slow boot alone", () => {
+    assert.equal(
+      shouldRecoverBlankRoot({
+        elapsedMs: EMPTY_ROOT_RELOAD_MS - 1,
+        realScreenVisible: false,
+        bootCoverVisible: false,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldRecoverBlankRoot({
+        elapsedMs: EMPTY_ROOT_RELOAD_MS,
+        realScreenVisible: false,
+        bootCoverVisible: false,
+      }),
+      true,
+    );
+    // Heartbeat-alive used to skip this. The predicate does not look at the
+    // heartbeat: a live bundle with the splash already gone is the white screen.
+    assert.equal(
+      shouldRecoverBlankRoot({
+        elapsedMs: 30_000,
+        realScreenVisible: false,
+        bootCoverVisible: false,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldRecoverBlankRoot({
+        elapsedMs: 30_000,
+        realScreenVisible: false,
+        bootCoverVisible: true,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldRecoverBlankRoot({
+        elapsedMs: 30_000,
+        realScreenVisible: true,
+        bootCoverVisible: false,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldRecoverBlankRoot({
+        elapsedMs: 30_000,
+        realScreenVisible: false,
+        bootCoverVisible: false,
+        callActive: true,
+      }),
+      false,
     );
   });
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { resolveBillingName } from "@shared/orgOnlyBilling";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,8 @@ import {
   extractInvoiceLineItems,
   pickInvoiceSourceDocument,
 } from "@/lib/invoiceLineItemSources";
+import { invoiceDescriptionFromSources, invoiceJobDescriptionFromDraft } from "@/lib/invoiceJobDescription";
+import { readJobDescriptionDraft } from "@/lib/jobDescriptionDraft";
 
 // One-button "job's done" flow: mark the job complete, generate the invoice
 // (same line items the InvoiceBuilder would pre-fill), email it to the
@@ -181,7 +184,7 @@ export function CompleteAndInvoiceDialog({
       ? `${job.jobContactFirstName} ${job.jobContactLastName}`
       : job?.jobContactFirstName || job?.jobContactLastName || "";
   const contactName: string =
-    job?.billingNameOverride || jobContactName || customer?.name || "";
+    resolveBillingName(job?.billingNameOverride || jobContactName || customer?.name || "", customer, job);
 
   const invoiceNumber: string =
     existingInvoice?.invoiceNumber || (job?.jobNumber ? String(job.jobNumber) : "");
@@ -241,11 +244,17 @@ export function CompleteAndInvoiceDialog({
                   .toISOString()
                   .split("T")[0],
                 notes: job.notes || "",
-                description:
-                  proposal?.introduction ||
-                  quote?.description ||
-                  job.description ||
-                  "",
+                description: invoiceDescriptionFromSources({
+                  hasProposal: !!proposal,
+                  proposalIntroduction: proposal?.introduction,
+                  hasQuote: !!quote,
+                  quoteDescription: quote?.description,
+                  jobDescription: invoiceJobDescriptionFromDraft(
+                    readJobDescriptionDraft(jobId),
+                    null,
+                    job.description,
+                  ),
+                }),
                 lineItems: lineItems.map((item) => ({
                   description: item.description,
                   quantity: item.quantity,

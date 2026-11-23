@@ -36,6 +36,7 @@ export interface DiaryEntry {
     phoneNumber?: string;
     emailAddress?: string;
     fromEmail?: string;
+    proposalId?: string;
     proposalNumber?: string;
     eventType?: string;
     status?: string;
@@ -494,9 +495,12 @@ function normalizeProposal(proposal: unknown, index: number): DiaryEntry {
     author: diaryText(row.createdBy) || "System",
     timestamp: diaryText(row.createdAt),
     metadata: {
+      proposalId: diaryText(row.id) || undefined,
       proposalNumber,
       status: diaryText(row.status) || undefined,
       viewedDate: diaryText(row.viewedDate) || undefined,
+      // The card is removed by deleting the proposal, not the diary row.
+      // Leaving this false keeps the generic diary trash off this entry.
       isDeletable: false,
     },
   };

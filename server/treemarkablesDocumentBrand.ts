@@ -6,9 +6,14 @@
  * This middleware rewrites that first HTML byte — and the web manifest /
  * Inflow icon URLs — on Treemarkables hosts only.
  *
+ * Public marketing routes also get a static HTML snapshot in front of #root
+ * (real H1, copy, phone, address, links) plus JSON-LD, and the Inflow boot
+ * loader is removed for those routes only. The React app still mounts into
+ * #root and replaces that snapshot. Staff routes (/login, /dashboard,
+ * /dispatch, …) keep the Inflow boot shell. App hosts never get the snapshot.
+ *
  * Intentionally NOT the PR #516 cutover:
- *   - React UI / layout is unchanged (same SPA)
- *   - no static treemarkables-site/ marketing HTML
+ *   - same SPA, not a separate treemarkables-site/
  *   - no 301 of /login, /dispatch, etc. off www
  *
  * No-op on Inflow hosts (app.inflowapp.co.nz, www.inflowapp.co.nz) and on
@@ -17,10 +22,34 @@
 import type { IncomingHttpHeaders } from "http";
 import type { Request, RequestHandler, Response } from "express";
 import fs from "fs";
+import { injectTreemarkablesPublicHtml, removeTreemarkablesPublicHtml, treemarkablesJsonLd } from "./treemarkablesPublicHtml";
+import { applyHtmlCacheHeaders } from "./staticAssetPolicy";
+import {
+  EAST_COAST_PAGE,
+  EMERGENCY_PAGE,
+  HEDGE_PAGE,
+  HOME_PAGE,
+  STUMP_PAGE,
+  SUMMER_PAGE,
+  TREE_PRUNING_PAGE,
+  TREE_REMOVAL_PAGE,
+  WAIROA_PAGE,
+} from "@shared/treemarkablesPageCopy";
 
 export const TREEMARKABLES_DOCUMENT_HOSTS = new Set([
   "www.treemarkables.co.nz",
   "treemarkables.co.nz",
+]);
+
+/**
+ * Hosts that serve the Inflow app, including the iOS webview start URL.
+ * A request whose Host is one of these is never a marketing document, even
+ * when X-Forwarded-Host names www.
+ */
+export const INFLOW_APP_DOCUMENT_HOSTS = new Set([
+  "app.inflowapp.co.nz",
+  "www.inflowapp.co.nz",
+  "app.treemarkables.co.nz",
 ]);
 
 export const TREEMARKABLES_CANONICAL_ORIGIN = "https://www.treemarkables.co.nz";
@@ -45,46 +74,71 @@ export interface DocumentBrandMeta {
 
 /** Copy already used by client/src/pages/* SEO components — keep first-byte in sync. */
 export const DEFAULT_TREEMARKABLES_META: DocumentBrandMeta = {
-  title: "Treemarkables — Gisborne's Number 1 Arborist & Tree Care",
-  description:
-    "Gisborne's trusted arborists for safe tree removals, expert pruning, stump grinding and hedge trimming across Tairāwhiti and the East Coast.",
+  title: HOME_PAGE.title,
+  description: HOME_PAGE.description,
   canonicalPath: "/",
+  ogTitle: HOME_PAGE.title,
+  ogDescription: HOME_PAGE.description,
   ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/team-photo.jpg`,
 };
 
 const PAGE_META: Record<string, DocumentBrandMeta> = {
   "/": DEFAULT_TREEMARKABLES_META,
   "/tree-removal": {
-    title: "Tree Removal Gisborne – Safe, Certified & 24/7",
-    description:
-      "Need a dangerous or unwanted tree removed? Our certified arborists provide safe tree removal for homes and farms in Gisborne and Wairoa. Contact us for competitive prices.",
+    title: TREE_REMOVAL_PAGE.title,
+    description: TREE_REMOVAL_PAGE.description,
     canonicalPath: "/tree-removal",
-    ogTitle: "Tree Removal Gisborne – Safe & Efficient Service",
+    ogTitle: TREE_REMOVAL_PAGE.title,
+    ogDescription: TREE_REMOVAL_PAGE.description,
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/hazardous-tree-removal.jpg`,
   },
   "/tree-pruning": {
-    title: "Tree Pruning Gisborne – Qualified Arborists",
-    description:
-      "Improve tree health and safety with our expert tree pruning services. Treemarkables offers crown reduction and shaping across Gisborne and the wider East Coast. Free assessments available.",
+    title: TREE_PRUNING_PAGE.title,
+    description: TREE_PRUNING_PAGE.description,
     canonicalPath: "/tree-pruning",
-    ogTitle: "Tree Pruning Gisborne – Professional Arborists",
+    ogTitle: TREE_PRUNING_PAGE.title,
+    ogDescription: TREE_PRUNING_PAGE.description,
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/tree-pruning.jpg`,
   },
   "/stump-grinding": {
-    title: "Stump Grinding Gisborne – Complete Stump Removal",
-    description:
-      "Eliminate unsightly stumps with our powerful stump grinding service. Serving Gisborne, Wairoa and rural properties. Book your stump removal today.",
+    title: STUMP_PAGE.title,
+    description: STUMP_PAGE.description,
     canonicalPath: "/stump-grinding",
-    ogTitle: "Stump Grinding Gisborne – Fast & Tidy Stump Removal",
+    ogTitle: STUMP_PAGE.title,
+    ogDescription: STUMP_PAGE.description,
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/stump-grinding.jpg`,
   },
   "/hedge-trimming": {
-    title: "Hedge Trimming Gisborne – Expert Shaping & Care",
-    description:
-      "Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote.",
+    title: HEDGE_PAGE.title,
+    description: HEDGE_PAGE.description,
     canonicalPath: "/hedge-trimming",
-    ogTitle: "Hedge Trimming Gisborne – Neat & Healthy Hedges",
+    ogTitle: HEDGE_PAGE.title,
+    ogDescription: HEDGE_PAGE.description,
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/hedge-trimming.jpg`,
+  },
+  "/emergency-tree-removal": {
+    title: EMERGENCY_PAGE.title,
+    description: EMERGENCY_PAGE.description,
+    canonicalPath: "/emergency-tree-removal",
+    ogTitle: EMERGENCY_PAGE.title,
+    ogDescription: EMERGENCY_PAGE.description,
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}${EMERGENCY_PAGE.ogImage}`,
+  },
+  "/wairoa": {
+    title: WAIROA_PAGE.title,
+    description: WAIROA_PAGE.description,
+    canonicalPath: "/wairoa",
+    ogTitle: WAIROA_PAGE.title,
+    ogDescription: WAIROA_PAGE.description,
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}${WAIROA_PAGE.ogImage}`,
+  },
+  "/east-coast": {
+    title: EAST_COAST_PAGE.title,
+    description: EAST_COAST_PAGE.description,
+    canonicalPath: "/east-coast",
+    ogTitle: EAST_COAST_PAGE.title,
+    ogDescription: EAST_COAST_PAGE.description,
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}${EAST_COAST_PAGE.ogImage}`,
   },
   "/contact": {
     title: "Contact Us – Get a Free Quote | Treemarkables",
@@ -108,6 +162,22 @@ const PAGE_META: Record<string, DocumentBrandMeta> = {
     ogTitle: "Tree Care Blog - Expert Tips from Gisborne Arborists",
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/team-photo.jpg`,
   },
+  "/blog/hazardous-tree-removal-gisborne-5-signs-dangerous-tree": {
+    title: "5 Signs Your Tree Is a Hazard and Needs Removing | Treemarkables Blog",
+    description:
+      "Worried a tree on your Gisborne property is a hazard? Learn 5 critical signs of a dangerous tree, from dead branches to root decay.",
+    canonicalPath: "/blog/hazardous-tree-removal-gisborne-5-signs-dangerous-tree",
+    ogTitle: "5 Signs Your Tree Is a Hazard and Needs Removing",
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/hazardous-tree-gisborne.jpg`,
+  },
+  "/blog/why-regular-tree-pruning-protects-your-home-gisborne": {
+    title: "Why Regular Tree Pruning Protects Your Home in Gisborne | Treemarkables Blog",
+    description:
+      "Gisborne's mild climate and coastal winds create conditions where branches can grow quickly and pose risks to homes. Regular pruning is preventive maintenance.",
+    canonicalPath: "/blog/why-regular-tree-pruning-protects-your-home-gisborne",
+    ogTitle: "Why Regular Tree Pruning Protects Your Home in Gisborne",
+    ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/tree-pruning.jpg`,
+  },
   "/mulch": {
     title: "Order Mulch — Treemarkables",
     description: "Aged arborist mulch delivered across Gisborne. $35/m³ + GST plus $80 delivery, minimum 4 m³.",
@@ -121,13 +191,11 @@ const PAGE_META: Record<string, DocumentBrandMeta> = {
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/team-photo.jpg`,
   },
   "/summer-offer": {
-    title: "Win $1000 Back - Summer Tree Care Offer | Treemarkables Gisborne",
-    description:
-      "Book any tree care service this summer and win up to $1000 back! 1-in-90 chance to win. Professional tree removal, pruning & emergency services in Gisborne.",
+    title: SUMMER_PAGE.title,
+    description: SUMMER_PAGE.description,
     canonicalPath: "/summer-offer",
-    ogTitle: "Win $1000 Back on Tree Care - Summer Offer",
-    ogDescription:
-      "Book any tree service this summer for your chance to win $1000 back! Professional arborists serving Gisborne and surrounding areas.",
+    ogTitle: SUMMER_PAGE.title,
+    ogDescription: SUMMER_PAGE.description,
     ogImage: `${TREEMARKABLES_CANONICAL_ORIGIN}/team-photo.jpg`,
   },
 };
@@ -161,11 +229,40 @@ export function normalizeHostname(hostHeader: string | undefined): string {
   return hostHeader.split(":")[0].trim().toLowerCase().replace(/\.$/, "");
 }
 
+function firstHostname(value: string | string[] | undefined): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return "";
+  return normalizeHostname(raw.split(",")[0]);
+}
+
+/**
+ * Public host for this request.
+ *
+ * DigitalOcean often presents its own hostname in Host and the custom domain
+ * in X-Forwarded-Host. That forwarded value wins for platform hosts.
+ * When Host is already an app host or www, it wins: a forwarded www must not
+ * turn app.inflowapp.co.nz into a marketing document.
+ */
 export function hostFromHeaders(headers: IncomingHttpHeaders, fallbackHost?: string): string {
-  const forwarded = headers["x-forwarded-host"];
-  const forwardedHost = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  const raw = forwardedHost || headers.host || fallbackHost || "";
-  return normalizeHostname(typeof raw === "string" ? raw : "");
+  const forwarded = firstHostname(headers["x-forwarded-host"]);
+  const direct = firstHostname(headers.host) || normalizeHostname(fallbackHost);
+  if (INFLOW_APP_DOCUMENT_HOSTS.has(direct) || TREEMARKABLES_DOCUMENT_HOSTS.has(direct)) {
+    return direct;
+  }
+  return forwarded || direct;
+}
+
+/**
+ * Path of the document being served. `app.use("*")` trims `req.path` down to
+ * "/" (the mount consumes the URL), which made every www response inject the
+ * homepage snapshot. `originalUrl` is the path the browser asked for.
+ */
+export function requestDocumentPath(req: { originalUrl?: string; path?: string }): string {
+  const raw = req.originalUrl || req.path || "/";
+  const pathOnly = (raw.split("#")[0] || "/").split("?")[0] || "/";
+  if (!pathOnly.startsWith("/") || pathOnly.startsWith("//")) return "/";
+  if (pathOnly.length > 1 && pathOnly.endsWith("/")) return pathOnly.slice(0, -1);
+  return pathOnly;
 }
 
 export function isTreemarkablesDocumentHost(hostHeader: string | undefined): boolean {
@@ -240,10 +337,12 @@ function replaceOrInsertMeta(
   return html;
 }
 
-function brandHeadBlock(meta: DocumentBrandMeta): string {
+function brandHeadBlock(meta: DocumentBrandMeta, pathname: string): string {
   const canonical = canonicalUrl(meta.canonicalPath);
   const ogTitle = meta.ogTitle || meta.title;
   const ogDescription = meta.ogDescription || meta.description;
+  const jsonLd = treemarkablesJsonLd(pathname);
+  const schema = jsonLd ? `\n    ${jsonLd}` : "";
   return `${BRAND_START}
     <link rel="canonical" href="${escapeAttr(canonical)}" />
     <meta property="og:type" content="website" />
@@ -260,7 +359,7 @@ function brandHeadBlock(meta: DocumentBrandMeta): string {
     <meta name="twitter:description" content="${escapeAttr(ogDescription)}" />
     <meta name="twitter:image" content="${escapeAttr(meta.ogImage)}" />
     <meta name="author" content="Treemarkables" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow" />${schema}
     ${BRAND_END}`;
 }
 
@@ -288,7 +387,7 @@ export function applyTreemarkablesDocumentHead(html: string, pathname: string = 
     );
   }
 
-  const block = brandHeadBlock(meta);
+  const block = brandHeadBlock(meta, pathname);
   if (next.includes(BRAND_START)) {
     next = next.replace(
       new RegExp(`${BRAND_START.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*?${BRAND_END.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
@@ -298,7 +397,30 @@ export function applyTreemarkablesDocumentHead(html: string, pathname: string = 
     next = next.replace(/<\/head>/i, `    ${block}\n  </head>`);
   }
 
-  return next;
+  return injectTreemarkablesPublicHtml(next, pathname);
+}
+
+/**
+ * App-host shell. No marketing snapshot, and a class that hides one if a
+ * later pass inserts it. The Inflow boot splash in index.html stays.
+ */
+export function applyInflowAppShell(html: string): string {
+  const withoutSnapshot = removeTreemarkablesPublicHtml(html);
+  if (/<html\b[^>]*\binflow-app\b/i.test(withoutSnapshot)) return withoutSnapshot;
+  return withoutSnapshot.replace(/<html\b/i, '<html class="inflow-app"');
+}
+
+/**
+ * HTML for one SPA navigation. Marketing hosts get the snapshot only when
+ * `requestDocumentPath` is a public Treemarkables route. Every other host,
+ * including the iOS start URL, gets the app shell.
+ */
+export function htmlForSpaRequest(
+  html: string,
+  req: Pick<Request, "headers" | "hostname" | "originalUrl" | "path">,
+): string {
+  if (!requestIsTreemarkablesDocumentHost(req)) return applyInflowAppShell(html);
+  return applyTreemarkablesDocumentHead(html, requestDocumentPath(req));
 }
 
 function invokeSendFileCallback(optionsOrCb: unknown, maybeCb: unknown, err?: Error): void {
@@ -318,7 +440,7 @@ function interceptHtmlResponses(res: Response, pathname: string): void {
   res.send = ((body?: unknown) => {
     if (typeof body === "string" && looksLikeHtmlDocument(body)) {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      applyHtmlCacheHeaders(res);
       return originalSend(brand(body));
     }
     return originalSend(body as Parameters<Response["send"]>[0]);
@@ -330,7 +452,7 @@ function interceptHtmlResponses(res: Response, pathname: string): void {
       try {
         const html = fs.readFileSync(filePath, "utf8");
         res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        applyHtmlCacheHeaders(res);
         originalSend(brand(html));
         invokeSendFileCallback(options, callback);
         return res;
@@ -351,7 +473,7 @@ function interceptHtmlResponses(res: Response, pathname: string): void {
     if (typeof chunk === "string" && looksLikeHtmlDocument(chunk)) {
       if (!res.headersSent) {
         res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        applyHtmlCacheHeaders(res);
       }
       return originalEnd(brand(chunk), encoding as BufferEncoding, cb as () => void);
     }
@@ -360,7 +482,7 @@ function interceptHtmlResponses(res: Response, pathname: string): void {
       if (looksLikeHtmlDocument(asText)) {
         if (!res.headersSent) {
           res.setHeader("Content-Type", "text/html; charset=utf-8");
-          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+          applyHtmlCacheHeaders(res);
         }
         return originalEnd(Buffer.from(brand(asText), "utf8"), encoding as BufferEncoding, cb as () => void);
       }
@@ -375,7 +497,7 @@ export function createTreemarkablesDocumentBrandMiddleware(): RequestHandler {
       return next();
     }
 
-    const pathname = (req.path || "/").split("?")[0] || "/";
+    const pathname = requestDocumentPath(req);
 
     if (isWebManifestPath(pathname)) {
       res.status(200);

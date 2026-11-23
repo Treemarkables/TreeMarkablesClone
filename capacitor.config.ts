@@ -18,7 +18,9 @@ const config: CapacitorConfig = {
     // capacitorDidLoad, which runs before Capacitor snapshots isOpaque.
     // That false snapshot is what cold starts restored, and a non-opaque
     // webview composites as a stuck black screen. Do not "fix" a white
-    // about:blank flash by setting isOpaque = false.
+    // about:blank flash by setting isOpaque = false. The white flash is the
+    // opaque empty web view itself; WebViewBootRecovery covers it until the
+    // page sends appReady. That cover is native and needs a TestFlight build.
     backgroundColor: "#1a1a1a",
     scrollEnabled: false,
     // Push taps are handled natively by NotificationHandler (AppDelegate+Firebase.swift),
