@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Truck, X } from "lucide-react";
+import { Plus, Truck, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -43,6 +43,86 @@ function PersonAvatar({ person, size = "md" }: { person: TodayPerson; size?: "sm
   );
 }
 
+interface LiveCrewJobRef {
+  jobId: string;
+  jobNumber: string | null;
+  jobTitle: string;
+}
+
+interface LiveCrewMember {
+  employeeId: string;
+  name: string;
+  position: string | null;
+  timer: (LiveCrewJobRef & { startedAt: string; distanceKm: number | null; hasLocation: boolean }) | null;
+  assignments: LiveCrewJobRef[];
+}
+
+// Clock-in GPS fix + Nominatim rooftop error headroom; within this we say
+// "on site", beyond it we show the km.
+const ON_SITE_RADIUS_KM = 0.5;
+
+function liveCrewJobLabel(ref: LiveCrewJobRef): string {
+  return ref.jobNumber ? `Job #${ref.jobNumber}` : ref.jobTitle;
+}
+
+type LiveCrewStatusKind = "on-site" | "far" | "clocked-in" | "assigned" | "idle";
+
+function nzTime(iso: string): string {
+  return new Date(iso)
+    .toLocaleTimeString("en-NZ", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "Pacific/Auckland",
+    })
+    .toLowerCase();
+}
+
+function liveCrewStatus(member: LiveCrewMember): { rank: number; kind: LiveCrewStatusKind; text: string; jobId: string | null } {
+  if (member.timer) {
+    const since = `since ${nzTime(member.timer.startedAt)}`;
+    const label = liveCrewJobLabel(member.timer);
+    if (member.timer.distanceKm != null && member.timer.distanceKm <= ON_SITE_RADIUS_KM) {
+      return { rank: 0, kind: "on-site", text: `On site at ${label} — ${since}`, jobId: member.timer.jobId };
+    }
+    if (member.timer.distanceKm != null) {
+      return {
+        rank: 1,
+        kind: "far",
+        text: `Clocked in at ${label} — ${member.timer.distanceKm} km from site — ${since}`,
+        jobId: member.timer.jobId,
+      };
+    }
+    return { rank: 2, kind: "clocked-in", text: `Clocked in at ${label} — ${since}`, jobId: member.timer.jobId };
+  }
+  if (member.assignments.length > 0) {
+    const labels = member.assignments.map(liveCrewJobLabel).join(", ");
+    return {
+      rank: 3,
+      kind: "assigned",
+      text: `Assigned to ${labels} today — not clocked in`,
+      jobId: member.assignments[0].jobId,
+    };
+  }
+  return { rank: 4, kind: "idle", text: "No job today", jobId: null };
+}
+
+function LiveCrewStatusDot({ kind }: { kind: LiveCrewStatusKind }) {
+  if (kind === "on-site") {
+    return (
+      <span className="relative flex h-2 w-2 shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+      </span>
+    );
+  }
+  const color =
+    kind === "far" ? "bg-amber-500" :
+    kind === "clocked-in" ? "bg-green-500" :
+    kind === "assigned" ? "bg-blue-500" :
+    "bg-muted-foreground/40";
+  return <span className={`inline-flex rounded-full h-2 w-2 shrink-0 ${color}`} />;
+}
+
 export default function TodayDashboard() {
   const { currentUser } = useAuth();
   const { toast } = useToast();
@@ -55,7 +135,7 @@ export default function TodayDashboard() {
   const addBarRef = useRef<HTMLFormElement>(null);
   const noteInputRef = useRef<HTMLInputElement>(null);
 
-  const { data, isLoading } = useQuery<{ success: boolean; data: TodayOverviewData }>({
+  const { data, isLoading } = useQuery<{ success: boolean; data: TodayOverviewData & { liveCrew?: LiveCrewMember[] } }>({
     queryKey: ["/api/today-overview"],
     refetchInterval: 60_000,
   });
@@ -121,6 +201,10 @@ export default function TodayDashboard() {
     extraNotes: 0,
   };
 
+  const liveCrewSorted = [...(data?.data.liveCrew ?? [])]
+    .map((member) => ({ member, status: liveCrewStatus(member) }))
+    .sort((a, b) => a.status.rank - b.status.rank || a.member.name.localeCompare(b.member.name));
+
   const summary = [
     { value: String(counts.jobsToday), label: TODAY_COPY.jobsToday, accent: true },
     { value: String(counts.crewsLive), label: TODAY_COPY.crewsLive },
@@ -183,6 +267,59 @@ export default function TodayDashboard() {
           ))}
         </div>
       </div>
+
+      {liveCrewSorted.length > 0 && (
+        <section className="inflow-chrome overflow-hidden mb-4" data-testid="today-live-crew">
+          <div className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-3">
+            <Users className="h-4 w-4" />
+            <p className="font-semibold leading-tight">Crew</p>
+          </div>
+          <ul className="divide-y divide-border">
+            {liveCrewSorted.map(({ member, status }) => {
+              const jobId = status.jobId;
+              return (
+                <li key={member.employeeId}>
+                  <div
+                    role={jobId ? "button" : undefined}
+                    tabIndex={jobId ? 0 : undefined}
+                    data-testid={`crew-row-${member.employeeId}`}
+                    onClick={jobId ? () => openJob(jobId) : undefined}
+                    onKeyDown={
+                      jobId
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openJob(jobId);
+                            }
+                          }
+                        : undefined
+                    }
+                    className={`flex items-center gap-3 px-4 py-3 ${
+                      jobId
+                        ? "cursor-pointer hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        : ""
+                    }`}
+                  >
+                    <LiveCrewStatusDot kind={status.kind} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{member.name}</p>
+                      <p
+                        className={`text-xs truncate ${
+                          status.kind === "far"
+                            ? "text-amber-700 dark:text-amber-400"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {status.text}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <section className="inflow-chrome overflow-hidden mb-4" data-testid="today-notes-strip">
         <div className="flex items-center gap-3 bg-primary text-primary-foreground px-4 py-3">
