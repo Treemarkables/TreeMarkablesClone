@@ -4,6 +4,8 @@
  * to ensure consistent field access and defaults.
  */
 
+import { fallbackCompanyAddress } from "./treemarkablesYard";
+
 export interface CompanyInfo {
   name: string;
   address: string;
@@ -19,9 +21,10 @@ export interface CompanyInfo {
  * Handles the Drizzle camelCase field names from DB rows.
  */
 export function resolveCompanyInfo(template: Record<string, unknown> | null | undefined): CompanyInfo {
+  const name = (template?.companyName as string | undefined)?.trim() || 'Treemarkables LTD';
   return {
-    name: (template?.companyName as string | undefined) || 'Treemarkables LTD',
-    address: (template?.companyAddress as string | undefined) || '213 Stanley Road, Gisborne',
+    name,
+    address: fallbackCompanyAddress(name, template?.companyAddress as string | undefined),
     phone: (template?.companyPhone as string | undefined) || '027 216 6882',
     email: (template?.companyEmail as string | undefined) || 'quotes@treemarkables.nz',
     gstNumber: (template?.gstNumber as string | undefined) || '131-047-592',

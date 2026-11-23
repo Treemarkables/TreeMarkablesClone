@@ -40,6 +40,9 @@ export default function RedesignFooter() {
               <li><Link href="/tree-pruning" className="hover:text-neon transition-colors">Tree Pruning</Link></li>
               <li><Link href="/stump-grinding" className="hover:text-neon transition-colors">Stump Grinding</Link></li>
               <li><Link href="/hedge-trimming" className="hover:text-neon transition-colors">Hedge Trimming</Link></li>
+              <li><Link href="/emergency-tree-removal" className="hover:text-neon transition-colors">Emergency Tree Removal</Link></li>
+              <li><Link href="/wairoa" className="hover:text-neon transition-colors">Arborist Wairoa</Link></li>
+              <li><Link href="/east-coast" className="hover:text-neon transition-colors">East Coast Arborist</Link></li>
               <li><Link href="/blog" className="hover:text-neon transition-colors">Tree Care Blog</Link></li>
             </ul>
           </div>
@@ -48,7 +51,8 @@ export default function RedesignFooter() {
             <ul className="space-y-2.5 text-white/55 text-sm">
               <li><a href={`tel:${PHONE}`} onClick={handlePhoneClick} className="hover:text-neon transition-colors">027 216 6882</a></li>
               <li><a href="mailto:quotes@treemarkables.nz" className="hover:text-neon transition-colors">quotes@treemarkables.nz</a></li>
-              <li>Gisborne &amp; surrounds</li>
+              <li>26 Cochrane Street, Gisborne, NZ</li>
+              <li>Gisborne, Tairāwhiti, Wairoa &amp; the East Coast</li>
               <li className="flex items-center gap-1.5 pt-1 text-neon/90"><Clock className="h-3.5 w-3.5" />24/7 emergency</li>
             </ul>
           </div>

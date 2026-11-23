@@ -197,6 +197,45 @@ final class WebViewBootDecisionTests: XCTestCase {
         XCTAssertEqual(nextReloadCount(0, event: .attempt), 1)
     }
 
+    func testReadySignalWaitsThenReloadsOnceThenFallsBack() {
+        XCTAssertEqual(
+            bootReadyAction(appReady: false, elapsed: 11, isLoading: false, cacheBusts: 0),
+            "wait"
+        )
+        XCTAssertEqual(
+            bootReadyAction(appReady: false, elapsed: 12, isLoading: false, cacheBusts: 0),
+            "reload"
+        )
+        // Still downloading: do not cancel the document at 12s.
+        XCTAssertEqual(
+            bootReadyAction(appReady: false, elapsed: 12, isLoading: true, cacheBusts: 0),
+            "wait"
+        )
+        XCTAssertEqual(
+            bootReadyAction(appReady: false, elapsed: 18, isLoading: true, cacheBusts: 0),
+            "reload"
+        )
+        XCTAssertEqual(
+            bootReadyAction(appReady: false, elapsed: 12, isLoading: false, cacheBusts: 1),
+            "fallback"
+        )
+        XCTAssertEqual(
+            bootReadyAction(appReady: true, elapsed: 60, isLoading: false, cacheBusts: 1),
+            "wait"
+        )
+    }
+
+    func testCoverStaysUpUntilTheAppHasPainted() {
+        XCTAssertFalse(shouldDismissBootCover(appReady: false, probe: "painting"))
+        XCTAssertFalse(shouldDismissBootCover(appReady: false, probe: "empty"))
+        XCTAssertFalse(shouldDismissBootCover(appReady: false, probe: "not-booted"))
+        XCTAssertFalse(shouldDismissBootCover(appReady: false, probe: "blank"))
+        XCTAssertFalse(shouldDismissBootCover(appReady: false, probe: "wrong-origin"))
+        XCTAssertTrue(shouldDismissBootCover(appReady: false, probe: "booted"))
+        XCTAssertTrue(shouldDismissBootCover(appReady: true, probe: "empty"))
+        XCTAssertTrue(shouldDismissBootCover(appReady: true, probe: "painting"))
+    }
+
     func testCancelledNavigationIsNotAFailure() {
         XCTAssertTrue(isIgnorableNavigationError(domain: NSURLErrorDomain, code: NSURLErrorCancelled))
         XCTAssertEqual(NSURLErrorCancelled, -999)

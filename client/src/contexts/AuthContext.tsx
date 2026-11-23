@@ -35,6 +35,8 @@ interface AuthContextType {
   can: (requires: string) => boolean;
   login: (credentials: { employeeId?: string; email?: string; password?: string }) => Promise<any>;
   loginPending: boolean;
+  // Drop a localStorage user the server does not recognise (no session cookie).
+  abandonCachedSession: () => void;
   completeMfa: (opts: { code: string; recovery?: boolean }) => Promise<any>;
   mfaPending: boolean;
   adoptSession: (user: AuthUser) => void;
@@ -243,6 +245,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logoutMutation.mutate();
   };
 
+  // The iOS shell can keep treemarkables_user after WKWebView drops the session
+  // cookie. The server then answers "Please log in" on Add Staff. Clear the
+  // cached user so the login screen can set a cookie the webview will store.
+  const abandonCachedSession = () => {
+    consecutive401sRef.current = 0;
+    setCurrentUser(null);
+    queryClient.setQueryData(['/api/auth/me'], { success: false, data: null });
+    setLocation('/login');
+  };
+
   // Dev mode auto-login: automatically log in as admin when not authenticated
   useEffect(() => {
     if (DEV_AUTO_LOGIN && !devAutoLoginAttempted && initialAuthCheckComplete && !currentUser && !loginMutation.isPending) {
@@ -366,6 +378,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         can,
         login,
         loginPending: loginMutation.isPending,
+        abandonCachedSession,
         completeMfa,
         mfaPending: mfaMutation.isPending,
         adoptSession,

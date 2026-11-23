@@ -104,6 +104,9 @@ describe("job diary shapes from a blank-description Apple Mail reply", () => {
     assert.equal(created.type, "proposal");
     assert.equal(created.title, "Proposal Created: PROP-1000000000001");
     assert.equal(created.content, "Sample Quote");
+    assert.equal(created.metadata?.proposalId, "proposal-1");
+    assert.equal(created.metadata?.status, "draft");
+    assert.equal(created.metadata?.isDeletable, false);
   });
 
   it("renders the HTML reply as text and the null-content send as its description", () => {
@@ -216,6 +219,80 @@ describe("job diary shapes from a blank-description Apple Mail reply", () => {
         assert.equal(details.status, 500);
         assert.equal(details.message, "relation job_diary_entries does not exist");
         assert.equal(error instanceof Error && error.message, "relation job_diary_entries does not exist");
+        return true;
+      },
+    );
+  });
+
+  it("keeps the HTTP status and a short body snippet when the diary body is not JSON", async () => {
+    const html =
+      '<!DOCTYPE html><html><head><title>Login</title></head><body>password=hunter2 sign in</body></html>';
+    const request = async (_method: string, url: string) => {
+      if (url.includes("/proposals") || url.includes("servicem8") || url.includes("staff-assignments")) {
+        return { json: async () => ({ data: [] }) };
+      }
+      const payload = {
+        status: 200,
+        json: async () => JSON.parse(html),
+        text: async () => html,
+        clone() {
+          return this;
+        },
+      };
+      return payload;
+    };
+    await assert.rejects(
+      () =>
+        fetchDiaryTimelineSources(
+          {
+            diary: "/api/jobs/job-1/diary?limit=100",
+            proposals: "/api/proposals?jobId=job-1",
+            servicem8: "/api/servicem8/jobs/job-1/diary",
+            assignments: "/api/jobs/job-1/staff-assignments",
+          },
+          request,
+        ),
+      (error: unknown) => {
+        const details = describeDiaryFailure(error);
+        assert.equal(details.request, "/api/jobs/job-1/diary?limit=100");
+        assert.equal(details.status, 200);
+        assert.match(details.message, /Login/);
+        assert.equal(details.message.includes("hunter2"), false);
+        assert.match(details.message, /password=\[redacted\]/);
+        return true;
+      },
+    );
+  });
+
+  it("keeps status when the diary body is empty", async () => {
+    const request = async (_method: string, url: string) => {
+      if (!url.includes("/diary?") || url.includes("servicem8")) {
+        return { json: async () => ({ data: [] }) };
+      }
+      return {
+        status: 204,
+        json: async () => JSON.parse(""),
+        text: async () => "",
+        clone() {
+          return this;
+        },
+      };
+    };
+    await assert.rejects(
+      () =>
+        fetchDiaryTimelineSources(
+          {
+            diary: "/api/jobs/job-1/diary?limit=100",
+            proposals: "/api/proposals?jobId=job-1",
+            servicem8: "/api/servicem8/jobs/job-1/diary",
+            assignments: "/api/jobs/job-1/staff-assignments",
+          },
+          request,
+        ),
+      (error: unknown) => {
+        const details = describeDiaryFailure(error);
+        assert.equal(details.status, 204);
+        assert.match(details.message, /\(empty body\)/);
         return true;
       },
     );

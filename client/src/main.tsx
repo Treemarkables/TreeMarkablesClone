@@ -4,9 +4,23 @@ import * as Sentry from "@sentry/react";
 import App from "./App";
 import "./index.css";
 import { isReloadUnsafe } from "./lib/foregroundReloadGuard";
-import { isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
+import { peekNotificationNav } from "./lib/notificationNav";
+import { foregroundDeployReloadUrl } from "@shared/notificationDeepLink";
+import { isVoiceCallActive } from "./lib/voiceCallReloadGuard";
+import { isAssetScriptFailure, isChunkLoadErrorMessage, requestStaleBundleReload } from "./lib/staleChunkReload";
 import { noteBootError, startNativeBootWatchdogs } from "./lib/nativeBootRecovery";
+import { installMobileKeyboardScroll } from "./lib/mobileKeyboardScroll";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+
+declare global {
+  interface Window {
+    __ENTRY_STARTED?: boolean;
+  }
+}
+
+// Set before any listener so a 404 on this file (the module never runs) is
+// visible to the inline boot script in index.html.
+window.__ENTRY_STARTED = true;
 
 // Sentry frontend init — disabled when VITE_SENTRY_DSN is unset so local
 // development without a DSN doesn't spam Sentry.
@@ -50,12 +64,13 @@ if (SENTRY_DSN) {
 // can't cause an endless reload loop.
 window.addEventListener('error', (event) => {
   const msg = event.message || '';
-  const isChunkError = (
-    isChunkLoadErrorMessage(msg) ||
-    (event.filename && event.filename.includes('/assets/') && msg.includes('SyntaxError'))
-  );
+  const isChunkError = isAssetScriptFailure(msg, event.filename);
 
   if (isChunkError) {
+    if (isVoiceCallActive()) {
+      console.warn('⚠️ Stale JS bundle during a live call — not reloading');
+      return;
+    }
     console.warn('⚠️ Stale JS bundle detected — reloading to get fresh version');
     requestStaleBundleReload();
     return;
@@ -70,6 +85,11 @@ window.addEventListener('unhandledrejection', (event) => {
   const msg = reason?.message || String(reason) || '';
 
   if (isChunkLoadErrorMessage(msg)) {
+    if (isVoiceCallActive()) {
+      console.warn('⚠️ Stale JS chunk during a live call — not reloading');
+      event.preventDefault();
+      return;
+    }
     console.warn('⚠️ Stale JS chunk import failed — reloading to get fresh version');
     event.preventDefault();
     requestStaleBundleReload();
@@ -126,18 +146,35 @@ async function hasNewDeployShipped(): Promise<boolean> {
 // is mid-edit (e.g. an open job card), we skip this reload entirely and retry
 // on the next foreground, once the work is closed. Picking up fresh code can
 // always wait; eating an edit cannot.
+//
+// Wait long enough for a notification tap to persist its deep link before
+// deciding to reload. Checking immediately raced the native injection and
+// reloaded the page that was already open (bare despatch) instead of the job.
+let deployReloadTimer = 0;
 document.addEventListener('visibilitychange', () => {
+  window.clearTimeout(deployReloadTimer);
   if (document.visibilityState !== 'visible') return;
 
-  hasNewDeployShipped().then((isStale) => {
-    if (!isStale) return;
-    if (isReloadUnsafe()) {
-      console.warn('↻ New build shipped but in-progress work open — will reload once it closes.');
-      return;
-    }
-    console.warn('↻ New build detected on foreground — reloading to get fresh code');
-    window.location.reload();
-  });
+  deployReloadTimer = window.setTimeout(() => {
+    if (document.visibilityState !== 'visible') return;
+    hasNewDeployShipped().then((isStale) => {
+      if (!isStale) return;
+      if (document.visibilityState !== 'visible') return;
+      if (isReloadUnsafe()) {
+        console.warn('↻ New build shipped but in-progress work open — will reload once it closes.');
+        return;
+      }
+      const pending = peekNotificationNav();
+      const target = foregroundDeployReloadUrl(window.location.href, pending);
+      if (target) {
+        console.warn('↻ New build detected on foreground — reloading onto notification', target);
+        window.location.assign(target);
+        return;
+      }
+      console.warn('↻ New build detected on foreground — reloading to get fresh code');
+      window.location.reload();
+    });
+  }, 1500);
 });
 
 // Keep cache cleanup to remove any old service worker / cache that was left behind.
@@ -148,6 +185,10 @@ if ('serviceWorker' in navigator) {
     registrations.forEach(registration => registration.unregister());
   });
 }
+
+// Phone keyboards cover inputs in the Android WebView. Scroll the focused
+// field into view after the keyboard animation. Desktop widths are skipped.
+installMobileKeyboardScroll();
 
 // Boot / frozen-resume recovery for the TestFlight Capacitor shell (and PWA).
 // Native WebViewBootRecovery.swift is the backstop when this JS never runs.

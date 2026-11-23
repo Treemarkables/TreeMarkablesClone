@@ -4,14 +4,18 @@ import {
   buildRequoteDraft,
   collapseFollowUpSources,
   customerFacingQuoteNumber,
+  customerFirstName,
   DEFAULT_NUDGE_DAYS,
   draftCheckInMessage,
   draftRequoteMessage,
+  followUpHasSentDocument,
   EXPIRY_NUDGE_STEP,
   isCustomerDiaryReply,
   parseNudgeDays,
+  planFollowUpNameRefresh,
   planQuoteFollowUps,
   planUntouchedDraftRefresh,
+  resolveFollowUpIdentity,
   previewRequote,
   proposalFollowUpStatus,
   quietDaysSince,
@@ -348,12 +352,62 @@ describe("proposals and presented jobs", () => {
     assert.equal(plans[0]?.quoteId, "prop-1");
   });
 
-  it("follows a job that was presented with no proposal", () => {
+  it("does not follow a job that was only presented or marked sent later", () => {
+    for (const status of ["sent", "expired"]) {
+      const plans = creates(follow([
+        quote({
+          id: "job-1",
+          jobId: "job-1",
+          sourceType: "job",
+          quoteNumber: "9065",
+          status,
+          jobStatus: "quote",
+          proposalSent: false,
+          validUntil: new Date(NOW - DAY).toISOString(),
+        }),
+      ]));
+      assert.equal(plans.length, 0, status);
+    }
+    assert.equal(followUpHasSentDocument({
+      sourceType: "job",
+      quoteSentDate: null,
+      proposalDocumentSentDate: null,
+      jobProposalSent: false,
+    }), false);
+    assert.equal(followUpHasSentDocument({
+      sourceType: "job",
+      quoteSentDate: "2026-09-23",
+      jobProposalSent: false,
+    }), false);
+  });
+
+  it("follows a job when the proposal was sent", () => {
     const plans = creates(follow([
-      quote({ id: "job-1", jobId: "job-1", sourceType: "job", quoteNumber: "4048", status: "sent", jobStatus: "quote" }),
+      quote({
+        id: "job-1",
+        jobId: "job-1",
+        sourceType: "job",
+        quoteNumber: "4048",
+        status: "sent",
+        jobStatus: "quote",
+        proposalSent: true,
+      }),
     ]));
     assert.equal(plans.length, 1);
     assert.equal(plans[0]?.quoteId, "job-1");
+    assert.equal(followUpHasSentDocument({
+      sourceType: "job",
+      jobProposalSent: true,
+    }), true);
+    assert.equal(followUpHasSentDocument({
+      sourceType: "quote",
+      quoteSentDate: "2026-09-23",
+    }), true);
+    assert.equal(followUpHasSentDocument({
+      sourceType: "quote",
+      quoteSentDate: null,
+      jobProposalSent: true,
+    }), false);
   });
 
   it("keeps one item when the job has a proposal and a presented date", () => {
@@ -624,5 +678,74 @@ describe("untouched draft refresh", () => {
       message: refreshed.message,
       subject: refreshed.subject,
     }).action, "keep");
+  });
+});
+
+describe("customer record vs job contact", () => {
+  it("labels and greets with the customer spelling when the contact is the same person", () => {
+    const identity = resolveFollowUpIdentity({
+      customerName: "Alan Bates",
+      contactName: "Allen Bates",
+    });
+    assert.equal(identity.samePerson, true);
+    assert.equal(identity.customerName, "Alan Bates");
+    assert.equal(identity.recipientName, "Alan Bates");
+    assert.equal(identity.contactName, null);
+    assert.equal(customerFirstName(identity.recipientName), "Alan");
+
+    const comma = resolveFollowUpIdentity({
+      customerName: "Bates, Alan",
+      contactName: "Allen Bates",
+    });
+    assert.equal(comma.samePerson, true);
+    assert.equal(comma.customerName, "Bates, Alan");
+    assert.equal(customerFirstName(comma.recipientName), "Alan");
+
+    const refreshed = planFollowUpNameRefresh({
+      status: "draft",
+      message: "Hi Allen, just checking where you're at with quote 4233. Happy to answer any questions. Cheers, Treemarkables",
+      subject: null,
+      recipientName: "Allen Bates",
+      customerName: "Alan Bates",
+      contactName: "Allen Bates",
+    });
+    assert.equal(refreshed.action, "rewrite");
+    if (refreshed.action !== "rewrite") return;
+    assert.match(refreshed.message, /^Hi Alan,/);
+    assert.doesNotMatch(refreshed.message, /Allen/);
+    assert.equal(refreshed.recipientName, "Alan Bates");
+
+    const edited = planFollowUpNameRefresh({
+      status: "draft",
+      draftEditedAt: "2026-09-28T00:00:00.000Z",
+      message: "Hi Allen, parking is tight.",
+      subject: null,
+      recipientName: "Allen Bates",
+      customerName: "Alan Bates",
+      contactName: "Allen Bates",
+    });
+    assert.equal(edited.action, "keep");
+  });
+
+  it("keeps a different job contact as the recipient and leaves the customer name for the list", () => {
+    const identity = resolveFollowUpIdentity({
+      customerName: "Gisborne District Council",
+      contactName: "Samantha Frasier",
+    });
+    assert.equal(identity.samePerson, false);
+    assert.equal(identity.customerName, "Gisborne District Council");
+    assert.equal(identity.recipientName, "Samantha Frasier");
+    assert.equal(identity.contactName, "Samantha Frasier");
+    assert.equal(customerFirstName(identity.recipientName), "Samantha");
+
+    const refreshed = planFollowUpNameRefresh({
+      status: "draft",
+      message: "Hi Samantha, just checking where you're at with quote 9065. Happy to answer any questions. Cheers, Treemarkables",
+      subject: null,
+      recipientName: "Samantha Frasier",
+      customerName: "Gisborne District Council",
+      contactName: "Samantha Frasier",
+    });
+    assert.equal(refreshed.action, "keep");
   });
 });

@@ -2,8 +2,10 @@
  * Quote follow-up workflow.
  *
  * quoteFollowUpDetection runs hourly (RUN_CRONS, both app instances). It only
- * inserts follow-up drafts. It reads proposals (the documents customers are
- * emailed or texted), jobs with quote_presented_date, and the quotes table.
+ * inserts follow-up drafts. It reads proposals that were emailed or texted,
+ * quotes with sent_date, and jobs whose proposal_sent flag is set. A job that
+ * is only status quote, or has quote_presented_date / sent_later and nothing
+ * sent, is not queued. Waiting drafts for those jobs are marked skipped.
  * Approve & Send is the only path that talks to a customer or creates a
  * re-quote, and it refuses unless confirm is the boolean true.
  *
@@ -11,7 +13,7 @@
  * Callers wrap storage helpers in runWithBusiness so quote numbers, diary
  * rows, and notifications stamp the same tenant.
  */
-import { and, asc, eq, gte, inArray, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, or } from "drizzle-orm";
 import { ownerDb } from "./db";
 import { storage } from "./storage";
 import { runWithBusiness, currentBusinessId } from "./tenancy/tenantStore";
@@ -29,13 +31,16 @@ import {
   buildRequoteDraft,
   collapseFollowUpSources,
   customerFacingQuoteNumber,
+  followUpHasSentDocument,
   followUpQueuePath,
   isInternalDocumentNumber,
   isWaitingFollowUp,
   parseNudgeDays,
+  planFollowUpNameRefresh,
   planQuoteFollowUps,
   previewRequote,
   proposalFollowUpStatus,
+  resolveFollowUpIdentity,
   SENT_LOOKBACK_DAYS,
   withNewQuoteNumber,
   type DiaryReplySignal,
@@ -57,6 +62,8 @@ export interface QuoteFollowUpView {
   jobId: string | null;
   customerId: string | null;
   customerName: string | null;
+  /** Job contact when they are a different person from the customer record. */
+  contactName: string | null;
   kind: string;
   nudgeStep: number;
   channel: string;
@@ -170,9 +177,14 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
   ]));
   const jobRows = jobIds.length === 0 ? [] : await ownerDb.select({
     id: schema.jobs.id,
+    customerId: schema.jobs.customerId,
     jobNumber: schema.jobs.jobNumber,
     address: schema.jobs.address,
+    proposalSent: schema.jobs.proposalSent,
+    proposalSentDate: schema.jobs.proposalSentDate,
     quotePresentedDate: schema.jobs.quotePresentedDate,
+    jobContactFirstName: schema.jobs.jobContactFirstName,
+    jobContactLastName: schema.jobs.jobContactLastName,
     updatedAt: schema.jobs.updatedAt,
     totalAmount: schema.jobs.totalAmount,
     lineItems: schema.jobs.lineItems,
@@ -192,6 +204,18 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
   const quotesById = new Map(quoteRows.map((row) => [row.id, row]));
   const proposalsById = new Map(proposalRows.map((row) => [row.id, row]));
   const jobsById = new Map(jobRows.map((row) => [row.id, row]));
+  const customerIds = Array.from(new Set([
+    ...rows.map((row) => row.customerId),
+    ...jobRows.map((row) => row.customerId),
+  ].filter((id): id is string => !!id)));
+  const customerRows = customerIds.length === 0 ? [] : await ownerDb.select({
+    id: schema.customers.id,
+    name: schema.customers.name,
+  }).from(schema.customers).where(and(
+    eq(schema.customers.businessId, businessId),
+    inArray(schema.customers.id, customerIds),
+  ));
+  const customersById = new Map(customerRows.map((row) => [row.id, row]));
   const linesByProposal = new Map<string, typeof proposalLineRows>();
   for (const line of proposalLineRows) {
     const list = linesByProposal.get(line.proposalId) ?? [];
@@ -202,13 +226,20 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
   const rates = needsPreview ? await rateCard(businessId) : [];
   const now = Date.now();
 
-  const followUps: QuoteFollowUpView[] = rows.map((row) => {
+  const followUps: QuoteFollowUpView[] = rows.flatMap((row) => {
     const sourceType: FollowUpSourceType = row.sourceType === "proposal" || row.sourceType === "job" ? row.sourceType : "quote";
     const quote = sourceType === "quote" ? quotesById.get(row.quoteId) : undefined;
     const proposal = sourceType === "proposal" ? proposalsById.get(row.quoteId) : undefined;
     const job = jobsById.get(row.jobId || "") ?? (sourceType === "job" ? jobsById.get(row.quoteId) : undefined)
       ?? (quote?.jobId ? jobsById.get(quote.jobId) : undefined)
       ?? (proposal?.jobId ? jobsById.get(proposal.jobId) : undefined);
+    if (!followUpHasSentDocument({
+      sourceType,
+      quoteSentDate: quote?.sentDate ?? null,
+      proposalDocumentSentDate: proposal?.sentDate ?? null,
+      proposalRecorded: sourceType === "proposal" && !!proposal,
+      jobProposalSent: job?.proposalSent === true,
+    })) return [];
     const documentNumber = sourceType === "quote"
       ? quote?.quoteNumber
       : sourceType === "proposal"
@@ -231,7 +262,7 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
         jobAddress: job?.address,
       })
       : null;
-    const sent = quote?.sentDate ?? proposal?.sentDate ?? job?.quotePresentedDate ?? null;
+    const sent = quote?.sentDate ?? proposal?.sentDate ?? job?.proposalSentDate ?? job?.quotePresentedDate ?? null;
     const updated = quote?.updatedAt ?? proposal?.updatedAt ?? job?.updatedAt ?? null;
     const sentMs = sent ? new Date(sent).getTime() : null;
     const updatedMs = updated ? new Date(updated).getTime() : null;
@@ -253,20 +284,37 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
       : sourceType === "job"
         ? job?.totalAmount
         : quote?.amount;
-    return {
+    const customerId = row.customerId || job?.customerId || null;
+    const customer = customerId ? customersById.get(customerId) : undefined;
+    const contactFull = [job?.jobContactFirstName, job?.jobContactLastName].filter(Boolean).join(" ").trim();
+    const identity = resolveFollowUpIdentity({
+      customerName: customer?.name ?? null,
+      contactName: contactFull || null,
+    });
+    const namePlan = planFollowUpNameRefresh({
+      status: row.status,
+      draftEditedAt: row.draftEditedAt,
+      message: row.message,
+      subject: row.subject,
+      recipientName: row.recipientName,
+      customerName: customer?.name ?? null,
+      contactName: contactFull || null,
+    });
+    return [{
       id: row.id,
       quoteId: row.quoteId,
       quoteNumber,
       jobId: row.jobId,
-      customerId: row.customerId,
-      customerName: row.recipientName,
+      customerId,
+      customerName: identity.customerName || row.recipientName,
+      contactName: identity.contactName,
       kind: row.kind,
       nudgeStep: row.nudgeStep,
       channel: row.channel,
       status: row.status,
       waiting: isWaitingFollowUp(row.status, row.snoozeUntil, now),
-      subject: row.subject,
-      message: row.message,
+      subject: namePlan.action === "rewrite" ? namePlan.subject : row.subject,
+      message: namePlan.action === "rewrite" ? namePlan.message : row.message,
       recipientPhone: row.recipientPhone,
       recipientEmail: row.recipientEmail,
       requoteId: row.requoteId,
@@ -279,7 +327,7 @@ async function loadViews(businessId: string, base = appBase()): Promise<QuoteFol
         queue: `${base}${followUpQueuePath(row.id)}`,
         job: row.jobId ? `${base}/dispatch?job=${row.jobId}` : null,
       },
-    };
+    }];
   });
 
   return {
@@ -869,8 +917,12 @@ function textField(row: unknown, key: string): string | null {
 
 function contactBits(job: unknown, customer: { name: string | null; email: string | null; phone: string | null; mobile: string | null } | undefined) {
   const contactName = [textField(job, "jobContactFirstName"), textField(job, "jobContactLastName")].filter(Boolean).join(" ").trim();
+  const identity = resolveFollowUpIdentity({
+    customerName: customer?.name ?? null,
+    contactName: contactName || null,
+  });
   return {
-    customerName: contactName || customer?.name || null,
+    customerName: identity.recipientName,
     phone: textField(job, "jobContactMobile") || textField(job, "jobContactPhone") || customer?.mobile || customer?.phone || null,
     email: textField(job, "jobContactEmail") || customer?.email || null,
   };
@@ -891,15 +943,21 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
       and(inArray(schema.proposals.status, PROPOSAL_TRACKED), gte(schema.proposals.updatedAt, lookbackStart)),
     ),
   )).limit(1000);
-  const presentedJobs = await ownerDb.select().from(schema.jobs).where(and(
+  const proposalSentJobs = await ownerDb.select().from(schema.jobs).where(and(
     eq(schema.jobs.businessId, businessId),
-    gte(schema.jobs.quotePresentedDate, lookbackStart),
+    eq(schema.jobs.proposalSent, true),
+    or(
+      gte(schema.jobs.proposalSentDate, lookbackStart),
+      gte(schema.jobs.quotePresentedDate, lookbackStart),
+      gte(schema.jobs.updatedAt, lookbackStart),
+      gte(schema.jobs.createdAt, lookbackStart),
+    ),
   )).limit(1000);
 
   const jobIds = Array.from(new Set([
     ...quoteRows.map((row) => row.jobId),
     ...proposalRows.map((row) => row.jobId),
-    ...presentedJobs.map((row) => row.id),
+    ...proposalSentJobs.map((row) => row.id),
   ].filter((id): id is string => !!id)));
   const diaryRows = jobIds.length === 0 ? [] : await ownerDb.select({
     jobId: schema.jobDiaryEntries.jobId,
@@ -938,7 +996,7 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
     eq(schema.jobs.businessId, businessId),
     inArray(schema.jobs.id, extraJobIds),
   ));
-  const jobs = [...presentedJobs, ...extraJobs.filter((job) => !presentedJobs.some((row) => row.id === job.id))];
+  const jobs = [...proposalSentJobs, ...extraJobs.filter((job) => !proposalSentJobs.some((row) => row.id === job.id))];
   const quoteJobIds = quoteRows.map((row) => row.jobId).filter((id): id is string => !!id && !jobs.some((job) => job.id === id));
   const quoteJobs = quoteJobIds.length === 0 ? [] : await ownerDb.select().from(schema.jobs).where(and(
     eq(schema.jobs.businessId, businessId),
@@ -1029,7 +1087,9 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
     });
   }
   for (const job of Array.from(jobsById.values())) {
-    if (!job.quotePresentedDate) continue;
+    if (job.proposalSent !== true) continue;
+    const sentDate = job.proposalSentDate ?? job.quotePresentedDate ?? job.updatedAt ?? job.createdAt ?? null;
+    if (!sentDate) continue;
     const customer = job.customerId ? customersById.get(job.customerId) : undefined;
     signals.push({
       id: job.id,
@@ -1045,9 +1105,10 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
       amount: job.totalAmount,
       lineItems: job.lineItems,
       status: "sent",
-      sentDate: job.quotePresentedDate,
+      sentDate,
       updatedAt: job.updatedAt,
       validUntil: null,
+      proposalSent: true,
       sourceType: "job",
       jobStatus: job.status,
       title: job.title,
@@ -1116,7 +1177,128 @@ async function detectForBusiness(businessId: string, now: Date): Promise<void> {
     await insertPlanRow(businessId, { ...plan, sourceType }, plan.action === "skip" ? "skipped" : "draft");
   }
 
+  await reconcileWaitingFollowUps(businessId);
   await remindIfWaiting(businessId, now);
+}
+
+/**
+ * Drop waiting drafts whose job never had a quote or proposal sent, and
+ * rewrite untouched greetings onto the customer-record spelling. Rows are
+ * marked skipped so the history stays.
+ */
+async function reconcileWaitingFollowUps(businessId: string): Promise<void> {
+  const waiting = await ownerDb.select({
+    id: schema.quoteFollowUps.id,
+    quoteId: schema.quoteFollowUps.quoteId,
+    jobId: schema.quoteFollowUps.jobId,
+    customerId: schema.quoteFollowUps.customerId,
+    sourceType: schema.quoteFollowUps.sourceType,
+    status: schema.quoteFollowUps.status,
+    message: schema.quoteFollowUps.message,
+    subject: schema.quoteFollowUps.subject,
+    recipientName: schema.quoteFollowUps.recipientName,
+    draftEditedAt: schema.quoteFollowUps.draftEditedAt,
+  }).from(schema.quoteFollowUps).where(and(
+    eq(schema.quoteFollowUps.businessId, businessId),
+    inArray(schema.quoteFollowUps.status, ["draft", "snoozed"]),
+  ));
+  if (waiting.length === 0) return;
+
+  const quoteIds = Array.from(new Set(waiting.filter((row) => (row.sourceType || "quote") === "quote").map((row) => row.quoteId)));
+  const proposalIds = Array.from(new Set(waiting.filter((row) => row.sourceType === "proposal").map((row) => row.quoteId)));
+  const jobIds = Array.from(new Set(waiting.flatMap((row) => {
+    const ids = [row.jobId];
+    if (row.sourceType === "job") ids.push(row.quoteId);
+    return ids;
+  }).filter((id): id is string => !!id)));
+
+  const quoteRows = quoteIds.length === 0 ? [] : await ownerDb.select({
+    id: schema.quotes.id,
+    sentDate: schema.quotes.sentDate,
+    jobId: schema.quotes.jobId,
+  }).from(schema.quotes).where(and(eq(schema.quotes.businessId, businessId), inArray(schema.quotes.id, quoteIds)));
+  const proposalRows = proposalIds.length === 0 ? [] : await ownerDb.select({
+    id: schema.proposals.id,
+    sentDate: schema.proposals.sentDate,
+    jobId: schema.proposals.jobId,
+  }).from(schema.proposals).where(and(eq(schema.proposals.businessId, businessId), inArray(schema.proposals.id, proposalIds)));
+  const jobRows = jobIds.length === 0 ? [] : await ownerDb.select({
+    id: schema.jobs.id,
+    customerId: schema.jobs.customerId,
+    proposalSent: schema.jobs.proposalSent,
+    jobContactFirstName: schema.jobs.jobContactFirstName,
+    jobContactLastName: schema.jobs.jobContactLastName,
+  }).from(schema.jobs).where(and(eq(schema.jobs.businessId, businessId), inArray(schema.jobs.id, jobIds)));
+  const quotesById = new Map(quoteRows.map((row) => [row.id, row]));
+  const proposalsById = new Map(proposalRows.map((row) => [row.id, row]));
+  const jobsById = new Map(jobRows.map((row) => [row.id, row]));
+  const customerIds = Array.from(new Set([
+    ...waiting.map((row) => row.customerId),
+    ...jobRows.map((row) => row.customerId),
+  ].filter((id): id is string => !!id)));
+  const customerRows = customerIds.length === 0 ? [] : await ownerDb.select({
+    id: schema.customers.id,
+    name: schema.customers.name,
+  }).from(schema.customers).where(and(
+    eq(schema.customers.businessId, businessId),
+    inArray(schema.customers.id, customerIds),
+  ));
+  const customersById = new Map(customerRows.map((row) => [row.id, row]));
+
+  const skipIds: string[] = [];
+  for (const row of waiting) {
+    const sourceType: FollowUpSourceType = row.sourceType === "proposal" || row.sourceType === "job" ? row.sourceType : "quote";
+    const quote = sourceType === "quote" ? quotesById.get(row.quoteId) : undefined;
+    const proposal = sourceType === "proposal" ? proposalsById.get(row.quoteId) : undefined;
+    const job = jobsById.get(row.jobId || "") ?? (sourceType === "job" ? jobsById.get(row.quoteId) : undefined)
+      ?? (quote?.jobId ? jobsById.get(quote.jobId) : undefined)
+      ?? (proposal?.jobId ? jobsById.get(proposal.jobId) : undefined);
+    if (!followUpHasSentDocument({
+      sourceType,
+      quoteSentDate: quote?.sentDate ?? null,
+      proposalDocumentSentDate: proposal?.sentDate ?? null,
+      proposalRecorded: sourceType === "proposal" && !!proposal,
+      jobProposalSent: job?.proposalSent === true,
+    })) {
+      skipIds.push(row.id);
+      continue;
+    }
+    const customerId = row.customerId || job?.customerId || null;
+    const customer = customerId ? customersById.get(customerId) : undefined;
+    const contactName = [job?.jobContactFirstName, job?.jobContactLastName].filter(Boolean).join(" ").trim();
+    const namePlan = planFollowUpNameRefresh({
+      status: row.status,
+      draftEditedAt: row.draftEditedAt,
+      message: row.message,
+      subject: row.subject,
+      recipientName: row.recipientName,
+      customerName: customer?.name ?? null,
+      contactName: contactName || null,
+    });
+    if (namePlan.action !== "rewrite") continue;
+    await ownerDb.update(schema.quoteFollowUps).set({
+      message: namePlan.message,
+      subject: namePlan.subject,
+      recipientName: namePlan.recipientName,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(schema.quoteFollowUps.id, row.id),
+      eq(schema.quoteFollowUps.businessId, businessId),
+      inArray(schema.quoteFollowUps.status, ["draft", "snoozed"]),
+      row.draftEditedAt ? eq(schema.quoteFollowUps.draftEditedAt, row.draftEditedAt) : isNull(schema.quoteFollowUps.draftEditedAt),
+    ));
+  }
+
+  if (skipIds.length === 0) return;
+  await ownerDb.update(schema.quoteFollowUps).set({
+    status: "skipped",
+    cancelReason: "never_sent",
+    updatedAt: new Date(),
+  }).where(and(
+    eq(schema.quoteFollowUps.businessId, businessId),
+    inArray(schema.quoteFollowUps.id, skipIds),
+    inArray(schema.quoteFollowUps.status, ["draft", "snoozed"]),
+  ));
 }
 
 export async function runQuoteFollowUpDetection(now = new Date()): Promise<void> {

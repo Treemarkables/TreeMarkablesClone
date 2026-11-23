@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v17-ios-boot';
-const STATIC_CACHE = 'treemarkables-static-v17-ios-boot';
-const API_CACHE = 'treemarkables-api-v17-ios-boot';
+const CACHE_NAME = 'treemarkables-v18-ios-boot';
+const STATIC_CACHE = 'treemarkables-static-v18-ios-boot';
+const API_CACHE = 'treemarkables-api-v18-ios-boot';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -10,36 +10,60 @@ const urlsToCache = [
 
 // Install event - cache critical assets
 self.addEventListener('install', function(event) {
-  console.log('[SW v17] Installing - forcing immediate activation');
+  console.log('[SW v18] Installing - forcing immediate activation');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('[SW v17] Installed - skipping waiting');
+        console.log('[SW v18] Installed - skipping waiting');
         return self.skipWaiting();
       })
   );
 });
 
+// Pages running the current boot script announce themselves so activate
+// does not reload a healthy (or in-call) client when this worker updates.
+var readyClients = {};
+self.addEventListener('message', function(event) {
+  var data = event.data || {};
+  if (data.type !== 'inflow-client-ready') return;
+  if (event.source && event.source.id) readyClients[event.source.id] = true;
+});
+
 // Activate event - clean up ALL old caches
 self.addEventListener('activate', function(event) {
-  console.log('[SW v17] Activating - deleting ALL old caches');
+  console.log('[SW v18] Activating - deleting ALL old caches');
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
-      console.log('[SW v17] Found caches:', cacheNames);
+      console.log('[SW v18] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          if (!cacheName.includes('v17-ios-boot')) {
-            console.log('[SW v17] DELETING old cache:', cacheName);
+          if (!cacheName.includes('v18-ios-boot')) {
+            console.log('[SW v18] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => {
-      console.log('[SW v17] Taking control of all clients');
+    }).then(function() {
+      console.log('[SW v18] Taking control of all clients');
       return self.clients.claim();
+    }).then(function() {
+      // A page that loaded this worker's HTML posts inflow-client-ready.
+      // A client still on an older shell (deleted chunk hashes, white root)
+      // never does. Reload that client once.
+      return new Promise(function(resolve) {
+        setTimeout(function() {
+          self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+            clientList.forEach(function(client) {
+              if (readyClients[client.id]) return;
+              if (typeof client.navigate === 'function') client.navigate(client.url);
+            });
+            resolve();
+          }).catch(function() { resolve(); });
+        }, 1500);
+      });
     })
   );
 });

@@ -5,7 +5,7 @@ import { queryClient } from "./queryClient";
  * `['/api/jobs']` (SSE, most mutations) does not refresh this cache.
  */
 export const DISPATCH_JOBS_QUERY_KEY =
-  "/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true";
+  "/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true&sort=recentActivity";
 
 type JobsListCache = {
   data?: Array<Record<string, unknown> & { id?: string }>;

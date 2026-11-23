@@ -92,3 +92,36 @@ public func shouldReload(
 
     return elapsed >= unbooted
 }
+
+/// What to do when the web app has not signalled ready.
+///
+/// `elapsed` is seconds since the last load attempt. A document that is still
+/// loading is left alone until `loadingStall` (cancelling it early is the
+/// white WebView). The first miss reloads once, cache-busting. The next miss
+/// shows the bundled fallback instead of reloading again.
+public func bootReadyAction(
+    appReady: Bool,
+    elapsed: TimeInterval,
+    isLoading: Bool,
+    cacheBusts: Int,
+    readyTimeout: TimeInterval = 12,
+    loadingStall: TimeInterval = WebViewBootPolicy.loadingStall
+) -> String {
+    if appReady { return "wait" }
+    let due = isLoading ? elapsed >= loadingStall : elapsed >= readyTimeout
+    if !due { return "wait" }
+    if cacheBusts >= 1 { return "fallback" }
+    return "reload"
+}
+
+/// Keep the native splash up until a real screen has painted.
+///
+/// `painting` is only the inline "Opening Inflow" shell (or a live heartbeat
+/// with an empty root). Dismissing on that, or when the HTML document
+/// commits, reveals the paper-white body on an opaque WKWebView. `booted`
+/// is the probe that a route has text or media. `appReady` is the same
+/// signal from the page.
+public func shouldDismissBootCover(appReady: Bool, probe: String) -> Bool {
+    if appReady { return true }
+    return probe == "booted"
+}
