@@ -22,7 +22,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/contexts/AuthContext";
+import { ApiError, apiRequest } from "@/lib/queryClient";
+import { DeleteProposalDialog } from "@/components/DeleteProposalDialog";
 import { fetchPhotoAnnotationsBatch } from "@/lib/photoAnnotations";
 import { invalidRecipientMessage } from "@/lib/emailValidation";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
@@ -31,6 +33,11 @@ import { DEFAULT_PROPOSAL_BLOCKS } from "@shared/schema";
 import { proposalAcceptLink } from "@shared/customerLinks";
 import { lineItemsForNewProposal } from "./proposalCreateLineItems";
 import { mergeJobLinesIntoProposalBlocks } from "./proposalEditLineItems";
+import {
+  descriptionForLoadedSection,
+  draftNeedsSaveBeforeSend,
+  shouldTakeSilentEditBaseline,
+} from "./proposalDescriptionSeed";
 import { tryAcquireSend } from "@shared/proposalSend";
 
 // Minimal typed interfaces for browser SpeechRecognition (not in TypeScript lib by default)
@@ -1312,6 +1319,7 @@ export function ProposalBuilderV2({
 }: ProposalBuilderV2Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
   // Quote mode: the builder UI is identical to the proposal builder; only the
   // save payload (templateUsed='quote'), send endpoint, and SMS visibility change.
   const isQuote = kind === "quote";
@@ -1334,7 +1342,7 @@ export function ProposalBuilderV2({
   // a cached copy would silently miss the photos the user just added.
   const { data: diaryData, isFetching: diaryFetching } = useQuery({ queryKey: ["/api/jobs", jobId, "diary"], enabled: !!jobId && isOpen, refetchOnMount: "always" });
   const { data: jobPhotosData, isFetching: jobPhotosFetching } = useQuery({ queryKey: ["/api/jobs", jobId, "photos"], enabled: !!jobId && isOpen, refetchOnMount: "always" });
-  const { data: existingData } = useQuery({
+  const { data: existingData, error: existingProposalError } = useQuery({
     queryKey: ["/api/proposals", proposalId],
     enabled: !!proposalId && mode === "edit" && isOpen,
     staleTime: 0,
@@ -1415,6 +1423,11 @@ export function ProposalBuilderV2({
   const [proposalTitle, setProposalTitle] = useState("Treemarkables Quote");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
+  const [savedStatus, setSavedStatus] = useState<string | null>(mode === "create" ? "draft" : null);
+  const [savedProposalNumber, setSavedProposalNumber] = useState<string | undefined>();
+  const [loadedAsQuote, setLoadedAsQuote] = useState(false);
+  const [deleteProposalOpen, setDeleteProposalOpen] = useState(false);
+  const deletingProposalRef = useRef(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
@@ -1453,7 +1466,13 @@ export function ProposalBuilderV2({
   const editHasLineItemsRef = useRef(false);
   // First load of a saved proposal is the baseline. Don't auto-save it —
   // that rewrite is what duplicated lines when it overlapped with Send.
+  // A description block filled from job.description is not on the proposal
+  // yet: skipping the baseline lets one save persist it. Otherwise Email
+  // posts send-email and the server says the proposal has no description.
   const takeEditBaseline = useRef(false);
+  const seededDescriptionUnsaved = useRef(false);
+  // Set as soon as a create returns, before draftId state re-renders.
+  const latestDraftIdRef = useRef<string | null>(null);
   // Create-mode prefill: the starter line item to open in the editor, and the
   // original URLs of auto-added job photos (for the annotated-PNG swap).
   const [autoEditItemId, setAutoEditItemId] = useState<string | null>(null);
@@ -1467,6 +1486,8 @@ export function ProposalBuilderV2({
       initEditRef.current = null;
       editHasLineItemsRef.current = false;
       takeEditBaseline.current = false;
+      seededDescriptionUnsaved.current = false;
+      latestDraftIdRef.current = null;
       autoPhotoSourcesRef.current = [];
       setAutoEditItemId(null);
       setDraftId(null);
@@ -1479,8 +1500,13 @@ export function ProposalBuilderV2({
       setDepositValue(0);
       setPreviewMode(false);
       setPreviewServerData(null);
+      setSavedStatus(mode === "create" ? "draft" : null);
+      setSavedProposalNumber(undefined);
+      setLoadedAsQuote(false);
+      setDeleteProposalOpen(false);
+      deletingProposalRef.current = false;
     }
-  }, [isOpen]);
+  }, [isOpen, mode]);
 
   useEffect(() => { initEditRef.current = null; editHasLineItemsRef.current = false; }, [proposalId]);
 
@@ -1508,6 +1534,9 @@ export function ProposalBuilderV2({
     const p = (existingData as { data: Record<string, unknown> }).data;
     setProposalTitle((p.title as string) || "Treemarkables Quote");
     setDraftId((p.id as string) || proposalId || null);
+    setSavedStatus(typeof p.status === "string" && p.status ? p.status : "draft");
+    setSavedProposalNumber(typeof p.proposalNumber === "string" ? p.proposalNumber : undefined);
+    setLoadedAsQuote(p.templateUsed === "quote");
     const depRaw = (p.depositType as string) || "none";
     setDepositType((["none", "percent", "fixed"].includes(depRaw) ? depRaw : "none") as "none" | "percent" | "fixed");
     setDepositValue(parseFloat(p.depositValue as string) || 0);
@@ -1529,6 +1558,7 @@ export function ProposalBuilderV2({
     }
 
     if (Array.isArray(p.sections)) {
+      let seededDescriptionFromJob = false;
       const loadedBlocks: WysiwygBlock[] = (p.sections as Array<{
         id: string;
         title: string;
@@ -1564,20 +1594,19 @@ export function ProposalBuilderV2({
         // re-ran (reopen, or the line-item re-init below), so the customer's
         // emailed PDF carried the job's old description instead of the edit.
         // The live job.description only seeds description blocks that have
-        // no saved content of their own.
+        // no saved content of their own. That seed is not on the server
+        // until a save — see seededDescriptionUnsaved below.
         const liveJobDesc =
           jobDescription ||
           (job as { description?: string } | null)?.description ||
           "";
-        const effectiveDesc =
-          inferredType === "description" && !sectionDesc.trim()
-            ? liveJobDesc
-            : sectionDesc;
+        const loadedDesc = descriptionForLoadedSection(sectionDesc, inferredType, liveJobDesc);
+        if (loadedDesc.seededFromJob) seededDescriptionFromJob = true;
         return {
           id: s.id || `block-${idx}`,
           type: inferredType,
           title: s.title || "",
-          description: effectiveDesc,
+          description: loadedDesc.description,
           photos,
           lineItems,
           sortOrder: s.sortOrder ?? idx,
@@ -1621,7 +1650,10 @@ export function ProposalBuilderV2({
       setBlocks(loadedBlocks.map((block, index) => (
         merged[index].lineItems === block.lineItems ? block : { ...block, lineItems: merged[index].lineItems }
       )));
-      takeEditBaseline.current = true;
+      seededDescriptionUnsaved.current = seededDescriptionFromJob;
+      // Saved content can take the silent baseline. A job-description seed
+      // must be written once, or send-email still sees an empty section.
+      takeEditBaseline.current = shouldTakeSilentEditBaseline(seededDescriptionFromJob);
     }
   }, [existingData, job, mode, isOpen, proposalId]);
 
@@ -1862,8 +1894,12 @@ export function ProposalBuilderV2({
 
   const saveDraftMutation = useMutation({
     mutationFn: async (data: ReturnType<typeof buildPayload>) => {
-      if (draftId) {
-        const res = await apiRequest("PUT", `/api/proposals/${draftId}`, data);
+      // A create in this same turn records the id on the ref before React
+      // re-renders, so the pre-send flush updates that draft instead of
+      // inserting a second proposal.
+      const id = draftId || latestDraftIdRef.current;
+      if (id) {
+        const res = await apiRequest("PUT", `/api/proposals/${id}`, data);
         return await res.json();
       }
       const res = await apiRequest("POST", "/api/proposals", data);
@@ -1871,6 +1907,7 @@ export function ProposalBuilderV2({
     },
     onSuccess: (res) => {
       const id = res?.data?.id || res?.id;
+      if (id) latestDraftIdRef.current = id;
       if (!draftId && id) setDraftId(id);
       setAutoSaveStatus("saved");
       setLastSavedAt(new Date());
@@ -1887,7 +1924,6 @@ export function ProposalBuilderV2({
   // Refs kept fresh for the unmount-flush below — avoids stale closure.
   const latestPayloadRef = useRef<ReturnType<typeof buildPayload> | null>(null);
   const latestSnapshotRef = useRef<string | null>(null);
-  const latestDraftIdRef = useRef<string | null>(null);
   // Saves run one at a time so auto-save and Send cannot both insert lines.
   const saveTail = useRef<Promise<void>>(Promise.resolve());
   function enqueueSave<T>(fn: () => Promise<T>): Promise<T> {
@@ -1897,6 +1933,7 @@ export function ProposalBuilderV2({
   }
 
   useEffect(() => {
+    if (deletingProposalRef.current) return;
     if (!isOpen || blocks.length === 0) return;
     // Include the discount, deposit and validUntil in the snapshot — otherwise
     // applying a VIP/discount (or changing the deposit) without also editing a
@@ -1912,7 +1949,9 @@ export function ProposalBuilderV2({
       setAutoSaveStatus("saved");
       return;
     }
-    if (snap === lastSnapshot.current) return;
+    // A job-description seed can share a snapshot with a baseline that was
+    // never written. That still has to be saved once.
+    if (snap === lastSnapshot.current && !seededDescriptionUnsaved.current) return;
     // Auto-save only takes over after the user has committed once with the
     // Save button (or opened an existing record in edit mode, which seeds
     // draftId from proposalId). Until then, edits stay local — closing the
@@ -1925,13 +1964,14 @@ export function ProposalBuilderV2({
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
       void enqueueSave(async () => {
-        if (lastSnapshot.current === snap) return;
+        if (lastSnapshot.current === snap && !seededDescriptionUnsaved.current) return;
         const hasContent = proposalTitle || blocks.some((b) => b.description || b.photos.length > 0 || b.lineItems.length > 0);
         if (!hasContent) return;
         setAutoSaveStatus("saving");
         try {
           await saveDraftMutation.mutateAsync(buildPayload());
           lastSnapshot.current = snap;
+          seededDescriptionUnsaved.current = false;
         } catch {
           // handled in mutation
         }
@@ -1962,6 +2002,7 @@ export function ProposalBuilderV2({
             s.description || s.photos.length > 0 || s.lineItems.length > 0,
         );
       if (!hasContent) return;
+      if (deletingProposalRef.current) return;
       fetch(`/api/proposals/${pendingDraftId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1976,6 +2017,27 @@ export function ProposalBuilderV2({
 
   const sendEmailMutation = useMutation({
     mutationFn: async (d: { proposalId: string; to: string; subject: string; message?: string; cc?: string }) => {
+      // The builder can show the job description before it is stored. Persist
+      // that, and any other edit, before the send request. Wait for a save
+      // already in the queue so the two writes cannot overlap.
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = null;
+      }
+      const snap = JSON.stringify({ blocks, proposalTitle, discountAmount, discountType, depositType, depositValue, validUntil });
+      await enqueueSave(async () => {
+        const persistedId = draftId || latestDraftIdRef.current;
+        if (!persistedId) return;
+        if (!draftNeedsSaveBeforeSend({
+          hasDraftId: true,
+          snapshot: snap,
+          lastSavedSnapshot: lastSnapshot.current,
+          descriptionSeededFromJobUnsaved: seededDescriptionUnsaved.current,
+        })) return;
+        await saveDraftMutation.mutateAsync(buildPayload());
+        lastSnapshot.current = snap;
+        seededDescriptionUnsaved.current = false;
+      });
       const endpoint = isQuote
         ? `/api/proposals/${d.proposalId}/send-quote-email`
         : `/api/proposals/${d.proposalId}/send-email`;
@@ -2026,7 +2088,13 @@ export function ProposalBuilderV2({
       autoSaveTimer.current = null;
     }
     return enqueueSave(async () => {
-      if (draftId && snap === lastSnapshot.current) return draftId;
+      const needsSave = draftNeedsSaveBeforeSend({
+        hasDraftId: !!draftId,
+        snapshot: snap,
+        lastSavedSnapshot: lastSnapshot.current,
+        descriptionSeededFromJobUnsaved: seededDescriptionUnsaved.current,
+      });
+      if (!needsSave) return draftId;
       const resolvedJobId = draftId ? jobId || null : await ensureJobSaved();
       if (!draftId && onRequestJobSave && !resolvedJobId) return null;
       setAutoSaveStatus("saving");
@@ -2036,6 +2104,8 @@ export function ProposalBuilderV2({
         const id = res?.data?.id || res?.id || draftId;
         if (id) {
           lastSnapshot.current = snap;
+          seededDescriptionUnsaved.current = false;
+          latestDraftIdRef.current = id;
           if (!draftId) setDraftId(id);
           return id;
         }
@@ -2164,13 +2234,51 @@ export function ProposalBuilderV2({
     }
   };
 
+  const deleteProposalMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/proposals/${id}`);
+      return res.json();
+    },
+    onSuccess: (_data, id) => {
+      setDeleteProposalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/proposals", id] });
+      if (jobId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "diary-timeline"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "diary"] });
+      }
+      // Stop the close-flush from writing the proposal back after it is gone.
+      latestDraftIdRef.current = null;
+      if (latestSnapshotRef.current) lastSnapshot.current = latestSnapshotRef.current;
+      onClose();
+    },
+    onError: (error: Error) => {
+      deletingProposalRef.current = false;
+      toast({
+        title: "Couldn't delete proposal",
+        description: error.message || "Failed to delete proposal",
+        variant: "destructive",
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!isOpen || mode !== "edit") return;
+    if (existingProposalError instanceof ApiError && existingProposalError.status === 404) {
+      onClose();
+    }
+  }, [existingProposalError, isOpen, mode, onClose]);
+
   const handleClose = async () => {
     // Only flush pending changes if a draft already exists. Closing without
     // ever pressing Save discards the in-progress quote/proposal — the user
     // explicitly opted out of persisting it.
     if (draftId && autoSaveStatus === "unsaved") {
       setAutoSaveStatus("saving");
-      try { await saveDraftMutation.mutateAsync(buildPayload()); } catch { /* close anyway */ }
+      try {
+        await saveDraftMutation.mutateAsync(buildPayload());
+        seededDescriptionUnsaved.current = false;
+      } catch { /* close anyway */ }
     }
     onClose();
   };
@@ -2273,6 +2381,23 @@ export function ProposalBuilderV2({
 
   return (
     <>
+      <DeleteProposalDialog
+        open={deleteProposalOpen}
+        onOpenChange={setDeleteProposalOpen}
+        proposalNumber={savedProposalNumber}
+        status={savedStatus}
+        pending={deleteProposalMutation.isPending}
+        onConfirm={() => {
+          const id = draftId || proposalId;
+          if (!id || deletingProposalRef.current) return;
+          deletingProposalRef.current = true;
+          if (autoSaveTimer.current) {
+            clearTimeout(autoSaveTimer.current);
+            autoSaveTimer.current = null;
+          }
+          deleteProposalMutation.mutate(id);
+        }}
+      />
       <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 w-full">
           {/* ── Toolbar ── */}
@@ -2433,6 +2558,21 @@ export function ProposalBuilderV2({
             </div>
             </>
           </div>
+
+          {!isQuote && !loadedAsQuote && isAdmin && savedStatus && (draftId || proposalId) && (
+            <div className="flex-shrink-0 flex justify-end px-3 py-1 border-b bg-white">
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive min-h-11"
+                onClick={() => setDeleteProposalOpen(true)}
+                data-testid="button-delete-proposal-view"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Delete proposal
+              </Button>
+            </div>
+          )}
 
           {/* ── VIP Banner ── */}
           {isVip && (

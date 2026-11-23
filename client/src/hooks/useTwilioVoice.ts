@@ -1,5 +1,11 @@
 import { useEffect, useCallback, useRef } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import {
+  VOICE_TOKEN_TTL_SECONDS,
+  clampVoiceTokenTtl,
+  voiceTokenIsDue,
+  voiceTokenRefreshDelayMs,
+} from "@shared/voiceToken";
 
 export interface TwilioVoicePluginInterface {
   register(options: { token: string }): Promise<void>;
@@ -27,6 +33,10 @@ export interface CallEvent {
   callerName?: string;
   sid?: string;
   error?: string;
+  // Twilio error code as a string ("31005"). The native plugin adds this;
+  // older TestFlight builds only send `error` (the localized description).
+  errorCode?: string;
+  errorDomain?: string;
   deviceToken?: string;
   message?: string;
   // "true" when the app was in the foreground as the call arrived (captured
@@ -77,9 +87,26 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
   const listenersRef = useRef<Array<{ remove: () => void }>>([]);
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  const issuedAtRef = useRef(0);
+  const ttlRef = useRef(VOICE_TOKEN_TTL_SECONDS);
+  const refreshTimerRef = useRef<number | null>(null);
+  const inFlightRef = useRef(false);
+  const fetchRef = useRef<() => Promise<void>>(async () => {});
+
+  const armRefresh = useCallback((delayMs: number) => {
+    if (refreshTimerRef.current != null) window.clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = window.setTimeout(() => {
+      void fetchRef.current();
+    }, delayMs);
+  }, []);
 
   const fetchTokenAndRegister = useCallback(async () => {
     if (!isNative) return;
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    const hadLiveToken =
+      issuedAtRef.current > 0 &&
+      !voiceTokenIsDue(issuedAtRef.current, ttlRef.current, Date.now());
     try {
       // Tell the server which platform we are so it can pick the right Twilio
       // push credential (APNs for iOS, FCM for Android).
@@ -101,17 +128,27 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
         // so inbound calls silently stop ringing here. Route it through the
         // registrationError handler so the UI can tell the user instead of
         // only whispering into the webview console.
-        optionsRef.current.onRegistrationError?.({
-          message: `Couldn't authorise this device for incoming calls (${res.status}). Try logging in again.`,
-        });
+        if (!hadLiveToken) {
+          optionsRef.current.onRegistrationError?.({
+            message: `Couldn't authorise this device for incoming calls (${res.status}). Try logging in again.`,
+          });
+        }
+        armRefresh(60_000);
         return;
       }
       const data = JSON.parse(bodyText) as {
         token?: string;
         pushEnabled?: boolean;
+        ttl?: number;
       };
       if (!data.token) {
         console.error("[TwilioVoice] token endpoint returned no token:", bodyText);
+        if (!hadLiveToken) {
+          optionsRef.current.onRegistrationError?.({
+            message: "Couldn't authorise this device for incoming calls (no token).",
+          });
+        }
+        armRefresh(60_000);
         return;
       }
       if (data.pushEnabled === false) {
@@ -119,18 +156,27 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
           "[TwilioVoice] token issued but VoIP push is DISABLED (TWILIO_PUSH_CREDENTIAL_SID not set) — the app cannot receive inbound calls.",
         );
       }
+      ttlRef.current = clampVoiceTokenTtl(data.ttl ?? VOICE_TOKEN_TTL_SECONDS);
       await TwilioVoice.register({ token: data.token });
+      issuedAtRef.current = Date.now();
+      armRefresh(voiceTokenRefreshDelayMs(ttlRef.current));
       console.log("[TwilioVoice] register() ok — requested VoIP registration");
     } catch (err) {
       console.error(
         "[TwilioVoice] Registration failed:",
         err instanceof Error ? err.message : String(err),
       );
-      optionsRef.current.onRegistrationError?.({
-        message: err instanceof Error ? err.message : String(err),
-      });
+      if (!hadLiveToken) {
+        optionsRef.current.onRegistrationError?.({
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+      armRefresh(60_000);
+    } finally {
+      inFlightRef.current = false;
     }
-  }, [isNative]);
+  }, [isNative, armRefresh]);
+  fetchRef.current = fetchTokenAndRegister;
 
   useEffect(() => {
     if (!isNative) return;
@@ -152,6 +198,16 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
       try {
         for (const [event, handlerKey] of eventMap) {
           const handle = await TwilioVoice.addListener(event, (data) => {
+            if (event === "registered") {
+              // Heartbeat the server so an inbound call can skip <Client>
+              // once this token has expired and no refresh has landed.
+              void fetch("/api/twilio/presence", {
+                method: "POST",
+                credentials: "include",
+              }).catch((err) => {
+                console.warn("[TwilioVoice] presence heartbeat failed:", err);
+              });
+            }
             const handler = optionsRef.current[handlerKey] as
               | ((d: CallEvent) => void)
               | undefined;
@@ -167,7 +223,19 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
 
     setup();
 
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      // iOS suspends timers while the webview is backgrounded, so the
+      // scheduled refresh may have been skipped. Catch up on foreground.
+      if (voiceTokenIsDue(issuedAtRef.current, ttlRef.current, Date.now())) {
+        void fetchRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      if (refreshTimerRef.current != null) window.clearTimeout(refreshTimerRef.current);
       listenersRef.current.forEach((l) => l.remove());
       listenersRef.current = [];
     };

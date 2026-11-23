@@ -23,10 +23,18 @@ import {
   googleCalendarConnections,
   googleEventLinks,
   googleBusyEvents,
+  jobs,
+  jobStaffAssignments,
   type GoogleCalendarConnection,
 } from '@shared/schema';
 import { storage } from '../storage';
 import { getJobScheduledNZDates, getNZDateString, nzTimeToUTC } from '@shared/dateUtils';
+import {
+  connectionSyncErrorPatch,
+  connectionSyncOkPatch,
+  nextPushScope,
+  selectWorkOrdersToBackfill,
+} from '@shared/googleCalendarConnect';
 
 const INFLOW_JOB_TAG = 'inflowJobId';
 const PUSH_DEBOUNCE_MS = 5_000;
@@ -51,10 +59,41 @@ function isAuthRevokedError(error: unknown): boolean {
 
 async function deactivateConnection(conn: GoogleCalendarConnection, reason: string) {
   console.error(`❌ Google Calendar connection ${conn.id} deactivated: ${reason}`);
+  const patch = connectionSyncErrorPatch(new Error(reason));
   await db
     .update(googleCalendarConnections)
-    .set({ isActive: false, lastError: reason.slice(0, 500), updatedAt: new Date() })
+    .set({ isActive: false, syncStatus: patch.syncStatus, lastError: patch.lastError, updatedAt: new Date() })
     .where(eq(googleCalendarConnections.id, conn.id));
+}
+
+async function markConnectionSync(connectionId: string, patch: { syncStatus: "synced" | "error"; lastError: string | null }) {
+  await db
+    .update(googleCalendarConnections)
+    .set({ syncStatus: patch.syncStatus, lastError: patch.lastError, updatedAt: new Date() })
+    .where(eq(googleCalendarConnections.id, connectionId));
+}
+
+/** Record a push that threw outside the per-connection handler. */
+async function persistConnectionSyncFailure(jobId: string, onlyConnectionId: string | undefined, error: unknown) {
+  const patch = connectionSyncErrorPatch(error);
+  try {
+    if (onlyConnectionId) {
+      await markConnectionSync(onlyConnectionId, patch);
+      return;
+    }
+    const job = await storage.getJob(jobId);
+    const businessId = job?.businessId;
+    if (!businessId) return;
+    await db
+      .update(googleCalendarConnections)
+      .set({ syncStatus: patch.syncStatus, lastError: patch.lastError, updatedAt: new Date() })
+      .where(and(
+        eq(googleCalendarConnections.businessId, businessId),
+        eq(googleCalendarConnections.isActive, true),
+      ));
+  } catch (recordErr) {
+    console.error(`❌ Could not record Google Calendar sync failure for job ${jobId}:`, recordErr);
+  }
 }
 
 /**
@@ -119,19 +158,25 @@ export async function getConnectionForUser(businessId: string | null | undefined
 
 // ── Push pipeline ─────────────────────────────────────────────────────────────
 
-const pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pushTimers = new Map<string, { timer: ReturnType<typeof setTimeout>; onlyConnectionId?: string }>();
 
-/** Debounced job push — safe to call from any route's post-response work. */
-export function queueJobPush(jobId: string): void {
+/**
+ * Debounced job push — safe to call from any route's post-response work.
+ * `onlyConnectionId` limits the push to one calendar (connect backfill).
+ * A failure is written onto that connection as sync_status=error and last_error.
+ */
+export function queueJobPush(jobId: string, onlyConnectionId?: string): void {
   const existing = pushTimers.get(jobId);
-  if (existing) clearTimeout(existing);
-  pushTimers.set(
-    jobId,
-    setTimeout(() => {
-      pushTimers.delete(jobId);
-      pushJob(jobId).catch((err) => console.error(`❌ Google Calendar push failed for job ${jobId}:`, err));
-    }, PUSH_DEBOUNCE_MS),
-  );
+  if (existing) clearTimeout(existing.timer);
+  const scope = nextPushScope(existing ? existing.onlyConnectionId : null, onlyConnectionId);
+  const timer = setTimeout(() => {
+    pushTimers.delete(jobId);
+    pushJob(jobId, scope).catch((err) => {
+      console.error(`❌ Google Calendar push failed for job ${jobId}:`, err);
+      void persistConnectionSyncFailure(jobId, scope, err);
+    });
+  }, PUSH_DEBOUNCE_MS);
+  pushTimers.set(jobId, { timer, onlyConnectionId: scope });
 }
 
 interface DayWindow {
@@ -203,7 +248,7 @@ export async function removeJobEvents(jobId: string): Promise<void> {
   }
 }
 
-export async function pushJob(jobId: string): Promise<void> {
+export async function pushJob(jobId: string, onlyConnectionId?: string): Promise<void> {
   const job = await storage.getJob(jobId);
   if (!job) {
     await removeJobEvents(jobId);
@@ -214,8 +259,9 @@ export async function pushJob(jobId: string): Promise<void> {
     return;
   }
 
-  const businessId = (job as { businessId?: string | null }).businessId ?? null;
-  const connections = await getActiveConnectionsForBusiness(businessId);
+  const businessId = job.businessId ?? null;
+  const connections = (await getActiveConnectionsForBusiness(businessId))
+    .filter((conn) => !onlyConnectionId || conn.id === onlyConnectionId);
   if (connections.length === 0) return;
 
   const assignments = await storage.getJobStaffAssignmentsByJob(jobId);
@@ -342,16 +388,92 @@ export async function pushJob(jobId: string): Promise<void> {
         }
       }
 
+      // A job this person was never going to receive must not clear a real
+      // failure recorded against their connection.
+      if (isAssigned || isAdmin) {
+        await markConnectionSync(conn.id, connectionSyncOkPatch());
+      }
       console.log(`✅ Google Calendar push: job ${job.jobNumber ?? jobId} → ${conn.googleEmail ?? conn.userId} (${wanted.length} day event(s))`);
     } catch (error) {
       if (!isAuthRevokedError(error)) {
         console.error(`❌ Google Calendar push failed for connection ${conn.id}:`, error);
+        const patch = connectionSyncErrorPatch(error);
+        try {
+          await markConnectionSync(conn.id, patch);
+        } catch (recordErr) {
+          console.error(`❌ Could not record Google Calendar sync failure for connection ${conn.id}:`, recordErr);
+        }
         await db
           .update(googleEventLinks)
-          .set({ syncStatus: 'error', lastError: error instanceof Error ? error.message.slice(0, 500) : String(error), updatedAt: new Date() })
+          .set({ syncStatus: patch.syncStatus, lastError: patch.lastError, updatedAt: new Date() })
           .where(and(eq(googleEventLinks.jobId, jobId), eq(googleEventLinks.connectionId, conn.id)));
       }
     }
+  }
+}
+
+/**
+ * After a successful connect, queue a push of every future scheduled work
+ * order this connection should see. The Google calls run on the debounce, so
+ * the OAuth redirect is not held open on the calendar API.
+ */
+export async function backfillFutureScheduledWorkOrders(connectionId: string): Promise<number> {
+  try {
+    const [conn] = await db
+      .select()
+      .from(googleCalendarConnections)
+      .where(eq(googleCalendarConnections.id, connectionId));
+    if (!conn?.isActive || !conn.businessId) return 0;
+
+    const employee = await storage.getEmployee(conn.userId);
+    const isAdmin = employee?.role === 'admin';
+    const jobRows = await db
+      .select({
+        id: jobs.id,
+        status: jobs.status,
+        scheduledDate: jobs.scheduledDate,
+        scheduledEndDate: jobs.scheduledEndDate,
+        scheduledDates: jobs.scheduledDates,
+        assignedTo: jobs.assignedTo,
+      })
+      .from(jobs)
+      .where(and(eq(jobs.businessId, conn.businessId), eq(jobs.status, 'work_order')));
+
+    let assignedJobIds: string[] = [];
+    if (!isAdmin) {
+      const assignments = await db
+        .select({ jobId: jobStaffAssignments.jobId })
+        .from(jobStaffAssignments)
+        .where(eq(jobStaffAssignments.employeeId, conn.userId));
+      assignedJobIds = assignments.map((row) => row.jobId);
+    }
+
+    const ids = selectWorkOrdersToBackfill({
+      jobs: jobRows.map((job) => ({
+        id: job.id,
+        status: job.status,
+        nzDates: getJobScheduledNZDates(job),
+        assignedTo: job.assignedTo,
+      })),
+      todayNZ: getNZDateString(new Date()),
+      userId: conn.userId,
+      isAdmin,
+      assignedJobIds,
+    });
+
+    for (const id of ids) queueJobPush(id, conn.id);
+    if (ids.length > 0) {
+      console.log(`📅 Google Calendar backfill: queued ${ids.length} future work order(s) for connection ${conn.id}`);
+    }
+    return ids.length;
+  } catch (error) {
+    console.error(`❌ Google Calendar backfill failed for connection ${connectionId}:`, error);
+    try {
+      await markConnectionSync(connectionId, connectionSyncErrorPatch(error));
+    } catch (recordErr) {
+      console.error(`❌ Could not record Google Calendar backfill failure for connection ${connectionId}:`, recordErr);
+    }
+    return 0;
   }
 }
 

@@ -17,9 +17,12 @@ import WebKit
 /// the app did not try again.
 ///
 /// This type keeps the web view opaque (never `isOpaque = false`) and covers
-/// it with a native `#1a1a1a` placeholder until the first app page commits.
-/// The placeholder is removed on that commit and on a booted or painting
-/// probe, so it cannot sit on top of a loaded page. Reload policy lives in
+/// it with a native `#1a1a1a` placeholder until the web app reports a real
+/// screen (`appReady` / a `booted` probe). The cover is a sibling in front of
+/// the web view: a subview of WKWebView is composited behind the web process,
+/// so an opaque `about:blank` stays white on top of it. Removing the cover
+/// in `didFinish` did the same thing — HTML had arrived, React had not, and
+/// the paper-white body was the cold-start white screen. Reload policy lives in
 /// `shouldReload` (`WebViewBootDecision.swift`): leave an in progress
 /// navigation alone until `WebViewBootPolicy.loadingStall`, and reload
 /// sooner only after a real navigation failure.
@@ -50,6 +53,8 @@ final class WebViewBootRecovery: NSObject, WKScriptMessageHandler {
     private var failureGeneration = 0
     private var stallGeneration = 0
     private var returnInspectScheduled = false
+    private var titleLabel: UILabel?
+    private var failureLabel: UILabel?
     private let shellColor = UIColor(red: 26 / 255, green: 26 / 255, blue: 26 / 255, alpha: 1)
     private let shellTextColor = UIColor(red: 245 / 255, green: 245 / 255, blue: 240 / 255, alpha: 1)
 
@@ -144,6 +149,10 @@ final class WebViewBootRecovery: NSObject, WKScriptMessageHandler {
         switch type {
         case "appReady":
             noteAppReady(reason: "appReady")
+        case "bootFailed":
+            // Terminal boot failure. Keep the cover (now with the error and
+            // a Reload button) so the paper-white body cannot show through.
+            showBootFailure(message: text)
         case "reload":
             showingFallback = false
             appReady = false
@@ -249,8 +258,8 @@ final class WebViewBootRecovery: NSObject, WKScriptMessageHandler {
         // wait out the stall window before another reload.
         navigationFailed = false
         failureGeneration += 1
+        // HTML committed. React has not painted. Leave the cover up.
         paintShell(webView)
-        hidePlaceholder(reason: "page loaded")
     }
 
     private func scheduleFailureInspect(reason: String) {
@@ -291,24 +300,37 @@ final class WebViewBootRecovery: NSObject, WKScriptMessageHandler {
         }
         webView.superview?.backgroundColor = shellColor
         if let cover = placeholder {
-            cover.frame = webView.bounds
             cover.backgroundColor = shellColor
-            webView.bringSubviewToFront(cover)
+            layoutCover(cover, over: webView)
         }
+    }
+
+    /// Host for the splash. A subview of WKWebView is painted behind the web
+    /// process, so the white about:blank covers it. The superview sits in front.
+    private func coverHost(for webView: WKWebView) -> UIView {
+        webView.superview ?? webView
+    }
+
+    private func layoutCover(_ cover: UIView, over webView: WKWebView) {
+        let host = coverHost(for: webView)
+        if cover.superview !== host {
+            cover.removeFromSuperview()
+            host.addSubview(cover)
+        }
+        if host === webView {
+            cover.frame = webView.bounds
+        } else {
+            cover.frame = webView.convert(webView.bounds, to: host)
+        }
+        host.bringSubviewToFront(cover)
     }
 
     private func showPlaceholder(on webView: WKWebView) {
         if let cover = placeholder {
-            if cover.superview !== webView {
-                cover.removeFromSuperview()
-                webView.addSubview(cover)
-            }
-            cover.frame = webView.bounds
-            webView.bringSubviewToFront(cover)
+            layoutCover(cover, over: webView)
             return
         }
         let cover = UIView(frame: webView.bounds)
-        cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         cover.backgroundColor = shellColor
         cover.isUserInteractionEnabled = false
 
@@ -325,22 +347,107 @@ final class WebViewBootRecovery: NSObject, WKScriptMessageHandler {
             title.leadingAnchor.constraint(greaterThanOrEqualTo: cover.leadingAnchor, constant: 24),
             title.trailingAnchor.constraint(lessThanOrEqualTo: cover.trailingAnchor, constant: -24),
         ])
+        titleLabel = title
 
-        webView.addSubview(cover)
-        webView.bringSubviewToFront(cover)
         placeholder = cover
+        layoutCover(cover, over: webView)
         print("WebViewBootRecovery placeholder shown")
         DispatchQueue.main.async { [weak self, weak webView] in
-            guard let self, let webView, let cover = self.placeholder, cover.superview === webView else { return }
-            cover.frame = webView.bounds
-            webView.bringSubviewToFront(cover)
+            guard let self, let webView, let cover = self.placeholder else { return }
+            self.layoutCover(cover, over: webView)
         }
+    }
+
+    /// Full document navigation (cold load, chunk reload, watchdog reload).
+    /// A previous appReady must not keep the splash down across that load.
+    func noteMainFrameNavigation(url: URL?) {
+        if showingFallback { return }
+        guard let url else { return }
+        let scheme = url.scheme?.lowercased() ?? ""
+        guard scheme == "http" || scheme == "https" else { return }
+        let host = url.host?.lowercased() ?? ""
+        let appHost =
+            host.contains("app.inflowapp.co.nz") ||
+            host.contains("app.treemarkables.co.nz") ||
+            host == "localhost" ||
+            host == "127.0.0.1"
+        // An https link that leaves the app (maps, a bank page) must not
+        // raise the splash. Only a new document on the app host can be a
+        // white shell that still has appReady set from the previous page.
+        guard appHost else { return }
+        if appReady || sawHealthyBoot {
+            appReady = false
+            sawHealthyBoot = false
+            lastLoadAt = Date()
+            navigationFailed = false
+        }
+        guard let webView else { return }
+        showPlaceholder(on: webView)
+        paintShell(webView)
+        scheduleStallCheck()
+    }
+
+    private func showBootFailure(message: String) {
+        guard let webView else { return }
+        showPlaceholder(on: webView)
+        guard let cover = placeholder else { return }
+        cover.isUserInteractionEnabled = true
+        titleLabel?.text = "Inflow didn't open"
+        let text = message.isEmpty ? "Inflow did not finish opening." : message
+        if failureLabel == nil, let title = titleLabel {
+            let label = UILabel()
+            label.translatesAutoresizingMaskIntoConstraints = false
+            label.textColor = shellTextColor.withAlphaComponent(0.75)
+            label.font = .systemFont(ofSize: 15)
+            label.textAlignment = .center
+            label.numberOfLines = 0
+            cover.addSubview(label)
+            let button = UIButton(type: .system)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.setTitle("Reload", for: .normal)
+            button.setTitleColor(shellTextColor, for: .normal)
+            button.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+            button.layer.cornerRadius = 22
+            button.layer.borderWidth = 1
+            button.layer.borderColor = shellTextColor.withAlphaComponent(0.35).cgColor
+            button.addTarget(self, action: #selector(coverReloadTapped), for: .touchUpInside)
+            cover.addSubview(button)
+            NSLayoutConstraint.activate([
+                label.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 8),
+                label.leadingAnchor.constraint(equalTo: cover.leadingAnchor, constant: 24),
+                label.trailingAnchor.constraint(equalTo: cover.trailingAnchor, constant: -24),
+                button.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 20),
+                button.centerXAnchor.constraint(equalTo: cover.centerXAnchor),
+                button.widthAnchor.constraint(greaterThanOrEqualToConstant: 120),
+                button.heightAnchor.constraint(equalToConstant: 44),
+            ])
+            failureLabel = label
+        }
+        failureLabel?.text = text
+        layoutCover(cover, over: webView)
+    }
+
+    @objc private func coverReloadTapped() {
+        showingFallback = false
+        appReady = false
+        sawHealthyBoot = false
+        cacheBusts = 0
+        reloadCount = 0
+        lastBootError = ""
+        titleLabel?.text = "Opening Inflow"
+        failureLabel?.text = ""
+        placeholder?.isUserInteractionEnabled = false
+        loadApp(reason: "cover button")
     }
 
     private func hidePlaceholder(reason: String) {
         guard let cover = placeholder else { return }
         cover.removeFromSuperview()
         placeholder = nil
+        // The labels belong to the removed cover. Leaving them set makes the
+        // next failure write onto a detached view and skip the Reload button.
+        titleLabel = nil
+        failureLabel = nil
         print("WebViewBootRecovery placeholder removed (\(reason))")
     }
 
@@ -426,18 +533,17 @@ final class WebViewBootRecovery: NSObject, WKScriptMessageHandler {
             }
             let status = result as? String ?? "not-booted"
             if self.showingFallback { return }
-            if self.appReady || status == "booted" {
+            if shouldDismissBootCover(appReady: self.appReady, probe: status) {
                 self.noteAppReady(reason: status == "booted" ? "booted" : "appReady")
                 return
             }
             // "painting" means the web cover is up and the bundle is alive.
-            // That is not ready. Hide the native placeholder (the web cover
-            // is the visible one) and still apply the 12s ready timeout.
+            // Keep the native splash in front until a real screen paints.
+            // Dismissing here revealed the paper-white body.
             if status == "painting" {
                 self.navigationFailed = false
                 self.failureGeneration += 1
                 self.paintShell(webView)
-                self.hidePlaceholder(reason: status)
             }
             let action = bootReadyAction(
                 appReady: false,
@@ -626,6 +732,22 @@ final class WebViewBootRecovery: NSObject, WKScriptMessageHandler {
 final class BootNavigationObserver: NSObject, WKNavigationDelegate {
     weak var forward: WKNavigationDelegate?
     weak var recovery: WebViewBootRecovery?
+
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        if navigationAction.targetFrame?.isMainFrame == true {
+            recovery?.noteMainFrameNavigation(url: navigationAction.request.url)
+        }
+        let actionSelector = NSSelectorFromString("webView:decidePolicyForNavigationAction:decisionHandler:")
+        if let forward = forward, (forward as AnyObject).responds(to: actionSelector) {
+            forward.webView?(webView, decidePolicyFor: navigationAction, decisionHandler: decisionHandler)
+            return
+        }
+        decisionHandler(.allow)
+    }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         recovery?.handleNavigationFailure(error, kind: "didFail")

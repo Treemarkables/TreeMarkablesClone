@@ -17,9 +17,16 @@ import { timeTrackingService } from "./timeTrackingService";
 import { setupVite, log } from "./vite";
 import {
   createTreemarkablesDocumentBrandMiddleware,
-  requestIsTreemarkablesDocumentHost,
   applyTreemarkablesDocumentHead,
+  htmlForSpaRequest,
 } from "./treemarkablesDocumentBrand";
+import {
+  applyHashedAssetCacheHeaders,
+  applyHtmlCacheHeaders,
+  assertBuiltPrerenderDir,
+  isMissingStaticAsset,
+  writeMissingAsset,
+} from "./staticAssetPolicy";
 import { createTreemarkablesApexRedirectMiddleware } from "./treemarkablesApexRedirect";
 import { createTreemarkablesAppHostSeoMiddleware } from "./treemarkablesAppHostSeo";
 import fs from "fs";
@@ -31,6 +38,7 @@ import { clearLegacyDomainSessionCookie } from "./security/authSession";
 import { preferEmployeeSessionCookie, SESSION_COOKIE_NAME, SESSION_COOKIE_SAMESITE } from "./security/sessionCookie";
 import { pool, assertTenantDbMatchesOwner, assertTenantTablesHaveRlsPolicies } from "./db";
 import { ensureSchemaUpToDate } from "./schemaMigrations";
+import { warnIfGoogleCalendarTablesMissing } from "./services/googleCalendarTables";
 import { sweepStaleInboundDocuments } from "./services/supplierInvoiceIngest";
 import { attachVoiceAgentWss } from "./services/voiceAgent";
 
@@ -127,9 +135,10 @@ app.use(createTreemarkablesApexRedirectMiddleware());
 app.use(createTreemarkablesAppHostSeoMiddleware());
 
 // www.treemarkables.co.nz / treemarkables.co.nz: first HTML byte is Treemarkables
-// branded (title/meta/icons/og), and public marketing routes include a static
-// page snapshot plus LocalBusiness JSON-LD. Staff routes stay the Inflow shell.
-// No 301 of /login or /dispatch off www. No-op on Inflow hosts.
+// branded (title/meta/icons/og). Public marketing routes also include a static
+// page snapshot plus LocalBusiness JSON-LD. /login, /dashboard, /dispatch and
+// the other staff routes keep the Inflow boot shell. No 301 of those off www.
+// App hosts (app.inflowapp.co.nz, app.treemarkables.co.nz) never get the snapshot.
 app.use(createTreemarkablesDocumentBrandMiddleware());
 
 // Legacy-domain redirect. Customer document links already sent out (invoices,
@@ -290,6 +299,7 @@ function resolveAndServeStatic(appInstance: express.Express) {
     const indexPath = path.join(staticDirOverride, "index.html");
     if (fs.existsSync(indexPath)) {
       log(`Verified index.html exists at override path: ${indexPath}`, "static");
+      assertBuiltPrerenderDir(staticDirOverride, (html) => applyTreemarkablesDocumentHead(html, "/"));
       setupStaticServing(appInstance, staticDirOverride);
       return;
     } else {
@@ -317,6 +327,7 @@ function resolveAndServeStatic(appInstance: express.Express) {
     if (exists) {
       log(`Selected static directory: ${candidatePath}`, "static");
       log(`Verified index.html at: ${indexPath}`, "static");
+      assertBuiltPrerenderDir(candidatePath, (html) => applyTreemarkablesDocumentHead(html, "/"));
       setupStaticServing(appInstance, candidatePath);
       return;
     }
@@ -334,10 +345,7 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
   appInstance.use((req, res, next) => {
     const noCacheFiles = ['/sw.js', '/manifest.webmanifest', '/index.html'];
     if (noCacheFiles.some(file => req.path === file || req.path.endsWith(file))) {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Surrogate-Control', 'no-store');
+      applyHtmlCacheHeaders(res);
     }
     next();
   });
@@ -355,7 +363,7 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
       // imported module" crash. index.html / sw.js / manifest are NOT under
       // /assets/ and keep their no-store headers from the middleware above.
       if (filePath.includes(`${path.sep}assets${path.sep}`)) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        applyHashedAssetCacheHeaders(res);
       }
     },
   }));
@@ -365,44 +373,38 @@ function setupStaticServing(appInstance: express.Express, staticPath: string) {
       return next();
     }
 
-    if (req.originalUrl.startsWith('/assets/') || req.originalUrl.match(/\.(js|css|map|woff|woff2|ttf|png|jpg|svg|ico)(\?.*)?$/)) {
-      return res.status(404).send('Asset not found');
+    if (isMissingStaticAsset(req.originalUrl)) {
+      // Express res.send(string) is text/html. A browser then refuses the
+      // module and the visitor is left on the prerender. Keep the 404, but
+      // as JavaScript or CSS, and do not let the edge cache the miss.
+      writeMissingAsset(res, req.originalUrl);
+      return;
     }
 
     const indexPath = path.join(staticPath, "index.html");
 
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    applyHtmlCacheHeaders(res);
 
     log(`Serving SPA fallback: ${req.originalUrl} -> index.html`, "static");
 
-    if (requestIsTreemarkablesDocumentHost(req)) {
-      try {
-        const html = fs.readFileSync(indexPath, "utf8");
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.send(applyTreemarkablesDocumentHead(html, req.path || "/"));
-        return;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        log(`Error serving branded index.html: ${message}`, "error");
+    try {
+      // Read from this image's disk every time. Asset hashes stay the ones
+      // Vite wrote for this build. Do not cache the document in memory.
+      // req.path is "/" inside this "*" mount — htmlForSpaRequest uses
+      // originalUrl so /login does not receive the homepage snapshot.
+      const html = fs.readFileSync(indexPath, "utf8");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(htmlForSpaRequest(html, req));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log(`Error serving index.html: ${message}`, "error");
+      if (!res.headersSent) {
         res.status(500).json({
           error: "Failed to serve application",
           details: message
         });
-        return;
       }
     }
-
-    res.sendFile(indexPath, (err) => {
-      if (err) {
-        log(`Error serving index.html: ${err.message}`, "error");
-        res.status(500).json({
-          error: "Failed to serve application",
-          details: err.message
-        });
-      }
-    });
   });
 
   log(`Static file serving setup completed successfully`, "static");
@@ -615,6 +617,13 @@ function startNotificationQueueWorker() {
       console.error("[schema] boot migrations failed (continuing):", e);
     }
 
+    try {
+      const calendarTablesWarning = await warnIfGoogleCalendarTablesMissing();
+      if (calendarTablesWarning) log(calendarTablesWarning, "startup");
+    } catch (e) {
+      log(`⚠️ Google Calendar table check failed: ${(e as Error).message}`, "startup");
+    }
+
     // Tenant-isolation backstop: any business_id table without an RLS policy is
     // cross-tenant readable under the app_tenant grant. Logs loudly; hard-fails
     // only under TENANT_RLS_STRICT (then the outer catch exits). Runs AFTER the
@@ -665,10 +674,7 @@ function startNotificationQueueWorker() {
     app.use((req, res, next) => {
       const noCacheFiles = ['/sw.js', '/manifest.webmanifest', '/index.html'];
       if (noCacheFiles.some(file => req.path === file || req.path.endsWith(file))) {
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-        res.setHeader('Surrogate-Control', 'no-store');
+        applyHtmlCacheHeaders(res);
       }
       next();
     });

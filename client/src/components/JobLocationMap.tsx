@@ -3,6 +3,7 @@ import { MapPin, Building2, ChevronDown, ChevronUp, ExternalLink, Navigation } f
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { openExternalUrl } from "@/lib/openExternalUrl";
 import {
   TREEMARKABLES_YARD_ADDRESS,
   isTreemarkablesBusiness,
@@ -134,7 +135,7 @@ export function JobLocationMap({ jobAddress, businessId, className = "" }: JobLo
                   variant="outline"
                   size="sm"
                   className="flex-1 text-xs"
-                  onClick={() => window.open(directionsUrl, '_blank')}
+                  onClick={() => openExternalUrl(directionsUrl)}
                 >
                   <Navigation className="h-3.5 w-3.5 mr-1.5" />
                   Open in Google Maps
@@ -142,7 +143,7 @@ export function JobLocationMap({ jobAddress, businessId, className = "" }: JobLo
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => window.open(satelliteViewUrl, '_blank')}
+                  onClick={() => openExternalUrl(satelliteViewUrl)}
                   title="Open full satellite view"
                   aria-label="Open full satellite view"
                 >

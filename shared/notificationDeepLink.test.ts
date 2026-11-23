@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   flattenNotificationPayload,
   jobIdFromNotificationPath,
+  foregroundDeployReloadUrl,
   parseStoredNotificationNav,
   resolveBellNotificationPath,
   resolveNotificationPath,
@@ -239,5 +240,38 @@ describe("flatten + path helpers", () => {
     const raw = serializeStoredNotificationNav("/dispatch?job=late", 1_000);
     assert.equal(parseStoredNotificationNav(raw, 1_000 + 10_000), "/dispatch?job=late");
     assert.equal(parseStoredNotificationNav(raw, 1_000 + 61_000), null);
+  });
+});
+
+describe("foregroundDeployReloadUrl", () => {
+  it("reloads onto the pending job diary instead of the page already open", () => {
+    assert.equal(
+      foregroundDeployReloadUrl(
+        "https://app.inflowapp.co.nz/dispatch",
+        "/dispatch?job=job-1&tab=diary&entry=e-1",
+      ),
+      "/dispatch?job=job-1&tab=diary&entry=e-1",
+    );
+  });
+
+  it("keeps a plain reload when the address bar already has the deep link", () => {
+    assert.equal(
+      foregroundDeployReloadUrl(
+        "https://app.inflowapp.co.nz/dispatch?job=job-1&tab=diary",
+        "/dispatch?job=job-1&tab=diary",
+      ),
+      null,
+    );
+  });
+
+  it("does nothing special when no notification is pending", () => {
+    assert.equal(
+      foregroundDeployReloadUrl("https://app.inflowapp.co.nz/today", null),
+      null,
+    );
+    assert.equal(
+      foregroundDeployReloadUrl("https://app.inflowapp.co.nz/today", "https://evil.example/dispatch"),
+      null,
+    );
   });
 });

@@ -225,6 +225,17 @@ final class WebViewBootDecisionTests: XCTestCase {
         )
     }
 
+    func testCoverStaysUpUntilTheAppHasPainted() {
+        XCTAssertFalse(shouldDismissBootCover(appReady: false, probe: "painting"))
+        XCTAssertFalse(shouldDismissBootCover(appReady: false, probe: "empty"))
+        XCTAssertFalse(shouldDismissBootCover(appReady: false, probe: "not-booted"))
+        XCTAssertFalse(shouldDismissBootCover(appReady: false, probe: "blank"))
+        XCTAssertFalse(shouldDismissBootCover(appReady: false, probe: "wrong-origin"))
+        XCTAssertTrue(shouldDismissBootCover(appReady: false, probe: "booted"))
+        XCTAssertTrue(shouldDismissBootCover(appReady: true, probe: "empty"))
+        XCTAssertTrue(shouldDismissBootCover(appReady: true, probe: "painting"))
+    }
+
     func testCancelledNavigationIsNotAFailure() {
         XCTAssertTrue(isIgnorableNavigationError(domain: NSURLErrorDomain, code: NSURLErrorCancelled))
         XCTAssertEqual(NSURLErrorCancelled, -999)

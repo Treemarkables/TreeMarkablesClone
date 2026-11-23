@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { resolveBillingName } from "@shared/orgOnlyBilling";
 import express from "express";
 import { Webhook as SvixWebhook } from 'svix';
 import { addClient, removeClient, broadcast } from "./sseManager";
@@ -26,17 +27,31 @@ declare module 'express-session' {
 import { storage, invoiceRevenueExGst } from "./storage";
 import { clearProposalContent, withProposalContentLock } from "./proposalContentLock";
 import { beginProposalSend, releaseProposalSend } from "./proposalSendClaim";
+import { deleteProposalDocument } from "./services/deleteProposalDocument";
 import { clientSafeErrorText } from "./httpErrorText";
 import { buildTodayOverview, createTodayExtraInstruction, deleteTodayExtraInstruction, HttpError } from "./todayOverview";
 import { loadEffectiveRiskLinksForJobs, loadRiskLinksForJobs, recordRiskAssessmentChecklistDone } from "./jhaJobRisk";
 import { checklistCompletionClearsRiskDue, doneIdsIncludingLinkedJha, jhaCompletionRequiresJob, normalizeJhaJobId, RISK_ASSESSMENT_CHECKLIST_ITEM_ID, type JobRiskAssessmentLink } from "@shared/jhaJobRisk";
 import { sanitizeJobEquipment } from "@shared/jobEquipmentCatalogue";
 import { APP_URL } from "./config/appUrl";
+import { facebookGraphUrl, readFacebookPageAccessToken, redactFacebookSecrets } from "./config/facebookGraph";
+import { checkFacebookConnection, loadFacebookPageReviews } from "./services/reviewsService";
 import { proposalAcceptLink, invoiceViewLink } from "@shared/customerLinks";
 import { getBusinessIdentity, getBrandColors } from "./businessIdentity";
+import { crewIdsAfterSave, newlyAddedCrewIds } from "@shared/scheduleCrew";
 import { buildBusinessKnowledgeBlock } from "./aiKnowledge";
 import { withTenant, currentBusinessId, runWithBusiness } from "./tenancy/tenantStore";
 import { businessIdFromVoiceClient, isBusinessId, voiceIdentityForEmployee, inboundVoiceIdentity } from "./tenancy/voiceIdentity";
+import { VOICE_TOKEN_TTL_SECONDS } from "@shared/voiceToken";
+import {
+  HANGUP_TWIML,
+  decideInboundDialFollowup,
+  parseDialCallDuration,
+  parseDialLeg,
+  planInboundRing,
+  recoveryPhoneDialTwiml,
+} from "./services/inboundCallPlan";
+import { readVoiceClientPresence, recordVoiceClientPresence } from "./services/voiceClientPresence";
 import { requireEntitlement } from "./tenancy/requireEntitlement";
 import { resolveBusinessIdByChannel, normalizeChannelIdentifier, type ChannelType } from "./tenancy/channelMap";
 import { businessHasRoleChecklist, TREEMARKABLES_BUSINESS_IDS } from "../shared/roleChecklistAccess";
@@ -97,6 +112,7 @@ import { getTwilioClient } from "./services/twilioClient";
 import { mintStreamToken } from "./services/voiceAgent";
 import jwt from "jsonwebtoken";
 import path from "path";
+import { handleTreemarkablesSitemap, renderTreemarkablesSitemap } from "./treemarkablesSitemap";
 import bcrypt from "bcrypt";
 import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
@@ -105,6 +121,9 @@ import { registerOpsRoutes } from "./opsRoutes";
 import { registerQuoteFollowUpRoutes } from "./quoteFollowUpRoutes";
 import { registerInvoiceXeroRoutes } from "./invoiceXeroRoutes";
 import { registerJobsNotBilledRoutes } from "./jobsNotBilledRoutes";
+import { registerStripePayoutRoutes } from "./stripePayoutRoutes";
+import { reconcileJobPaidFromPayments } from "./jobPaidFromPayments";
+import { ingestStripePayoutWebhook } from "./stripePayoutSync";
 import {
   isStripeConfigured,
   businessOwnsStripeAccount,
@@ -196,6 +215,7 @@ import {
 } from "@shared/crewDayRoles";
 import { composeCustomerAddress } from "@shared/customerAddress";
 import { statusAfterBooking, statusAfterDiaryBook } from "@shared/jobStatus";
+import { runPendingMessageApproval } from "@shared/holdingMessageApproval";
 import { fillEmptyJobContactFromSources } from "@shared/jobContactFill";
 import { backfillEmptyJobContact } from "./jobContactBackfill";
 import { AutomatedTriggers } from "./services/automatedTriggers";
@@ -216,8 +236,12 @@ import {
 } from "./photoAnnotationStore";
 import { renderSiteMapSnapshot, renderImageSiteMapSnapshot, NoMarkersError } from "./siteMapSnapshot";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
+import { describeVideoFile } from "@shared/videoUpload";
+import { registerDirectVideoUploadRoutes } from "./videoUploadRoutes";
+import { google } from "googleapis";
 import { googleCalendarService, CALENDAR_SYNCABLE_JOB_STATUSES } from "./services/googleCalendarService";
-import { queueJobPush, removeJobEvents, getConnectionForUser } from "./services/googleCalendarSync";
+import { queueJobPush, removeJobEvents, getConnectionForUser, backfillFutureScheduledWorkOrders } from "./services/googleCalendarSync";
+import { googleCalendarBrowserOrigin, googleCalendarRedirectUri } from "@shared/googleCalendarConnect";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
 
@@ -284,8 +308,14 @@ const videoUpload = multer({
     fileSize: 2 * 1024 * 1024 * 1024, // 2 GB
     files: 1,
   },
-  fileFilter: (req, file, cb) => {
-    cb(null, file.mimetype.startsWith('video/'));
+  fileFilter: (_req, file, cb) => {
+    // WebKit often sends an iPhone .mov as application/octet-stream or with an
+    // empty type. The extension is enough; a non-video is still rejected.
+    if (describeVideoFile(file.originalname || "", file.mimetype || "")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only video files can be uploaded"));
+    }
   }
 });
 
@@ -336,7 +366,7 @@ function serializeJobTimestamps(job: any): any {
   const serialized = { ...job };
   
   // Convert timestamp fields to ISO UTC strings
-  const timestampFields = ['scheduledDate', 'scheduledEndDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt', 'customerReplyReceivedAt'];
+  const timestampFields = ['scheduledDate', 'scheduledEndDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt', 'customerReplyReceivedAt', 'recentActivityAt', 'proposalSentDate', 'quotePresentedDate'];
   
   for (const field of timestampFields) {
     if (serialized[field]) {
@@ -1826,7 +1856,7 @@ async function generateInvoicePDFBuffer(
 
     // Per-invoice billing-name override (saved on the invoice) takes priority over the
     // job-level billingNameOverride so "edit for this invoice only" actually sticks on render.
-    const billingName = invoiceData?.contactName || job?.billingNameOverride || customer?.name || 'Customer';
+    const billingName = resolveBillingName(invoiceData?.contactName || job?.billingNameOverride || customer?.name || 'Customer', customer, job);
     const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
     const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
 
@@ -2271,6 +2301,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // XERO INTEGRATION ROUTES
   // ========================================
   registerXeroRoutes(app, storage);
+  registerStripePayoutRoutes(app);
   // In-app bug / feedback reports (text + voice + photos + video) — server/bugReports.ts
   registerBugReportRoutes(app, { requireSession, requirePlatformAdmin, imageUpload, videoUpload, audioUpload });
   registerOpsRoutes(app);
@@ -2709,27 +2740,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   // ─────────────────────────────────────────────────────────────────────────
 
-  // SEO routes - serve sitemap.xml and robots.txt
-  app.get('/sitemap.xml', (req: Request, res: Response) => {
-    try {
-      const sitemapPath = path.join(process.cwd(), 'sitemap.xml');
-      
-      if (fs.existsSync(sitemapPath)) {
-        res.set('Content-Type', 'application/xml');
-        res.sendFile(sitemapPath);
-      } else {
-        res.status(404).json({ 
-          success: false, 
-          message: 'Sitemap not found. Please generate sitemap using the included Python script.' 
-        });
-      }
-    } catch (error) {
+  // SEO routes - serve sitemap.xml and robots.txt.
+  // Built in memory. sendFile() on cwd/sitemap.xml reported stream and missing-file
+  // errors via next(err), which the process handler turned into HTTP 500, and the
+  // esbuild bundle does not include that file. A failed blog lookup still returns
+  // the static marketing URLs.
+  app.get('/sitemap.xml', (_req: Request, res: Response) => {
+    handleTreemarkablesSitemap(res).catch((error) => {
       console.error('Error serving sitemap:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Error serving sitemap' 
-      });
-    }
+      if (res.headersSent) return;
+      res.status(200);
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.send(renderTreemarkablesSitemap([]));
+    });
   });
 
   // Public route: SaaS subscriber onboarding guide (no auth required)
@@ -2774,115 +2797,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       res.status(500).send('# Error serving robots.txt');
     }
   });
-  // Facebook reviews endpoint
-  app.get('/api/reviews/facebook', async (req: Request, res: Response) => {
-    try {
-      // Use long-lived Page Access Token instead of user token
-      const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
-      const pageId = process.env.FACEBOOK_PAGE_ID;
-      
-      if (!pageAccessToken) {
-        return res.status(200).json({ 
-          success: true, 
-          reviews: [],
-          message: 'Facebook Page Access Token not configured. Please set FACEBOOK_PAGE_ACCESS_TOKEN with a long-lived page token.' 
-        });
-      }
-
-      if (!pageId) {
-        return res.status(200).json({ 
-          success: true, 
-          reviews: [],
-          message: 'Facebook Page ID not configured' 
-        });
-      }
-
-      // Use ratings endpoint with page access token
-      const url = `https://graph.facebook.com/v18.0/${pageId}/ratings?access_token=${pageAccessToken}&fields=reviewer{name},rating,review_text,created_time&limit=10`;
-      
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Handle authentication errors gracefully instead of throwing 500
-        if (data.error?.code === 190 || data.error?.type === 'OAuthException') {
-          console.error('Facebook authentication error - token may be expired:', data.error?.message);
-          return res.status(200).json({ 
-            success: true, 
-            reviews: [],
-            message: 'Facebook token expired or invalid. Please refresh your long-lived Page Access Token.' 
-          });
-        }
-        
-        console.error('Facebook API error:', data);
-        return res.status(200).json({ 
-          success: true, 
-          reviews: [],
-          message: 'Unable to fetch Facebook reviews at this time' 
-        });
-      }
-
-      // Transform Facebook data to match our review interface
-      const reviews = data.data?.map((review: any, index: number) => ({
-        id: `fb-${index}`,
-        name: review.reviewer?.name || 'Facebook User',
-        location: 'Facebook',
-        rating: review.rating || 5,
-        comment: review.review_text || '',
-        service: 'Service',
-        source: 'facebook',
-        date: review.created_time
-      })) || [];
-
-      res.json({ success: true, reviews });
-
-    } catch (error) {
-      console.error('Facebook reviews error:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Error fetching Facebook reviews' 
-      });
-    }
+  // Facebook reviews — the only registration of this path. A later duplicate
+  // used to be registered further down; Express kept this first handler, and
+  // that handler treated every OAuthException as an expired token.
+  app.get('/api/reviews/facebook', async (_req: Request, res: Response) => {
+    const payload = await loadFacebookPageReviews();
+    res.status(200).json(payload);
   });
 
   // Facebook status endpoint
-  app.get('/api/facebook/status', async (req: Request, res: Response) => {
-    try {
-      const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
-      const pageId = process.env.FACEBOOK_PAGE_ID;
-      
-      if (!pageAccessToken || !pageId) {
-        return res.json({ 
-          connected: false,
-          message: 'Facebook credentials not configured'
-        });
-      }
-
-      // Quick test to verify token is valid by fetching page info
-      const url = `https://graph.facebook.com/v18.0/${pageId}?access_token=${pageAccessToken}&fields=name`;
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        return res.json({ 
-          connected: false,
-          message: 'Facebook token invalid or expired'
-        });
-      }
-
-      return res.json({ 
-        connected: true,
-        pageName: data.name,
-        pageId: pageId
-      });
-
-    } catch (error) {
-      console.error('Facebook status check error:', error);
-      return res.json({ 
-        connected: false,
-        message: 'Error checking Facebook status'
-      });
-    }
+  app.get('/api/facebook/status', async (_req: Request, res: Response) => {
+    const payload = await checkFacebookConnection();
+    res.json(payload);
   });
 
   // Gmail status endpoint
@@ -2915,6 +2841,21 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
   // Google Calendar — per-user OAuth + two-way sync (unified calendar Phase C)
   // ─────────────────────────────────────────────────────────────────────────────
 
+  const googleCalendarOAuthTarget = (req: Request) => {
+    const requestOrigin = `${req.protocol}://${req.get('host')}`;
+    const redirectUri = googleCalendarRedirectUri(
+      {
+        NODE_ENV: process.env.NODE_ENV,
+        GOOGLE_CALENDAR_REDIRECT_URI: process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+      },
+      requestOrigin,
+    );
+    return {
+      redirectUri,
+      appOrigin: googleCalendarBrowserOrigin(redirectUri, requestOrigin, process.env.NODE_ENV),
+    };
+  };
+
   // Status: returns connection info for the logged-in user.
   app.get('/api/google-calendar/status', async (req: Request, res: Response) => {
     try {
@@ -2927,6 +2868,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         calendarId: conn.calendarId,
         lastSynced: conn.lastSyncedAt,
         lastError: conn.lastError,
+        syncStatus: conn.syncStatus,
       });
     } catch (error) {
       console.error('Google Calendar status error:', error);
@@ -2941,11 +2883,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     if (!clientId || !clientSecret) {
       return res.status(503).json({ success: false, message: 'Google Calendar OAuth not configured' });
     }
-    const { google } = require('googleapis');
-    const origin = process.env.NODE_ENV === 'production'
-      ? 'https://app.treemarkables.co.nz'
-      : `${req.protocol}://${req.get('host')}`;
-    const redirectUri = `${origin}/api/google-calendar/callback`;
+    const { redirectUri } = googleCalendarOAuthTarget(req);
     const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     // State encodes the current session identifiers so the callback can associate
     // the connection with the right employee without trusting POST body.
@@ -2968,30 +2906,26 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
   // OAuth callback: exchange code, upsert connection, redirect to /integrations.
   app.get('/api/google-calendar/callback', async (req: Request, res: Response) => {
-    const origin = process.env.NODE_ENV === 'production'
-      ? 'https://app.treemarkables.co.nz'
-      : `${req.protocol}://${req.get('host')}`;
+    const { redirectUri, appOrigin } = googleCalendarOAuthTarget(req);
     try {
       const code = typeof req.query.code === 'string' ? req.query.code : '';
       const stateRaw = typeof req.query.state === 'string' ? req.query.state : '';
       if (!code || !stateRaw) {
-        return res.redirect(`${origin}/integrations?gcal_error=missing_code`);
+        return res.redirect(`${appOrigin}/integrations?gcal_error=missing_code`);
       }
       let stateParsed: { businessId?: string; employeeId?: string } = {};
       try {
         stateParsed = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8'));
       } catch {
-        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+        return res.redirect(`${appOrigin}/integrations?gcal_error=bad_state`);
       }
       const { businessId, employeeId } = stateParsed;
       if (!businessId || !employeeId) {
-        return res.redirect(`${origin}/integrations?gcal_error=bad_state`);
+        return res.redirect(`${appOrigin}/integrations?gcal_error=bad_state`);
       }
 
       const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID!;
       const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET!;
-      const redirectUri = `${origin}/api/google-calendar/callback`;
-      const { google } = require('googleapis');
       const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
       const { tokens } = await oauth2.getToken(code);
       oauth2.setCredentials(tokens);
@@ -3026,24 +2960,32 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 50 * 60 * 1000),
         scope: tokens.scope ?? null,
         isActive: true,
+        syncStatus: 'synced',
         lastError: null,
         updatedAt: new Date(),
       };
 
+      let connectionId: string | undefined;
       if (existing.length > 0) {
+        connectionId = existing[0].id;
         await db
           .update(googleCalendarConnections)
           .set(connData)
           .where(eq(googleCalendarConnections.id, existing[0].id));
       } else {
-        await db.insert(googleCalendarConnections).values(connData);
+        const inserted = await db.insert(googleCalendarConnections).values(connData).returning({ id: googleCalendarConnections.id });
+        connectionId = inserted[0]?.id;
+      }
+
+      if (connectionId) {
+        await backfillFutureScheduledWorkOrders(connectionId);
       }
 
       console.log(`✅ Google Calendar connected for employee ${employeeId} (${googleEmail})`);
-      res.redirect(`${origin}/integrations?gcal_connected=true`);
+      res.redirect(`${appOrigin}/integrations?gcal_connected=true`);
     } catch (error) {
       console.error('Google Calendar OAuth callback error:', error);
-      res.redirect(`${origin}/integrations?gcal_error=oauth_failed`);
+      res.redirect(`${appOrigin}/integrations?gcal_error=oauth_failed`);
     }
   });
 
@@ -3059,7 +3001,6 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
         const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
         if (clientId && clientSecret) {
-          const { google } = require('googleapis');
           const auth = new google.auth.OAuth2(clientId, clientSecret);
           auth.setCredentials({ refresh_token: conn.refreshToken });
           await auth.revokeCredentials();
@@ -6224,7 +6165,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.get('/api/jobs', async (req: Request, res: Response) => {
     try {
-      const { customerId, status, limit, offset, excludeCompleted, excludeArchived } = req.query;
+      const { customerId, status, limit, offset, excludeCompleted, excludeArchived, sort } = req.query;
+      // Dispatch Unscheduled asks for this. Other list callers keep createdAt order.
+      const sortByRecentActivity = sort === "recentActivity";
 
       // Parse pagination params
       const parsedLimit = limit ? parseInt(limit as string) : 10;
@@ -6289,7 +6232,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         offset: parsedOffset,
         excludeCompleted: excludeCompleted === 'true',
         excludeArchived: excludeArchived === 'true',
-      });
+      }, sortByRecentActivity ? "recentActivity" : undefined);
 
       // Serialize timestamps to ISO UTC format
       const serializedJobs = await attachCustomerNames(result.jobs.map(serializeJobTimestamps));
@@ -9223,7 +9166,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
   // getJob rides the owner connection (hence the ownership check) and the videos
   // insert needs runWithBusiness to stamp the tenant.
-  app.post('/api/jobs/:jobId/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
+  // Legacy single-request upload. New clients use the resumable session routes
+  // registered below — a whole iPhone .mov through this path is what the edge
+  // drops. Auth runs before multer so an anonymous body is not written to GCS.
+  app.post('/api/jobs/:jobId/videos', requireSession, videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
       if (!req.session.employeeId) {
@@ -9352,10 +9298,29 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   const isContentPublisher = (businessId: string | undefined): boolean =>
     !!businessId && CONTENT_PUBLISHER_BUSINESS_IDS.has(businessId);
 
+  registerDirectVideoUploadRoutes(app, {
+    getJob: (jobId) => storage.getJob(jobId),
+    createVideo: (businessId, data) => runWithBusiness(businessId, () => storage.createVideo(data)),
+    findByFilename: async (filename) => {
+      const [row] = await db.select().from(schema.videos).where(eq(schema.videos.filename, filename)).limit(1);
+      return row;
+    },
+    deleteObject: (objectPath) => videoStorage.deleteVideoObject(objectPath),
+    onReady: async (video, showToCustomer) => {
+      if (video.jobId && showToCustomer && video.kind !== "knowledge") {
+        await syncVideoLinkInJobDescription(video.jobId, video.id, true);
+      }
+      generateVideoThumbnail(video.id).catch(() => {});
+      generateVideoCaptions(video.id).catch(() => {});
+    },
+    canPublishKnowledge: (businessId) => isContentPublisher(businessId),
+    appUrl: APP_URL,
+  });
+
   // Multer route: ALS tenant context is lost (see note on /api/jobs/:jobId/photos) —
   // tenant identity comes from the session, reads ride the owner connection (hence
   // the job ownership check), and the insert is stamped via runWithBusiness.
-  app.post('/api/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
+  app.post('/api/videos', requireSession, videoUpload.single('video'), async (req: Request, res: Response) => {
     try {
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -11168,26 +11133,13 @@ Return only the rewritten description, nothing else.`,
       // Create the invoice
       const invoice = await storage.createInvoice(invoiceData);
 
-      // Update job to store invoice reference AND sync total amount for revenue metrics
-      const jobUpdate: Record<string, unknown> = {
-        invoiceId: invoice.id,
-        invoiceBlocked: false,
-        totalAmount: amount.toString() // Sync invoice amount to job for revenue tracking
-      };
-      // Backfill the job description from the invoice when the job has none yet,
-      // so a description typed straight into the invoice surfaces on the job card.
-      // Only fill when empty — never clobber an existing job description.
-      const invoiceDescription = (customData.description || '').trim();
-      if (invoiceDescription && !(job.description || '').trim()) {
-        jobUpdate.description = invoiceDescription;
-      }
-      await storage.updateJob(id, jobUpdate);
-
-      // Compute exc-GST and inc-GST totals per line item so the diary entry
-      // can show both, clearly labelled. Without this, the diary dumped the
-      // raw `amount` sum (whose GST basis depends on each item's
+      // Compute exc-GST and inc-GST totals per line item so the job row and
+      // the diary entry share one pair of figures. Without this, the diary
+      // dumped the raw `amount` sum (whose GST basis depends on each item's
       // priceIncludesTax flag) while the job-card header always shows
       // exc-GST — producing confusing "$9,145 vs $7,952" discrepancies.
+      // subtotal and total_including_gst are stored here too, so later
+      // screens (Despatch) don't have to guess which column is ex-GST.
       type DiaryLineItem = {
         total?: number | string;
         amount?: number | string;
@@ -11233,6 +11185,29 @@ Return only the rewritten description, nothing else.`,
         exGstTotal *= pct;
         incGstTotal *= pct;
       }
+      const gstAmount = incGstTotal - exGstTotal;
+
+      // Update job to store invoice reference AND sync total amount for revenue metrics.
+      // total_amount stays the ex-GST invoice amount. subtotal and
+      // total_including_gst are written in the same update so a later screen
+      // can prefer subtotal instead of guessing from a zeroed GST column.
+      const jobUpdate: Record<string, unknown> = {
+        invoiceId: invoice.id,
+        invoiceBlocked: false,
+        totalAmount: amount.toString(),
+        subtotal: exGstTotal.toFixed(2),
+        totalIncludingGst: incGstTotal.toFixed(2),
+        gstAmount: gstAmount.toFixed(2),
+      };
+      // Backfill the job description from the invoice when the job has none yet,
+      // so a description typed straight into the invoice surfaces on the job card.
+      // Only fill when empty — never clobber an existing job description.
+      const invoiceDescription = (customData.description || '').trim();
+      if (invoiceDescription && !(job.description || '').trim()) {
+        jobUpdate.description = invoiceDescription;
+      }
+      await storage.updateJob(id, jobUpdate);
+
       const partialSuffix = invoiceType === 'partial' ? ' (partial)' : '';
       const diaryText = `Invoice ${invoiceNumber} created for $${exGstTotal.toFixed(2)} + GST — $${incGstTotal.toFixed(2)} total${partialSuffix}`;
 
@@ -11572,7 +11547,7 @@ Return only the rewritten description, nothing else.`,
         && s.content.trim().length > 0,
       );
       if (!hasIntroduction && !hasDescriptionSection) {
-        validationErrors.push('proposal has no description text — the customer would see an empty job description');
+        validationErrors.push('proposal has no saved description text — the customer would see an empty job description');
       }
 
       // No line-item / $0-total check here: pricing is sometimes written in the
@@ -11838,7 +11813,7 @@ Return only the rewritten description, nothing else.`,
         && s.content.trim().length > 0,
       );
       if (!hasIntroduction && !hasDescriptionSection) {
-        validationErrors.push('quote has no description text — the PDF would have an empty job description');
+        validationErrors.push('quote has no saved description text — the PDF would have an empty job description');
       }
 
       // No line-item / $0-total check here: pricing is sometimes written in the
@@ -12259,7 +12234,8 @@ Return only the rewritten description, nothing else.`,
 
         // Per-invoice billing-name override (saved on the invoice) beats the job-level
         // billingNameOverride so "edit for this invoice only" sticks in the email too.
-        const invCustomerName = invoiceDetails?.contactName || job?.billingNameOverride || customer?.name || 'there';
+        // Org-only customers (e.g. Gisborne District Council) are never greeted by a person's name.
+        const invCustomerName = resolveBillingName(invoiceDetails?.contactName || job?.billingNameOverride || customer?.name || 'there', customer, job);
 
         // Review ask riding along with the invoice. Reuses the job's existing
         // review-request token (re-sent invoices don't mint new ones); otherwise
@@ -12269,7 +12245,7 @@ Return only the rewritten description, nothing else.`,
           if (job?.id && job?.customerId) {
             let reviewReq = await storage.getLatestReviewRequestForJob(job.id);
             if (!reviewReq) {
-              const reviewToken = require('crypto').randomBytes(32).toString('hex');
+              const reviewToken = randomBytes(32).toString('hex');
               reviewReq = await storage.createReviewRequest({
                 jobId: job.id,
                 customerId: job.customerId,
@@ -13074,7 +13050,7 @@ Return only the rewritten description, nothing else.`,
       });
       const accessToken = new AccessToken(accountSid, apiKey, apiSecret, {
         identity: clientIdentity,
-        ttl: 3600,
+        ttl: VOICE_TOKEN_TTL_SECONDS,
       });
       accessToken.addGrant(voiceGrant);
       if (!twimlAppSid) {
@@ -13084,11 +13060,43 @@ Return only the rewritten description, nothing else.`,
         const credEnv = platform === 'android' ? 'TWILIO_PUSH_CREDENTIAL_SID_ANDROID' : 'TWILIO_PUSH_CREDENTIAL_SID';
         console.warn(`⚠️  ${credEnv} not set — incoming call push notifications to the ${platform} app will not work. Create a Push Credential at Twilio Console → Voice → Push Credentials (${platform === 'android' ? 'FCM' : 'APNs'}) and set this secret.`);
       }
-      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (platform: ${platform}, outgoing: ${twimlAppSid ? 'enabled' : 'disabled'}, push: ${pushCredentialSid ? 'enabled' : 'disabled'})`);
-      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity, platform, outgoingEnabled: !!twimlAppSid, pushEnabled: !!pushCredentialSid });
+      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (platform: ${platform}, outgoing: ${twimlAppSid ? 'enabled' : 'disabled'}, push: ${pushCredentialSid ? 'enabled' : 'disabled'}, ttl: ${VOICE_TOKEN_TTL_SECONDS}s)`);
+      return res.json({
+        success: true,
+        token: accessToken.toJwt(),
+        identity: clientIdentity,
+        platform,
+        ttl: VOICE_TOKEN_TTL_SECONDS,
+        outgoingEnabled: !!twimlAppSid,
+        pushEnabled: !!pushCredentialSid,
+      });
     } catch (error: any) {
       console.error('❌ Error generating Twilio token:', error);
       return res.status(500).json({ success: false, message: 'Failed to generate token' });
+    }
+  });
+
+  // The iOS app calls this after TwilioVoiceSDK.register succeeds, and again
+  // each time it refreshes the access token. The answer webhook reads the row
+  // to decide whether <Client> is worth dialling.
+  app.post('/api/twilio/presence', async (req: Request, res: Response) => {
+    try {
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const requestingEmployee = await storage.getEmployee(employeeId);
+      const businessId = requestingEmployee?.businessId || req.session.businessId;
+      if (!businessId) {
+        return res.status(403).json({ success: false, message: 'No business on this account' });
+      }
+      const isAdmin = requestingEmployee?.role === 'admin';
+      const identity = voiceIdentityForEmployee(businessId, employeeId, isAdmin);
+      await recordVoiceClientPresence(identity, VOICE_TOKEN_TTL_SECONDS);
+      return res.json({ success: true, identity, ttl: VOICE_TOKEN_TTL_SECONDS });
+    } catch (error: any) {
+      console.error('❌ Error recording voice presence:', error);
+      return res.status(500).json({ success: false, message: 'Failed to record voice presence' });
     }
   });
 
@@ -13101,12 +13109,11 @@ Return only the rewritten description, nothing else.`,
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
 
-  // Builds the inner TwiML verbs (everything between <Response> and </Response>)
-  // for the original "ring the iOS app + owner's phone simultaneously, record,
-  // voicemail on no-answer" flow. Extracted verbatim from the answer webhook so
-  // the IVR menu can fall through to the exact same behaviour on timeout /
-  // press-2, and so the voice-agent failure fallback (?mode=dial) reproduces
-  // today's flow byte-for-byte.
+  // Rings the iOS app. The owner's mobile is added to the same Dial only
+  // while the app has a live registration. An expired registration still
+  // dials the app on its own (skipping it sent callers straight to voicemail
+  // once the heartbeat lapsed). The action URL then rings the mobile, and
+  // only then takes voicemail.
   const buildDialJulesTwimlBody = async (req: Request): Promise<string> => {
     const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER;
     // Dial the business that owns the line, not a shared identity every
@@ -13125,18 +13132,26 @@ Return only the rewritten description, nothing else.`,
     const clientIdentity = dialBusinessId
       ? inboundVoiceIdentity(dialBusinessId)
       : (process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner');
-    const hasClient = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
-
-    // Must have at least one destination — Client app OR phone number
-    if (!hasClient && !ownerPhone) {
-      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or OWNER_PHONE_NUMBER)');
-      return `  <Say voice="alice">Sorry, we are unable to take your call right now. Please try again later.</Say>
-`;
-    }
+    const clientConfigured = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
+    const presence = clientConfigured
+      ? await readVoiceClientPresence(clientIdentity)
+      : "unregistered";
+    const ring = planInboundRing({
+      clientConfigured,
+      presence,
+      hasOwnerPhone: !!ownerPhone,
+    });
 
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
+
+    // Nothing to ring — the no-answer route plays the saved voicemail greeting.
+    if (ring.leg === "none") {
+      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or OWNER_PHONE_NUMBER)');
+      return `  <Redirect method="POST">${escapeTwimlXml(`${baseUrl}/api/webhooks/twilio-no-answer?leg=none`)}</Redirect>
+`;
+    }
 
     // Twilio's recording-status callback (fired when the call's recording
     // completes) does NOT include From / ForwardedFrom / To — only the initial
@@ -13227,12 +13242,12 @@ Return only the rewritten description, nothing else.`,
 
     // Build the list of Dial targets. When we have a caller name, the <Client>
     // must use the <Identity> noun form so we can attach a <Parameter>.
-    const clientTarget = hasClient
+    const clientTarget = ring.dialClient
       ? callerName
         ? `    <Client>\n      <Identity>${clientIdentity}</Identity>\n      <Parameter name="callerName" value="${escapeXml(callerName)}"/>\n    </Client>`
         : `    <Client>${clientIdentity}</Client>`
       : '';
-    const phoneTarget = ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
+    const phoneTarget = ring.dialPhone && ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
 
     // Optional recorded-call disclosure played to the CALLER before we ring
     // through. OFF by default — playing any audio before the agent picks up
@@ -13272,7 +13287,7 @@ Return only the rewritten description, nothing else.`,
       connectingTwiml = `  <Say voice="alice">${escapeXml(connectingPromptRaw)}</Say>\n`;
     }
 
-    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, connecting=${connectingTwiml ? 'on' : 'off'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
+    console.log(`📞 Twilio answer webhook — client=${ring.dialClient ? clientIdentity : 'off'} (presence=${presence}), phone=${ring.dialPhone ? ownerPhone : 'off'}, leg=${ring.leg}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, connecting=${connectingTwiml ? 'on' : 'off'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
 
     return `${connectingTwiml}${disclosureTwiml}  <Dial
     record="record-from-answer"
@@ -13280,7 +13295,7 @@ Return only the rewritten description, nothing else.`,
     recordingStatusCallback="${recordingCallbackUrl}"
     recordingStatusCallbackEvent="completed"
     timeout="20"
-    action="${baseUrl}/api/webhooks/twilio-no-answer"
+    action="${escapeTwimlXml(`${baseUrl}/api/webhooks/twilio-no-answer?leg=${ring.leg}`)}"
   >
 ${clientTarget}
 ${phoneTarget}
@@ -13677,6 +13692,28 @@ ${dialBody}</Response>`);
     }
   });
 
+  // Which party the <Dial> actually bridged. A 1-second "completed" call is
+  // the app dropping (31005) when `to` is client:, and a real hang-up when
+  // `to` is the owner's mobile. Failures return null and the follow-up
+  // treats that as "don't lose the caller".
+  const lookupDialedParty = async (dialCallSid: string): Promise<string | null> => {
+    if (!/^CA[0-9a-f]{32}$/i.test(dialCallSid)) return null;
+    try {
+      const client = await getTwilioClient();
+      const fetched = client.calls(dialCallSid).fetch().then(
+        (call) => (typeof call.to === "string" ? call.to : null),
+        () => null,
+      );
+      return await Promise.race([
+        fetched,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+      ]);
+    } catch (err) {
+      console.error("📞 dial leg lookup failed:", err);
+      return null;
+    }
+  };
+
   // TwiML: owner didn't answer → take a voicemail (still records and processes)
   app.post('/api/webhooks/twilio-no-answer', async (req: Request, res: Response) => {
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
@@ -13684,18 +13721,45 @@ ${dialBody}</Response>`);
     const baseUrl = `${protocol}://${host}`;
 
     // Twilio's <Dial action> fires when the Dial verb finishes for ANY reason —
-    // including a successfully connected call where one side hung up. We only
-    // want to fall through to voicemail when the dial actually failed to
-    // connect, not after a normal completed conversation. DialCallStatus is
-    // one of: completed, answered, busy, no-answer, failed, canceled.
+    // including a successfully connected call where one side hung up. A normal
+    // conversation hangs up. A few-second app-leg drop, or a <Dial> that
+    // failed before the mobile could ring, is forwarded to the mobile and
+    // then to voicemail. DialCallStatus is one of: completed, answered, busy,
+    // no-answer, failed, canceled.
     const dialStatus = String(req.body?.DialCallStatus || '').toLowerCase();
-    if (dialStatus === 'completed' || dialStatus === 'answered') {
-      console.log(`📞 Dial completed (status=${dialStatus}) — call ended naturally, skipping voicemail`);
+    const leg = parseDialLeg(req.query.leg);
+    const dialCallDuration = parseDialCallDuration(req.body?.DialCallDuration);
+    const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER || '';
+    const followupInput = {
+      leg,
+      dialStatus,
+      dialCallDuration,
+      hasOwnerPhone: !!ownerPhone,
+    };
+    let decision = decideInboundDialFollowup(followupInput);
+    if (decision.action === 'lookup') {
+      const answeredTo = await lookupDialedParty(String(req.body?.DialCallSid || ''));
+      decision = decideInboundDialFollowup({ ...followupInput, answeredTo });
+    }
+    if (decision.action === 'hangup') {
+      console.log(`📞 Dial completed (status=${dialStatus}, duration=${dialCallDuration ?? '?'}, leg=${leg}) — call ended naturally, skipping voicemail`);
       res.type('text/xml');
-      return res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>');
+      return res.send(HANGUP_TWIML);
+    }
+    if (decision.action === 'dial-phone' && ownerPhone) {
+      const inboundFrom = String(req.body?.From || req.body?.ForwardedFrom || '');
+      const inboundTo = String(req.body?.To || '');
+      console.log(`📞 In-app call unavailable (status=${dialStatus}, duration=${dialCallDuration ?? '?'}, leg=${leg}) — forwarding to ${ownerPhone}`);
+      res.type('text/xml');
+      return res.send(recoveryPhoneDialTwiml({
+        ownerPhone,
+        actionUrl: `${baseUrl}/api/webhooks/twilio-no-answer?leg=phone`,
+        recordingCallbackUrl:
+          `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&calledTo=${encodeURIComponent(inboundTo)}`,
+      }));
     }
 
-    console.log(`📞 Twilio no-answer (DialCallStatus=${dialStatus || 'unknown'}) — switching to voicemail`);
+    console.log(`📞 Twilio no-answer (DialCallStatus=${dialStatus || 'unknown'}, leg=${leg}) — switching to voicemail`);
 
     // Voicemail recording's status callback also needs callerFrom in the URL
     // (same reason as the answer webhook — recording callbacks don't include
@@ -18161,7 +18225,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
       let link = await storage.getTimelineLinkForJob(job.id);
       if (!link) {
-        const token = require('crypto').randomBytes(32).toString('hex');
+        const token = randomBytes(32).toString('hex');
         link = await storage.createTimelineLink(job.id, token);
       }
       res.json({
@@ -20017,9 +20081,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // Delete existing staff assignments for this job to prevent duplicates when rescheduling
       // Skip deletion when addOnly=true (e.g. drag-drop onto a specific employee row)
       const existingAssignments = await storage.getJobStaffAssignmentsByJob(jobId);
+      const removedAssignmentIds: string[] = [];
       if (!addOnly) {
         for (const existing of existingAssignments) {
           await storage.deleteJobStaffAssignment(existing.id);
+          removedAssignmentIds.push(existing.id);
         }
         console.log(`🗑️ Deleted ${existingAssignments.length} existing staff assignment(s) for job ${jobId}`);
       } else {
@@ -20030,9 +20096,18 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           const timeMatch = existing.startTime && Math.abs(new Date(existing.startTime).getTime() - newStart) < 60000;
           if (empMatch && timeMatch) {
             await storage.deleteJobStaffAssignment(existing.id);
+            removedAssignmentIds.push(existing.id);
           }
         }
       }
+      // Full save: the submitted crew replaces the booking.
+      // addOnly: everyone whose row survived, plus the people just submitted.
+      const finalEmployeeIds = crewIdsAfterSave({
+        addOnly: !!addOnly,
+        existing: existingAssignments.map(a => ({ id: a.id, employeeId: a.employeeId })),
+        removedAssignmentIds,
+        submittedEmployeeIds: uniqueEmployeeIds.filter((id): id is string => typeof id === "string"),
+      });
 
       // Inherit dayRole: if this employee already has any assignment that NZ-day,
       // the new row inherits their existing 'A' / 'B'. Cached per (employeeId, NZ date).
@@ -20065,14 +20140,19 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         created.push(newAssignment);
       }
 
-      // Update job's assignedTeam (deduplicated)
-      const employeeIds = uniqueEmployeeIds;
+      // Keep both crew fields in step. A later edit reads either one, and
+      // writing only assignedTeam made the other go stale.
+      // Built as a typed patch: two string[] fields plus a spread makes
+      // TypeScript invent an index signature that Partial<InsertJob> rejects.
+      const employeeIds = finalEmployeeIds;
       if (job) {
         const next = statusAfterBooking(job.status);
-        await storage.updateJob(jobId, {
+        const crewPatch: Partial<schema.InsertJob> = {
           assignedTeam: employeeIds,
-          ...(next ? { status: next } : {}),
-        });
+          assignedTo: employeeIds,
+        };
+        if (next) crewPatch.status = next;
+        await storage.updateJob(jobId, crewPatch);
       }
 
       // Calculate and update estimated man-hours based on staff assignments
@@ -20084,8 +20164,12 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const deferredPushNotifications = sendNotifications
         ? async () => {
             // Multi-day bookings create one assignment per day per employee —
-            // notify each employee once, not once per day.
-            const employeeIdsToNotify = [...new Set(created.map(a => a.employeeId))];
+            // notify each newly added employee once, not once per day, and
+            // not again if they were already on this job.
+            const employeeIdsToNotify = newlyAddedCrewIds(
+              existingAssignments.map(a => a.employeeId),
+              created.map(a => a.employeeId),
+            );
             for (const employeeId of employeeIdsToNotify) {
               try {
                 const employee = await storage.getEmployee(employeeId);
@@ -25575,11 +25659,11 @@ Transcription: ${transcriptText}`;
               
               // Fetch sender's name from Facebook Graph API
               let senderName = 'Facebook Messenger Enquiry';
+              const pageAccessToken = readFacebookPageAccessToken().token;
               try {
-                const PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
-                if (PAGE_ACCESS_TOKEN) {
+                if (pageAccessToken) {
                   const userInfoResponse = await fetch(
-                    `https://graph.facebook.com/v18.0/${senderId}?fields=name&access_token=${PAGE_ACCESS_TOKEN}`
+                    facebookGraphUrl(`${senderId}?fields=name&access_token=${pageAccessToken}`)
                   );
                   if (userInfoResponse.ok) {
                     const userInfo = await userInfoResponse.json();
@@ -25589,7 +25673,8 @@ Transcription: ${transcriptText}`;
                   }
                 }
               } catch (error) {
-                console.error('Error fetching Facebook user info:', error);
+                const detail = error instanceof Error ? error.message : String(error);
+                console.error('Error fetching Facebook user info:', redactFacebookSecrets(detail, pageAccessToken));
               }
               
               // Find existing conversation for this Facebook sender
@@ -25869,11 +25954,11 @@ Transcription: ${transcriptText}`;
       } else if (messagePlatform === 'facebook_messenger') {
         // Send Facebook message
         try {
-          const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+          const pageAccessToken = readFacebookPageAccessToken().token;
           
           if (pageAccessToken) {
             const response = await fetch(
-              `https://graph.facebook.com/v18.0/me/messages?access_token=${pageAccessToken}`,
+              facebookGraphUrl(`me/messages?access_token=${pageAccessToken}`),
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -27723,7 +27808,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       if (!proposal) {
         return res.status(404).json({
           success: false,
-          message: 'Proposal not found'
+          message: 'This proposal is no longer available'
         });
       }
       
@@ -28911,6 +28996,19 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         return res.json({ received: true });
       }
 
+      // Payout events are optional. An unknown business is acknowledged inside
+      // ingest so Stripe stops retrying; a Stripe or database failure is 500.
+      if (typeof event.type === "string" && event.type.startsWith("payout.")) {
+        try {
+          await ingestStripePayoutWebhook(event);
+        } catch (payoutErr: unknown) {
+          const message = payoutErr instanceof Error ? payoutErr.message : "payout webhook failed";
+          console.error("Stripe payout webhook failed:", message);
+          return res.status(500).json({ received: false });
+        }
+        return res.json({ received: true });
+      }
+
       // ── Subscription billing events (Inflow — Phase 4) ──
       // Keep each business's `subscriptions` row in sync with Stripe. Runs outside any
       // request (owner connection), so businessId comes from the event metadata.
@@ -28970,87 +29068,99 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const amountPaid = Math.round(amountTotalCents) / 100;
         const invoiceId: string | undefined = session?.metadata?.invoiceId;
 
-        // Invoice payment (kind='payment'). Record the payment and mark the
-        // invoice paid — we always charge the full outstanding balance, so a
-        // succeeded session settles it.
+        // Invoice payment (kind='payment'). Record the payment, then roll the
+        // job's paid amount and balance up from the payments ledger. A retry
+        // still reconciles: the old path returned as a duplicate before the
+        // job was updated, which left paid amount at 0.
         if (kind === 'payment' && invoiceId) {
           const existingInvoicePay = await storage.getPaymentBySessionId(session.id);
-          if (existingInvoicePay) {
-            console.log(`Stripe webhook: session ${session.id} already processed`);
-            return res.json({ received: true, duplicate: true });
-          }
           const invoice = await storage.getInvoice(invoiceId);
           if (!invoice) {
             console.error('Stripe webhook: invoice not found for session', { invoiceId, sessionId: session.id });
             // 200 so Stripe stops retrying — the invoice isn't coming back.
             return res.json({ received: true, missingInvoice: true });
           }
+          const intent = session.payment_intent;
+          const providerPaymentId = typeof intent === "string" ? intent : intent?.id ?? null;
           // Stripe webhook runs as owner (no session) → bind the matched invoice's
-          // tenant so the payment-ledger row + invoice update stamp the owning
+          // tenant so the payment-ledger row + job update stamp the owning
           // business, not the DEFAULT (Treemarkables).
           await runWithBusiness(invoice.businessId ?? undefined, async () => {
-            await storage.createPayment({
-              jobId: (invoice.jobId || null) as any,
-              invoiceId: invoice.id,
-              customerId: invoice.customerId,
-              amount: amountPaid as any,
-              currency: 'NZD',
-              provider: 'stripe',
-              providerSessionId: session.id,
-              providerPaymentId: session.payment_intent || null,
-              kind: 'payment',
-              status: 'succeeded',
-              paidAt: new Date(),
-            } as any);
-            if (invoice.status !== 'paid') {
-              await storage.updateInvoice(invoice.id, { status: 'paid', paidAt: new Date() } as any);
+            if (!existingInvoicePay) {
+              try {
+                await storage.createPayment({
+                  jobId: invoice.jobId || null,
+                  invoiceId: invoice.id,
+                  customerId: invoice.customerId,
+                  amount: amountPaid.toFixed(2),
+                  currency: "NZD",
+                  provider: "stripe",
+                  providerSessionId: session.id,
+                  providerPaymentId,
+                  kind: "payment",
+                  status: "succeeded",
+                  paidAt: new Date(),
+                });
+              } catch (insertErr: unknown) {
+                const raced = await storage.getPaymentBySessionId(session.id);
+                if (!raced) throw insertErr;
+              }
+            }
+            const jobId = invoice.jobId || existingInvoicePay?.jobId || null;
+            if (jobId) {
+              await reconcileJobPaidFromPayments(jobId);
+            } else {
+              const status = (invoice.status ?? "").toLowerCase();
+              const closed = status === "paid" || status === "cancelled" || status === "canceled" || status === "void" || status === "voided";
+              if (!closed) {
+                await storage.updateInvoice(invoice.id, { status: "paid", paidAt: invoice.paidAt ?? new Date() });
+              }
             }
           });
-          console.log(`✅ Stripe webhook: payment of $${amountPaid} captured for invoice ${invoice.invoiceNumber}; marked paid`);
+          console.log(`Stripe webhook: payment of $${amountPaid} captured for invoice ${invoice.invoiceNumber}`);
           return res.json({ received: true });
         }
 
         // Job payment (kind='payment' + jobId) — staff "Take payment" on the
-        // job card. Record the payment and roll the job's paid/balance forward.
+        // job card. Record the payment, then set paid/balance from the ledger
+        // so a retried webhook cannot add the same amount twice.
         const jobIdMeta: string | undefined = session?.metadata?.jobId;
         if (kind === 'payment' && jobIdMeta) {
           const existingJobPay = await storage.getPaymentBySessionId(session.id);
-          if (existingJobPay) {
-            console.log(`Stripe webhook: session ${session.id} already processed`);
-            return res.json({ received: true, duplicate: true });
-          }
           const job = await storage.getJob(jobIdMeta);
           if (!job) {
             console.error('Stripe webhook: job not found for session', { jobIdMeta, sessionId: session.id });
             return res.json({ received: true, missingJob: true });
           }
-          const jobTotal = parseFloat((job as any).totalAmount?.toString() || '0') || 0;
-          const prevPaid = parseFloat((job as any).paidAmount?.toString() || '0') || 0;
-          const newPaid = Math.round((prevPaid + amountPaid) * 100) / 100;
-          const newBalance = Math.max(0, Math.round((jobTotal - newPaid) * 100) / 100);
+          const intent = session.payment_intent;
+          const providerPaymentId = typeof intent === "string" ? intent : intent?.id ?? null;
           // Stripe webhook runs as owner (no session) → bind the matched job's tenant
           // so the payment-ledger row + job update stamp the owning business, not the
           // DEFAULT (Treemarkables).
           await runWithBusiness(job.businessId ?? undefined, async () => {
-            await storage.createPayment({
-              jobId: job.id,
-              customerId: (job as any).customerId || null,
-              amount: amountPaid as any,
-              currency: 'NZD',
-              provider: 'stripe',
-              providerSessionId: session.id,
-              providerPaymentId: session.payment_intent || null,
-              kind: 'payment',
-              status: 'succeeded',
-              paidAt: new Date(),
-            } as any);
-            await storage.updateJob(job.id, {
-              paidAmount: String(newPaid),
-              balanceDue: String(newBalance),
-            } as any);
+            if (!existingJobPay) {
+              try {
+                await storage.createPayment({
+                  jobId: job.id,
+                  customerId: job.customerId || null,
+                  amount: amountPaid.toFixed(2),
+                  currency: "NZD",
+                  provider: "stripe",
+                  providerSessionId: session.id,
+                  providerPaymentId,
+                  kind: "payment",
+                  status: "succeeded",
+                  paidAt: new Date(),
+                });
+              } catch (insertErr: unknown) {
+                const raced = await storage.getPaymentBySessionId(session.id);
+                if (!raced) throw insertErr;
+              }
+            }
+            await reconcileJobPaidFromPayments(job.id);
           });
 
-          console.log(`✅ Stripe webhook: payment of $${amountPaid} captured for job ${(job as any).jobNumber}; paid ${newPaid}/${jobTotal}`);
+          console.log(`Stripe webhook: payment of $${amountPaid} captured for job ${job.jobNumber}`);
           return res.json({ received: true });
         }
 
@@ -29138,43 +29248,32 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Delete proposal
+  // Delete proposal. Admin only, and only a proposal that belongs to the
+  // signed-in company. Accepted proposals (and any that already took a
+  // payment) are refused. The job and its quote row are not touched.
   app.delete('/api/proposals/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
-      // Forensic snapshot. There is no soft-delete on proposals and the
-      // delete cascades to proposal_sections + proposal_line_items, so once
-      // the row is gone this log is the only trace. Logged at warn level so
-      // it surfaces in the DO production log retention.
-      const snapshot = await storage.getProposal(req.params.id).catch(() => null);
-      if (snapshot) {
-        let sectionCount = 0;
-        try {
-          const sections = await storage.getProposalSectionsByProposal(req.params.id);
-          sectionCount = sections?.length ?? 0;
-        } catch { /* best-effort, snapshot is still useful */ }
-        console.warn(
-          `🛑 PROPOSAL_DELETE_AUDIT id=${req.params.id} ts=${new Date().toISOString()} session=${req.session?.employeeId ?? 'anon'} ua=${req.headers['user-agent'] ?? 'n/a'} snapshot=${JSON.stringify({
-            jobId: snapshot.jobId,
-            customerId: snapshot.customerId,
-            proposalNumber: snapshot.proposalNumber,
-            status: snapshot.status,
-            title: snapshot.title,
-            totalAmount: snapshot.totalAmount,
-            sentDate: snapshot.sentDate,
-            viewedDate: snapshot.viewedDate,
-            responseDate: snapshot.responseDate,
-            createdAt: snapshot.createdAt,
-            updatedAt: snapshot.updatedAt,
-            sectionCount,
-          })}`
-        );
-      } else {
-        console.warn(`🛑 PROPOSAL_DELETE_AUDIT id=${req.params.id} ts=${new Date().toISOString()} (no snapshot — proposal already missing) session=${req.session?.employeeId ?? 'anon'}`);
+      const employeeId = req.session.employeeId;
+      const employee = employeeId ? await storage.getEmployee(employeeId) : undefined;
+      const actorBusinessId = employee?.businessId || req.session.businessId || null;
+      if (!actorBusinessId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account is not linked to a company.',
+        });
       }
-      await storage.deleteProposal(req.params.id);
+
+      const userAgent = req.headers['user-agent'];
+      const result = await deleteProposalDocument(req.params.id, actorBusinessId, {
+        employeeId: req.session.employeeId ?? null,
+        userAgent: typeof userAgent === 'string' ? userAgent : null,
+      });
+      if (!result.ok) {
+        return res.status(result.status).json({ success: false, message: result.message });
+      }
       res.json({
         success: true,
-        message: 'Proposal deleted successfully'
+        message: 'Proposal deleted successfully',
       });
     } catch (error) {
       console.error('Error deleting proposal:', error);
@@ -29237,91 +29336,96 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Approve and send a pending message
+  // Approve and send a pending message.
+  // The notification bell and the job-diary button both hit this route.
+  // claimPendingOutboundMessage flips pending → sending in one update, so a
+  // second request (double tap, or bell + diary together) cannot send again.
   app.post('/api/pending-messages/:id/approve', requireAdmin, async (req: Request, res: Response) => {
     try {
-      const msg = await storage.getPendingOutboundMessage(req.params.id);
-      if (!msg) return res.status(404).json({ success: false, message: 'Message not found' });
-      if (msg.status !== 'pending') return res.status(400).json({ success: false, message: 'Message is not pending' });
+      let updated: Awaited<ReturnType<typeof storage.updatePendingOutboundMessage>> | undefined;
+      const result = await runPendingMessageApproval(req.params.id, {
+        claim: async (id) => (await storage.claimPendingOutboundMessage(id)) ?? null,
+        lookup: async (id) => (await storage.getPendingOutboundMessage(id)) ?? null,
+        send: async (msg) => {
+          // Same transports as before: SMS, else email, else SMS when a phone
+          // is on file. sent stays false only when neither channel can be used.
+          let sent = false;
+          if (msg.channel === 'sms' && msg.recipientPhone) {
+            await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
+            sent = true;
+          } else if (msg.channel === 'email' && msg.recipientEmail) {
+            // Authed admin route → getBusinessSettings() is RLS-scoped to this tenant.
+            const __updBiz = (await storage.getBusinessSettings())?.businessName || '';
+            await emailService.sendEmail({
+              to: msg.recipientEmail,
+              fromName: __updBiz || undefined, // From shows the tenant's business name; blank → platform default
+              subject: __updBiz ? `Update from ${__updBiz}` : 'Update',
+              html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
+              text: msg.message,
+            });
+            sent = true;
+          } else if (msg.recipientPhone) {
+            // Fallback to SMS if phone available
+            await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
+            sent = true;
+          }
+          return { sent };
+        },
+        markSent: async (msg) => {
+          updated = await storage.updatePendingOutboundMessage(msg.id, {
+            status: 'sent',
+            sentAt: new Date(),
+          });
+        },
+        release: async (msg) => {
+          await storage.releasePendingOutboundMessageClaim(msg.id);
+        },
+        afterSent: async (msg) => {
+          // Log to job diary. A diary failure must not undo the send.
+          if (!msg.jobId) return;
+          try {
+            await storage.createJobDiaryEntry({
+              jobId: msg.jobId,
+              entryType: msg.channel === 'email' ? 'email' : 'sms',
+              title: 'Holding message sent to customer',
+              description: msg.message,
+              content: msg.message,
+              authorName: (req as any).user?.name || 'System',
+              authorRole: (req as any).user?.role || 'system',
+              metadata: {
+                channel: msg.channel,
+                recipientName: msg.recipientName,
+                eventType: 'holding_message_sent',
+              },
+            });
+          } catch (diaryErr) {
+            console.error('Failed to log diary entry after pending-message approve:', diaryErr);
+          }
 
-      // Send via SMS or email
-      let sent = false;
-      if (msg.channel === 'sms' && msg.recipientPhone) {
-        await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
-        sent = true;
-      } else if (msg.channel === 'email' && msg.recipientEmail) {
-        // Authed admin route → getBusinessSettings() is RLS-scoped to this tenant.
-        const __updBiz = (await storage.getBusinessSettings())?.businessName || '';
-        await emailService.sendEmail({
-          to: msg.recipientEmail,
-          fromName: __updBiz || undefined, // From shows the tenant's business name; blank → platform default
-          subject: __updBiz ? `Update from ${__updBiz}` : 'Update',
-          html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
-          text: msg.message,
-        });
-        sent = true;
-      } else if (msg.recipientPhone) {
-        // Fallback to SMS if phone available
-        await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
-        sent = true;
-      }
-
-      // Only mark as sent and log if a transport actually succeeded
-      if (!sent) {
-        return res.status(422).json({
-          success: false,
-          message: 'No deliverable channel: message has no phone number or email address. Please edit the message details and try again.',
-        });
-      }
-
-      const updated = await storage.updatePendingOutboundMessage(req.params.id, {
-        status: 'sent',
-        sentAt: new Date(),
+          // Auto-upgrade lead → quote once the customer has been sent a booking
+          // confirmation for a job that's already booked in the diary. The
+          // dispatch-board staff-assignment flow does this inline; this branch
+          // catches the AI-Smart-Dispatch draft → approve-and-send path so the
+          // job drops out of the lead list as soon as the customer is told a date.
+          try {
+            const linkedJob = await storage.getJob(msg.jobId);
+            if (linkedJob?.scheduledDate) {
+              const next = statusAfterBooking(linkedJob.status);
+              if (next) {
+                await storage.updateJob(msg.jobId, { status: next });
+                console.log(`📊 Auto-upgraded job ${linkedJob.jobNumber} status '${linkedJob.status}' → '${next}' after customer booking message`);
+              }
+            }
+          } catch (statusErr) {
+            console.error('Failed to auto-upgrade job status after pending-message approve:', statusErr);
+          }
+        },
       });
 
-      // Log to job diary. Wrapped in try/catch so a diary failure can't
-      // surface as a 500 to the UI after the SMS/email has already gone out
-      // and the message is already marked sent.
-      if (msg.jobId) {
-        try {
-          await storage.createJobDiaryEntry({
-            jobId: msg.jobId,
-            entryType: msg.channel === 'email' ? 'email' : 'sms',
-            title: 'Holding message sent to customer',
-            description: msg.message,
-            content: msg.message,
-            authorName: (req as any).user?.name || 'System',
-            authorRole: (req as any).user?.role || 'system',
-            metadata: {
-              channel: msg.channel,
-              recipientName: msg.recipientName,
-              eventType: 'holding_message_sent',
-            },
-          });
-        } catch (diaryErr) {
-          console.error('Failed to log diary entry after pending-message approve:', diaryErr);
-        }
-
-        // Auto-upgrade lead → quote once the customer has been sent a booking
-        // confirmation for a job that's already booked in the diary. The
-        // dispatch-board staff-assignment flow does this inline; this branch
-        // catches the AI-Smart-Dispatch draft → approve-and-send path so the
-        // job drops out of the lead list as soon as the customer is told a date.
-        try {
-          const linkedJob = await storage.getJob(msg.jobId);
-          if (linkedJob?.scheduledDate) {
-            const next = statusAfterBooking(linkedJob.status);
-            if (next) {
-              await storage.updateJob(msg.jobId, { status: next });
-              console.log(`📊 Auto-upgraded job ${linkedJob.jobNumber} status '${linkedJob.status}' → '${next}' after customer booking message`);
-            }
-          }
-        } catch (statusErr) {
-          console.error('Failed to auto-upgrade job status after pending-message approve:', statusErr);
-        }
+      if (!result.ok) {
+        return res.status(result.status).json({ success: false, message: result.message });
       }
-
-      res.json({ success: true, data: updated, sent });
+      res.json({ success: true, data: updated, sent: true });
     } catch (error) {
       console.error('Error approving pending message:', error);
       res.status(500).json({ success: false, message: 'Error approving pending message' });
@@ -31311,7 +31415,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       }
 
       // Generate unique token
-      const token = require('crypto').randomBytes(32).toString('hex');
+      const token = randomBytes(32).toString('hex');
       
       // Create review request
       const reviewRequest = await storage.createReviewRequest({
@@ -33233,18 +33337,7 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  // Reviews API - Facebook only here; Google is registered earlier in this file (cached).
-  const { fetchFacebookReviews } = await import("./services/reviewsService");
-
-  app.get("/api/reviews/facebook", async (req, res) => {
-    try {
-      const reviews = await fetchFacebookReviews();
-      res.json({ success: true, reviews });
-    } catch (error) {
-      console.error('Error fetching Facebook reviews:', error);
-      res.json({ success: false, reviews: [], message: error instanceof Error ? error.message : 'Failed to fetch Facebook reviews' });
-    }
-  });
+  // GET /api/reviews/facebook is registered once, with the other public routes.
 
   // Marketing Campaigns API
   const { metaMarketingService } = await import("./services/metaMarketingService");
@@ -34365,7 +34458,7 @@ Transcription: ${transcriptText}`;
       const body = req.body;
       if (body.object !== 'page') return;
 
-      const PAGE_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+      const PAGE_TOKEN = readFacebookPageAccessToken().token;
       if (!PAGE_TOKEN) {
         console.warn('⚠️ FACEBOOK_PAGE_ACCESS_TOKEN not set — cannot process Messenger webhook');
         return;
@@ -34386,14 +34479,15 @@ Transcription: ${transcriptText}`;
           // Fetch sender's name from Graph API
           let senderName = '';
           try {
-            const profileUrl = `https://graph.facebook.com/v18.0/${senderId}?fields=name&access_token=${PAGE_TOKEN}`;
+            const profileUrl = facebookGraphUrl(`${senderId}?fields=name&access_token=${PAGE_TOKEN}`);
             const profileRes = await fetch(profileUrl);
             if (profileRes.ok) {
               const profile = await profileRes.json() as { name?: string };
               senderName = profile.name || '';
             }
           } catch (err) {
-            console.warn('Could not fetch Facebook sender profile:', err);
+            const detail = err instanceof Error ? err.message : String(err);
+            console.warn('Could not fetch Facebook sender profile:', redactFacebookSecrets(detail, PAGE_TOKEN));
           }
 
           // Use AI to extract job details from the message
@@ -34442,7 +34536,7 @@ Transcription: ${transcriptText}`;
 
               // Auto-reply to the sender
               try {
-                const replyUrl = `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_TOKEN}`;
+                const replyUrl = facebookGraphUrl(`me/messages?access_token=${PAGE_TOKEN}`);
                 await fetch(replyUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
