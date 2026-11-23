@@ -27,6 +27,10 @@ const RLS_ENABLED = process.env.TENANT_RLS_ENABLED === "true";
 // Routes that run with cross-tenant (owner) access on purpose. Matched as prefixes
 // (exact match or `path` starts with `prefix + "/"`).
 const OWNER_PATHS = [
+  // Session-less assistant job create. Auth is a server env secret, and the
+  // handler stamps only the Treemarkables business id. Do not widen this to
+  // /api/assistant — that would put the signed-in chat route on the owner path.
+  "/api/assistant/jobs",
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/dev-test-login",

@@ -118,6 +118,12 @@ import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
 import { registerBugReportRoutes } from "./bugReports";
 import { registerOpsRoutes } from "./opsRoutes";
+import { invokeJobCreate, registerAssistantJobRoutes } from "./assistantJobRoutes";
+import {
+  createTreemarkablesCustomer,
+  findTreemarkablesCustomerMatches,
+  getTreemarkablesCustomer,
+} from "./assistantJobLookup";
 import { registerQuoteFollowUpRoutes } from "./quoteFollowUpRoutes";
 import { registerInvoiceXeroRoutes } from "./invoiceXeroRoutes";
 import { registerJobsNotBilledRoutes } from "./jobsNotBilledRoutes";
@@ -5649,10 +5655,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   // JOB MANAGEMENT API ROUTES
   // ========================================
 
-  app.post('/api/jobs', async (req: Request, res: Response) => {
+  async function createJobFromBody(body: Request["body"], res: Response) {
     try {
       // Preprocess date fields - convert strings to Date objects
-      const processedBody = { ...req.body };
+      const processedBody = { ...body };
       if ('equipment' in processedBody) {
         processedBody.equipment = sanitizeJobEquipment(processedBody.equipment);
       }
@@ -5968,7 +5974,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
       
       // Migrate temporary diary entries if they exist
-      const tempJobId = req.body.tempJobId; // Frontend should send this when creating from temp data
+      const tempJobId = body.tempJobId; // Frontend should send this when creating from temp data
       if (tempJobId && tempJobId.startsWith('temp-') && (global as any).tempDiaryEntries) {
         const tempEntries = (global as any).tempDiaryEntries.get(tempJobId);
         if (tempEntries && tempEntries.length > 0) {
@@ -6096,6 +6102,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       console.error('Error creating job:', error);
       res.status(500).json({ success: false, message: 'Error creating job' });
     }
+  }
+
+  app.post('/api/jobs', async (req: Request, res: Response) => {
+    await createJobFromBody(req.body, res);
+  });
+
+  // Assistant job create. Same createJobFromBody path as the job card.
+  // Secret: INFLOW_ASSISTANT_JOB_SECRET (server env; not stored in the repo).
+  registerAssistantJobRoutes(app, {
+    readSecret: () => process.env.INFLOW_ASSISTANT_JOB_SECRET,
+    getCustomer: getTreemarkablesCustomer,
+    findMatches: findTreemarkablesCustomerMatches,
+    createCustomer: createTreemarkablesCustomer,
+    createJob: (body) => invokeJobCreate(createJobFromBody, body),
   });
 
   // Fix fake job descriptions with real ServiceM8 data
