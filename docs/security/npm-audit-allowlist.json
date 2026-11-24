@@ -44,6 +44,41 @@
       "expires": "2026-12-18"
     },
     {
+      "id": "GHSA-m9gg-hp2v-232j",
+      "package": "@grpc/grpc-js",
+      "severity": "high",
+      "reason": "Nested under @firebase/firestore. getAuthContext can treat an unauthorized cert as authorized in some configs. npm's only offered fix is a semver-major downgrade to firebase 9.14.0; the app is on firebase ^12, so that fix is not applicable. Needs a firebase/firestore release that bumps @grpc/grpc-js.",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-c475-qrg2-pj4r",
+      "package": "basic-ftp",
+      "severity": "high",
+      "reason": "Transitive via get-uri → puppeteer ^24. Quadratic CPU use in Client.list() Unix listings. Fix is puppeteer 25.x (semver-major). This app does not parse untrusted FTP listings.",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-v53p-9fqp-m79j",
+      "package": "nodemailer",
+      "severity": "high",
+      "reason": "Direct dep (^7.0.6). Quadratic addressparser DoS, same class as GHSA-2x7j-588g-ccc2. Fix is nodemailer 10.6.1 (semver-major). Dedicated mailer bump PR; package.json is off-limits here.",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-r7g4-qg5f-qqm2",
+      "package": "nodemailer",
+      "severity": "high",
+      "reason": "Direct dep (^7.0.6). TLS gap is in nodemailer's OAuth2 token fetch. Mail is sent with Gmail SMTP user and app password (server/email.ts), not nodemailer OAuth2. Fix is nodemailer 10.x (semver-major).",
+      "expires": "2026-12-18"
+    },
+    {
+      "id": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
+      "severity": "high",
+      "reason": "Direct dep (^3.24.2). Memory exhaustion while validating oversized collections. Fix is zod 4.6.7 (semver-major), tracked by Dependabot PR #658. Request bodies are size-limited.",
+      "expires": "2026-12-18"
+    },
+    {
       "id": "GHSA-f88m-g3jw-g9cj",
       "package": "sharp",
       "severity": "high",

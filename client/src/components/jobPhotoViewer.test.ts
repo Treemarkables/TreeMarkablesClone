@@ -75,6 +75,21 @@ describe("job photo viewer layout contract", () => {
     assert.doesNotMatch(viewer, /max-h-full/);
   });
 
+  it("pins previous and next on opposite sides and hides them for a single photo", () => {
+    // hover-elevate sets position:relative at a higher specificity than
+    // Tailwind `absolute`, which stacked both arrows on the left. Inline
+    // position is what actually places them.
+    assert.match(viewer, /function photoNavStyle/);
+    assert.match(viewer, /position:\s*"absolute"/);
+    assert.match(viewer, /button-previous-photo/);
+    assert.match(viewer, /button-next-photo/);
+    assert.match(viewer, /photos\.length > 1 && index > 0/);
+    assert.match(viewer, /photos\.length > 1 && index < photos\.length - 1/);
+    assert.match(viewer, /\$\{index \+ 1\} \/ \$\{photos\.length\}/);
+    assert.match(viewer, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
+    assert.doesNotMatch(viewer, /group-hover:opacity/);
+  });
+
   it("job diary opens this viewer instead of the centered dialog", () => {
     assert.match(diary, /<JobPhotoViewer/);
     assert.doesNotMatch(diary, /DialogTitle>Job Photos/);
