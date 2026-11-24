@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOverlayHistory } from "@/hooks/useOverlayHistory";
@@ -32,7 +32,35 @@ import {
  * A downward drag on a fitted photo follows the finger and dismisses; a
  * zoomed photo still pans. Opening pushes a history entry so Android back
  * closes the viewer.
+ *
+ * Previous/next sit outside the gesture stage. The shared Button style
+ * applies hover-elevate, which sets position:relative and z-index:0 at a
+ * higher specificity than Tailwind's `absolute` / `z-*`. Class-only arrows
+ * therefore stacked on the left edge. Inline position keeps one arrow on
+ * each side, on touch screens as well as desktop.
  */
+function photoNavStyle(side: "left" | "right"): CSSProperties {
+  return {
+    position: "absolute",
+    top: "50%",
+    transform: "translateY(-50%)",
+    left: side === "left" ? "max(12px, env(safe-area-inset-left))" : "auto",
+    right: side === "right" ? "max(12px, env(safe-area-inset-right))" : "auto",
+    zIndex: 30,
+    width: 48,
+    height: 48,
+    minWidth: 48,
+    minHeight: 48,
+    borderRadius: 9999,
+    backgroundColor: "rgba(0,0,0,0.78)",
+    color: "#fff",
+    border: "2px solid #fff",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.55)",
+    touchAction: "manipulation",
+    padding: 0,
+  };
+}
+
 export function JobPhotoViewer({
   open,
   photos,
@@ -233,7 +261,8 @@ export function JobPhotoViewer({
     if (pointers.current.size === 0) gesture.current = null;
   };
 
-  const zoomed = scale > 1;
+  const showPrevious = photos.length > 1 && index > 0;
+  const showNext = photos.length > 1 && index < photos.length - 1;
 
   return (
     <div
@@ -248,75 +277,83 @@ export function JobPhotoViewer({
       }}
     >
       <div
-        className="pointer-events-none fixed z-[99] w-max max-w-[calc(100%-6.5rem)] truncate text-sm text-white"
+        className="pointer-events-none fixed z-[99] w-max max-w-[calc(100%-6.5rem)] truncate text-sm font-semibold text-white"
         style={{
           position: "fixed",
-          top: "calc(env(safe-area-inset-top) + 34px)",
+          top: "calc(env(safe-area-inset-top) + 28px)",
           left: "calc(env(safe-area-inset-left) + 16px)",
           width: "max-content",
+          backgroundColor: "rgba(0,0,0,0.78)",
+          border: "1px solid rgba(255,255,255,0.7)",
+          borderRadius: 9999,
+          padding: "4px 10px",
+          lineHeight: "20px",
         }}
         data-testid="text-photo-count"
       >
-        {photos.length > 1 ? `${index + 1} of ${photos.length}` : title}
+        {photos.length > 1 ? `${index + 1} / ${photos.length}` : title}
       </div>
 
-      <div
-        ref={stageRef}
-        className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
-        style={{ touchAction: "none" }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onContextMenu={(event) => event.preventDefault()}
-      >
-        {/* Definite 100% box. object-fit contain letterboxes the bitmap.
-            Pinch zoom does not change layout. A dismiss drag translates this
-            wrapper only, so the fitted photo follows the finger. */}
+      <div className="relative min-h-0 min-w-0 flex-1">
         <div
-          className="absolute inset-0"
-          style={{
-            transform: `translateY(${dismissY}px)`,
-            transition: dismissDragging ? "none" : "transform 180ms ease-out",
-          }}
+          ref={stageRef}
+          className="absolute inset-0 overflow-hidden"
+          style={{ touchAction: "none" }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onContextMenu={(event) => event.preventDefault()}
         >
-          <img
-            src={src}
-            alt={`${title} ${index + 1}`}
-            draggable={false}
-            data-testid="img-photo-viewer"
-            className="absolute inset-0 h-full w-full select-none object-contain"
+          {/* Definite 100% box. object-fit contain letterboxes the bitmap.
+              Pinch zoom does not change layout. A dismiss drag translates this
+              wrapper only, so the fitted photo follows the finger. */}
+          <div
+            className="absolute inset-0"
             style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-              transformOrigin: "center center",
+              transform: `translateY(${dismissY}px)`,
+              transition: dismissDragging ? "none" : "transform 180ms ease-out",
             }}
-          />
+          >
+            <img
+              src={src}
+              alt={`${title} ${index + 1}`}
+              draggable={false}
+              data-testid="img-photo-viewer"
+              className="absolute inset-0 h-full w-full select-none object-contain"
+              style={{
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+                transformOrigin: "center center",
+              }}
+            />
+          </div>
         </div>
-
-        {photos.length > 1 && index > 0 && !zoomed && (
+        {showPrevious && (
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="absolute left-3 top-1/2 z-[91] h-11 w-11 -translate-y-1/2 rounded-full border-white/40 bg-black/60 text-white"
+            style={photoNavStyle("left")}
+            onPointerDown={(event) => event.stopPropagation()}
             onClick={() => onIndexChange?.(index - 1)}
             aria-label="Previous photo"
             data-testid="button-previous-photo"
           >
-            <ChevronLeft className="h-6 w-6" />
+            <ChevronLeft style={{ width: 28, height: 28 }} strokeWidth={2.5} />
           </Button>
         )}
-        {photos.length > 1 && index < photos.length - 1 && !zoomed && (
+        {showNext && (
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="absolute right-3 top-1/2 z-[91] h-11 w-11 -translate-y-1/2 rounded-full border-white/40 bg-black/60 text-white"
+            style={photoNavStyle("right")}
+            onPointerDown={(event) => event.stopPropagation()}
             onClick={() => onIndexChange?.(index + 1)}
             aria-label="Next photo"
             data-testid="button-next-photo"
           >
-            <ChevronRight className="h-6 w-6" />
+            <ChevronRight style={{ width: 28, height: 28 }} strokeWidth={2.5} />
           </Button>
         )}
       </div>
