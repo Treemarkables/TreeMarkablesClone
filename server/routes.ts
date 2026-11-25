@@ -20893,8 +20893,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       if (eventId) {
         // If jobId provided, add a diary entry about the booking AND advance
         // the job's status when this Book implies a transition. A lead booked
-        // from the diary (quoting visit) becomes 'quote'. Other statuses use
-        // the shared booking rule (quote → work_order only).
+        // from the diary (quoting visit) becomes 'quote'. A null result leaves
+        // the status unchanged — rebooking a quote (or any later status) is
+        // still a site visit and must not become a work_order.
         if (jobId) {
           try {
             await storage.createJobDiaryEntry({
