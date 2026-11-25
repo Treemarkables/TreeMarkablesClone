@@ -7,12 +7,12 @@ describe("statusAfterDiaryBook", () => {
     assert.equal(statusAfterDiaryBook("lead"), "quote");
   });
 
-  it("still advances a quote to work_order on that same Book path", () => {
-    assert.equal(statusAfterDiaryBook("quote"), "work_order");
+  it("leaves a quote as a quote — diary Book is a site visit, not a work booking", () => {
+    assert.equal(statusAfterDiaryBook("quote"), null);
   });
 
-  it("leaves every other status alone", () => {
-    for (const status of ["mulch", "work_order", "completed", "unsuccessful", null, undefined, ""]) {
+  it("leaves work_order and every other status alone", () => {
+    for (const status of ["work_order", "mulch", "completed", "unsuccessful", null, undefined, ""]) {
       assert.equal(statusAfterDiaryBook(status), null);
     }
   });

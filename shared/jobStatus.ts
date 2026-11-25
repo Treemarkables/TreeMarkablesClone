@@ -25,12 +25,14 @@ export function statusAfterBooking(current?: string | null): JobStatusType | nul
 }
 
 // Diary "Book" only (POST /api/calendar/quick-book from the job diary).
-// Booking a lead from an email/text is the quoting visit, so the job becomes
-// 'quote' — the same status value used by quote filters and lead→quote
-// upgrades elsewhere. Other statuses follow statusAfterBooking.
+// That action books a quoting / site-visit appointment. It never sets
+// scheduled_date or assigns crew, so it must not commit the job to the work.
+// A lead booked from an email or text becomes 'quote'. Every other status,
+// including an existing quote, stays put (null). Real scheduling still uses
+// statusAfterBooking, which advances quote → work_order.
 // Keep this off statusAfterBooking: crew scheduling and dispatch drops use
 // that helper and must leave a lead as a lead.
 export function statusAfterDiaryBook(current?: string | null): JobStatusType | null {
   if (current === "lead") return "quote";
-  return statusAfterBooking(current);
+  return null;
 }
