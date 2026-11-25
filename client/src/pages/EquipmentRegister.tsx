@@ -85,18 +85,27 @@ export default function EquipmentRegister() {
     updateMutation.mutate({ id: editingEquip.id, licenceRequired: finalLicence });
   };
 
+  // Local override only. Badge's default is whitespace-nowrap, which is what
+  // made a long licence paint over the name on a phone. Staff licence chips
+  // stay on the shared Badge and are not affected.
+  const licenceBadgeClass =
+    "h-auto w-fit max-w-full items-start whitespace-normal py-1 text-left text-xs leading-snug";
+
   const getLicenceBadge = (eq: Equipment) => {
     if (!eq.licenceRequired || eq.licenceRequired === "None required") {
       return (
-        <Badge variant="secondary" className="text-xs">
-          <CheckCircle2 className="w-3 h-3 mr-1" />
+        <Badge variant="secondary" className={licenceBadgeClass} data-testid={`badge-equip-licence-${eq.id}`}>
+          <CheckCircle2 className="mr-1 mt-0.5 h-3.5 w-3.5 shrink-0" />
           No licence required
         </Badge>
       );
     }
     return (
-      <Badge className="text-xs bg-amber-100 text-amber-800 border border-amber-300">
-        <Shield className="w-3 h-3 mr-1" />
+      <Badge
+        className={`${licenceBadgeClass} border border-amber-300 bg-amber-100 text-amber-800`}
+        data-testid={`badge-equip-licence-${eq.id}`}
+      >
+        <Shield className="mr-1 mt-0.5 h-3.5 w-3.5 shrink-0" />
         {eq.licenceRequired}
       </Badge>
     );
@@ -105,7 +114,7 @@ export default function EquipmentRegister() {
   const ungatedCount = equipment.filter(e => !e.licenceRequired).length;
 
   return (
-    <div className="flex flex-col min-h-full overflow-y-auto p-6 space-y-6">
+    <div className="flex min-h-full min-w-0 flex-col space-y-6 overflow-y-auto p-4 sm:p-6">
       <div className="flex items-center gap-4">
         <Link href="/settings">
           <Button variant="ghost" size="icon" aria-label="Back to settings" data-testid="button-back-settings">
@@ -130,45 +139,52 @@ export default function EquipmentRegister() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="px-4 sm:px-6">
           <CardTitle className="flex items-center gap-2 text-base">
             <Wrench className="w-4 h-4" />
             All Equipment ({equipment.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6">
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-16 bg-muted animate-pulse rounded-md" />
+                <div key={i} className="h-24 animate-pulse rounded-md bg-muted" />
               ))}
             </div>
           ) : equipment.length === 0 ? (
             <p className="text-muted-foreground text-sm text-center py-8">No equipment found. Add equipment in the Equipment page first.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {equipment.map(eq => (
                 <div
                   key={eq.id}
-                  className="flex items-center justify-between gap-3 p-3 rounded-md border bg-card hover-elevate cursor-pointer"
+                  className="grid min-w-0 cursor-pointer grid-cols-[2.75rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 rounded-md border bg-card p-4 hover-elevate lg:grid-cols-[2.75rem_minmax(8rem,1fr)_minmax(0,18rem)_auto] lg:items-center"
                   onClick={() => openEdit(eq)}
                   data-testid={`equip-row-${eq.id}`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                      <Wrench className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{eq.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{eq.type?.replace(/_/g, " ") || "Equipment"}</p>
-                    </div>
+                  <div className="col-start-1 row-start-1 flex h-11 w-11 items-center justify-center self-start rounded-md bg-muted lg:self-center">
+                    <Wrench className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="col-start-2 row-start-1 min-w-0">
+                    <p className="break-words text-base font-semibold leading-snug" data-testid={`text-equip-name-${eq.id}`}>
+                      {eq.name}
+                    </p>
+                    <p className="mt-0.5 break-words text-sm capitalize text-muted-foreground">
+                      {eq.type?.replace(/_/g, " ") || "Equipment"}
+                    </p>
+                  </div>
+                  <div className="col-span-2 col-start-2 row-start-2 min-w-0 lg:col-span-1 lg:col-start-3 lg:row-start-1 lg:self-center">
                     {getLicenceBadge(eq)}
-                    <Button variant="ghost" size="sm" className="text-xs h-7">
-                      Edit
-                    </Button>
                   </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="col-start-3 row-start-1 h-11 min-h-11 min-w-11 shrink-0 self-start px-3 text-sm lg:col-start-4 lg:self-center"
+                    data-testid={`button-edit-equip-${eq.id}`}
+                  >
+                    Edit
+                  </Button>
                 </div>
               ))}
             </div>
